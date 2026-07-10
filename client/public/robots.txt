@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+Disallow: /admin
+Disallow: /checkout
+Disallow: /order-success/
+Disallow: /payment-result
+
+Sitemap: https://tap-and-wrap.com/sitemap.xml

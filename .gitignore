@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Builds
+dist/
+build/
+client/dist/
+server/dist/
+coverage/
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+client/.env
+client/.env.*
+!client/.env.example
+!client/.env.*.example
+server/.env
+server/.env.*
+!server/.env.example
+!server/.env.*.example
+
+# Platform metadata
+.vercel/
+.render/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Temporary uploads and caches
+tmp/
+temp/
+uploads/
+.cache/
+node_modules/.vite/
+client/node_modules/.vite/

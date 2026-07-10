@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: tap-and-wrap-api
+    runtime: node
+    rootDir: server
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      - key: MONGO_URI
+        sync: false
+
+      - key: JWT_SECRET
+        generateValue: true
+
+      - key: CLIENT_URL
+        sync: false
+
+      - key: SERVER_URL
+        sync: false
+
+      - key: ADMIN_COOKIE_SAME_SITE
+        value: none
+
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+
+      - key: CLOUDINARY_API_KEY
+        sync: false
+
+      - key: CLOUDINARY_API_SECRET
+        sync: false
