@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  client:
+    name: Client foundation
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: client
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install client dependencies
+        run: npm ci
+
+      - name: Audit client dependencies
+        run: npm audit --audit-level=high
+
+      - name: Build client
+        run: npm run build
+        env:
+          VITE_API_URL: https://api.example.com/api
+          VITE_SITE_URL: https://example.com
+
+  server:
+    name: Server foundation
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: server
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install server dependencies
+        run: npm ci
+
+      - name: Verify dependency tree
+        run: npm ls --depth=0
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Check server syntax
+        run: npm run check:syntax
+
+      - name: Validate server environment contract
+        run: npm run check:env
+        env:
+          NODE_ENV: production
+          MONGO_URI: mongodb://127.0.0.1:27017/tap_wrap_ci
+          JWT_SECRET: ci-only-secret-with-at-least-thirty-two-characters
+          CLIENT_URL: https://example.com
+          SERVER_URL: https://api.example.com

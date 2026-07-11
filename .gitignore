@@ -44,7 +44,7 @@ Thumbs.db
 # Temporary uploads and caches
 tmp/
 temp/
-uploads/
+/uploads/
 .cache/
 node_modules/.vite/
 client/node_modules/.vite/

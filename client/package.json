@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "npm run check:env && vite build",
+    "build:local": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "check:env": "node scripts/checkProductionEnv.mjs"
