@@ -578,8 +578,7 @@ const paymobSchema =
       orderId: {
         type: String,
         default: "",
-        trim: true,
-        index: true
+        trim: true
       },
 
       merchantOrderId: {

@@ -163,6 +163,12 @@ export function getEmailTransporter() {
       maxConnections: 3,
       maxMessages: 100,
 
+      disableFileAccess:
+        true,
+
+      disableUrlAccess:
+        true,
+
       connectionTimeout:
         30000,
 
