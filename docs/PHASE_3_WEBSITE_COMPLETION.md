@@ -113,7 +113,7 @@ Feature flags remain false and credential placeholders empty. Runtime enabling r
 | --- | --- |
 | Baseline backend/frontend before Phase 3 | 165 backend and 63 frontend tests passed. |
 | Final complete backend suite | 242 passed; 0 failed, skipped or cancelled. Disposable local MongoDB only. |
-| Complete final frontend rerun | Running; 96 tests collected. Final result will be recorded before completion. |
+| Frontend suite and affected rerun | 99 final cases passed: 95 in the complete run plus all four isolated commerce viewport cases after correcting its navigation wait. This comprises 80 browser workflows and 19 helper cases; no unresolved failures. |
 | Offline SEO generator/Worker suite | 27 passed; approved fixtures only. |
 | Frontend lint | Passed without warnings. |
 | Production build | Passed; safe development-noindex output, 22 routes, 0 indexable routes, no database/network requests. |
@@ -126,7 +126,9 @@ New backend coverage includes 26 email/account tests, 19 Meta tests, 18 website/
 
 Browser coverage includes desktop, tablet, 320/390px layouts, fixed logo alignment/dimensions, URL filters, modal keyboard/Escape/focus behavior, galleries/options/photos, cart success/failure/reduced motion, disabled checkout, order ownership, on-demand private proof, admin denial, category locks, content approval, read-only customer reviews, account links/sign-out, consent/GPC and deduplication. A product’s semantic prerendered information is tested with JavaScript disabled. Traces/screenshots stay under ignored test-results.
 
-Failures discovered during implementation were investigated: the frontend token format was corrected to the actual backend contract; SMTP ambiguity now stops automatic retries; the product picker uses the inspected API search key; WhatsApp URLs use approved phone data; eligible bundles are selected after validation with centrally clamped savings; and the default Cloudflare config now uses the reviewed Worker. Test-only selector ambiguity was corrected to actual accessible names, and the layout test’s twelve hard navigations were split into independent widths with working in-app navigation instead of increasing safety/rate limits.
+Final 320px and 1440px cart screenshots were also inspected visually: the original logo stays centered, white/rose styling is preserved, controls remain readable and the layouts show no horizontal overflow. Their product/price data is explicitly isolated test-fixture data.
+
+Failures discovered during implementation were investigated: the frontend token format was corrected to the actual backend contract; SMTP ambiguity now stops automatic retries; the product picker uses the inspected API search key; WhatsApp URLs use approved phone data; eligible bundles are selected after validation with centrally clamped savings; and the default Cloudflare config now uses the reviewed Worker. Test-only selector ambiguity was corrected to actual accessible names. Repeated hard-navigation layout tests exceeded their shared 30-second budget; traces showed successful but slow Google Fonts requests and pending font downloads, rather than an overflow assertion failure. Those cases now run independently by width, wait for application headings/forms, and retain every route/overflow/screenshot assertion. Public-page checks also use working in-app navigation. No authorization, rate limit, font, design or test timeout was weakened to pass the checks.
 
 ## Remaining prerequisites and deliberate limits
 
@@ -266,6 +268,7 @@ These are instructions for a separately authorized integration session, not acti
 - `client/src/pages/AdminCommercePage.jsx`
 - `client/e2e/catalog-fixtures.js`
 - `client/e2e/commerce-fixtures.js`
+- `client/e2e/commerce.spec.js`
 - `server/.env.example`
 - `server/package.json`
 - `server/package-lock.json`

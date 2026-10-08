@@ -345,18 +345,23 @@ test('admin order search uses strict order-number filtering and bounded server p
   expect(requests.every((call) => !Object.hasOwn(call.query, 'search'))).toBe(true);
 });
 
-test('commerce layouts remain within mobile, tablet and desktop viewports', async ({ page }, testInfo) => {
-  await mockCommerce(page, { checkoutEnabled: true, cart: cartWithProduct() });
-  for (const width of [320, 390, 768, 1440]) {
+for (const width of [320, 390, 768, 1440]) {
+  test(`commerce layouts remain within the ${width}px viewport`, async ({ page }, testInfo) => {
+    await mockCommerce(page, { checkoutEnabled: true, cart: cartWithProduct() });
     await page.setViewportSize({ width, height: 900 });
     for (const route of ['/cart', '/checkout', '/track-order', `/products/${commerceProduct.slug}/customize`]) {
-      await page.goto(route);
-      await expect(page.locator('main')).toBeVisible();
+      // Readiness belongs to the application, rather than repeated external
+      // font downloads included by the browser's document load event.
+      await page.goto(route, { waitUntil: 'domcontentloaded' });
+      await expect(page.locator('main h1')).toBeVisible();
+      if (route === '/cart') await expect(page.locator('.commerce-cart-item')).toBeVisible();
+      if (route === '/checkout') await expect(page.getByLabel('Full name', { exact: true })).toBeVisible();
+      if (route.endsWith('/customize')) await expect(page.locator('.commerce-configurator')).toBeVisible();
       await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       if (route === '/cart' && [320, 1440].includes(width)) await page.screenshot({ path: testInfo.outputPath(`commerce-cart-${width}.png`), fullPage: true });
     }
-  }
-});
+  });
+}
 
 test('reduced-motion cart feedback avoids the product flight animation', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
