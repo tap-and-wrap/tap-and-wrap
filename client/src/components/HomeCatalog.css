@@ -1,0 +1,8 @@
+.home-category-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:20px; }
+.home-category { min-width:0; padding:20px; border:1px solid var(--tw-border); border-radius:12px; background:var(--tw-surface); }
+.home-category img { display:block; width:100%; height:auto; aspect-ratio:4/3; object-fit:contain; }
+.home-category h3 { font-size:clamp(24px,2.2vw,32px); overflow-wrap:anywhere; }
+.home-category span { font-size:13px; color:var(--tw-muted); }
+.home-category:hover { border-color:var(--tw-rose-dark); }
+.home-product-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
+@media(max-width:760px) { .home-category-grid,.home-product-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; } .home-category { padding:14px; } }

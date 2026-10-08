@@ -1,0 +1,38 @@
+{
+  "name": "tapandwrap-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "node scripts/run-tests.js",
+    "check": "node scripts/check.js",
+    "catalog:import": "node scripts/import-catalog.js",
+    "staging:check": "node scripts/check-staging.js",
+    "commerce:jobs": "node scripts/run-commerce-jobs.js",
+    "email:smoke": "node scripts/email-smoke-test.js",
+    "seo:export": "node scripts/export-seo-catalog.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "3.1148.0",
+    "@aws-sdk/s3-request-presigner": "3.1148.0",
+    "bcryptjs": "^3.0.2",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.0",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.0.1",
+    "helmet": "^8.1.0",
+    "mongoose": "^8.19.0",
+    "nodemailer": "10.0.13",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "mongodb-memory-server-core": "11.3.0",
+    "read-excel-file": "9.3.12"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "name": "tapandwrap-client",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build && node scripts/generate-seo.js",
+    "seo:generate": "node scripts/generate-seo.js",
+    "test:seo": "node --test scripts/seo/*.test.js",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "test": "playwright test"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.90.0",
+    "axios": "^1.12.2",
+    "lucide-react": "^0.468.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-router-dom": "^7.9.6",
+    "sonner": "^2.0.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.36.0",
+    "@playwright/test": "1.64.0",
+    "@tailwindcss/vite": "^4.1.16",
+    "@vitejs/plugin-react": "^6.0.0",
+    "eslint": "^9.36.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.20",
+    "globals": "^16.4.0",
+    "tailwindcss": "^4.1.16",
+    "vite": "^8.0.0"
+  }
+}

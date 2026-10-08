@@ -1,0 +1,22 @@
+# Node
+node_modules/
+dist/
+coverage/
+.cache/
+.vite/
+# Local credentials
+.env
+.env.*
+!.env.example
+# Logs
+*.log
+.DS_Store
+Thumbs.db
+# Editor
+.vscode/
+# Original merchant catalog and local import reports (never commit without approval)
+/local-data/
+# Isolated browser test artifacts
+test-results/
+playwright-report/
+test-results-*.txt

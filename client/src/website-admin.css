@@ -1,0 +1,21 @@
+.website-admin-nav { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0 0 1.5rem; }
+.website-admin-nav a { border: 1px solid var(--border, #EADAD5); border-radius: .4rem; padding: .65rem .85rem; text-decoration: none; background: #fff; }
+.website-admin-nav a[aria-current="page"] { background: #795045; border-color: #795045; color: #fff; }
+.website-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 1rem; }
+.website-metric { text-decoration: none; display: flex; flex-direction: column; gap: .6rem; }
+.website-metric strong { font-size: 2rem; }
+.website-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 1rem; }
+.website-summary div { border-top: 1px solid #EADAD5; padding-top: 1rem; }
+.website-summary dd { margin: .4rem 0 0; font-weight: 600; font-size: 1.2rem; }
+.website-form { display: grid; gap: 1rem; margin-top: 1rem; max-width: 850px; }
+.website-form label, .website-fieldset { display: grid; gap: .5rem; min-width: 0; }
+.website-form input:not([type="checkbox"]), .website-form textarea, .website-form select, .website-admin .admin-panel > label > select { border: 1px solid #EADAD5; border-radius: .35rem; padding: .75rem; width: 100%; min-width: 0; background: white; color: #62483F; font: inherit; }
+.website-form .admin-checkbox { display: flex; align-items: start; gap: .7rem; }
+.website-fieldset { border: 1px solid #EADAD5; border-radius: .5rem; padding: 1rem; }
+.website-fieldset legend { padding: 0 .4rem; }
+.website-fieldset .admin-search { margin: 0; }
+.website-selection-list > div { display: grid; gap: .5rem; padding: 1rem 0; border-bottom: 1px solid #EADAD5; overflow-wrap: anywhere; }
+.website-admin .admin-button:not(.admin-button-secondary) { background: #795045; color: white; border-color: #795045; }
+.website-admin .admin-button:disabled { opacity: .5; }
+.website-admin .admin-panel p { line-height: 1.65; }
+@media (max-width: 600px) { .website-admin .admin-inline { flex-wrap: wrap; } .website-admin .admin-search { width: 100%; } .website-admin-nav a { flex: 1 1 auto; text-align: center; } .website-admin .admin-pagination { flex-wrap: wrap; justify-content: center; } }

@@ -1,0 +1,13 @@
+{
+  "name": "tapandwrap-frontend",
+  "main": "./worker/seo-worker.js",
+  "compatibility_date": "2026-10-09",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "html_handling": "none",
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/*", "!/assets/*", "!/tap-wrap-logo.webp"]
+  },
+  "vars": { "SEO_INDEXING_ENABLED": "false" }
+}

@@ -1,0 +1,128 @@
+/* Tap & Wrap Design Lock v1.0 — append/import AFTER existing client/src/styles.css.
+   White-led, premium gifting aesthetic inspired by supplied Hedeytyy references.
+   Imported after styles.css; the supplied transparent logo is used unchanged.
+*/
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=DM+Sans:wght@400;500;600&display=swap');
+
+:root {
+  --tw-bg: #FFFCFB;
+  --tw-surface: #FFFFFF;
+  --tw-soft: #FDF6F3;
+  --tw-blush: #F7EBE7;
+  --tw-logo-rose: #DA9B8D;
+  --tw-rose: #C98D81;
+  --tw-rose-dark: #915B50;
+  --tw-ink: #62483F;
+  --tw-muted: #80675F;
+  --tw-button: #795045;
+  --tw-border: #EADAD5;
+  --tw-focus: #915B50;
+  --tw-success: #35644D;
+  --tw-error: #A33B43;
+  --tw-font-display: 'Cormorant Garamond', Georgia, serif;
+  --tw-font-body: 'DM Sans', Arial, sans-serif;
+  font-family: var(--tw-font-body);
+  color: var(--tw-ink);
+  background: var(--tw-bg);
+}
+
+html { background: var(--tw-bg); scrollbar-gutter: stable both-edges; }
+body { background: var(--tw-bg); color: var(--tw-ink); font-family: var(--tw-font-body); }
+h1, h2, h3 { font-family: var(--tw-font-display); color: var(--tw-ink); font-weight: 500; }
+h1 { font-size: clamp(2.75rem, 5.7vw, 4.85rem); line-height: 1.05; }
+h2 { font-size: clamp(2.3rem, 4vw, 3.5rem); line-height: 1.1; }
+h3 { font-size: clamp(1.7rem, 2.5vw, 2.35rem); }
+p { line-height: 1.65; }
+:focus-visible { outline: 2px solid var(--tw-focus); outline-offset: 3px; }
+
+.announcement {
+  background: var(--tw-bg);
+  color: var(--tw-rose-dark);
+  padding: 9px 16px;
+  font-size: 10px;
+  letter-spacing: .16em;
+}
+.site-header {
+  background: var(--tw-surface);
+  color: var(--tw-ink);
+  border-bottom: 1px solid var(--tw-border);
+  min-height: 96px;
+}
+.site-logo { width: 200px; }
+.site-logo img, .footer-logo img { aspect-ratio: 2000 / 667; }
+.header-actions { color: var(--tw-rose-dark); }
+.icon-button { color: var(--tw-rose-dark); }
+.icon-button:hover { color: var(--tw-ink); background: var(--tw-soft); }
+
+.hero {
+  background: var(--tw-bg); /* the future video supplies its own visual */
+  color: var(--tw-ink);
+}
+.hero-description, .section-heading p:last-child, .page-shell > p, .service-card p,
+.editorial-note, .hint { color: var(--tw-muted); }
+.eyebrow { color: var(--tw-rose-dark); font-weight: 600; letter-spacing: .16em; }
+.button {
+  border-radius: 11px;
+  min-height: 46px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--tw-rose);
+  transition: background-color .18s ease, border-color .18s ease, transform .18s ease;
+}
+.button-dark { background: var(--tw-button); border-color: var(--tw-button); color: #FFFFFF; }
+.button-dark:hover { background: var(--tw-ink); border-color: var(--tw-ink); opacity: 1; }
+.button-outline { background: var(--tw-surface); color: var(--tw-rose-dark); }
+.button-outline:hover { background: var(--tw-soft); border-color: var(--tw-rose-dark); opacity: 1; }
+.button:active { transform: translateY(1px); }
+
+.section { background: var(--tw-bg); }
+.trust-section { background: var(--tw-soft); color: var(--tw-ink); }
+.service-section { background: var(--tw-bg); }
+.service-card {
+  background: var(--tw-surface);
+  border: 1px solid var(--tw-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(98,72,63,.035);
+}
+.service-card:hover { transform: translateY(-2px); box-shadow: 0 11px 35px rgba(98,72,63,.065); }
+.placeholder-strip { background: var(--tw-soft); border: 1px dashed var(--tw-border); color: var(--tw-muted); }
+.auth-form input { background: var(--tw-surface); border: 1px solid var(--tw-border); border-radius: 10px; color: var(--tw-ink); }
+.auth-form input:focus { border-color: var(--tw-rose-dark); }
+.error-text { color: var(--tw-error); }
+.laser-video { background: var(--tw-soft); }
+.site-footer { background: var(--tw-surface); color: var(--tw-ink); border-top: 1px solid var(--tw-border); }
+.site-footer a:hover { color: var(--tw-rose-dark); }
+.site-footer a:not(.footer-logo) { min-height: 24px; display: inline-flex; align-items: center; }
+.footer-bottom { border-top: 1px solid var(--tw-border); color: var(--tw-muted); }
+.navigation-drawer { background: var(--tw-surface); color: var(--tw-ink); box-shadow: 12px 0 40px rgba(98,72,63,.12); }
+.navigation-drawer[open] { animation: drawer-enter .22s ease-out; }
+.navigation-drawer::backdrop { background: rgba(37,27,25,.42); animation: backdrop-enter .22s ease-out; }
+.drawer-header { border-bottom: 1px solid var(--tw-border); }
+.drawer-nav a { font-weight: 500; transition: background-color .18s ease, color .18s ease; }
+.drawer-nav a:hover, .drawer-nav a.active { background: var(--tw-soft); color: var(--tw-rose-dark); }
+.drawer-nav a.active { box-shadow: inset 3px 0 var(--tw-logo-rose); }
+@keyframes drawer-enter { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+@keyframes backdrop-enter { from { opacity: 0; } to { opacity: 1; } }
+
+/* For upcoming product card component. */
+.product-card { background: var(--tw-surface); border: 1px solid transparent; border-radius: 12px; }
+.product-card:hover { border-color: var(--tw-border); }
+.product-card__image { width: 100%; aspect-ratio: 1 / 1; object-fit: contain; background: var(--tw-soft); }
+.product-card__category { font: 600 11px/1.4 var(--tw-font-body); letter-spacing: .1em; color: var(--tw-rose-dark); text-transform: uppercase; }
+.product-card__name { font: 500 15px/1.4 var(--tw-font-body); color: var(--tw-ink); }
+.product-card__price { font: 600 16px/1.4 var(--tw-font-body); color: var(--tw-ink); }
+
+@media (max-width: 920px) {
+  .site-header { min-height: 84px; }
+  .site-logo { width: 164px; }
+}
+@media (max-width: 620px) {
+  .site-header { min-height: 76px; }
+  .site-logo { width: 145px; }
+  h1 { font-size: clamp(2.55rem, 10vw, 3.75rem); }
+  .hero { padding: 64px 20px 48px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .button, .service-card { transition: none !important; transform: none !important; }
+  .navigation-drawer, .navigation-drawer::backdrop { animation: none !important; }
+}
