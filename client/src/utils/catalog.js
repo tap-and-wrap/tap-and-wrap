@@ -51,6 +51,23 @@ export function catalogApiParams(params) {
   return Object.fromEntries(Object.entries(params).filter(([, value]) => value !== '' && value !== undefined && value !== null));
 }
 
+// URL bounds are integer piastres, while the editor holds decimal EGP strings.
+export function catalogPriceErrors(searchParams) {
+  const errors = {};
+  for (const key of ['minPrice', 'maxPrice']) {
+    const value = searchParams.get(key);
+    if (value !== null && value !== '' && (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value)))) {
+      errors[key] = 'This URL price filter is invalid. Enter a non-negative EGP amount.';
+    }
+  }
+  const minimum = searchParams.get('minPrice');
+  const maximum = searchParams.get('maxPrice');
+  if (!Object.keys(errors).length && minimum && maximum && BigInt(minimum) > BigInt(maximum)) {
+    errors.range = 'Minimum price must be less than or equal to maximum price.';
+  }
+  return errors;
+}
+
 export function applyCatalogFilters(searchParams, filters) {
   const next = new URLSearchParams(searchParams);
   for (const key of ['category', 'subcategory', 'availability', 'minPrice', 'maxPrice']) {

@@ -7,6 +7,7 @@ import { emailSettings, assertSafeEmailRecipient } from '../email/settings.js';
 import { renderEmailTemplate } from '../email/templates.js';
 import { createGmailProvider } from '../email/gmail.js';
 import { accountActionUrl } from '../email/action-secrets.js';
+import { shouldStop, boundedOperation } from './work-budget.js';
 
 const MAX_ATTEMPTS = 6;
 const LEASE_MS = 120000;
@@ -89,47 +90,71 @@ export function retryDelayMs(attempt) {
   return Math.min(6 * 60 * 60 * 1000, 60000 * (2 ** Math.max(0, attempt - 1)));
 }
 
-export async function runNotificationBatch({ batchSize = 20, now = new Date() } = {}) {
+/** Bounded maintenance runs even when delivery is disabled. Never touch an
+ * active dispatch: SMTP acceptance can be ambiguous and must not be replayed. */
+export async function cleanupNotificationSecrets({ batchSize = 20, now = new Date(), budget } = {}) {
   if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 100) throw notificationError('INVALID_NOTIFICATION_BATCH', 400);
+  writeGuard();
+  const counts = { cleanedSecrets: 0, dead: 0, uncertain: 0 };
+  const stopped = () => { if (shouldStop(budget)) { counts.stopped = true; return true; } return false; };
+  if (stopped()) return counts;
+  const interrupted = await NotificationEvent.find({ state: 'processing', leaseUntil: { $lte: now }, dispatchStartedAt: { $exists: true } })
+    .select('_id').sort({ leaseUntil: 1, _id: 1 }).limit(batchSize).lean().maxTimeMS(3000);
+  if (interrupted.length) counts.uncertain += (await NotificationEvent.updateMany({ _id: { $in: interrupted.map(event => event._id) }, state: 'processing', leaseUntil: { $lte: now }, dispatchStartedAt: { $exists: true } },
+    { $set: { state: 'uncertain', lastErrorCode: 'SMTP_DELIVERY_UNCERTAIN' }, $unset: { leaseToken: 1, leaseUntil: 1, sealedActionToken: 1 } })).modifiedCount;
+  if (stopped()) return counts;
+  const exhausted = await NotificationEvent.find({ state: { $in: ['queued', 'failed', 'processing'] }, attempts: { $gte: MAX_ATTEMPTS },
+    $or: [{ state: { $in: ['queued', 'failed'] } }, { leaseUntil: { $lte: now } }] }).select('_id').sort({ createdAt: 1, _id: 1 }).limit(batchSize).lean().maxTimeMS(3000);
+  if (exhausted.length) counts.dead += (await NotificationEvent.updateMany({ _id: { $in: exhausted.map(event => event._id) }, state: { $in: ['queued', 'failed', 'processing'] }, attempts: { $gte: MAX_ATTEMPTS },
+    $or: [{ state: { $in: ['queued', 'failed'] } }, { leaseUntil: { $lte: now } }] },
+    { $set: { state: 'dead', lastErrorCode: 'RETRY_LIMIT_REACHED' }, $unset: { leaseToken: 1, leaseUntil: 1, sealedActionToken: 1 } })).modifiedCount;
+  if (stopped()) return counts;
+  const terminal = await NotificationEvent.find({ state: { $in: ['sent', 'dead', 'uncertain'] }, sealedActionToken: { $exists: true } })
+    .select('_id').sort({ createdAt: 1, _id: 1 }).limit(batchSize).lean().maxTimeMS(3000);
+  if (terminal.length) counts.cleanedSecrets += (await NotificationEvent.updateMany({ _id: { $in: terminal.map(event => event._id) }, state: { $in: ['sent', 'dead', 'uncertain'] } },
+    { $unset: { sealedActionToken: 1 } })).modifiedCount;
+  if (stopped()) return counts;
+  const expiredFilter = { expiresAt: { $lte: now }, $or: [{ state: { $in: ['queued', 'failed'] } }, { state: 'processing', leaseUntil: { $lte: now }, dispatchStartedAt: { $exists: false } }] };
+  const expired = await NotificationEvent.find(expiredFilter)
+    .select('_id').sort({ expiresAt: 1, _id: 1 }).limit(batchSize).lean().maxTimeMS(3000);
+  if (expired.length) counts.dead += (await NotificationEvent.updateMany({ _id: { $in: expired.map(event => event._id) }, ...expiredFilter },
+    { $set: { state: 'dead', lastErrorCode: 'ACCOUNT_ACTION_EXPIRED' }, $unset: { sealedActionToken: 1, leaseToken: 1, leaseUntil: 1 } })).modifiedCount;
+  if (stopped()) return counts;
+  // Consumed/replaced account links are no longer useful even before expiry.
+  const pending = await NotificationEvent.find({ state: { $in: ['queued', 'failed'] }, sealedActionToken: { $exists: true }, actionTokenId: { $exists: true } })
+    .select('_id actionTokenId').sort({ createdAt: 1, _id: 1 }).limit(batchSize).lean().maxTimeMS(3000);
+  if (pending.length) {
+    const valid = new Set((await AccountActionToken.find({ _id: { $in: pending.map(event => event.actionTokenId) }, consumedAt: null, expiresAt: { $gt: now } }).select('_id').lean()).map(action => String(action._id)));
+    const obsolete = pending.filter(event => !valid.has(String(event.actionTokenId))).map(event => event._id);
+    if (obsolete.length) counts.dead += (await NotificationEvent.updateMany({ _id: { $in: obsolete }, state: { $in: ['queued', 'failed'] } },
+      { $set: { state: 'dead', lastErrorCode: 'ACCOUNT_ACTION_EXPIRED' }, $unset: { sealedActionToken: 1, leaseToken: 1, leaseUntil: 1 } })).modifiedCount;
+  }
+  return counts;
+}
+
+export async function runNotificationBatch({ batchSize = 20, now = new Date(), budget } = {}) {
+  if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 100) throw notificationError('INVALID_NOTIFICATION_BATCH', 400);
+  const maintenance = await cleanupNotificationSecrets({ batchSize, now, budget });
   const usingMock = process.env.NODE_ENV === 'test' && Boolean(testProvider);
   const config = notificationSettings();
-  if (process.env.NODE_ENV === 'test' && !usingMock) return { enabled: false, claimed: 0, sent: 0, failed: 0, dead: 0 };
+  if (process.env.NODE_ENV === 'test' && !usingMock) return { enabled: false, claimed: 0, sent: 0, failed: 0, ...maintenance };
   if (!usingMock && (!config.enabled || !config.configured || (!config.production && !config.safeRecipients.length))) {
-    return { enabled: false, claimed: 0, sent: 0, failed: 0, dead: 0 };
+    return { enabled: false, claimed: 0, sent: 0, failed: 0, ...maintenance };
   }
   const provider = usingMock ? testProvider : createNotificationProvider();
-  const counts = { enabled: true, claimed: 0, sent: 0, failed: 0, dead: 0, uncertain: 0 };
+  const counts = { enabled: true, claimed: 0, sent: 0, failed: 0, ...maintenance };
   try {
-  // SMTP cannot deduplicate an interrupted send. Never automatically resend a
-  // dispatch that might already have been accepted; preserve it for review.
-  writeGuard();
-  const interruptedSmtp = await NotificationEvent.find({ state: 'processing', leaseUntil: { $lte: now }, dispatchStartedAt: { $exists: true } })
-    .select('_id').sort({ leaseUntil: 1 }).limit(batchSize).lean();
-  if (interruptedSmtp.length) {
-    const uncertain = await NotificationEvent.updateMany({ _id: { $in: interruptedSmtp.map(event => event._id) }, state: 'processing', leaseUntil: { $lte: now }, dispatchStartedAt: { $exists: true } }, {
-      $set: { state: 'uncertain', lastErrorCode: 'SMTP_DELIVERY_UNCERTAIN' }, $unset: { leaseUntil: 1, leaseToken: 1 },
-    });
-    counts.uncertain += uncertain.modifiedCount;
-  }
-  // An interrupted final attempt is terminal once its lease expires; it never remains stuck forever.
-  const exhaustedIds = await NotificationEvent.find({
-    state: 'processing', leaseUntil: { $lte: now }, attempts: { $gte: MAX_ATTEMPTS },
-  }).select('_id').sort({ leaseUntil: 1 }).limit(batchSize).lean();
-  if (exhaustedIds.length) {
-    writeGuard();
-    const exhausted = await NotificationEvent.updateMany({ _id: { $in: exhaustedIds.map((event) => event._id) },
-      state: 'processing', leaseUntil: { $lte: now }, attempts: { $gte: MAX_ATTEMPTS },
-    }, { $set: { state: 'dead', lastErrorCode: 'RETRY_LIMIT_REACHED' }, $unset: { leaseUntil: 1, leaseToken: 1 } });
-    counts.dead += exhausted.modifiedCount;
-  }
   for (let index = 0; index < batchSize; index += 1) {
+    if (shouldStop(budget)) { counts.stopped = true; break; }
     const leaseToken = randomUUID();
     writeGuard();
     const event = await NotificationEvent.findOneAndUpdate({
       attempts: { $lt: MAX_ATTEMPTS },
       $or: [
         { state: { $in: ['queued', 'failed'] }, nextAttemptAt: { $lte: now } },
-        { state: 'processing', leaseUntil: { $lte: now } },
+        // A bounded maintenance batch may leave older ambiguous SMTP leases
+        // for its next run. Never reclaim those dispatched records for sending.
+        { state: 'processing', leaseUntil: { $lte: now }, dispatchStartedAt: { $exists: false } },
       ],
     }, { $set: { state: 'processing', leaseUntil: new Date(now.getTime() + LEASE_MS), leaseToken }, $inc: { attempts: 1 } }, {
       new: true, sort: { nextAttemptAt: 1, _id: 1 },
@@ -154,7 +179,8 @@ export async function runNotificationBatch({ batchSize = 20, now = new Date() } 
         const dispatch = await NotificationEvent.updateOne({ _id: event._id, state: 'processing', leaseToken }, { $set: { dispatchStartedAt: new Date() } });
         if (dispatch.modifiedCount !== 1) throw notificationError('NOTIFICATION_LEASE_LOST');
       }
-      const result = await provider.send(event, { actionUrl });
+      const result = await boundedOperation(signal => provider.send(event, { actionUrl, signal }), { budget, timeoutMs: 45000,
+        code: provider.supportsIdempotency === false ? 'SMTP_DELIVERY_UNCERTAIN' : 'PROVIDER_TIMEOUT' });
       if (!result || typeof result.id !== 'string') throw notificationError('INVALID_PROVIDER_RESPONSE');
       deliveryAccepted = true;
       writeGuard();

@@ -23,12 +23,17 @@ export async function consumeInventory(lines, applied, session) {
   const claims = aggregateClaims(lines), byProduct = new Map();
   for (const claim of claims) {
     if (claim.kind === 'component') {
-      const component = await ComponentOption.findById(claim.id).session(session).lean();
-      if (!component) throw commerceError(409, 'COMPONENT_UNAVAILABLE', 'A selected component is unavailable.');
-      claim.mode = component.inventory.mode;
+      // Current server quotes already validated mode. The conditional write
+      // remains authoritative and conflicts with concurrent component edits.
+      // Preserve a fallback for legacy internal claims without mode metadata.
+      if (!['tracked', 'made_to_order'].includes(claim.mode)) {
+        const component = await ComponentOption.findById(claim.id).session(session).lean().maxTimeMS(3000);
+        if (!component) throw commerceError(409, 'COMPONENT_UNAVAILABLE', 'A selected component is unavailable.');
+        claim.mode = component.inventory.mode;
+      }
       const filter = { _id: claim.id, enabledForCustomization: true, configurationApproved: true, priceApproved: true, reviewRequired: false,
         'inventory.approved': true, 'inventory.available': true, 'inventory.mode': claim.mode };
-      const increment = { commerceRevision: 1 };
+      const increment = { commerceRevision: 1, __v: 1 };
       if (claim.mode === 'tracked') { filter['inventory.quantity'] = { $gte: claim.quantity }; increment['inventory.quantity'] = -claim.quantity; }
       assertDatabaseWriteAllowed(ComponentOption.db, env);
       if (!(await ComponentOption.updateOne(filter, { $inc: increment }, { session })).matchedCount) throw commerceError(409, 'INSUFFICIENT_STOCK', 'A selected component is no longer available.');
@@ -38,7 +43,9 @@ export async function consumeInventory(lines, applied, session) {
   }
   for (const [id, entries] of byProduct) {
     const filter = { ...publicProductFilter(), _id: id, 'inventory.available': true };
-    const increment = { commerceRevision: 1 }, arrayFilters = [];
+    // Inventory changes are also admin editing boundaries. A stale merchant
+    // form must not restore pre-order quantities after a completed checkout.
+    const increment = { commerceRevision: 1, __v: 1 }, arrayFilters = [];
     for (const [index, claim] of entries.entries()) {
       if (claim.variantKey) {
         (filter.$and ||= []).push({ variants: { $elemMatch: { key: claim.variantKey, 'inventory.approved': true, 'inventory.available': true,
@@ -76,7 +83,7 @@ export async function restockInventory(order, session) {
   for (const claim of order.inventoryClaims) {
     if (claim.mode !== 'tracked') continue;
     const Model = claim.kind === 'component' ? ComponentOption : Product;
-    const filter = { _id: claim.id }, increment = { commerceRevision: 1 };
+    const filter = { _id: claim.id }, increment = { commerceRevision: 1, __v: 1 };
     if (claim.variantKey) {
       filter.variants = { $elemMatch: { key: claim.variantKey, 'inventory.mode': 'tracked', 'inventory.quantity': { $gte: 0, $lte: Number.MAX_SAFE_INTEGER - claim.quantity } } };
       increment['variants.$.inventory.quantity'] = claim.quantity;

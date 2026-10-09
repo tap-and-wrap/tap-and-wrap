@@ -5,8 +5,10 @@ import { rateLimit } from 'express-rate-limit';
 import { User } from '../models/User.js';
 import { Session } from '../models/Session.js';
 import { env, assertAuthConfig } from '../config/env.js';
-import { newSessionToken, hashSession, makeCsrfToken } from '../utils/tokens.js';
-import { requireAuth } from '../middleware/auth.js';
+import { newSessionToken, hashSession, makeCsrfToken, validCsrfToken } from '../utils/tokens.js';
+import { requireAuth, optionalAuth, sessionCookieOptions } from '../middleware/auth.js';
+import { newPasswordSchema } from '../utils/password.js';
+import { rotateGuestCookie } from '../commerce/ownership.js';
 import { csrfProtection } from '../middleware/csrf.js';
 import { requireCatalogDatabase } from './catalog.routes.js';
 import { assertDatabaseWriteAllowed } from '../config/database-safety.js';
@@ -14,9 +16,9 @@ import { captureAction } from '../tracking/service.js';
 
 const router=Router();
 const authRateLimit=rateLimit({windowMs:15*60*1000,limit:10,standardHeaders:'draft-8',legacyHeaders:false});
-const signupSchema=z.object({name:z.string().trim().min(2).max(100),email:z.email().max(254),password:z.string().min(12).max(128)}).strict();
+const signupSchema=z.object({name:z.string().trim().min(2).max(100),email:z.email().max(254),password:newPasswordSchema}).strict();
 const loginSchema=z.object({email:z.email(),password:z.string().min(1)}).strict();
-const cookieOptions={httpOnly:true,secure:env.nodeEnv==='production',sameSite:'lax',path:'/'};
+const cookieOptions=sessionCookieOptions;
 function setSessionCookie(res,token){res.cookie('tw_session',token,{...cookieOptions,maxAge:7*24*60*60*1000});}
 async function createSession(res,userId,authVersion=0){
  const token=newSessionToken();
@@ -25,7 +27,7 @@ async function createSession(res,userId,authVersion=0){
  setSessionCookie(res,token);
 }
 router.get('/csrf',(req,res,next)=>{
- try {assertAuthConfig();const token=makeCsrfToken(env.sessionSecret);res.cookie('tw_csrf',token,{...cookieOptions,maxAge:24*60*60*1000});res.json({ok:true,data:{csrfToken:token}});} catch(e){next(e);}
+ try {assertAuthConfig();const existing=req.cookies?.tw_csrf;const token=validCsrfToken(existing,env.sessionSecret)?existing:makeCsrfToken(env.sessionSecret);res.cookie('tw_csrf',token,{...cookieOptions,maxAge:24*60*60*1000});res.json({ok:true,data:{csrfToken:token}});} catch(e){next(e);}
 });
 router.post('/signup',authRateLimit,csrfProtection,async(req,res,next)=>{
  try {
@@ -51,7 +53,11 @@ router.post('/login',authRateLimit,csrfProtection,async(req,res,next)=>{
  } catch(e){next(e);}
 });
 router.get('/me',requireCatalogDatabase,requireAuth,(req,res)=>res.json({ok:true,data:{user:{id:String(req.user._id),name:req.user.name,email:req.user.email,role:req.user.role}}}));
-router.post('/logout',csrfProtection,requireAuth,async(req,res,next)=>{
- try {assertDatabaseWriteAllowed(Session.db,env);await Session.deleteOne({_id:req.session._id});res.clearCookie('tw_session',cookieOptions);res.json({ok:true,data:{loggedOut:true}});}catch(e){next(e);}
+router.post('/logout',csrfProtection,optionalAuth,async(req,res,next)=>{
+ try {assertDatabaseWriteAllowed(Session.db,env);if(req.session)await Session.deleteOne({_id:req.session._id});res.clearCookie('tw_session',cookieOptions);rotateGuestCookie(res);res.json({ok:true,data:{loggedOut:true}});}catch(e){next(e);}
 });
+export function resetAuthRateLimitsForTests() {
+ if (process.env.NODE_ENV !== 'test') throw new Error('Test-only rate limit helper.');
+ authRateLimit.resetKey('127.0.0.1');
+}
 export default router;

@@ -26,9 +26,10 @@ const notificationEventSchema = new mongoose.Schema({
   lastErrorCode: { type: String, maxlength: 80 },
   providerMessageId: { type: String, maxlength: 180, select: false },
   sentAt: Date,
-}, { timestamps: true, strict: 'throw' });
+}, { timestamps: true, strict: 'throw', minimize: false });
 
 notificationEventSchema.index({ state: 1, nextAttemptAt: 1, leaseUntil: 1 });
+notificationEventSchema.index({ state: 1, expiresAt: 1, _id: 1 });
 notificationEventSchema.index({ state: 1, leaseUntil: 1, attempts: 1 });
 notificationEventSchema.index({ orderId: 1, createdAt: -1 });
 notificationEventSchema.index({ userId: 1, createdAt: -1 });
@@ -37,7 +38,10 @@ notificationEventSchema.index({ createdAt: -1, _id: -1 });
 notificationEventSchema.pre('validate', function () {
   if (ORDER_NOTIFICATION_EVENTS.includes(this.event) && !this.orderId) this.invalidate('orderId', 'Order events require an order');
   if (ACCOUNT_NOTIFICATION_EVENTS.includes(this.event) && !this.userId) this.invalidate('userId', 'Account events require an account');
-  if (['password_reset', 'email_verification'].includes(this.event) && (!this.actionTokenId || !this.sealedActionToken || !this.expiresAt)) this.invalidate('actionTokenId', 'Account action events require an expiring encrypted token');
+  if (['password_reset', 'email_verification'].includes(this.event)
+    && (!this.actionTokenId || !this.expiresAt || (!['sent', 'dead', 'uncertain'].includes(this.state) && !this.sealedActionToken))) {
+    this.invalidate('actionTokenId', 'Pending account action events require an expiring encrypted token');
+  }
 });
 
 export const NotificationEvent = mongoose.models.NotificationEvent || mongoose.model('NotificationEvent', notificationEventSchema);

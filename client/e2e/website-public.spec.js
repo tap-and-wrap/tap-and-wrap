@@ -74,7 +74,7 @@ test('contact uses approved working contact links without a fake submission', as
   const fixture = await mockCatalog(page);
   await respond(page, '/public/site-content', content);
   await page.goto('/contact');
-  await expect(page.getByRole('link', { name: 'Email Tap & Wrap' })).toHaveAttribute('href', 'mailto:isolated@example.test');
+  await expect(page.getByRole('main').getByRole('link', { name: 'Email Tap & Wrap', exact: true })).toHaveAttribute('href', 'mailto:isolated@example.test');
   await expect(page.getByRole('link', { name: 'Call Tap & Wrap' })).toHaveAttribute('href', 'tel:01012345678');
   await expect(page.getByRole('main').getByRole('link', { name: 'WhatsApp', exact: true })).toHaveAttribute('rel', /noreferrer/);
   await expect(page.getByRole('main').getByRole('link', { name: 'WhatsApp', exact: true })).toHaveAttribute('href', 'https://wa.me/201012345678');
@@ -167,7 +167,14 @@ for (const width of [320, 768, 1440]) {
     await expect(logo).toHaveAttribute('width', '2000');
     await expect(logo).toHaveAttribute('height', '667');
     const box = await logo.boundingBox();
-    expect(Math.abs(box.x + box.width / 2 - width / 2)).toBeLessThan(2);
+    if (width >= 1024) {
+      expect(box.x).toBeLessThan(width / 4);
+      await expect(page.locator('.desktop-navigation')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Open menu', exact: true })).toBeHidden();
+    } else {
+      await expect(page.getByRole('button', { name: 'Open menu', exact: true })).toBeVisible();
+      expect(box.x).toBeLessThan(width / 2);
+    }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     for (const name of ['Contact', 'Privacy Policy']) {
       await page.getByRole('contentinfo').getByRole('link', { name, exact: true }).click();

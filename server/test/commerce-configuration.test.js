@@ -23,7 +23,7 @@ test('gift-box quote uses approved component prices, configured adjustments and 
   const config = template(chocolate);
   const quote = evaluateCustomization(config, [chocolate], input(config));
   assert.equal(quote.adjustmentPiastres, 3200);
-  assert.deepEqual(quote.inventoryClaims, [{ kind: 'component', id: String(chocolate._id), variantKey: null, quantityPerUnit: 2 }]);
+  assert.deepEqual(quote.inventoryClaims, [{ kind: 'component', id: String(chocolate._id), variantKey: null, mode: 'tracked', quantityPerUnit: 2 }]);
   assert.equal(quote.snapshot.version, 1);
   assert.equal(quote.snapshot.fields.message, 'Happy birthday');
   assert.equal(quote.fields.find((field) => field.key === 'photo').required, true);
@@ -178,4 +178,19 @@ test('specific bundle variants are allocated before wildcard entries of the same
   const result = evaluatePromotions([{ productId, variantKey: 'red', quantity: 1, unitPricePiastres: 1000 }, { productId, variantKey: 'blue', quantity: 1, unitPricePiastres: 2000 }], [configured]);
   assert.equal(result.applied.length, 1);
   assert.equal(result.discountPiastres, 375);
+});
+
+test('valid stored hyphenated template fields and upper bounds remain supported without schema relaxation', async () => {
+  const values = { key: 'contract-limits', name: 'Isolated limits', kind: 'laser_engraving', fields: [{ key: 'gift-message', label: 'Message', type: 'text', maxChars: 2000 }, { key: 'gift-photo', label: 'Photo', type: 'image', minFiles: 0, maxFiles: 10, maxBytes: 10485760, acceptedMimeTypes: ['image/png'] }], groups: [{ key: 'gift-extras', label: 'Extras', options: [{ key: 'gift-card', label: 'Card', minQuantity: 1, maxQuantity: 20, defaultQuantity: 20 }] }], engraving: { materials: [{ key: 'approved-metal', label: 'Approved metal' }], fonts: [{ key: 'approved-font', label: 'Approved font' }], maxChars: 500, maxCharsPerLine: 500, artworkAllowed: true, artworkMaxFiles: 5, artworkMaxBytes: 10485760 } };
+  await new CustomizationTemplate(values).validate();
+  for (const mutate of [
+    (value) => { value.fields[0].maxChars = 2001; },
+    (value) => { value.groups[0].options[0].maxQuantity = 21; },
+    (value) => { value.engraving.maxChars = 501; },
+    (value) => { value.engraving.artworkMaxFiles = 6; },
+    (value) => { value.engraving.artworkMaxBytes = 10485761; },
+  ]) {
+    const invalid = structuredClone(values); mutate(invalid);
+    await assert.rejects(new CustomizationTemplate(invalid).validate());
+  }
 });

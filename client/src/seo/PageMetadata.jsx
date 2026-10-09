@@ -1,15 +1,23 @@
-import { useEffect } from 'react';
+import { useLayoutEffect } from 'react';
 import { canonicalOrigin, canonicalUrl, cleanText, productMetadata, publicImageUrl, serializeJsonLd } from './metadata.js';
+import { matchingBootSnapshot, bootMetadataDecision, expireBootMetadata } from './boot.js';
 
 const configuredOrigin = import.meta.env.VITE_SITE_URL || '';
 const indexingEnabled = import.meta.env.VITE_SEO_INDEXING_ENABLED === 'true';
 
-export default function PageMetadata({ title = 'Tap & Wrap', description = '', pathname = '/', imageUrl, structuredData = [], indexable = false }) {
+export default function PageMetadata({ title = 'Tap & Wrap', description = '', pathname = '/', imageUrl, structuredData = [], productSignature, categoryProductCount, indexable = false, pending = false }) {
   const serialized = serializeJsonLd(structuredData);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const origin = canonicalOrigin(configuredOrigin);
     const canonical = canonicalUrl(origin, pathname);
-    const canIndex = Boolean(origin && canonical && indexingEnabled && indexable && window.location.origin === origin);
+    const boot = matchingBootSnapshot(pathname, window.location.origin);
+    const decision = bootMetadataDecision(boot, { pathname, currentOrigin: window.location.origin, configuredOrigin: origin, indexingEnabled, indexable, pending, productSignature, categoryProductCount, search: window.location.search });
+    const expiryTimer = boot ? setTimeout(() => expireBootMetadata(), Math.min(86400000, Math.max(0, Date.parse(boot.expiresAt) - Date.now()))) : null;
+    // Loading a reviewed static route must not briefly publish "Loading product"
+    // and noindex. Navigation to a route without a current reviewed snapshot
+    // remains fail-closed even if a browser build flag was accidentally enabled.
+    if (decision.preservePending) return () => clearTimeout(expiryTimer);
+    const canIndex = Boolean(canonical && decision.canIndex);
     document.title = cleanText(title, 160) || 'Tap & Wrap';
     const update = (selector, tag, attributes) => {
       const existing = document.head.querySelector(selector);
@@ -38,13 +46,14 @@ export default function PageMetadata({ title = 'Tap & Wrap', description = '', p
       script.textContent = serialized;
       document.head.append(script);
     }
+    return () => clearTimeout(expiryTimer);
   // JSON serialization gives metadata stable dependencies even when the caller builds an array inline.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, description, pathname, imageUrl, serialized, indexable]);
+  }, [title, description, pathname, imageUrl, serialized, productSignature, categoryProductCount, indexable, pending]);
   return null;
 }
 
 export function ProductMetadata({ product, loading = false, error = false, checkoutEnabled = false }) {
-  const metadata = !loading && !error && product ? productMetadata(product, configuredOrigin, { checkoutEnabled }) : { title: loading ? 'Loading product | Tap & Wrap' : 'Product unavailable | Tap & Wrap', description: loading ? 'Loading product information.' : 'This product is not available.', indexable: false };
-  return <PageMetadata {...metadata} />;
+  const metadata = !loading && !error && product ? productMetadata(product, configuredOrigin, { checkoutEnabled }) : { title: loading ? 'Loading product | Tap & Wrap' : 'Product unavailable | Tap & Wrap', description: loading ? 'Loading product information.' : 'This product is not available.', pathname: window.location.pathname, indexable: false };
+  return <PageMetadata {...metadata} pending={loading} />;
 }

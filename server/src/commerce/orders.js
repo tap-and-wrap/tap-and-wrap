@@ -16,6 +16,8 @@ import { enqueueOrderEvent } from './notifications.js';
 import { recordAdminAudit } from './audit.js';
 import { commerceError, checkedMoney } from './errors.js';
 import { recordOrderTracking } from '../tracking/service.js';
+import { presentOrder } from './order-presentation.js';
+export { presentOrder } from './order-presentation.js';
 
 export function normalizePhone(value) {
   if (typeof value !== 'string' || value.length > 25 || !/^[+0-9\s()-]+$/.test(value)) throw commerceError(400, 'INVALID_PHONE', 'Enter a valid Egyptian mobile number.');
@@ -27,14 +29,6 @@ export function normalizePhone(value) {
 }
 export function generateOrderNumber() { return String(randomInt(100000, 1000000)); }
 function requireCheckout() { if (!env.checkoutEnabled) throw commerceError(403, 'CHECKOUT_DISABLED', 'Checkout is not enabled. No order has been placed.'); }
-export function presentOrder(order, { admin = false } = {}) {
-  return { id: String(order._id), _id: String(order._id), orderNumber: order.orderNumber, customer: order.customer, lines: order.lines,
-    totals: order.totals, paymentMethod: order.paymentMethod, paymentState: order.paymentState, fulfillmentState: order.fulfillmentState,
-    history: order.history.map(entry => ({ ...entry, actor: String(entry.actor || '').startsWith('admin:') ? 'admin' : entry.actor })),
-    createdAt: order.createdAt, updatedAt: order.updatedAt, revision: order.revision,
-    canCancel: ['received', 'confirmed'].includes(order.fulfillmentState) && order.paymentState !== 'paid',
-    ...(admin ? { proofAvailable: Boolean(order.paymentProofId), uploadIds: order.uploadIds.map(String) } : {}) };
-}
 export async function checkoutQuote(owner, input, { session, userId } = {}) {
   const cart = await quoteCart(owner, { session, strict: true });
   if (!cart.items.length) throw commerceError(400, 'CART_EMPTY', 'Add an eligible product before checking out.');
@@ -135,7 +129,7 @@ export function validateOrderTransition(order, input, { admin = false } = {}) {
   if (nextPayment !== order.paymentState) {
     const allowed = order.paymentMethod === 'instapay' ? order.paymentState === 'awaiting_verification' && ['paid', 'rejected'].includes(nextPayment) : order.paymentState === 'unpaid' && nextPayment === 'paid' && ['out_for_delivery', 'delivered'].includes(order.fulfillmentState);
     if (!admin || !allowed) throw commerceError(409, 'INVALID_PAYMENT_TRANSITION', 'This payment transition is not permitted.');
-    if (nextPayment === 'rejected' && !input.reason?.trim()) throw commerceError(400, 'REASON_REQUIRED', 'Provide a reason for rejecting payment.');
+    if (nextPayment === 'rejected' && !(input.publicReason || input.internalNote || input.reason)?.trim()) throw commerceError(400, 'REASON_REQUIRED', 'Provide a reason for rejecting payment.');
   }
   if (nextFulfillment === 'cancelled' && nextPayment === 'paid') throw commerceError(409, 'REFUND_REVIEW_REQUIRED', 'Paid orders require a separate refund review before cancellation.');
   if (nextFulfillment !== 'received' && nextFulfillment !== 'cancelled' && order.paymentMethod === 'instapay' && nextPayment !== 'paid') throw commerceError(409, 'PAYMENT_VERIFICATION_REQUIRED', 'Verify the full InstaPay payment before fulfillment.');
@@ -152,8 +146,12 @@ export async function changeOrderState(id, owner, input, actor) {
     const from = { fulfillmentState: order.fulfillmentState, paymentState: order.paymentState };
     if (next.fulfillmentState === 'cancelled') await restockInventory(order, session);
     order.fulfillmentState = next.fulfillmentState; order.paymentState = next.paymentState; order.revision += 1;
-    const entry = { at: new Date(), event: 'state_changed', actor: actor?.role === 'admin' ? `admin:${actor._id}` : 'customer', from,
-      to: { fulfillmentState: next.fulfillmentState, paymentState: next.paymentState }, reason: input.reason || '' };
+    const isAdmin = actor?.role === 'admin';
+    if (!isAdmin && (input.internalNote || input.publicReason)) throw commerceError(403, 'ORDER_ACTION_FORBIDDEN', 'Administrative notes require administrator permission.');
+    const entry = { at: new Date(), event: 'state_changed', actor: isAdmin ? `admin:${actor._id}` : 'customer', from,
+      to: { fulfillmentState: next.fulfillmentState, paymentState: next.paymentState },
+      publicReason: isAdmin ? input.publicReason || '' : input.reason || '',
+      ...(isAdmin ? { internalNote: input.internalNote || input.reason || '' } : {}) };
     order.history.push(entry);
     // Update only mutable state. Saving a hydrated document must never rewrite
     // immutable snapshots, including Mixed arrays, during a state transition.
@@ -175,6 +173,11 @@ export async function getOwnedOrder(id, owner, { admin = false } = {}) {
   const order = await Order.findOne({ _id: id, ...(admin ? {} : { owner }) }).lean().maxTimeMS(3000);
   if (!order) throw commerceError(404, 'ORDER_NOT_FOUND', 'Order not found.');
   return order;
+}
+export async function findOwnedCheckoutSubmission(checkoutKey, owner) {
+  // A missing record is NOT proof that a concurrent submission cannot commit.
+  // This read never creates an order, resumes checkout or permits a new payload.
+  return Order.findOne({ owner, checkoutKey }).lean().maxTimeMS(3000);
 }
 export async function orderFiles(order) {
   return Upload.find({ _id: { $in: order.uploadIds }, orderId: order._id, state: 'retained' }).select('_id purpose mimeType sizeBytes productId fieldKey').lean().maxTimeMS(3000);

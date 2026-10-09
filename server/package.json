@@ -12,7 +12,10 @@
     "test": "node scripts/run-tests.js",
     "check": "node scripts/check.js",
     "catalog:import": "node scripts/import-catalog.js",
+    "catalog:identities": "node scripts/category-identities.js",
     "staging:check": "node scripts/check-staging.js",
+    "operations:check": "node scripts/check-operations.js",
+    "schema:init": "node scripts/initialize-schema.js",
     "commerce:jobs": "node scripts/run-commerce-jobs.js",
     "email:smoke": "node scripts/email-smoke-test.js",
     "seo:export": "node scripts/export-seo-catalog.js"

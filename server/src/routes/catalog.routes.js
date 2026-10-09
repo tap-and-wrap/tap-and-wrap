@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
+import { z } from 'zod';
 import { listProducts, getPublicProduct, listCategories, getPublicCategory } from '../catalog/service.js';
 import { captureAction, monetaryParameters } from '../tracking/service.js';
 import { parseInput, parseSlug, publicProductQuerySchema, categoryQuerySchema } from '../catalog/validation.js';
@@ -16,8 +17,11 @@ router.use(requireCatalogDatabase);
 
 router.get('/products', async (req, res) => {
   const query = parseInput(publicProductQuerySchema, req.query);
+  const searchId = req.get('x-search-event-id');
+  if (searchId && !query.q) return res.status(400).json({ ok: false, error: { code: 'INVALID_SEARCH_ACTION', message: 'A search action requires a valid search query.' } });
+  const eventId = searchId ? parseInput(z.string().uuid(), searchId) : null;
   const result = await listProducts(query);
-  const tracking = query.q ? await captureAction(req, 'Search', { content_type: 'product', content_ids: result.products.map(product => String(product._id)), num_items: result.pagination.total }, { sourcePath: '/shop' }) : null;
+  const tracking = eventId ? await captureAction(req, 'Search', { content_type: 'product', content_ids: result.products.map(product => String(product._id)), num_items: result.pagination.total }, { sourcePath: '/shop', dedupKey: eventId }) : null;
   res.set('Cache-Control', tracking ? 'private, no-store' : 'public, max-age=0, must-revalidate');
   res.json({ ok: true, data: { ...result, tracking } });
 });

@@ -1,6 +1,9 @@
-import 'dotenv/config';
+import { runtimeSettings } from './deployment.js';
+// Operational scripts set this before dynamic imports; their offline paths never load .env.
+if (process.env.TAP_WRAP_SKIP_DOTENV !== 'true') await import('dotenv/config');
 
 export const env = {
+  ...runtimeSettings(),
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT || 4000),
   mongoUri: process.env.MONGODB_URI || '',

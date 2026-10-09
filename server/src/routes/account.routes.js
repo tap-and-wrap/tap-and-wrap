@@ -9,6 +9,7 @@ import { requireCatalogDatabase } from './catalog.routes.js';
 import { User } from '../models/User.js';
 import { requestAccountAction, resetAccountPassword, verifyAccountEmail } from '../email/account-actions.js';
 import { emailSettings } from '../email/settings.js';
+import { newPasswordSchema } from '../utils/password.js';
 
 const router = Router();
 const rateLimitResponse = (req, res) => res.status(429).json({ ok: false, error: { code: 'RATE_LIMITED', message: 'Too many account requests. Please try again later.' } });
@@ -16,7 +17,7 @@ const requestLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHea
 const actionLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: 'draft-8', legacyHeaders: false, handler: rateLimitResponse });
 const emailSchema = z.object({ email: z.email().max(254) }).strict();
 const tokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
-const resetSchema = z.object({ token: tokenSchema, newPassword: z.string().min(12).max(128) }).strict();
+const resetSchema = z.object({ token: tokenSchema, newPassword: newPasswordSchema }).strict();
 const verificationSchema = z.object({ token: tokenSchema }).strict();
 const MESSAGE = 'If this account can receive email, a secure link has been queued. Delivery may be unavailable until email is configured.';
 

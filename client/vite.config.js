@@ -19,7 +19,10 @@ function protectedCatalogHeaders() {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), protectedCatalogHeaders()],
+  envDir: process.env.TAP_WRAP_ISOLATED_TEST === 'true' ? false : undefined,
+  plugins: [react(), tailwindcss(), protectedCatalogHeaders(), { name: 'isolated-no-network-hints', transformIndexHtml(html) {
+    return process.env.TAP_WRAP_ISOLATED_TEST === 'true' ? html.replace(/<link\b[^>]*\brel="(?:preconnect|dns-prefetch)"[^>]*>/gi, '') : html;
+  } }],
   server: { port: 5173 },
   build: { outDir: 'dist' },
 });

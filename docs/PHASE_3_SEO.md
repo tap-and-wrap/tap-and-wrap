@@ -1,5 +1,7 @@
 # Phase 3 SEO implementation and activation
 
+**Current Batch 3 contract:** this phase report is historical. [BATCH_3_SEO_OPERATIONS.md](BATCH_3_SEO_OPERATIONS.md) supersedes its earlier activation details with version-2 immutable publications, source/media freshness, an expected-publication-ID gate, explicit media-object verification, thin-category noindex, accurate Made by Request availability, report-only browser policy and bounded static/React boot. Keep indexing disabled; none of those live activation steps are authorized or verified by a local fixture run.
+
 This is a JavaScript build-time extension to the existing Vite application. It does not change frameworks, contact databases during a normal frontend build, or render public pages through Render on every request.
 
 ## Implemented

@@ -16,6 +16,7 @@ import { Upload } from '../src/models/Upload.js';
 import { UploadQuota } from '../src/models/UploadQuota.js';
 import { AdminAudit } from '../src/models/AdminAudit.js';
 import { NotificationEvent } from '../src/models/NotificationEvent.js';
+import CustomizationTemplate from '../src/models/CustomizationTemplate.js';
 import { newSessionToken, hashSession, makeCsrfToken } from '../src/utils/tokens.js';
 import { createMemoryStorage, setStorageForTests } from '../src/commerce/storage.js';
 import { generateOrderNumber, normalizePhone } from '../src/commerce/orders.js';
@@ -642,4 +643,72 @@ test('public order numbers use cryptographic six-digit generation and a database
   assert.ok(new Set(values).size > 190);
   const indexes = await Order.collection.indexes();
   assert.ok(indexes.some((index) => index.unique && index.key.orderNumber === 1));
+});
+
+test('customer order APIs hide legacy/private notes while authorized admins retain operational history', async () => {
+  env.checkoutEnabled = true;
+  const customer = await authenticated();
+  await add(customer.client);
+  const order = orderOf(await submit(customer.client, await review(customer.client)));
+  const privateNote = 'PRIVATE_RISK_REVIEW_FIXTURE';
+  await Order.updateOne({ _id: order.id }, { $push: { history: { event: 'legacy_review', actor: 'admin:fixture', reason: privateNote } } });
+  const admin = await authenticated('admin');
+  const changed = await admin.client.request(`${ADMIN_ROOT}/orders/${order.id}/state`, { method: 'PATCH', body: {
+    revision: 0, fulfillmentState: 'confirmed', internalNote: privateNote, publicReason: 'Your order has been confirmed.',
+  } });
+  assert.equal(changed.status, 200, JSON.stringify(changed.body));
+  assert.equal(orderOf(changed).history.at(-1).internalNote, privateNote);
+  const detail = await customer.client.request(`${ROOT}/orders/${order.id}`);
+  assert.equal(detail.status, 200);
+  assert.equal(JSON.stringify(detail.body).includes(privateNote), false);
+  assert.equal(orderOf(detail).history.at(-1).reason, 'Your order has been confirmed.');
+  const list = await customer.client.request(`${ROOT}/orders`);
+  assert.equal(JSON.stringify(list.body).includes(privateNote), false);
+  const tracking = await customer.client.request(`${ROOT}/orders/track`, { method: 'POST', body: { orderNumber: order.orderNumber, phone: CUSTOMER.phone } });
+  assert.equal(tracking.status, 200);
+  assert.equal(JSON.stringify(tracking.body).includes(privateNote), false);
+  const authorized = await admin.client.request(`${ADMIN_ROOT}/orders/${order.id}`);
+  assert.equal(orderOf(authorized).history.find(entry => entry.event === 'legacy_review').internalNote, privateNote);
+  const stranger = await authenticated();
+  assert.equal((await stranger.client.request(`${ROOT}/orders/${order.id}`)).status, 404);
+  assert.equal((await stranger.client.request(`${ADMIN_ROOT}/orders/${order.id}`)).status, 403);
+});
+
+test('actual normalized engraving DTO yields one private upload and immutable cart-to-order snapshots', async () => {
+  env.checkoutEnabled = true;
+  const template = await CustomizationTemplate.create({ key: 'engraving-contract-fixture', name: 'Approved engraving fixture', kind: 'laser_engraving', status: 'approved', active: true,
+    fields: [{ key: 'gift-message', label: 'Gift message', type: 'text', maxChars: 120 }],
+    engraving: { textRequired: true, maxChars: 80, baseAdjustmentPiastres: 500, artworkAllowed: true, artworkRequired: true, artworkMaxFiles: 1,
+      materials: [{ key: 'wood', label: 'Approved wood', adjustmentPiastres: 200 }], fonts: [{ key: 'plain', label: 'Approved plain font', adjustmentPiastres: 100 }] } });
+  await Product.updateOne({ _id: product._id }, { $set: { customization: { enabled: true, templateId: template._id, serviceKind: 'laser_engraving', serviceEntryEligible: true } } });
+  const guest = browserClient();
+  const serialized = data(await guest.request(`${ROOT}/customization/products/${product.slug}`)).template;
+  assert.equal(new Set(serialized.fields.map(field => field.key)).size, serialized.fields.length);
+  assert.equal(serialized.fields.filter(field => field.key === 'engraving_artwork').length, 1);
+  const signed = await guest.request(`${ROOT}/uploads/sign`, { method: 'POST', body: { purpose: 'artwork', mimeType: 'image/png', sizeBytes: PNG.length,
+    productId: String(product._id), fieldKey: 'engraving_artwork', templateId: String(template._id), templateVersion: template.version } });
+  assert.equal(signed.status, 201, JSON.stringify(signed.body));
+  const uploadId = data(signed).upload.id;
+  storage.put((await Upload.findById(uploadId).select('+temporaryKey')).temporaryKey, PNG);
+  assert.equal((await guest.request(`${ROOT}/uploads/${uploadId}/complete`, { method: 'POST', body: {} })).status, 200);
+  const customization = { templateId: serialized._id, version: serialized.version, selections: [], fields: {
+    'gift-message': 'Preserved hyphenated field', engraving_text: 'Immutable engraving text', engraving_material: 'wood', engraving_font: 'plain', engraving_artwork: [uploadId] } };
+  const quote = await guest.request(`${ROOT}/customization/quote`, { method: 'POST', body: { productId: String(product._id), customization } });
+  assert.equal(quote.status, 200, JSON.stringify(quote.body));
+  assert.equal(data(quote).unitPricePiastres, 12800);
+  const cart = await add(guest, { customization });
+  assert.equal(cart.items[0].customization.fields.engraving_artwork.length, 1);
+  const placed = await submit(guest, await review(guest));
+  assert.equal(placed.status, 201, JSON.stringify(placed.body));
+  const order = orderOf(placed);
+  assert.equal(order.lines[0].unitPricePiastres, 12800);
+  assert.equal(order.lines[0].customization.fields['gift-message'], 'Preserved hyphenated field');
+  assert.equal(order.lines[0].customization.engraving.text, 'Immutable engraving text');
+  assert.equal((await Upload.findById(uploadId)).state, 'retained');
+  assert.equal(await Upload.countDocuments({ purpose: 'artwork' }), 1);
+  await Product.updateOne({ _id: product._id }, { $set: { pricePiastres: 50000 } });
+  await CustomizationTemplate.updateOne({ _id: template._id }, { $set: { active: false } });
+  const unchanged = orderOf(await guest.request(`${ROOT}/orders/${order.id}`));
+  assert.deepEqual(unchanged.lines[0].customization, order.lines[0].customization);
+  assert.equal(unchanged.lines[0].unitPricePiastres, 12800);
 });

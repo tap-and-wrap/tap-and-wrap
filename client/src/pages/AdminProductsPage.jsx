@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { listAdminCategories, listAdminProducts } from '../services/catalog';
 import { adminErrorMessage, catalogId } from '../admin/catalog-form';
 import '../admin.css';
+import AdminLayout from '../admin/AdminLayout.jsx';
 
 const sortOptions = [
   ['newest', 'Newest'], ['featured', 'Featured'], ['best_sellers', 'Best Sellers'],
@@ -25,13 +26,13 @@ export default function AdminProductsPage() {
   });
   const categories = useQuery({
     queryKey: ['admin', 'categories', 'root'],
-    queryFn: ({ signal }) => listAdminCategories({ parent: 'root', page: 1, limit: 20 }, signal),
+    queryFn: ({ signal }) => listAdminCategories({ parent: 'root', page: 1, limit: 20, includeProductCounts: false }, signal),
     retry: false,
   });
   const subcategoryPage = Math.max(1, Number(filters.subcategoryPage) || 1);
   const subcategories = useQuery({
     queryKey: ['admin', 'categories', filters.category, subcategoryPage],
-    queryFn: ({ signal }) => listAdminCategories({ parent: filters.category, page: subcategoryPage, limit: 20 }, signal),
+    queryFn: ({ signal }) => listAdminCategories({ parent: filters.category, page: subcategoryPage, limit: 20, includeProductCounts: false }, signal),
     enabled: Boolean(filters.category),
     retry: false,
   });
@@ -62,11 +63,7 @@ export default function AdminProductsPage() {
   const rows = data?.products || [];
 
   return (
-    <main className="admin-shell">
-      <div className="admin-page-heading">
-        <div><p className="admin-eyebrow">Catalog management</p><h1>Products</h1><p>Review prices, inventory and publication before making a product public.</p></div>
-        <div className="admin-inline"><Link className="admin-button admin-button-secondary" to="/admin/website/overview">Dashboard</Link><Link className="admin-button admin-button-secondary" to="/admin/website/categories">Categories</Link><Link className="admin-button admin-button-secondary" to="/admin/website/homepage">Homepage selections</Link><Link className="admin-button admin-button-secondary" to="/admin/commerce/orders">Commerce management</Link><Link className="admin-button" to="/admin/products/new">Add product</Link></div>
-      </div>
+    <AdminLayout title="Products" description="Review prices, inventory and publication before making a product public." actions={<Link className="admin-button" to="/admin/products/new">Add product</Link>}>
       <section className="admin-panel" aria-label="Product filters">
         <form className="admin-search" onSubmit={submitSearch}>
           <label htmlFor="admin-product-search">Search product name</label>
@@ -99,6 +96,6 @@ export default function AdminProductsPage() {
           </div>}
         <nav className="admin-pagination" aria-label="Product pagination"><button type="button" className="admin-button admin-button-secondary" disabled={page <= 1} onClick={() => changePage(page - 1)}>Previous page</button><span>Page {page} of {Math.max(1, totalPages)}</span><button type="button" className="admin-button admin-button-secondary" disabled={page >= totalPages || page >= 200} onClick={() => changePage(page + 1)}>Next page</button></nav>
       </>}
-    </main>
+    </AdminLayout>
   );
 }

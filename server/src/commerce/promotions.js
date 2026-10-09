@@ -177,7 +177,9 @@ export async function claimDiscountRedemption(discountId, { session, userId, red
   if (!discount || !validDates(discount, now) || (discount.authenticatedOnly && !userId) || (discount.perCustomerLimit && redemptionCount >= discount.perCustomerLimit)) throw configurationError('This discount code is no longer available.', 'DISCOUNT_UNAVAILABLE', 409);
   const filter = { _id: discountId, active: true, usedCount: { $lt: discount.usageLimit ?? 1000000 }, $and: [{ $or: [{ startsAt: null }, { startsAt: { $lte: now } }] }, { $or: [{ endsAt: null }, { endsAt: { $gt: now } }] }] };
   assertDatabaseWriteAllowed(mongoose.connection, env);
-  const claimed = await DiscountCode.findOneAndUpdate(filter, { $inc: { usedCount: 1 } }, { session, new: true }).lean().maxTimeMS(3000);
+  // A new redemption invalidates merchant forms holding older usage/eligibility
+  // information, while remaining atomic with the order and usage-limit claim.
+  const claimed = await DiscountCode.findOneAndUpdate(filter, { $inc: { usedCount: 1, __v: 1 } }, { session, new: true }).lean().maxTimeMS(3000);
   if (!claimed) throw configurationError('This discount code’s usage limit has been reached.', 'DISCOUNT_UNAVAILABLE', 409);
   return claimed;
 }

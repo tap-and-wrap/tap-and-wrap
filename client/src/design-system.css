@@ -2,7 +2,8 @@
    White-led, premium gifting aesthetic inspired by supplied Hedeytyy references.
    Imported after styles.css; the supplied transparent logo is used unchanged.
 */
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=DM+Sans:wght@400;500;600&display=swap');
+/* Brand fonts are discovered directly in index.html, not through a late CSS
+   import. Optional display preserves fallback stability on slow first visits. */
 
 :root {
   --tw-bg: #FFFCFB;

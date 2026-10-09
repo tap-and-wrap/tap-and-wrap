@@ -22,6 +22,7 @@ import { calculatePromotions, claimDiscountRedemption, getShippingQuote, lockShi
 import { startTestDatabase } from './helpers/database.js';
 import { addCartItem } from '../src/commerce/cart.js';
 import { prepareCheckout, placeOrder } from '../src/commerce/orders.js';
+import { resetCommerceLimitsForTests } from '../src/commerce/routes.js';
 
 const models = [...new Set([User, Session, Product, Category, ComponentOption, CustomizationTemplate, DiscountCode, BundleRule, ShippingConfig, AdminAudit, DiscountRedemption, ...Object.values(mongoose.models)])];
 let stopDatabase;
@@ -39,7 +40,15 @@ async function account(role) {
   const csrf = makeCsrfToken(env.sessionSecret);
   return { user, headers: { Cookie: `tw_session=${token}; tw_csrf=${csrf}`, Origin: env.clientOrigin, 'x-csrf-token': csrf } };
 }
-async function request(path, { method = 'GET', body, headers = admin?.headers || {} } = {}) {
+async function request(path, { method = 'GET', body, headers = admin?.headers || {}, autoRevision = true } = {}) {
+  // Existing workflow fixtures explicitly read the editable revision before a
+  // mutation. Conflict tests below send captured revisions or disable this helper.
+  if (autoRevision && body && body.expectedRevision === undefined && (method === 'PATCH' || path.endsWith('/revisions'))) {
+    const match = path.match(/\/admin\/commerce\/(templates|components|bundles|discounts|products)\/([a-f\d]{24})/i);
+    const Model = match && { templates: CustomizationTemplate, components: ComponentOption, bundles: BundleRule, discounts: DiscountCode, products: Product }[match[1]];
+    const record = Model ? await Model.findById(match[2]).select('__v').lean() : path.endsWith('/admin/commerce/shipping') ? await ShippingConfig.findOne({ key: 'egypt-v1' }).select('__v').lean() : null;
+    if (Model || path.endsWith('/admin/commerce/shipping')) body = { ...body, expectedRevision: record?.__v ?? 0 };
+  }
   const response = await fetch(`${base}${path}`, { method, headers: { ...headers, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) }, body: body === undefined ? undefined : JSON.stringify(body) });
   const payload = await response.json();
   return { status: response.status, data: payload.data, error: payload.error, headers: response.headers, payload };
@@ -60,9 +69,164 @@ before(async () => {
   base = `http://127.0.0.1:${server.address().port}`;
 });
 beforeEach(async () => {
+  resetCommerceLimitsForTests();
   await Promise.all(models.filter((model) => ![User, Session].includes(model)).map((model) => model.deleteMany({})));
   main = await Category.create({ name: 'Isolated gifts', slug: 'isolated-gifts', active: true });
   child = await Category.create({ name: 'Isolated boxes', slug: 'isolated-boxes', parentId: main._id, active: true });
+});
+
+test('configuration edits require captured revisions and stale sequential forms never overwrite records', async () => {
+  const records = [
+    ['templates', await template('revision-draft', { status: 'draft', active: false }), { name: 'First template edit' }],
+    ['components', await ComponentOption.create({ name: 'Revision component', slug: 'revision-component', catalogRole: 'Customization Option', categoryId: main._id, mainImageKey: 'fixtures/component.webp', galleryKeys: ['fixtures/component.webp'] }), { name: 'First component edit' }],
+    ['discounts', await DiscountCode.create({ code: 'REVISION', name: 'Revision discount', kind: 'fixed', value: 100 }), { name: 'First discount edit' }],
+  ];
+  const first = await product('revision-bundle-first'), second = await product('revision-bundle-second');
+  records.push(['bundles', await BundleRule.create({ name: 'Revision bundle', items: [{ productId: first._id, quantity: 1 }, { productId: second._id, quantity: 1 }], discountKind: 'fixed', discountValue: 100 }), { name: 'First bundle edit' }]);
+  for (const [section, record, patch] of records) {
+    const path = `/api/v1/admin/commerce/${section}/${record._id}`;
+    const loaded = (await request(path)).data[section.slice(0, -1)];
+    assert.equal(loaded.revision, 0);
+    assert.equal(loaded.__v, undefined);
+    assert.equal((await request(path, { method: 'PATCH', body: patch, autoRevision: false })).status, 400);
+    const saved = await request(path, { method: 'PATCH', body: { ...patch, expectedRevision: loaded.revision } });
+    assert.equal(saved.status, 200, JSON.stringify(saved.error));
+    assert.equal(saved.data[section.slice(0, -1)].revision, 1);
+    const stale = await request(path, { method: 'PATCH', body: { name: 'Unsafe stale overwrite', expectedRevision: loaded.revision } });
+    assert.equal(stale.status, 409);
+    assert.equal(stale.error.code, 'EDIT_CONFLICT');
+    assert.equal((await request(path)).data[section.slice(0, -1)].name, patch.name);
+  }
+  assert.equal(await AdminAudit.countDocuments(), 4);
+});
+
+test('concurrent promotion/template edits allow one winner and a clear revision conflict', async () => {
+  const records = [
+    ['templates', await template('concurrent-draft', { status: 'draft', active: false })],
+    ['discounts', await DiscountCode.create({ code: 'CONCURRENT', name: 'Concurrent discount', kind: 'fixed', value: 100 })],
+  ];
+  for (const [section, record] of records) {
+    const path = `/api/v1/admin/commerce/${section}/${record._id}`;
+    const results = await Promise.all(['Editor A', 'Editor B'].map((name) => request(path, { method: 'PATCH', body: { expectedRevision: 0, name } })));
+    assert.deepEqual(results.map((result) => result.status).sort(), [200, 409]);
+    assert.equal(results.find((result) => result.status === 409).error.code, 'EDIT_CONFLICT');
+    assert.equal((await request(path)).data[section.slice(0, -1)].revision, 1);
+  }
+});
+
+test('creating a revision fences its source so stale approved-template editors cannot create extra versions', async () => {
+  const approved = await template('approved-revision-fence');
+  const path = `/api/v1/admin/commerce/templates/${approved._id}`;
+  const first = await request(`${path}/revisions`, { method: 'POST', body: { expectedRevision: 0 } });
+  assert.equal(first.status, 201, JSON.stringify(first.error));
+  assert.equal(first.data.template.version, 2);
+  const stale = await request(path, { method: 'PATCH', body: { expectedRevision: 0, name: 'Stale rules' } });
+  assert.equal(stale.status, 409);
+  assert.equal(await CustomizationTemplate.countDocuments({ key: approved.key }), 2);
+  assert.equal((await CustomizationTemplate.findById(approved._id)).name, approved.name);
+});
+
+test('product configuration and first shipping edits cannot reuse a stale form revision', async () => {
+  const ready = await product('configured-revision');
+  const path = `/api/v1/admin/commerce/products/${ready._id}/configuration`;
+  const fields = [{ key: 'gift-message', label: 'Gift message', type: 'short_text', maxLength: 5000, required: false }];
+  const saved = await request(path, { method: 'PATCH', body: { expectedRevision: 0, personalization: { fields } } });
+  assert.equal(saved.status, 200, JSON.stringify(saved.error));
+  assert.equal(saved.data.product.revision, 1);
+  assert.equal((await request(path, { method: 'PATCH', body: { expectedRevision: 0, personalization: { fields: [] } } })).status, 409);
+  assert.equal((await Product.findById(ready._id)).personalization.fields[0].key, 'gift-message');
+  const shippingPath = '/api/v1/admin/commerce/shipping';
+  const initial = (await request(shippingPath)).data.configuration;
+  assert.equal(initial.revision, 0);
+  const shipping = await request(shippingPath, { method: 'PATCH', body: { expectedRevision: 0, cairoGizaPiastres: 9500 } });
+  assert.equal(shipping.status, 200, JSON.stringify(shipping.error));
+  assert.equal(shipping.data.configuration.revision, 1);
+  assert.equal((await request(shippingPath, { method: 'PATCH', body: { expectedRevision: 0, cairoGizaPiastres: 1 } })).status, 409);
+  assert.equal((await ShippingConfig.findOne()).cairoGizaPiastres, 9500);
+});
+
+test('real template CRUD rejects unsupported option availability and enforces configured limits', async () => {
+  const base = { key: 'strict-options', name: 'Strict option fixture', kind: 'generic', groups: [{ key: 'extras', label: 'Extras', options: [{ key: 'gift-card', label: 'Card', minQuantity: 1, maxQuantity: 20, defaultQuantity: 0 }] }], fields: [{ key: 'gift-message', label: 'Message', type: 'text', maxChars: 2000 }] };
+  const invalid = structuredClone(base); invalid.groups[0].options[0].available = true;
+  assert.equal((await request('/api/v1/admin/commerce/templates', { method: 'POST', body: invalid })).status, 400);
+  assert.equal(await CustomizationTemplate.countDocuments(), 0);
+  const created = await request('/api/v1/admin/commerce/templates', { method: 'POST', body: base });
+  assert.equal(created.status, 201, JSON.stringify(created.error));
+  const path = `/api/v1/admin/commerce/templates/${created.data.template._id}`;
+  const tooMany = structuredClone(base.groups); tooMany[0].options[0].maxQuantity = 21;
+  assert.equal((await request(path, { method: 'PATCH', body: { expectedRevision: 0, groups: tooMany } })).status, 400);
+  const saved = await request(path, { method: 'PATCH', body: { expectedRevision: 0, name: 'Edited strict fixture' } });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.data.template.groups[0].options[0].available, undefined);
+});
+
+test('actual engraving DTO has unique fields and hyphenated fields flow through quote and cart validation', async () => {
+  const laser = await template('serialized-laser', { kind: 'laser_engraving', fields: [{ key: 'gift-message', label: 'Message', type: 'text', maxChars: 2000 }], engraving: { materials: [{ key: 'steel', label: 'Approved steel' }], fonts: [{ key: 'script', label: 'Approved script' }], placements: [{ key: 'front', label: 'Front' }], maxChars: 500, maxCharsPerLine: 500, artworkAllowed: true, artworkMaxFiles: 5 } });
+  const ready = await product('serialized-engraving', { customization: { enabled: true, serviceKind: 'laser_engraving', templateId: laser._id, serviceEntryEligible: true } });
+  const response = await request(`/api/v1/commerce/customization/products/${ready.slug}`);
+  assert.equal(response.status, 200, JSON.stringify(response.error));
+  const definitions = response.data.template.fields;
+  assert.equal(new Set(definitions.map((field) => field.key)).size, definitions.length);
+  for (const key of ['engraving_text', 'engraving_material', 'engraving_font', 'engraving_placement', 'engraving_artwork']) assert.equal(definitions.filter((field) => field.key === key).length, 1);
+  assert.deepEqual(definitions.find((field) => field.key === 'engraving_material').options, [{ key: 'steel', label: 'Approved steel' }]);
+  const customization = { templateId: String(laser._id), version: 1, selections: [], fields: { 'gift-message': 'A real-contract fixture', engraving_text: 'Approved message', engraving_material: 'steel', engraving_font: 'script', engraving_placement: 'front' } };
+  const quote = await request('/api/v1/commerce/customization/quote', { method: 'POST', body: { productId: String(ready._id), customization } });
+  assert.equal(quote.status, 200, JSON.stringify(quote.error));
+  const cart = await request('/api/v1/commerce/cart/items', { method: 'POST', body: { productId: String(ready._id), quantity: 1, customization } });
+  assert.equal(cart.status, 201, JSON.stringify(cart.error));
+  assert.equal(cart.data.cart.items[0].customization.fields['gift-message'], 'A real-contract fixture');
+  const invalid = structuredClone(customization); invalid.fields['gift-message'] = 'x'.repeat(2001);
+  assert.equal((await request('/api/v1/commerce/customization/quote', { method: 'POST', body: { productId: String(ready._id), customization: invalid } })).status, 400);
+});
+
+test('configured personalization character limits count Unicode characters consistently with the commerce request contract', async () => {
+  const ready = await product('unicode-personalization', { personalization: { fields: [{ key: 'gift-message', label: 'Message', type: 'long_text', maxLength: 5000, required: true }] } });
+  const path = '/api/v1/commerce/cart/items';
+  const valid = { productId: String(ready._id), quantity: 1, personalization: { 'gift-message': '🎁'.repeat(5000) } };
+  const added = await request(path, { method: 'POST', body: valid });
+  assert.equal(added.status, 201, JSON.stringify(added.error));
+  assert.equal(Array.from(added.data.cart.items[0].personalization['gift-message']).length, 5000);
+  assert.equal((await request(path, { method: 'POST', body: { ...valid, personalization: { 'gift-message': '🎁'.repeat(5001) } } })).status, 400);
+});
+
+test('component creation and concurrent category reparenting cannot commit an invalid catalog relationship', async () => {
+  for (let index = 0; index < 6; index += 1) {
+    const category = await Category.create({ name: `Race category ${index}`, slug: `race-category-${index}`, parentId: null });
+    const [component, reparent] = await Promise.all([
+      request('/api/v1/admin/commerce/components', { method: 'POST', body: { name: `Race component ${index}`, slug: `race-component-${index}`, categoryId: String(category._id), mainImageKey: 'fixtures/race.webp', galleryKeys: ['fixtures/race.webp'] } }),
+      request(`/api/v1/admin/categories/${category._id}`, { method: 'PATCH', body: { expectedRevision: 0, parentId: String(main._id) } }),
+    ]);
+    assert.ok([201, 400, 409].includes(component.status), JSON.stringify(component));
+    assert.ok([200, 409].includes(reparent.status), JSON.stringify(reparent));
+    assert.equal(component.status === 201 && reparent.status === 200, false, 'both conflicting relationship changes must not commit');
+    const current = await Category.findById(category._id).lean();
+    if (component.status === 201) {
+      assert.equal(current.parentId, null);
+      assert.equal(await ComponentOption.countDocuments({ categoryId: category._id }), 1);
+    } else {
+      assert.equal(String(current.parentId), String(main._id));
+      assert.equal(await ComponentOption.countDocuments({ categoryId: category._id }), 0);
+    }
+  }
+});
+
+test('legacy imported component revisions initialize only within an authorized edit and then reject stale writes', async () => {
+  const component = await ComponentOption.create({ name: 'Legacy revision component', slug: 'legacy-revision-component', catalogRole: 'Customization Option', categoryId: main._id, mainImageKey: 'fixtures/legacy.webp', galleryKeys: ['fixtures/legacy.webp'] });
+  await ComponentOption.collection.updateOne({ _id: component._id }, { $unset: { __v: '' } });
+  const path = `/api/v1/admin/commerce/components/${component._id}`;
+  const loaded = await request(path);
+  assert.equal(loaded.data.component.revision, 0);
+  assert.equal((await ComponentOption.collection.findOne({ _id: component._id })).__v, undefined, 'GET must not normalize or write imported data');
+  const saved = await request(path, { method: 'PATCH', body: { expectedRevision: 0, name: 'Authorized legacy component edit' } });
+  assert.equal(saved.status, 200, JSON.stringify(saved.error));
+  assert.equal(saved.data.component.revision, 1);
+  assert.equal((await request(path, { method: 'PATCH', body: { expectedRevision: 0, name: 'Stale imported edit' } })).status, 409);
+  const current = await ComponentOption.findById(component._id).lean();
+  assert.equal(current.name, 'Authorized legacy component edit');
+  assert.equal(current.status, 'draft');
+  assert.equal(current.priceApproved, false);
+  assert.equal(current.inventory.approved, false);
+  assert.equal(current.inventory.quantity, 10);
 });
 after(async () => {
   if (server) await new Promise((resolve) => server.close(resolve));

@@ -7,9 +7,9 @@ export default function HomePage() {
   const content = useSiteContent();
   const reviews = content.data?.featuredReviews || [];
   return <main>
-    <section className="hero">
+    <section className="hero" aria-labelledby="home-hero-heading">
       <p className="eyebrow">A LITTLE MORE THAN A GIFT</p>
-      <h1>Makes someone’s heart flap <em>with Tap & Wrap.</em></h1>
+      <h1 id="home-hero-heading">Makes someone’s heart flap <em>with Tap & Wrap.</em></h1>
       <p className="hero-description">Thoughtful gifts, personal touches and beautiful moments — all wrapped with love.</p>
       <div className="button-group"><Link to="/shop" className="button button-dark">Shop Gifts</Link><Link to="/customize" className="button button-outline">Customize a Gift</Link></div>
       <DeveloperHeroMedia/>

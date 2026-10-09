@@ -7,6 +7,12 @@ import { Product } from '../src/models/Product.js';
 import { ComponentOption } from '../src/models/ComponentOption.js';
 import { Category } from '../src/models/Category.js';
 import { startTestDatabase } from './helpers/database.js';
+import { planCategoryIdentityMigration, applyCategoryIdentityMigration } from '../src/catalog/category-import-identity.js';
+import { parseIdentityArguments } from '../scripts/category-identities.js';
+import { writeImportReport } from '../src/catalog/import-report.js';
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 
 function fixtureRow(overrides = {}) {
   return { 'Product ID': 'B1-TRO-001', 'Product Name': 'Custom Sports Awards Set',
@@ -125,8 +131,23 @@ test('Made by Request preserves source quantity but has no inventory deduction q
   assert.equal(plan.products[0].status, 'draft');
 });
 
+test('workbook currency is parsed into exact piastres without rounding invalid amounts', () => {
+  for (const [input, expected] of [['0.03', 3], ['1.01', 101], [125.25, 12525],
+    ['90071992547409.91', Number.MAX_SAFE_INTEGER], ['', null]]) {
+    const plan = buildCatalogPlan(fixtureSheets([fixtureRow({ 'Price EGP': input })]));
+    assert.deepEqual(plan.report.invalidRows, [], String(input));
+    assert.equal(plan.products[0].pricePiastres, expected);
+    assert.equal(plan.products[0].priceApproved, false);
+  }
+  for (const input of ['1.001', '90071992547409.92', '-1', '1e3', Infinity, true, '1,000']) {
+    const plan = buildCatalogPlan(fixtureSheets([fixtureRow({ 'Price EGP': input })]));
+    assert.equal(plan.products.length, 0, String(input));
+    assert.match(plan.report.invalidRows[0].issues.join(' '), /integer piastres/, String(input));
+  }
+});
+
 test('insert-only reimports preserve merchant edits and timestamps and report cross-collection classification changes', async () => {
-  const database = await startTestDatabase({ models: [Product, Category, ComponentOption] });
+  const database = await startTestDatabase({ models: [Product, Category, ComponentOption], transactions: true });
   try {
     const records = [fixtureRow(), fixtureRow({ 'Product ID': 'C1-001', 'Catalog Role': 'Customization Option' })];
     const firstPlan = buildCatalogPlan(fixtureSheets(records));
@@ -168,4 +189,170 @@ test('insert-only reimports preserve merchant edits and timestamps and report cr
     assert.deepEqual(await Product.findById(product._id).lean(), before);
     assert.deepEqual(await ComponentOption.findOne({ externalCatalogId: 'C1-001' }).lean(), componentBefore);
   } finally { await database.stop(); }
+});
+
+test('immutable category source keys preserve root/child IDs after merchant name and slug changes', async () => {
+  const database = await startTestDatabase({ transactions: true });
+  try {
+    const plan = buildCatalogPlan(fixtureSheets(), { workbookHash: 'a'.repeat(64) });
+    await applyCatalogPlan(plan, { Product, Category, ComponentOption });
+    const categories = await Category.find({}).select('+importCategoryKey').sort({ parentId: 1 });
+    for (const [index, category] of categories.entries()) { category.name = `Merchant category ${index}`; category.slug = `merchant-category-${index}`; category.featured = true; category.order = 90 + index; await category.save(); }
+    const before = await Category.find({}).select('+importCategoryKey +nameNormalized +relationshipRevision').sort({ _id: 1 }).lean();
+    const result = await applyCatalogPlan(plan, { Product, Category, ComponentOption });
+    assert.deepEqual(result.inserted, { products: 0, components: 0, categories: 0 });
+    assert.deepEqual(result.preserved, { products: 1, components: 0, categories: 2 });
+    assert.deepEqual(await Category.find({}).select('+importCategoryKey +nameNormalized +relationshipRevision').sort({ _id: 1 }).lean(), before);
+    const incoming = fixtureRow({ 'Product ID': 'B1-TRO-002', 'Product Name': 'Second source product' });
+    await applyCatalogPlan(buildCatalogPlan(fixtureSheets([fixtureRow(), incoming])), { Product, Category, ComponentOption });
+    const old = await Product.findOne({ externalCatalogId: 'B1-TRO-001' }).lean();
+    const added = await Product.findOne({ externalCatalogId: 'B1-TRO-002' }).lean();
+    assert.equal(String(added.categoryId), String(old.categoryId));
+    assert.equal(String(added.subcategoryId), String(old.subcategoryId));
+    assert.equal(await Category.countDocuments(), 2);
+  } finally { await database.stop(); }
+});
+
+test('changed source grouping for a stable catalog ID requires review rather than creating duplicate categories', async () => {
+  const database = await startTestDatabase({ transactions: true });
+  try {
+    const models = { Product, Category, ComponentOption };
+    await applyCatalogPlan(buildCatalogPlan(fixtureSheets()), models);
+    const before = await Category.find().sort({ _id: 1 }).lean();
+    const plan = buildCatalogPlan(fixtureSheets([fixtureRow({ 'Main Category': 'Renamed source grouping' })]));
+    const review = await planCategoryIdentityMigration(plan, models);
+    assert.match(review.issues[0].reason, /Source grouping changed/);
+    await assert.rejects(applyCatalogPlan(plan, models), { code: 'CATEGORY_IMPORT_IDENTITY_AMBIGUOUS' });
+    assert.deepEqual(await Category.find().sort({ _id: 1 }).lean(), before);
+    assert.equal(await Product.countDocuments(), 1);
+  } finally { await database.stop(); }
+});
+
+test('legacy renamed categories resolve without writes and explicit identity migration preserves merchant fields', async () => {
+  const database = await startTestDatabase({ transactions: true });
+  try {
+    const plan = buildCatalogPlan(fixtureSheets(), { workbookHash: 'a'.repeat(64) });
+    await applyCatalogPlan(plan, { Product, Category, ComponentOption });
+    await Category.collection.updateMany({}, { $unset: { importCategoryKey: '' } });
+    const categories = await Category.find({});
+    for (const [index, category] of categories.entries()) { category.name = `Renamed legacy ${index}`; category.slug = `renamed-legacy-${index}`; category.active = false; await category.save(); }
+    const before = await Category.find({}).select('+importCategoryKey +nameNormalized +relationshipRevision').sort({ _id: 1 }).lean();
+    const productBefore = await Product.findOne().lean();
+    const result = await applyCatalogPlan(plan, { Product, Category, ComponentOption });
+    assert.equal(result.legacyCategoryIdentities.length, 2);
+    assert.deepEqual(await Category.find({}).select('+importCategoryKey +nameNormalized +relationshipRevision').sort({ _id: 1 }).lean(), before, 'compatibility resolution must not backfill automatically');
+    const reviewed = await planCategoryIdentityMigration(plan, { Product, Category, ComponentOption });
+    assert.equal(reviewed.writes, 0);
+    assert.equal(reviewed.proposals.length, 2);
+    assert.deepEqual(reviewed.issues, []);
+    assert.ok(reviewed.proposals.every((proposal) => proposal.evidence === 'source-records'));
+    await assert.rejects(applyCategoryIdentityMigration(plan, reviewed, { Product, Category, ComponentOption }), /explicitly confirmed/);
+    const migrated = await applyCategoryIdentityMigration(plan, reviewed, { Product, Category, ComponentOption }, { confirm: true });
+    assert.equal(migrated.updated, 2);
+    const after = await Category.find({}).select('+importCategoryKey +nameNormalized +relationshipRevision').sort({ _id: 1 }).lean();
+    for (let index = 0; index < before.length; index++) {
+      const { importCategoryKey, __v, ...merchant } = after[index];
+      const { __v: oldVersion, ...oldMerchant } = before[index];
+      assert.deepEqual(merchant, oldMerchant);
+      assert.equal(__v, oldVersion + 1);
+      assert.ok(plan.categories.some((category) => category.key === importCategoryKey));
+    }
+    assert.deepEqual(await Product.findOne().lean(), productBefore);
+    assert.equal((await applyCategoryIdentityMigration(plan, reviewed, { Product, Category, ComponentOption }, { confirm: true })).updated, 0, 'reapplying metadata migration is safe');
+    assert.equal((await applyCatalogPlan(plan, { Product, Category, ComponentOption })).legacyCategoryIdentities.length, 0);
+  } finally { await database.stop(); }
+});
+
+test('identity migration fails closed on stale review and ambiguous source relationships before metadata writes', async () => {
+  const database = await startTestDatabase({ transactions: true });
+  try {
+    const plan = buildCatalogPlan(fixtureSheets(), { workbookHash: 'a'.repeat(64) });
+    await applyCatalogPlan(plan, { Product, Category, ComponentOption });
+    await Category.collection.updateMany({}, { $unset: { importCategoryKey: '' } });
+    const reviewed = await planCategoryIdentityMigration(plan, { Product, Category, ComponentOption });
+    const root = await Category.findOne({ parentId: null }); root.name = 'Merchant changed since review'; await root.save();
+    await assert.rejects(applyCategoryIdentityMigration(plan, reviewed, { Product, Category, ComponentOption }, { confirm: true }), { code: 'CATEGORY_IMPORT_IDENTITY_AMBIGUOUS' });
+    assert.equal(await Category.countDocuments({ importCategoryKey: { $exists: true } }), 0);
+    const other = await Category.create({ name: 'Different root', slug: 'different-root' });
+    await Product.collection.updateOne({ externalCatalogId: 'B1-TRO-001' }, { $set: { categoryId: other._id } });
+    const report = await planCategoryIdentityMigration(plan, { Product, Category, ComponentOption });
+    assert.ok(report.issues.length);
+    await assert.rejects(applyCatalogPlan(plan, { Product, Category, ComponentOption }), { code: 'CATEGORY_IMPORT_IDENTITY_AMBIGUOUS' });
+    assert.equal(await Category.countDocuments(), 3);
+  } finally { await database.stop(); }
+});
+
+test('committed batches are journaled while a failed batch rolls back and resumes without duplicates', async () => {
+  const database = await startTestDatabase({ transactions: true });
+  const original = Product.bulkWrite;
+  try {
+    const plan = buildCatalogPlan(fixtureSheets([fixtureRow(), fixtureRow({ 'Product ID': 'B1-TRO-002' }), fixtureRow({ 'Product ID': 'B1-TRO-003' })]));
+    const snapshots = [];
+    let calls = 0;
+    Product.bulkWrite = async function (operations, options) {
+      if (++calls === 1) return original.call(this, operations, options);
+      const result = await original.call(this, operations.slice(0, 1), options);
+      throw Object.assign(new Error('SYNTHETIC_SECRET_DRIVER_MESSAGE'), { result });
+    };
+    let failure;
+    try { await applyCatalogPlan(plan, { Product, Category, ComponentOption, batchSize: 1, onProgress: async (report) => snapshots.push(report) }); } catch (error) { failure = error; }
+    assert.ok(failure);
+    assert.equal(failure.importReport.status, 'failed');
+    assert.equal(failure.importReport.inserted.products, 1);
+    assert.equal(failure.importReport.inserted.categories, 2);
+    assert.equal(failure.importReport.journal.at(-1).uncertain, false);
+    assert.equal(failure.importReport.journal.at(-1).inserted, 0);
+    assert.equal(failure.importReport.journal.at(-1).rolledBack, true);
+    assert.equal(JSON.stringify(snapshots).includes('SYNTHETIC_SECRET_DRIVER_MESSAGE'), false);
+    assert.equal(snapshots.at(-1).status, 'failed');
+    const before = await Product.findOne().lean();
+    Product.bulkWrite = original;
+    const resumed = await applyCatalogPlan(plan, { Product, Category, ComponentOption });
+    assert.deepEqual(resumed.inserted, { products: 2, components: 0, categories: 0 });
+    assert.deepEqual(resumed.preserved, { products: 1, components: 0, categories: 2 });
+    assert.equal(resumed.status, 'completed');
+    assert.deepEqual(await Product.findById(before._id).lean(), before);
+    assert.equal(await Product.countDocuments(), 3);
+  } finally { Product.bulkWrite = original; await database.stop(); }
+});
+
+test('journal persistence interruption retains committed counts and pre-commit failures report rollback', async () => {
+  const database = await startTestDatabase({ transactions: true });
+  const original = Product.bulkWrite;
+  try {
+    const plan = buildCatalogPlan(fixtureSheets());
+    let failure;
+    try { await applyCatalogPlan(plan, { Product, Category, ComponentOption, onProgress: async (report) => { if (report.inserted.products) throw new Error('Synthetic report disk failure'); } }); } catch (error) { failure = error; }
+    assert.equal(failure.importReport.inserted.products, 1);
+    assert.equal(failure.importReport.status, 'failed');
+    assert.equal(await Product.countDocuments(), 1);
+    await Product.deleteMany({});
+    Product.bulkWrite = async () => { throw new Error('Synthetic unacknowledged network failure'); };
+    await assert.rejects(applyCatalogPlan(plan, { Product, Category, ComponentOption }), (error) => {
+      assert.equal(error.importReport.journal.at(-1).uncertain, false);
+      assert.equal(error.importReport.journal.at(-1).inserted, 0);
+      assert.equal(error.importReport.journal.at(-1).rolledBack, true);
+      return true;
+    });
+  } finally { Product.bulkWrite = original; await database.stop(); }
+});
+
+test('identity command defaults offline and report replacement remains atomic and project-scoped', async () => {
+  assert.equal(parseIdentityArguments([]).inspect, undefined);
+  assert.throws(() => parseIdentityArguments(['--inspect']), /requires/);
+  assert.throws(() => parseIdentityArguments(['--apply', '--target', 'staging', '--confirm-staging']), /reviewed/);
+  assert.throws(() => parseIdentityArguments(['--inspect', '--target', 'production', '--confirm-staging']), /Production/);
+  const cache = fileURLToPath(new URL('../.cache/', import.meta.url));
+  await mkdir(cache, { recursive: true });
+  const directory = await mkdtemp(path.join(cache, 'import-journal-'));
+  try {
+    const report = path.join(directory, 'report.json');
+    await writeImportReport(report, { status: 'applying', count: 1 });
+    await writeImportReport(report, { status: 'failed', count: 2 });
+    assert.deepEqual(JSON.parse(await readFile(report, 'utf8')), { status: 'failed', count: 2 });
+    await assert.rejects(writeImportReport(path.resolve(cache, '../../../../outside.json'), {}), /inside this project/);
+  } finally {
+    if (!path.resolve(directory).startsWith(path.resolve(cache) + path.sep)) throw new Error('Unsafe test artifact cleanup target.');
+    await rm(directory, { recursive: true, force: true });
+  }
 });

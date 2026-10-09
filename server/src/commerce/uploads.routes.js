@@ -59,8 +59,11 @@ router.delete('/:id', signingLimiter, async (req, res, next) => {
 
 // The browser calls this only after a View File / View Proof action. No GET URL is ever signed publicly.
 router.get('/:id/content', contentLimiter, async (req, res, next) => {
+  const controller = new AbortController();
+  const abort = () => { if (!res.writableFinished) controller.abort(); };
+  req.once('aborted', abort); res.once('close', abort);
   try {
-    const result = await openPrivateUpload(idSchema.parse(req.params.id), req.commerceOwner, { adminUser: req.user });
+    const result = await openPrivateUpload(idSchema.parse(req.params.id), req.commerceOwner, { adminUser: req.user, signal: controller.signal });
     res.set('Content-Type', result.mimeType);
     res.set('Content-Length', String(result.sizeBytes));
     res.set('Content-Disposition', 'inline; filename="private-image"');
@@ -70,7 +73,7 @@ router.get('/:id/content', contentLimiter, async (req, res, next) => {
   } catch (error) {
     if (res.headersSent) res.destroy();
     else next(error);
-  }
+  } finally { req.removeListener('aborted', abort); res.removeListener('close', abort); }
 });
 
 export default router;

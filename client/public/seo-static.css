@@ -1,5 +1,5 @@
 /* Only the no-JavaScript prerender content uses these classes. The interactive design remains unchanged. */
-.seo-static-header { display:flex; flex-direction:column; align-items:center; gap:16px; padding:24px; background:#fff; border-bottom:1px solid #eadad5; }
+.seo-static-header { display:flex; justify-content:space-between; align-items:center; gap:24px; min-height:84px; padding:16px clamp(16px,4vw,64px); background:#fff; border-bottom:1px solid #eadad5; }
 .seo-static-header img { display:block; width:180px; height:auto; }
 .seo-static-header nav, .seo-static-footer { display:flex; flex-wrap:wrap; justify-content:center; gap:16px; }
 [data-prerender] { overflow-wrap:anywhere; }
@@ -9,4 +9,5 @@
 [data-prerender] .seo-product-list img { display:block; width:100%; height:auto; aspect-ratio:1; object-fit:cover; }
 [data-prerender] .seo-product-list h2 { font-size:24px; overflow-wrap:anywhere; }
 .seo-static-footer { padding:32px 20px; border-top:1px solid #eadad5; }
+@media (max-width:767px) { .seo-static-header { flex-direction:column; gap:12px; padding:16px; } }
 @media (min-width:1000px) { [data-prerender] .seo-product-list { grid-template-columns:repeat(4,minmax(0,1fr)); } }

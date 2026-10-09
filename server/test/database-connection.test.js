@@ -18,9 +18,9 @@ import { MetaEvent } from '../src/models/MetaEvent.js';
 const stagingUri = 'mongodb+srv://fixture-user:fixture-secret@fixture.mongodb.net/tapandwrap_staging?retryWrites=true&w=majority';
 const models = [Product, Category, ComponentOption, User, Session, ...commerceModels, ...websiteModels, AccountActionToken, EmailRateWindow, TrackingConsent, MetaEvent];
 
-function isolatedConnection(t, { connectedName = 'tapandwrap_staging', connectionError, changeAfterCollection = false } = {}) {
+function isolatedConnection(t, { connectedName = 'tapandwrap_staging', connectionError, changeAfterVerification = false } = {}) {
   const previousEnv = { ...env };
-  Object.assign(env, { nodeEnv: 'development', databaseTarget: 'staging', mongoUri: stagingUri });
+  Object.assign(env, { nodeEnv: 'development', databaseTarget: 'staging', mongoUri: stagingUri, databaseConnectAttempts: 1 });
   t.after(() => Object.assign(env, previousEnv));
   const state = { readyState: 0, name: undefined, host: 'fixture.mongodb.net' };
   for (const field of ['readyState', 'name', 'host']) {
@@ -48,9 +48,14 @@ function isolatedConnection(t, { connectedName = 'tapandwrap_staging', connectio
     assert.equal(Model.db, mongoose.connection);
     t.mock.method(Model, 'createCollection', async () => {
       writes.push(`${Model.modelName}:collection`);
-      if (changeAfterCollection) state.name = 'tapandwrap_production';
     });
     t.mock.method(Model, 'createIndexes', async () => { writes.push(`${Model.modelName}:indexes`); });
+    t.mock.method(Model.collection, 'listIndexes', () => ({ toArray: async () => {
+      if (changeAfterVerification) state.name = 'tapandwrap_production';
+      return Model.schema.indexes().map(([key, options]) => Object.values(key).includes('text')
+        ? { ...options, key: { _fts: 'text', _ftsx: 1 }, weights: Object.fromEntries(Object.keys(key).map(name => [name, 1])) }
+        : { ...options, key });
+    } }));
   }
   return { state, connectCalls, writes, logs };
 }
@@ -73,7 +78,7 @@ test('unsafe configured databases are rejected before connecting or creating any
   assertRedacted(observed.logs);
 });
 
-test('validated staging connections pin the database and defer collection/index writes until after validation', async (t) => {
+test('validated staging connections pin the database and read declared indexes without startup DDL', async (t) => {
   const observed = isolatedConnection(t);
   await connectDatabase();
   assert.equal(observed.connectCalls.length, 1);
@@ -81,7 +86,7 @@ test('validated staging connections pin the database and defer collection/index 
   assert.equal(options.dbName, 'tapandwrap_staging');
   assert.equal(options.autoCreate, false);
   assert.equal(options.autoIndex, false);
-  assert.deepEqual(observed.writes, models.flatMap((Model) => [`${Model.modelName}:collection`, `${Model.modelName}:indexes`]));
+  assert.deepEqual(observed.writes, []);
   assert.equal(isDatabaseReady(), true);
   assertRedacted(observed.logs);
 });
@@ -96,10 +101,10 @@ test('a driver connected to an unexpected database cannot perform the first pers
   assertRedacted(observed.logs);
 });
 
-test('a target change during initialization blocks the next index write and every subsequent model operation', async (t) => {
-  const observed = isolatedConnection(t, { changeAfterCollection: true });
+test('a target change during schema verification blocks subsequent reads and readiness without any DDL', async (t) => {
+  const observed = isolatedConnection(t, { changeAfterVerification: true });
   await connectDatabase();
-  assert.deepEqual(observed.writes, [`${Product.modelName}:collection`]);
+  assert.deepEqual(observed.writes, []);
   assert.equal(isDatabaseReady(), false);
   assert.match(observed.logs.join(' '), /DATABASE_NAME_REJECTED/);
   assertRedacted(observed.logs);

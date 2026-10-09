@@ -64,7 +64,22 @@ export function organizationSchema(origin) {
   return url ? { '@context': 'https://schema.org', '@type': 'Organization', name: BRAND_NAME, url, logo: `${canonicalOrigin(origin)}/tap-wrap-logo.webp` } : null;
 }
 
-export function productMetadata(product, origin, { indexable = true, checkoutEnabled = false, mediaOrigins } = {}) {
+export function offerAvailability(product) {
+  if (product?.orderingAvailable !== true) return 'https://schema.org/OutOfStock';
+  if (product?.inventoryMode === 'made_to_order' || product?.inventory?.mode === 'made_to_order') return 'https://schema.org/PreOrder';
+  if (product?.inventoryMode === 'tracked' || product?.inventory?.mode === 'tracked') return 'https://schema.org/InStock';
+  // Approval does not imply immediate stock when an inventory mode is unknown.
+  return null;
+}
+
+export function productSeoSignature(product) {
+  const category = (value) => value ? { id: String(value._id || ''), name: cleanText(value.name, 160), slug: SLUG.test(value.slug || '') ? value.slug : null } : null;
+  const mode = (value) => ['tracked', 'made_to_order'].includes(value?.inventoryMode || value?.inventory?.mode) ? value.inventoryMode || value.inventory.mode : null;
+  const price = (value) => Number.isSafeInteger(value) && value >= 0 ? value : null;
+  return JSON.stringify({ name: cleanText(product?.name, 160), slug: SLUG.test(product?.slug || '') ? product.slug : null, description: cleanText(product?.description, 160), category: category(product?.category), subcategory: category(product?.subcategory), image: publicImageUrl(product?.mainImageUrl), price: price(product?.pricePiastres), compareAt: Number.isSafeInteger(product?.compareAtPiastres) && product.compareAtPiastres > product?.pricePiastres ? product.compareAtPiastres : null, orderingAvailable: product?.orderingAvailable === true, inventoryMode: mode(product), variants: (product?.variants || []).map((variant) => ({ price: price(variant.pricePiastres), orderingAvailable: product?.orderingAvailable === true && variant.orderingAvailable === true, inventoryMode: mode(variant) })) });
+}
+
+export function productMetadata(product, origin, { indexable = true, checkoutEnabled = false, mediaOrigins, mediaVerified } = {}) {
   const explicitlyPrivate = product?.preview?.enabled === true || product?.status && product.status !== 'ready' || product?.published === false || product?.reviewRequired === true || product?.inventory?.approved === false || product?.variants?.some((variant) => variant.priceApproved === false || variant.inventory?.approved === false);
   const eligible = !explicitlyPrivate && product?.priceApproved === true && Number.isSafeInteger(product.pricePiastres) && product.pricePiastres >= 0 && SLUG.test(product.slug || '') && Boolean(cleanText(product.name));
   const pathname = eligible ? `/products/${product.slug}` : '/products/unavailable';
@@ -73,14 +88,17 @@ export function productMetadata(product, origin, { indexable = true, checkoutEna
   const description = eligible ? cleanText(product.description) || `Explore ${cleanText(product.name, 100)} from Tap & Wrap.` : 'This product is not available.';
   const url = canonicalUrl(origin, pathname);
   const structuredData = [];
-  if (eligible && indexable && url) {
+  const indexEligible = eligible && Boolean(imageUrl) && mediaVerified !== false;
+  if (indexEligible && indexable && url) {
     const schema = { '@context': 'https://schema.org', '@type': 'Product', name: cleanText(product.name, 160), description, url, brand: { '@type': 'Brand', name: BRAND_NAME } };
     if (imageUrl) schema.image = [imageUrl];
     // A disabled checkout is not an offer. No merchant price is advertised as purchasable until launch authorization.
-    if (checkoutEnabled && product.orderingAvailable === true) {
-      const approvedVariantPrices = (product.variants || []).filter((variant) => variant.orderingAvailable === true && Number.isSafeInteger(variant.pricePiastres) && variant.pricePiastres >= 0).map((variant) => variant.pricePiastres);
-      const prices = approvedVariantPrices.length ? approvedVariantPrices : [product.pricePiastres];
-      schema.offers = { '@type': prices.length > 1 ? 'AggregateOffer' : 'Offer', url, priceCurrency: 'EGP', availability: 'https://schema.org/InStock' };
+    if (checkoutEnabled) {
+      const variantOffers = (product.variants || []).filter((variant) => Number.isSafeInteger(variant.pricePiastres) && variant.pricePiastres >= 0);
+      const prices = variantOffers.length ? variantOffers.map((variant) => variant.pricePiastres) : [product.pricePiastres];
+      schema.offers = { '@type': prices.length > 1 ? 'AggregateOffer' : 'Offer', url, priceCurrency: 'EGP' };
+      const states = (variantOffers.length ? variantOffers : [product]).map((entry) => offerAvailability(product.orderingAvailable === true ? entry : { ...entry, orderingAvailable: false }));
+      if (states.every((state) => state && state === states[0])) schema.offers.availability = states[0];
       if (prices.length > 1) Object.assign(schema.offers, { lowPrice: (Math.min(...prices) / 100).toFixed(2), highPrice: (Math.max(...prices) / 100).toFixed(2), offerCount: prices.length });
       else schema.offers.price = (prices[0] / 100).toFixed(2);
     }
@@ -91,5 +109,5 @@ export function productMetadata(product, origin, { indexable = true, checkoutEna
     const crumb = breadcrumbs(origin, entries);
     if (crumb) structuredData.push(crumb);
   }
-  return { title, description, pathname, imageUrl, structuredData, indexable: eligible && indexable };
+  return { title, description, pathname, imageUrl, structuredData, productSignature: eligible ? productSeoSignature(product) : null, indexable: indexEligible && indexable };
 }

@@ -18,7 +18,7 @@ const schema = new mongoose.Schema({
   usageLimit: { ...integer(1, 1000000), validate: (value) => value === null || Number.isSafeInteger(value), default: null },
   perCustomerLimit: { ...integer(1, 1000), validate: (value) => value === null || Number.isSafeInteger(value), default: null },
   usedCount: { ...integer(0, 1000000), default: 0 }
-}, { timestamps: true, strict: 'throw' });
+}, { timestamps: true, strict: 'throw', optimisticConcurrency: true });
 schema.index({ active: 1, startsAt: 1, endsAt: 1 });
 schema.index({ updatedAt: -1, _id: -1 });
 schema.index({ name: 'text', code: 'text' }, { name: 'discount_code_search', default_language: 'none' });

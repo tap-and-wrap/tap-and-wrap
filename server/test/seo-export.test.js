@@ -4,6 +4,9 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseSeoExportArguments, resolveSeoExportOutput, exportCategoryDto, exportProductDto, exportApprovedContent, buildApprovedSeoExport, runSeoCatalogExport, approvedMediaOrigin } from '../scripts/export-seo-catalog.js';
+import { buildSeoPlan } from '../../client/scripts/seo/generator.js';
+import { productSeoSignature } from '../../client/src/seo/metadata.js';
+import { publicProductDetail } from '../src/catalog/public-presentation.js';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const main = { _id: '111111111111111111111111', name: 'Isolated Gifts', slug: 'isolated-gifts', active: true, parentId: null, imageKey: 'Fixtures/category.webp' };
@@ -133,4 +136,41 @@ test('CLI rejection logs never include URI credentials or arbitrary driver detai
   assert.equal(result.stderr.includes('DO-NOT-LOG'), false);
   assert.equal(result.stderr.includes('mongodb'), false);
   assert.match(result.stderr, /DATABASE_NAME_REJECTED/);
+});
+
+test('actual exporter DTOs require separate current media attestation before generator indexing', async () => {
+  const now = new Date('2026-10-09T12:00:00Z');
+  const fixture = sourceFixture();
+  const configuration = { CATALOG_MEDIA_BASE_URL: 'https://public-media.example/catalog', CHECKOUT_ENABLED: 'false', COMMERCE_LAUNCH_AUTHORIZED: 'false' };
+  const unverified = await buildApprovedSeoExport(fixture.source, configuration, { now });
+  assert.equal(unverified.report.verifiedProductImages, 0);
+  assert.equal(unverified.report.unverifiedProductImages, 1);
+  assert.equal(buildSeoPlan({ catalog: unverified.catalog, siteOrigin: 'https://shop.example', publish: true, now }).routes.get('/products/isolated-gift').indexable, false);
+  const mediaVerification = { version: 1, source: 'authorized-media-object-verification', objects: [{ approved: true, url: 'https://public-media.example/catalog/Fixtures/main.webp', sha256: 'a'.repeat(64), sizeBytes: 10000, width: 900, height: 900, contentType: 'image/webp', objectVersion: 'fixture-version', verifiedAt: '2026-10-09T11:00:00Z', validUntil: '2026-10-09T14:00:00Z' }] };
+  const result = await buildApprovedSeoExport(sourceFixture().source, configuration, { now, mediaVerification });
+  assert.equal(result.report.verifiedProductImages, 1);
+  assert.equal(result.catalog.products[0].inventoryMode, 'tracked');
+  const plan = buildSeoPlan({ catalog: result.catalog, siteOrigin: 'https://shop.example', publish: true, now });
+  assert.equal(plan.routes.get('/products/isolated-gift').indexable, true);
+  assert.equal(plan.routes.get('/products/isolated-gift').structuredData[0].offers, undefined);
+  assert.equal(plan.routes.get('/categories/isolated-gifts').indexable, false);
+});
+
+test('SEO export distinguishes configured made-to-order and independently tracked variant inventory', () => {
+  const made = exportProductDto({ ...product, inventory: { mode: 'made_to_order', available: true, approved: true } }, categories);
+  assert.equal(made.inventoryMode, 'made_to_order');
+  assert.equal(made.orderingAvailable, true);
+  const variant = { key: 'tracked', pricePiastres: 12000, priceApproved: true, inventory: { mode: 'tracked', quantity: 0, available: true, approved: true } };
+  const dto = exportProductDto({ ...product, variants: [variant] }, categories);
+  assert.equal(dto.variants[0].inventoryMode, 'tracked');
+  assert.equal(dto.variants[0].orderingAvailable, false);
+});
+
+test('real exporter and public product-detail serializers produce the same allowlisted SEO signature', () => {
+  const variants = [{ key: 'rose', attributes: [{ name: 'Color', value: 'Rose' }], pricePiastres: 16000, priceApproved: true, inventory: { mode: 'made_to_order', available: true, approved: true } }];
+  const fixture = { ...product, variants };
+  const exported = exportProductDto(fixture, categories, 'https://public-media.example/catalog');
+  const live = { ...publicProductDetail({ ...fixture, categoryId: main, subcategoryId: child }), mainImageUrl: exported.mainImageUrl };
+  assert.equal(productSeoSignature(exported), productSeoSignature(live));
+  for (const privateValue of ['personalization', 'customization', 'galleryKeys', 'do-not-export', 'merchantReviewNotes']) assert.equal(productSeoSignature(live).includes(privateValue), false);
 });

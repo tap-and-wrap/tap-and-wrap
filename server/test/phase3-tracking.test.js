@@ -20,6 +20,7 @@ import { resetCommerceLimitsForTests } from '../src/commerce/routes.js';
 import { createMemoryStorage, setStorageForTests } from '../src/commerce/storage.js';
 import { newSessionToken, hashSession, makeCsrfToken } from '../src/utils/tokens.js';
 import { startTestDatabase } from './helpers/database.js';
+import { createWorkBudget } from '../src/commerce/work-budget.js';
 
 const SETTINGS = { META_ENABLED: 'true', META_POLICY_APPROVED: 'true', META_PIXEL_ID: '123456789', META_CONSENT_POLICY_VERSION: 'isolated-v1', SITE_ORIGIN: 'https://merchant.example.test', META_CAPI_ENABLED: 'false', META_ACCESS_TOKEN: '', META_API_VERSION: 'v24.0' };
 const original = Object.fromEntries(Object.keys(SETTINGS).map(key => [key, process.env[key]]));
@@ -121,7 +122,16 @@ test('approved catalog views/searches produce receipts while draft records remai
   const detail = data(await browser.request(`/public/products/${product.slug}`));
   assert.equal(detail.tracking.name, 'ViewContent'); assert.equal(detail.tracking.parameters.value, 120);
   const search = data(await browser.request('/public/products?q=Isolated'));
-  assert.equal(search.tracking.name, 'Search'); assert.equal(Object.hasOwn(search.tracking.parameters, 'search_string'), false);
+  assert.equal(search.tracking, null);
+  const actionId = randomUUID();
+  const qualified = data(await browser.request('/public/products?q=Isolated', { headers: { 'x-search-event-id': actionId } }));
+  assert.equal(qualified.tracking.name, 'Search'); assert.equal(Object.hasOwn(qualified.tracking.parameters, 'search_string'), false);
+  assert.equal(data(await browser.request('/public/products?q=Isolated', { headers: { 'x-search-event-id': actionId } })).tracking.id, qualified.tracking.id);
+  await browser.request('/public/products?q=Isolated&sort=price_asc');
+  await browser.request('/public/products?q=Isolated&page=2');
+  assert.equal((await browser.request('/public/products', { headers: { 'x-search-event-id': randomUUID() } })).status, 400);
+  assert.equal((await browser.request('/public/products?q=Isolated', { headers: { 'x-search-event-id': 'invalid' } })).status, 400);
+  assert.equal(await MetaEvent.countDocuments({ name: 'Search' }), 1);
   await Product.updateOne({ _id: product._id }, { $set: { status: 'draft', priceApproved: false } });
   assert.equal((await browser.request(`/public/products/${product.slug}`)).status, 404);
   assert.equal(await MetaEvent.countDocuments({ name: 'ViewContent' }), 1);
@@ -129,9 +139,13 @@ test('approved catalog views/searches produce receipts while draft records remai
 test('COD purchase is a single order-placement event across retries, refreshes and admin status changes', async () => {
   const browser = client(); await consent(browser); await add(browser); env.checkoutEnabled = true;
   const intent = await quote(browser);
-  assert.deepEqual(intent.quote.tracking.map(event => event.name).sort(), ['AddPaymentInfo', 'InitiateCheckout']);
+  assert.deepEqual(intent.quote.tracking.map(event => event.name).sort(), ['InitiateCheckout']);
+  assert.equal(await MetaEvent.countDocuments({ name: 'AddPaymentInfo' }), 0);
   const first = data(await submit(browser, intent)); const duplicate = data(await submit(browser, intent));
   assert.equal(first.order.id, duplicate.order.id); assert.equal(first.tracking.id, duplicate.tracking.id);
+  assert.equal(first.paymentTracking.name, 'AddPaymentInfo'); assert.equal(first.paymentTracking.id, duplicate.paymentTracking.id);
+  assert.equal(first.paymentTracking.parameters.payment_method, 'cod');
+  assert.equal(await MetaEvent.countDocuments({ name: 'AddPaymentInfo' }), 1);
   assert.equal(first.tracking.parameters.value, 210); assert.equal(first.tracking.parameters.payment_method, 'cod');
   assert.equal(data(await browser.request(`/commerce/orders/${first.order.id}`)).tracking.id, first.tracking.id);
   const operator = await admin();
@@ -144,6 +158,8 @@ test('InstaPay proof submission creates no Purchase until authorized manual veri
   const intent = await quote(browser, 'instapay'); const proofId = await proof(browser, intent);
   const initial = data(await submit(browser, intent, proofId));
   assert.equal(initial.tracking, null); assert.equal(initial.order.paymentState, 'awaiting_verification');
+  assert.equal(initial.paymentTracking.name, 'AddPaymentInfo');
+  assert.equal(initial.paymentTracking.parameters.payment_method, 'instapay');
   assert.equal(await MetaEvent.countDocuments({ name: 'OrderSubmitted' }), 1); assert.equal(await MetaEvent.countDocuments({ name: 'Purchase' }), 0);
   const operator = await admin();
   const verified = data(await operator.request(`/admin/commerce/orders/${initial.order.id}/state`, { method: 'PATCH', body: { revision: initial.order.revision, paymentState: 'paid' } })).order;
@@ -268,4 +284,25 @@ test('a provider without an explicit acceptance response is never recorded as de
   const result = await runMetaBatch();
   assert.equal(result.sent, 0); assert.equal(result.failed, 1);
   assert.equal((await MetaEvent.findOne()).state, 'failed');
+});
+
+test('expired job budgets claim nothing and timed-out Meta sends retry the same deduplicated event', async () => {
+  const browser = client(); const accepted = await consent(browser);
+  await recordQualifiedEvent(accepted._id, 'PageView', {}, { sourcePath: '/', dedupKey: 'bounded-fixture' });
+  const expired = createWorkBudget({ maxDurationMs: 100, clock: () => 0 });
+  expired.clock = () => 101;
+  const stopped = await runMetaBatch({ budget: expired });
+  assert.equal(stopped.sent, 0); assert.equal((await MetaEvent.findOne()).attempts, 0);
+  let aborted = false; const ids = [];
+  setMetaProviderForTests({ send(event, { signal }) {
+    ids.push(event.eventId);
+    return new Promise((_resolve, reject) => signal.addEventListener('abort', () => { aborted = true; reject(new Error('Synthetic adapter aborted.')); }, { once: true }));
+  } });
+  const now = new Date();
+  assert.equal((await runMetaBatch({ now, budget: createWorkBudget({ maxDurationMs: 100 }) })).failed, 1);
+  assert.equal(aborted, true);
+  assert.equal((await MetaEvent.findOne()).state, 'failed');
+  setMetaProviderForTests({ async send(event) { ids.push(event.eventId); return { accepted: true }; } });
+  assert.equal((await runMetaBatch({ now: new Date(now.getTime() + 61_000) })).sent, 1);
+  assert.equal(new Set(ids).size, 1);
 });

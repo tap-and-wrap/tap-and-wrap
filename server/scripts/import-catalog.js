@@ -1,4 +1,4 @@
-import { realpath, writeFile } from 'node:fs/promises';
+import { realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildCatalogPlan, readCatalogWorkbook, workbookSha256 } from '../src/catalog/import-workbook.js';
@@ -7,6 +7,7 @@ import { Product } from '../src/models/Product.js';
 import { Category } from '../src/models/Category.js';
 import { ComponentOption } from '../src/models/ComponentOption.js';
 import { validateCatalogModels } from '../src/catalog/import-catalog.js';
+import { writeImportReport } from '../src/catalog/import-report.js';
 
 export const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -82,12 +83,12 @@ export async function runCatalogImport(argv, { env = process.env, log = console.
     }
   }
   // A reviewable validation report exists before any connection or persistent write.
-  await writeFile(reportPath, `${JSON.stringify(plan.report, null, 2)}\n`, { encoding: 'utf8', flag: 'w' });
+  await writeImportReport(reportPath, plan.report);
 
   if (options.apply) {
     // Workbook validation must finish before considering a database connection.
     if (plan.report.fatalErrors.length || plan.report.invalidRows.length) {
-      await writeFile(reportPath, `${JSON.stringify(plan.report, null, 2)}\n`, { encoding: 'utf8', flag: 'w' });
+      await writeImportReport(reportPath, plan.report);
       throw new Error('Catalog validation failed; no database connection was opened. Review the local report.');
     }
     const uri = validateStagingUri(env.CATALOG_IMPORT_STAGING_URI, env.NODE_ENV);
@@ -97,11 +98,16 @@ export async function runCatalogImport(argv, { env = process.env, log = console.
     try {
       await mongoose.connect(uri, { dbName: 'tapandwrap_staging', autoCreate: false, autoIndex: false, serverSelectionTimeoutMS: 10000, maxPoolSize: 2 });
       assertConnectedDatabase(mongoose.connection, { target: 'staging', nodeEnv: env.NODE_ENV || 'development' });
-      plan.report.application = await applyCatalogPlan(plan, { Category, Product, ComponentOption, batchSize: options.batchSize });
       plan.report.mode = 'apply';
+      plan.report.application = await applyCatalogPlan(plan, { Category, Product, ComponentOption, batchSize: options.batchSize,
+        onProgress: async (application) => { plan.report.application = application; await writeImportReport(reportPath, plan.report); } });
+    } catch (error) {
+      plan.report.application = error.importReport || { mode: 'apply', status: 'failed', failureCode: 'IMPORT_CONNECTION_OR_SETUP_FAILED', countsUncertain: true };
+      await writeImportReport(reportPath, plan.report);
+      throw error;
     } finally { await mongoose.disconnect(); }
   }
-  await writeFile(reportPath, `${JSON.stringify(plan.report, null, 2)}\n`, { encoding: 'utf8', flag: 'w' });
+  await writeImportReport(reportPath, plan.report);
   log(JSON.stringify({ mode: plan.report.mode, workbookUnchanged: plan.report.workbookUnchanged, counts: plan.report.counts,
     fatalErrors: plan.report.fatalErrors, roles: plan.report.roleCounts, report: path.relative(PROJECT_ROOT, reportPath),
     ...(plan.report.application ? { application: plan.report.application } : {}) }, null, 2));

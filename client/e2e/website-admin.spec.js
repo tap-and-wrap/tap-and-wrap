@@ -5,7 +5,8 @@ async function websiteFixture(page, { role = 'admin' } = {}) {
   const existing = await mockCatalog(page, { role });
   const writes = [];
   const headers = { 'Access-Control-Allow-Origin': 'http://127.0.0.1:5191', 'Access-Control-Allow-Credentials': 'true', 'Access-Control-Allow-Headers': 'content-type,x-csrf-token', 'Access-Control-Allow-Methods': 'GET,POST,PATCH,OPTIONS' };
-  const content = { __v: 0, about: { title: '', body: '', approved: false, updatedAt: null }, contact: { approved: false }, faq: [], faqApproved: false };
+  const content = { revision: 0, about: { title: '', body: '', approved: false, updatedAt: null }, contact: { approved: false }, faq: [], faqApproved: false };
+  const categoryRecord = { ...category, revision: 0 };
   const reviews = [];
   const customers = Array.from({ length: 23 }, (_, index) => ({ _id: String(600 + index).padStart(24, '0'), name: `Isolated Customer ${index + 1}`, email: `isolated${index}@example.test`, active: true, createdAt: '2026-10-09T12:00:00Z' }));
   await page.route('**/api/v1/admin/website/**', async (route) => {
@@ -22,20 +23,24 @@ async function websiteFixture(page, { role = 'admin' } = {}) {
     if (path === 'notifications') return reply(paginate([{ _id: '555555555555555555555555', event: 'order_received', state: 'uncertain', attempts: 1, lastErrorCode: 'SMTP_ACCEPTANCE_UNCERTAIN', createdAt: '2026-10-09T12:00:00Z' }], 'events'));
     if (path === 'payment-settings') return reply({ checkoutEnabled: false, editable: false, launchManagedByEnvironment: true, methods: [{ key: 'cod', name: 'Cash on Delivery', verification: 'Manual collection confirmation.' }, { key: 'instapay', name: 'InstaPay', transferNumber: '01060673073', fullPaymentOnly: true, verification: 'Private proof requires manual verification.' }] });
     if (path === 'content' && request.method() === 'GET') return reply({ content });
-    if (path === 'content' && request.method() === 'PATCH') { const payload = request.postDataJSON(); writes.push({ path, payload, csrf: request.headers()['x-csrf-token'] }); Object.assign(content, payload); content.__v += 1; return reply({ content }); }
+    if (path === 'content' && request.method() === 'PATCH') { const { expectedRevision, ...patch } = request.postDataJSON(); writes.push({ path, payload: request.postDataJSON(), csrf: request.headers()['x-csrf-token'] }); if (expectedRevision !== content.revision) return reply({ code: 'EDIT_CONFLICT', message: 'This record changed after you opened it. Your changes were not saved.' }, 409); Object.assign(content, patch); content.revision += 1; return reply({ content }); }
     if (path === 'reviews' && request.method() === 'GET') return reply(paginate(reviews.map(({ text: _text, sourceNote: _source, ...item }) => item), 'reviews'));
-    if (path === 'reviews' && request.method() === 'POST') { const payload = request.postDataJSON(); writes.push({ path, payload, csrf: request.headers()['x-csrf-token'] }); const review = { _id: '444444444444444444444444', ...payload }; reviews.push(review); return reply({ review }, 201); }
-    if (path.startsWith('reviews/')) { const review = reviews.find((item) => item._id === path.split('/')[1]); if (!review) return reply({ message: 'Review not found' }, 404); if (request.method() === 'PATCH') { const payload = request.postDataJSON(); writes.push({ path, payload }); Object.assign(review, payload); } return reply({ review }); }
+    if (path === 'reviews' && request.method() === 'POST') { const payload = request.postDataJSON(); writes.push({ path, payload, csrf: request.headers()['x-csrf-token'] }); const review = { _id: '444444444444444444444444', ...payload, revision: 0 }; reviews.push(review); return reply({ review }, 201); }
+    if (path.startsWith('reviews/')) { const review = reviews.find((item) => item._id === path.split('/')[1]); if (!review) return reply({ message: 'Review not found' }, 404); if (request.method() === 'PATCH') { const { expectedRevision, ...patch } = request.postDataJSON(); writes.push({ path, payload: request.postDataJSON() }); if (expectedRevision !== review.revision) return reply({ code: 'EDIT_CONFLICT', message: 'Review changed.' }, 409); Object.assign(review, patch); review.revision += 1; } return reply({ review }); }
     return reply({ message: `Unexpected isolated website request: ${path}` }, 404);
   });
   await page.route('**/api/v1/admin/categories/**', async (route) => {
     const request = route.request();
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+    if (request.method() === 'GET') return route.fulfill({ headers, json: { ok: true, data: { category: categoryRecord } } });
     const payload = request.postDataJSON();
     writes.push({ path: 'category', payload, csrf: request.headers()['x-csrf-token'] });
-    return route.fulfill({ headers, json: { ok: true, data: { category: { ...category, ...payload } } } });
+    if (payload.expectedRevision !== categoryRecord.revision) return route.fulfill({ status: 409, headers, json: { ok: false, error: { code: 'EDIT_CONFLICT', message: 'Category changed.' } } });
+    const { expectedRevision: _expected, ...patch } = payload;
+    Object.assign(categoryRecord, patch, { revision: categoryRecord.revision + 1 });
+    return route.fulfill({ headers, json: { ok: true, data: { category: categoryRecord } } });
   });
-  return { ...existing, writes };
+  return { ...existing, writes, content, reviews, categoryRecord };
 }
 
 test('admin customer lists request server pages of twenty and expose no customer mutations', async ({ page }) => {
@@ -70,7 +75,7 @@ test('admin review form authors real-configured content with explicit approval a
   expect(fixture.writes[0].csrf).toBeTruthy();
   await page.getByRole('button', { name: 'Hide', exact: true }).click();
   await expect(page.getByRole('cell', { name: 'hidden · Approved' })).toBeVisible();
-  expect(fixture.writes[1].payload).toEqual({ status: 'hidden' });
+  expect(fixture.writes[1].payload).toEqual({ status: 'hidden', expectedRevision: 0 });
 });
 
 test('content approval clears when edited and policies require explicit owner-provided text', async ({ page }) => {
@@ -85,8 +90,69 @@ test('content approval clears when edited and policies require explicit owner-pr
   await page.getByLabel('Owner approval confirmed; make this section public').check();
   await page.getByRole('button', { name: 'Save section', exact: true }).click();
   await expect.poll(() => fixture.writes.length).toBe(1);
-  expect(fixture.writes[0].payload).toEqual({ privacyPolicy: { title: 'Isolated Privacy Policy', body: 'Revised owner-supplied isolated policy fixture.', approved: true } });
+  expect(fixture.writes[0].payload).toEqual({ expectedRevision: 0, privacyPolicy: { title: 'Isolated Privacy Policy', body: 'Revised owner-supplied isolated policy fixture.', approved: true } });
   expect(fixture.writes[0].csrf).toBeTruthy();
+});
+
+test('stale content saves retain merchant draft until an explicit confirmed reload', async ({ page }) => {
+  const fixture = await websiteFixture(page);
+  await page.goto('/admin/website/content');
+  await page.getByLabel('Page title', { exact: true }).fill('My unsaved title');
+  await page.getByLabel('Owner-approved page text').fill('My unsaved reviewed text');
+  fixture.content.about = { title: 'Other editor title', body: 'Other editor saved content', approved: false };
+  fixture.content.revision = 1;
+  await page.getByRole('button', { name: 'Save section', exact: true }).click();
+  await expect(page.getByText('This record changed after you opened it. Your changes were not saved.', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Page title', { exact: true })).toHaveValue('My unsaved title');
+  expect(fixture.writes[0].payload.expectedRevision).toBe(0);
+  expect(fixture.content.about.title).toBe('Other editor title');
+  await page.getByRole('button', { name: 'Reload latest record', exact: true }).click();
+  await page.getByRole('button', { name: 'Keep my draft', exact: true }).click();
+  await expect(page.getByLabel('Page title', { exact: true })).toHaveValue('My unsaved title');
+  await page.getByRole('button', { name: 'Reload latest record', exact: true }).click();
+  await page.getByRole('button', { name: 'Confirm reload and discard draft', exact: true }).click();
+  await expect(page.getByLabel('Page title', { exact: true })).toHaveValue('Other editor title');
+  await page.getByLabel('Page title', { exact: true }).fill('Reviewed latest edit');
+  await page.getByRole('button', { name: 'Save section', exact: true }).click();
+  await expect(page.getByText('Changes saved.', { exact: true })).toBeVisible();
+  expect(fixture.writes[1].payload.expectedRevision).toBe(1);
+});
+
+test('stale review editor retains a genuine quotation draft until confirmed reload', async ({ page }) => {
+  const fixture = await websiteFixture(page);
+  fixture.reviews.push({ _id: '444444444444444444444444', authorLabel: 'Isolated review author', text: 'Existing isolated quotation', sourceNote: 'Existing private provenance', rating: 5, productId: null, status: 'draft', approved: false, consentConfirmed: true, featured: false, displayOrder: 0, revision: 0 });
+  await page.goto('/admin/website/reviews');
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Review text', exact: true }).fill('My unsaved quotation');
+  fixture.reviews[0].text = 'Other editor quotation'; fixture.reviews[0].revision = 1;
+  await page.getByRole('button', { name: 'Save review', exact: true }).click();
+  await expect(page.getByText('Another editor changed this record. Your unsaved changes are still here. Copy any changes you need before reloading.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Review text', exact: true })).toHaveValue('My unsaved quotation');
+  await page.getByRole('button', { name: 'Reload latest record', exact: true }).click();
+  await page.getByRole('button', { name: 'Confirm reload and discard draft', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Review text', exact: true })).toHaveValue('Other editor quotation');
+  await page.getByRole('textbox', { name: 'Review text', exact: true }).fill('Reviewed latest quotation');
+  await page.getByRole('button', { name: 'Save review', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Edit review', exact: true })).toHaveCount(0);
+  expect(fixture.writes.map((write) => write.payload.expectedRevision)).toEqual([0, 1]);
+});
+
+test('stale category editor retains merchant changes and reloads the explicit detail contract', async ({ page }) => {
+  const fixture = await websiteFixture(page);
+  await page.goto('/admin/website/categories');
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.getByLabel('Name', { exact: true }).fill('My unsaved category');
+  fixture.categoryRecord.name = 'Other editor category'; fixture.categoryRecord.revision = 1;
+  await page.getByRole('button', { name: 'Save category', exact: true }).click();
+  await expect(page.getByText('Another editor changed this record. Your unsaved changes are still here. Copy any changes you need before reloading.', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue('My unsaved category');
+  await page.getByRole('button', { name: 'Reload latest record', exact: true }).click();
+  await page.getByRole('button', { name: 'Confirm reload and discard draft', exact: true }).click();
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Other editor category');
+  await page.getByLabel('Name', { exact: true }).fill('Reviewed latest category');
+  await page.getByRole('button', { name: 'Save category', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Edit category', exact: true })).toHaveCount(0);
+  expect(fixture.writes.map((write) => write.payload.expectedRevision)).toEqual([0, 1]);
 });
 
 test('category editor reuses protected category API and preserves audited references', async ({ page }) => {
@@ -110,6 +176,7 @@ test('delivery diagnostics and payment settings are read-only and responsive on 
   await expect(page.getByText('SMTP_ACCEPTANCE_UNCERTAIN')).toBeVisible();
   await expect(page.getByText(/automatic retries are suppressed/)).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.locator('.admin-navigation-toggle').click();
   await page.getByRole('link', { name: 'Payment settings', exact: true }).click();
   await expect(page.getByText(/disabled pending launch approval/)).toBeVisible();
   await expect(page.getByText('Full-payment transfer number: 01060673073')).toBeVisible();
@@ -140,6 +207,7 @@ test('bundle editor saves explicit homepage publication and uses the existing pr
   await page.getByRole('button', { name: 'Add bundle', exact: true }).click();
   await page.getByLabel('Bundle name', { exact: true }).fill('Isolated owner bundle');
   await page.getByLabel('Owner-approved bundle description').fill('Owner-approved isolated bundle description.');
+  await expect(page.getByRole('textbox', { name: 'Owner-approved bundle description', exact: true })).toHaveAttribute('name', 'description');
   await page.getByLabel('Active', { exact: true }).check();
   await page.getByLabel('Publish eligible bundle on homepage').check();
   await page.getByLabel('Fixed discount (EGP)').fill('5');

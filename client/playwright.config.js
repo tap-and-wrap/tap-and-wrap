@@ -20,7 +20,7 @@ export default defineConfig({
     command: 'npm run dev -- --host 127.0.0.1 --port 5191 --strictPort',
     url: 'http://127.0.0.1:5191',
     reuseExistingServer: false,
-    env: { VITE_API_BASE_URL: 'http://127.0.0.1:4091/api/v1', VITE_META_ENABLED: 'true', VITE_SEO_INDEXING_ENABLED: 'false' },
+    env: { TAP_WRAP_ISOLATED_TEST: 'true', VITE_API_BASE_URL: 'http://127.0.0.1:4091/api/v1', VITE_META_ENABLED: 'true', VITE_SEO_INDEXING_ENABLED: 'false' },
     timeout: 30_000,
   },
 });

@@ -9,5 +9,14 @@
     "not_found_handling": "404-page",
     "run_worker_first": ["/*", "!/assets/*", "!/tap-wrap-logo.webp"]
   },
-  "vars": { "SEO_INDEXING_ENABLED": "false" }
+  "vars": {
+    "SEO_INDEXING_ENABLED": "false",
+    "SEO_EXPECTED_PUBLICATION_ID": "",
+    "SEO_WITHDRAWN_PATHS": "",
+    "BROWSER_CSP_MODE": "report-only",
+    "BROWSER_API_ORIGINS": "",
+    "BROWSER_MEDIA_ORIGINS": "",
+    "BROWSER_UPLOAD_ORIGINS": "",
+    "BROWSER_TRACKING_ALLOWED": "false"
+  }
 }

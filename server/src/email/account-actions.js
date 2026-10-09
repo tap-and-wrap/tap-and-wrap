@@ -9,12 +9,27 @@ import { AccountActionToken } from '../models/AccountActionToken.js';
 import { EmailRateWindow } from '../models/EmailRateWindow.js';
 import { NotificationEvent } from '../models/NotificationEvent.js';
 import { sealActionToken } from './action-secrets.js';
+import { validNewPassword, PASSWORD_REQUIREMENTS } from '../utils/password.js';
 
 function writeGuard() { assertDatabaseWriteAllowed(mongoose.connection, env); }
 function actionError(code, message, status = 400) { return Object.assign(new Error(message), { code, status }); }
 function hashToken(value) { return createHash('sha256').update(value).digest('hex'); }
 const ONE_HOUR = 60 * 60 * 1000;
 const INVALID_ACTION = () => actionError('INVALID_ACCOUNT_TOKEN', 'This link is invalid, expired or has already been used.');
+
+async function eraseQueuedActionSecrets(actionIds, session) {
+  if (!actionIds.length) return;
+  // Do not interrupt a worker's active SMTP lease. Queued/failed links cannot
+  // be delivered after the transaction commits their consumption/replacement.
+  await NotificationEvent.updateMany({ actionTokenId: { $in: actionIds }, state: { $in: ['queued', 'failed'] } },
+    { $set: { state: 'dead', lastErrorCode: 'ACCOUNT_ACTION_EXPIRED' }, $unset: { sealedActionToken: 1, leaseToken: 1, leaseUntil: 1 } }, { session });
+}
+async function consumeOutstandingActions(userId, purpose, session, now = new Date()) {
+  const filter = { userId, purpose, consumedAt: null };
+  const actions = await AccountActionToken.find(filter).select('_id').session(session).lean();
+  await AccountActionToken.updateMany(filter, { $set: { consumedAt: now } }, { session });
+  await eraseQueuedActionSecrets(actions.map(action => action._id), session);
+}
 
 async function transaction(work) {
   writeGuard();
@@ -42,7 +57,7 @@ export async function requestAccountAction(emailValue, purpose, { userId, now = 
       if (!rate) return;
       const user = await User.findOne({ email, active: true, ...(userId ? { _id: userId } : {}) }).session(session).lean();
       if (!user || (purpose === 'email_verification' && user.emailVerifiedAt)) return;
-      await AccountActionToken.updateMany({ userId: user._id, purpose, consumedAt: null }, { $set: { consumedAt: now } }, { session });
+      await consumeOutstandingActions(user._id, purpose, session, now);
       const token = randomBytes(32).toString('base64url');
       const expiresAt = new Date(now.getTime() + (purpose === 'password_reset' ? 30 * 60 * 1000 : 24 * ONE_HOUR));
       const [action] = await AccountActionToken.create([{ userId: user._id, purpose, email, tokenHash: hashToken(token), expiresAt }], { session });
@@ -66,11 +81,12 @@ async function consumeAction(token, purpose, session, now = new Date()) {
   if (!action) throw INVALID_ACTION();
   const user = await User.findOne({ _id: action.userId, email: action.email, active: true }).session(session).lean();
   if (!user) throw INVALID_ACTION();
+  await eraseQueuedActionSecrets([action._id], session);
   return { action, user };
 }
 
 export async function resetAccountPassword(token, newPassword) {
-  if (typeof newPassword !== 'string' || newPassword.length < 12 || newPassword.length > 128) throw actionError('INVALID_PASSWORD', 'Password must contain 12–128 characters.');
+  if (!validNewPassword(newPassword)) throw actionError('INVALID_PASSWORD', PASSWORD_REQUIREMENTS);
   // Hash outside the short transaction, with the same bcrypt cost as signup.
   const passwordHash = await bcrypt.hash(newPassword, 12);
   await transaction(async session => {
@@ -78,7 +94,7 @@ export async function resetAccountPassword(token, newPassword) {
     const updated = await User.updateOne({ _id: user._id, email: user.email, active: true }, { $set: { passwordHash }, $inc: { authVersion: 1 } }, { session });
     if (updated.matchedCount !== 1) throw INVALID_ACTION();
     await Session.deleteMany({ userId: user._id }, { session });
-    await AccountActionToken.updateMany({ userId: user._id, purpose: 'password_reset', consumedAt: null }, { $set: { consumedAt: new Date() } }, { session });
+    await consumeOutstandingActions(user._id, 'password_reset', session);
     await NotificationEvent.create([{ eventKey: `account:${user._id}:password_changed:${action._id}`,
       userId: user._id, event: 'password_changed', recipient: user.email, snapshot: {},
       state: 'queued', attempts: 0, nextAttemptAt: new Date(),
@@ -91,6 +107,6 @@ export async function verifyAccountEmail(token) {
     const { user } = await consumeAction(token, 'email_verification', session);
     const updated = await User.updateOne({ _id: user._id, email: user.email, active: true }, { $set: { emailVerifiedAt: new Date() } }, { session });
     if (updated.matchedCount !== 1) throw INVALID_ACTION();
-    await AccountActionToken.updateMany({ userId: user._id, purpose: 'email_verification', consumedAt: null }, { $set: { consumedAt: new Date() } }, { session });
+    await consumeOutstandingActions(user._id, 'email_verification', session);
   });
 }

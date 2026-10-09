@@ -28,6 +28,9 @@ export async function startTestDatabase({ models = [], transactions = false } = 
   if (process.env.NODE_ENV !== 'test') {
     throw new Error('Isolated database helper can only run with NODE_ENV=test.');
   }
+  if (process.env.MONGODB_URI || process.env.CATALOG_IMPORT_STAGING_URI) {
+    throw new Error('Refusing a test environment that inherited an application or import database URI.');
+  }
   if (mongoose.connection.readyState !== 0) {
     throw new Error('Refusing to reuse an existing Mongoose connection.');
   }

@@ -107,7 +107,7 @@ export function evaluateCustomization(templateInput, componentsInput, input, { r
       adjustmentPiastres = sum(adjustmentPiastres, optionUnitPiastres * (quantity - baseline));
       if (quantity) {
         snapshotSelections.push({ groupKey: group.key, groupLabel: group.label, optionKey: option.key, label: option.label, componentId: component ? stringId(component._id) : null, componentName: component?.name || null, quantity, unitAdjustmentPiastres: optionUnitPiastres });
-        if (component) inventoryClaims.push({ kind: 'component', id: stringId(component._id), variantKey: null, quantityPerUnit: quantity, ...(component.updatedAt ? { expectedUpdatedAt: component.updatedAt } : {}) });
+        if (component) inventoryClaims.push({ kind: 'component', id: stringId(component._id), variantKey: null, mode: component.inventory.mode, quantityPerUnit: quantity, ...(component.updatedAt ? { expectedUpdatedAt: component.updatedAt } : {}) });
       }
     }
   }
@@ -134,16 +134,16 @@ export function evaluateCustomization(templateInput, componentsInput, input, { r
   return { adjustmentPiastres, snapshot: { templateId: stringId(template._id), templateKey: template.key, templateName: template.name, kind: template.kind, version: template.version, pricingMode: template.pricingMode, selections: snapshotSelections, fields: values, engraving: engravingSnapshot, adjustmentPiastres }, inventoryClaims, fields };
 }
 
-export async function loadCustomizationTemplate(product, { session } = {}) {
+export async function loadCustomizationTemplate(product, { session, context } = {}) {
   if (!(product.customization?.enabled || product.customization?.serviceEntryEligible) || !product.customization.templateId) throw configurationError('Customization is not enabled for this product.', 'CUSTOMIZATION_UNAVAILABLE', 409);
   let query = CustomizationTemplate.findById(product.customization.templateId).lean().maxTimeMS(3000);
   if (session) query = query.session(session);
-  const template = await query;
+  const template = context ? context.templates.get(String(product.customization.templateId)) : await query;
   if (!template || template.kind !== product.customization.serviceKind || template.status !== 'approved' || !template.active) throw configurationError('This customization template is not available.', 'CUSTOMIZATION_UNAVAILABLE', 409);
   const ids = [...new Set(template.groups.flatMap((group) => group.options.map((option) => option.componentId ? String(option.componentId) : null)).filter(Boolean))];
   let componentQuery = ComponentOption.find({ _id: { $in: ids } }).select('name pricePiastres priceApproved inventory enabledForCustomization configurationApproved reviewRequired updatedAt').lean().maxTimeMS(3000);
   if (session) componentQuery = componentQuery.session(session);
-  return { template, components: await componentQuery };
+  return { template, components: context ? ids.map(id => context.components.get(id)).filter(Boolean) : await componentQuery };
 }
 
 export async function quoteCustomization(product, input, options = {}) {

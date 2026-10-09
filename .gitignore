@@ -8,6 +8,8 @@ coverage/
 .env
 .env.*
 !.env.example
+server/.env
+client/.env
 # Logs
 *.log
 .DS_Store
@@ -18,5 +20,6 @@ Thumbs.db
 /local-data/
 # Isolated browser test artifacts
 test-results/
+test-results-contracts/
 playwright-report/
 test-results-*.txt

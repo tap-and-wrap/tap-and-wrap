@@ -10,7 +10,8 @@ const template = '<!doctype html><html lang="en"><head><title>Old title</title><
 const root = { _id: 'category-main', slug: 'fixture-gifts', name: 'Fixture Gifts', parentId: null, active: true, productCount: 1 };
 const child = { _id: 'category-child', slug: 'fixture-keepsakes', name: 'Fixture Keepsakes', parentId: root._id, active: true, productCount: 1 };
 const product = { _id: 'product-one', slug: 'fixture-product', name: 'Fixture Product', description: 'An isolated fixture description.', pricePiastres: 12345, priceApproved: true, orderingAvailable: true, category: root, subcategory: child, mainImageUrl: 'https://media.example/approved/main.webp', galleryUrls: ['https://media.example/private/secret.webp'], galleryKeys: ['private/secret'], personalization: { secret: 'PRIVATE-CUSTOMER-DATA' }, customization: { privateConfig: true }, updatedAt: '2026-10-09T12:00:00.000Z', seoEligibility: { status: 'ready', published: true, inventoryApproved: true, reviewRequired: false, categoriesActive: true } };
-function catalog(patch = {}) { return { version: 1, source: 'approved-public-catalog', mediaOrigins: ['https://media.example'], products: [structuredClone(product)], categories: [structuredClone(root), structuredClone(child)], checkoutEnabled: false, ...patch }; }
+const mediaVerification = { version: 1, source: 'authorized-media-object-verification', objects: [{ approved: true, url: product.mainImageUrl, sha256: 'a'.repeat(64), sizeBytes: 18000, width: 900, height: 900, contentType: 'image/webp', objectVersion: 'fixture-v1', verifiedAt: '2026-01-01T00:00:00Z', validUntil: '2099-01-01T00:00:00Z' }] };
+function catalog(patch = {}) { return { version: 1, source: 'approved-public-catalog', generatedAt: new Date().toISOString(), mediaOrigins: ['https://media.example'], mediaVerification: structuredClone(mediaVerification), products: [structuredClone(product)], categories: [structuredClone(root), structuredClone(child)], checkoutEnabled: false, ...patch }; }
 
 test('canonical origin rejects credentials, HTTP, paths, queries and local targets', () => {
   assert.equal(canonicalOrigin(origin), origin);
@@ -88,6 +89,17 @@ test('published product HTML has unique metadata, visible information and crawla
   assert.equal((repeated.match(/href="\/seo-static.css"/g) || []).length, 1);
   assert.equal((repeated.match(/<h1>/g) || []).length, 1);
   assert.match(html, /\/assets\/app-123\.js/);
+});
+
+test('static navigation follows public primary links without guessing authenticated order destinations', () => {
+  const plan = buildSeoPlan({ catalog: catalog(), siteOrigin: origin, publish: true });
+  const html = renderRouteHtml(template, plan.routes.get('/shop'), origin);
+  const navigation = html.match(/<nav aria-label="Main navigation">([\s\S]*?)<\/nav>/)[1];
+  for (const [href, label] of [['/', 'Home'], ['/shop', 'Shop'], ['/customize', 'Customize'], ['/about', 'About Us']]) {
+    assert.ok(navigation.includes(`href="${href}"`), label);
+  }
+  for (const href of ['/contact', '/track-order', '/my-orders', '/admin']) assert.equal(navigation.includes(`href="${href}"`), false);
+  assert.match(html.match(/<footer[\s\S]*?<\/footer>/)[0], /href="\/contact"/);
 });
 
 test('HTML and JSON-LD escape script-breaking product strings', () => {

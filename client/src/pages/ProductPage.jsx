@@ -11,6 +11,7 @@ import { commerceError, discardUploads, uploadConfiguredFields } from '../commer
 import { ProductReviews } from '../components/PublicContent.jsx';
 import { ProductMetadata } from '../seo/PageMetadata.jsx';
 import { emitTracking } from '../tracking/client.js';
+import { FieldError, fieldErrorProps, focusInvalidField } from '../components/FormFeedback.jsx';
 
 function quantityLimit(inventory) {
   return inventory?.mode === 'tracked' && Number.isSafeInteger(inventory.quantity)
@@ -18,12 +19,14 @@ function quantityLimit(inventory) {
     : 99;
 }
 
-export function ProductContent({ product, relatedProducts = [], preview = false, previewNotice }) {
+export function ProductContent({ product, relatedProducts = [], preview = false, previewNotice, embedded = false }) {
   const cart = useCart();
   const [personalization, setPersonalization] = useState({});
   const [fieldErrors, setFieldErrors] = useState({});
   const [addError, setAddError] = useState('');
   const [adding, setAdding] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState('');
+  const [failedImages, setFailedImages] = useState([]);
   const [activeImage, setActiveImage] = useState(0);
   const [variantKey, setVariantKey] = useState('');
   const [quantity, setQuantity] = useState(1);
@@ -64,18 +67,21 @@ export function ProductContent({ product, relatedProducts = [], preview = false,
     const errors = validateConfiguredFields(personalizationFields, personalization);
     if (variants.length && !variant) errors.variant = 'Choose a size / color.';
     setFieldErrors(errors); setAddError('');
-    if (Object.keys(errors).length) { purchaseRef.current.querySelector('[aria-invalid="true"], select, input')?.focus(); return; }
+    if (Object.keys(errors).length) { focusInvalidField(purchaseRef.current); return; }
     const uploadedIds = [];
     setAdding(true);
     try {
-      const fields = await uploadConfiguredFields(personalization, personalizationFields, { productId: product._id }, uploadedIds);
+      const fields = await uploadConfiguredFields(personalization, personalizationFields, { productId: product._id, onProgress: setUploadStatus }, uploadedIds);
+      setUploadStatus('Verifying price and adding your item…');
       await cart.add({ productId: product._id, variantKey: variant?.key || null, quantity, personalization: fields }, document.querySelector('.product-main-image img'));
     } catch (error) { setAddError(commerceError(error)); await discardUploads(uploadedIds); }
-    finally { setAdding(false); }
+    finally { setAdding(false); setUploadStatus(''); }
   }
 
+  const Container = embedded ? 'div' : 'main';
+  const ProductHeading = embedded ? 'h2' : 'h1';
   return (
-    <main className={`catalog-product-page ${showSticky ? 'catalog-product-with-sticky' : ''}`}>
+    <Container className={`catalog-product-page ${embedded ? 'admin-preview-product' : ''} ${showSticky ? 'catalog-product-with-sticky' : ''}`}>
       {previewNotice}
       <nav className="product-breadcrumbs" aria-label="Breadcrumb">
         <Link to={preview ? '/admin/products' : '/shop'}>{preview ? 'Admin products' : 'Shop'}</Link>
@@ -85,7 +91,7 @@ export function ProductContent({ product, relatedProducts = [], preview = false,
       <div className="product-detail-layout">
         <section className="product-gallery" aria-label="Product images">
           <div className="product-main-image">
-            {selectedImage?.url ? <img src={selectedImage.url} alt={`${product.name}${activeImage ? `, image ${activeImage + 1}` : ''}`} width="900" height="900" loading="eager" fetchPriority="high" decoding="async" />
+            {selectedImage?.url && !failedImages.includes(selectedImage.url) ? <img src={selectedImage.url} alt={`${product.name}${activeImage ? `, image ${activeImage + 1}` : ''}`} width="900" height="900" loading="eager" fetchPriority="high" decoding="async" onError={() => setFailedImages((previous) => [...previous, selectedImage.url])} />
               : <span className="catalog-image-placeholder">{preview ? selectedImage ? `${selectedImage.isMain ? 'Main image · ' : ''}Image ${selectedImage.position} · Media not configured` : 'No image references recorded' : 'Image coming soon'}</span>}
             {!preview && product.bestSeller === true && <span className="product-image-badge">Best Seller</span>}
           </div>
@@ -95,12 +101,12 @@ export function ProductContent({ product, relatedProducts = [], preview = false,
         </section>
         <section className="product-summary" aria-labelledby="product-title">
           {product.category?.name && <p className="catalog-eyebrow">{product.category.name}</p>}
-          <h1 id="product-title">{product.name}</h1>
+          <ProductHeading id="product-title">{product.name}</ProductHeading>
           <p className="catalog-price product-price"><span>{displayPrice}</span>{approvedPrice && Number.isSafeInteger(product.compareAtPiastres) && product.compareAtPiastres > price && <del>{formatCatalogPrice(product.compareAtPiastres)}</del>}</p>
           <p className={`product-stock-status ${orderingAvailable ? '' : 'is-unavailable'}`}>{preview ? 'Preview only · Ordering disabled' : orderingAvailable ? product.inventory?.mode === 'made_to_order' ? 'Made by Request' : 'Available' : 'Sold Out'}</p>
-          <form ref={purchaseRef} className="product-purchase-section" aria-label="Product options" onSubmit={addProduct}>
-            {variants.length > 0 && <label htmlFor={variantId}>Choose size / color
-              <select id={variantId} value={variantKey} disabled={adding} aria-invalid={Boolean(fieldErrors.variant)} required onChange={(event) => {
+          <form ref={purchaseRef} className="product-purchase-section" aria-label="Product options" onSubmit={addProduct} noValidate aria-busy={adding}>
+            {variants.length > 0 && <div className="commerce-field"><label htmlFor={variantId}>Choose size / color</label>
+              <select id={variantId} value={variantKey} disabled={adding} {...fieldErrorProps(variantId, fieldErrors.variant)} required onChange={(event) => {
                 const nextKey = event.target.value;
                 const nextVariant = variants.find((item) => item.key === nextKey);
                 setVariantKey(nextKey);
@@ -109,19 +115,20 @@ export function ProductContent({ product, relatedProducts = [], preview = false,
                 <option value="">Choose an option</option>
                 {variants.map((item) => <option key={item.key} value={item.key}>{variantLabel(item)}{!preview && item.orderingAvailable === false ? ' — Sold Out' : ''}</option>)}
               </select>
-              {fieldErrors.variant && <span role="alert">{fieldErrors.variant}</span>}
-            </label>}
+              <FieldError id={variantId}>{fieldErrors.variant}</FieldError>
+            </div>}
             {personalizationFields.length > 0 && <fieldset className="product-personalization"><legend>Personalize your gift</legend><ConfiguredFields fields={personalizationFields} values={personalization} onChange={setPersonalization} errors={fieldErrors} disabled={preview || adding} /></fieldset>}
             <div className="product-quantity-row">
               <label htmlFor={quantityId}>Quantity</label>
               <div className="product-quantity-controls">
-                <button type="button" aria-label="Decrease quantity" disabled={quantity <= 1 || !orderingAvailable} onClick={() => changeQuantity(quantity - 1)}><Minus size={16} /></button>
-                <input id={quantityId} type="number" inputMode="numeric" min="1" max={maximumQuantity} step="1" value={quantity} disabled={!orderingAvailable} onChange={(event) => changeQuantity(Math.floor(Number(event.target.value)))} />
-                <button type="button" aria-label="Increase quantity" disabled={quantity >= maximumQuantity || !orderingAvailable} onClick={() => changeQuantity(quantity + 1)}><Plus size={16} /></button>
+                <button type="button" aria-label="Decrease quantity" disabled={adding || quantity <= 1 || !orderingAvailable} onClick={() => changeQuantity(quantity - 1)}><Minus size={16} /></button>
+                <input id={quantityId} type="number" inputMode="numeric" min="1" max={maximumQuantity} step="1" value={quantity} disabled={adding || !orderingAvailable} onChange={(event) => changeQuantity(Math.floor(Number(event.target.value)))} />
+                <button type="button" aria-label="Increase quantity" disabled={adding || quantity >= maximumQuantity || !orderingAvailable} onClick={() => changeQuantity(quantity + 1)}><Plus size={16} /></button>
               </div>
             </div>
             <button type="submit" className="button button-dark product-purchase-button" disabled={!orderingAvailable || adding || cart.pending} aria-describedby="product-ordering-notice">{preview ? 'Ordering disabled' : adding ? 'Adding…' : orderingAvailable ? 'Add to Cart' : 'Sold Out'}</button>
             {addError && <p role="alert" className="error-text">{addError}</p>}
+            {adding && <p className="upload-progress" role="status"><progress aria-label="Adding your gift"/>{uploadStatus || 'Preparing your item…'}</p>}
             <p id="product-ordering-notice" className="product-ordering-notice">{preview ? 'This authenticated preview does not publish the product or enable cart, checkout or customization.' : personalizationFields.some(field => field.type === 'image') ? 'Your selected photos stay on this device until you press Add to Cart.' : 'Prices and availability are verified when adding to your cart.'}</p>
             {canCustomize && <Link className="catalog-secondary-button product-customize-button" to={`/products/${encodeURIComponent(product.slug)}/customize`}>Customize This</Link>}
           </form>
@@ -139,7 +146,7 @@ export function ProductContent({ product, relatedProducts = [], preview = false,
         {orderingAvailable && product.requiresOptions ? <button type="button" className="button button-dark" onClick={focusOptions}>Choose Options</button>
           : <button type="button" className="button button-dark" disabled={!orderingAvailable || adding || cart.pending} onClick={() => purchaseRef.current.requestSubmit()}>{orderingAvailable ? 'Add to Cart' : 'Sold Out'}</button>}
       </div>}
-    </main>
+    </Container>
   );
 }
 

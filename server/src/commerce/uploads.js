@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { randomUUID } from 'node:crypto';
 import { env } from '../config/env.js';
 import { assertDatabaseWriteAllowed } from '../config/database-safety.js';
 import { Upload } from '../models/Upload.js';
@@ -10,7 +11,9 @@ import { resolveArtworkUploadField } from './customization.js';
 import {
   getStorage, inspectStoredImage, privateObjectKey, UPLOAD_MIME_TYPES,
   MAX_UPLOAD_BYTES, UPLOAD_URL_SECONDS, storageError,
+  boundPrivateBody,
 } from './storage.js';
+import { shouldStop, boundedOperation } from './work-budget.js';
 
 const MAX_ACTIVE_UPLOADS = 20;
 const MAX_OWNER_BYTES = 100 * 1024 * 1024;
@@ -137,7 +140,7 @@ export async function signUpload(owner, body) {
         signedExpiresAt: new Date(now + UPLOAD_URL_SECONDS * 1000), expiresAt: new Date(now + TEMPORARY_LIFETIME_MS),
       }], { session });
     });
-    const signed = await storage.signPut(upload.temporaryKey, upload);
+    const signed = await boundedOperation(signal => storage.signPut(upload.temporaryKey, { ...upload.toObject(), signal }), { code: 'STORAGE_SIGN_TIMEOUT' });
     return { upload: serializeUpload(upload), uploadUrl: signed.url, headers: signed.headers, expiresInSeconds: signed.expiresInSeconds };
   } catch (error) {
     if (upload) {
@@ -167,7 +170,7 @@ export async function completeUpload(id, owner) {
   if (!upload) throw fail('UPLOAD_NOT_READY', 'The upload is already being processed.', 409);
   try {
     const verified = await inspectStoredImage(storage, upload.temporaryKey, upload);
-    await storage.copy(upload.temporaryKey, upload.objectKey, { mimeType: upload.mimeType, etag: verified.etag });
+    await boundedOperation(signal => storage.copy(upload.temporaryKey, upload.objectKey, { mimeType: upload.mimeType, etag: verified.etag, signal }), { code: 'STORAGE_COPY_TIMEOUT' });
     const copied = await inspectStoredImage(storage, upload.objectKey, upload);
     writeGuard();
     const result = await Upload.findOneAndUpdate({ _id: id, owner, state: 'verifying' }, {
@@ -188,7 +191,7 @@ export async function completeUpload(id, owner) {
   }
 }
 
-export async function validateUploadReferences(ids, owner, { purpose, session, productId, fieldKey, checkoutKey } = {}) {
+export async function validateUploadReferences(ids, owner, { purpose, session, productId, fieldKey, checkoutKey, context } = {}) {
   assertUploadOwner(owner);
   const objectIds = idsForQuery(ids);
   if (!objectIds.length) return [];
@@ -197,7 +200,10 @@ export async function validateUploadReferences(ids, owner, { purpose, session, p
   if (productId) filter.productId = productId;
   if (fieldKey) filter.fieldKey = fieldKey;
   if (checkoutKey) filter.checkoutKey = checkoutKey;
-  const records = await Upload.find(filter).session(session || null).lean();
+  const records = context ? (context.owner === owner ? objectIds.map(id => context.uploads.get(String(id))).filter(record => record
+    && (!purpose || record.purpose === purpose) && (!productId || String(record.productId) === String(productId))
+    && (!fieldKey || record.fieldKey === fieldKey) && (!checkoutKey || record.checkoutKey === checkoutKey)
+    && record.state === 'complete' && record.expiresAt > new Date()) : []) : await Upload.find(filter).session(session || null).lean().maxTimeMS(3000);
   if (records.length !== objectIds.length) throw fail('INVALID_UPLOAD_REFERENCES', 'An image is missing, expired or belongs to another shopping session.');
   const ordered = new Map(records.map((record) => [String(record._id), record]));
   return objectIds.map((id) => ordered.get(String(id)));
@@ -292,7 +298,7 @@ export async function deleteUpload(id, owner) {
   return { cleanupQueued: true };
 }
 
-export async function openPrivateUpload(id, owner, { adminUser } = {}) {
+export async function openPrivateUpload(id, owner, { adminUser, signal } = {}) {
   if (!mongoose.isObjectIdOrHexString(id)) throw fail('UPLOAD_NOT_FOUND', 'Upload not found.', 404);
   const isAdmin = adminUser?.role === 'admin' && adminUser.active !== false && mongoose.isObjectIdOrHexString(adminUser._id);
   if (!isAdmin) assertUploadOwner(owner);
@@ -304,48 +310,74 @@ export async function openPrivateUpload(id, owner, { adminUser } = {}) {
       details: { purpose: upload.purpose, orderId: upload.orderId ? String(upload.orderId) : null } });
   }
   try {
-    const result = await getStorage().open(upload.objectKey);
+    const result = await boundedOperation(operationSignal => getStorage().open(upload.objectKey, { signal: operationSignal }), { budget: signal ? { signal, deadline: Date.now() + 15000, clock: () => Date.now() } : undefined, code: 'STORAGE_VIEW_TIMEOUT' });
     if (result.mimeType !== upload.mimeType || result.sizeBytes !== upload.sizeBytes) {
       result.body.destroy?.();
       throw storageError();
     }
-    return { ...result, upload: serializeUpload(upload) };
+    return { ...result, body: boundPrivateBody(result.body, { signal }), upload: serializeUpload(upload) };
   } catch { throw storageError(); }
 }
 
-export async function cleanupExpiredUploads({ batchSize = 20, now = new Date() } = {}) {
+export async function cleanupExpiredUploads({ batchSize = 20, now = new Date(), budget } = {}) {
   if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 100) throw fail('INVALID_CLEANUP_BATCH', 'Cleanup batches must contain 1–100 records.');
   const storage = getStorage();
-  const result = { processed: 0, deleted: 0, failed: 0, temporarySourcesDeleted: 0 };
+  const result = { processed: 0, deleted: 0, failed: 0, temporarySourcesDeleted: 0, reviewRequired: 0 };
+  const leaseAvailable = { $or: [{ cleanupLeaseUntil: { $exists: false } }, { cleanupLeaseUntil: { $lt: now } }] };
+  const retryable = { cleanupReviewRequired: { $ne: true }, $and: [{ $or: [{ cleanupAttempts: { $exists: false } }, { cleanupAttempts: { $lt: 6 } }] }, { $or: [{ cleanupNextAttemptAt: { $exists: false } }, { cleanupNextAttemptAt: { $lte: now } }] }, leaseAvailable] };
+  if (shouldStop(budget)) return { ...result, stopped: true };
+  // A worker can die after claiming its last attempt. Never let lease recovery
+  // silently exceed the retry ceiling or discard an undeleted private object.
+  writeGuard();
+  const exhausted = await Upload.find({ cleanupAttempts: { $gte: 6 }, cleanupReviewRequired: { $ne: true }, ...leaseAvailable })
+    .select('_id').sort({ expiresAt: 1, _id: 1 }).limit(batchSize).lean().maxTimeMS(3000);
+  if (exhausted.length) result.reviewRequired += (await Upload.updateMany({ _id: { $in: exhausted.map(upload => upload._id) }, cleanupAttempts: { $gte: 6 }, ...leaseAvailable },
+    { $set: { cleanupReviewRequired: true, cleanupFailureCode: 'STORAGE_DELETE_FAILED' }, $unset: { cleanupLeaseUntil: 1, cleanupLeaseToken: 1 } }).maxTimeMS(3000)).modifiedCount;
+  const remove = key => boundedOperation(signal => storage.remove(key, { signal }), { budget, code: 'STORAGE_DELETE_TIMEOUT' });
+  const failedCleanup = async upload => {
+    const attempts = upload.cleanupAttempts || 1;
+    const review = attempts >= 6;
+    writeGuard();
+    const saved = await Upload.updateOne({ _id: upload._id, cleanupLeaseToken: upload.cleanupLeaseToken }, {
+      $set: { cleanupReviewRequired: review, cleanupFailureCode: 'STORAGE_DELETE_FAILED', cleanupNextAttemptAt: new Date(now.getTime() + Math.min(3600000, 60000 * 2 ** (attempts - 1))) },
+      $unset: { cleanupLeaseUntil: 1, cleanupLeaseToken: 1 },
+    }).maxTimeMS(3000);
+    if (review && saved.modifiedCount) result.reviewRequired += 1;
+    result.failed += 1;
+  };
   // Retained verified objects remain private; only their obsolete signed source is cleaned.
-  const retained = await Upload.find({ state: 'retained', signedExpiresAt: { $lt: new Date(now.getTime() - 60000) }, temporaryKey: { $exists: true } })
-    .select('+temporaryKey').sort({ signedExpiresAt: 1 }).limit(batchSize).lean();
-  for (const upload of retained) {
+  for (let count = 0; count < batchSize; count += 1) {
+    if (shouldStop(budget)) { result.stopped = true; break; }
+    writeGuard();
+    const upload = await Upload.findOneAndUpdate({ state: 'retained', signedExpiresAt: { $lt: new Date(now.getTime() - 60000) }, temporaryKey: { $exists: true }, ...retryable },
+      { $set: { cleanupLeaseUntil: new Date(now.getTime() + 60000), cleanupLeaseToken: randomUUID() }, $inc: { cleanupAttempts: 1 } }, { new: true, sort: { signedExpiresAt: 1, _id: 1 } }).select('+temporaryKey +cleanupLeaseToken').maxTimeMS(3000);
+    if (!upload) break;
     try {
-      await storage.remove(upload.temporaryKey);
+      await remove(upload.temporaryKey);
       writeGuard();
-      await Upload.updateOne({ _id: upload._id, state: 'retained', temporaryKey: upload.temporaryKey }, { $unset: { temporaryKey: 1 } });
-      result.temporarySourcesDeleted += 1;
-    } catch { result.failed += 1; }
+      const changed = await Upload.updateOne({ _id: upload._id, state: 'retained', temporaryKey: upload.temporaryKey, cleanupLeaseToken: upload.cleanupLeaseToken }, { $unset: { temporaryKey: 1, cleanupLeaseUntil: 1, cleanupLeaseToken: 1, cleanupNextAttemptAt: 1, cleanupFailureCode: 1 } }).maxTimeMS(3000);
+      result.temporarySourcesDeleted += changed.modifiedCount;
+    } catch { await failedCleanup(upload); }
   }
   for (let count = 0; count < batchSize; count += 1) {
+    if (shouldStop(budget)) { result.stopped = true; break; }
     writeGuard();
     const upload = await Upload.findOneAndUpdate({
       state: { $ne: 'retained' }, expiresAt: { $lte: now }, signedExpiresAt: { $lt: new Date(now.getTime() - 60000) },
-      $or: [{ cleanupLeaseUntil: { $exists: false } }, { cleanupLeaseUntil: { $lt: now } }],
-      $and: [{ $or: [{ state: { $ne: 'verifying' } }, { verificationLeaseUntil: { $lte: now } }, { verificationLeaseUntil: { $exists: false } }] }],
-    }, { $set: { state: 'deleting', cleanupLeaseUntil: new Date(now.getTime() + 60000) } }, { new: true, sort: { expiresAt: 1 } })
-      .select('+temporaryKey +objectKey');
+      ...retryable,
+      $and: [...retryable.$and, { $or: [{ state: { $ne: 'verifying' } }, { verificationLeaseUntil: { $lte: now } }, { verificationLeaseUntil: { $exists: false } }] }],
+    }, { $set: { state: 'deleting', cleanupLeaseUntil: new Date(now.getTime() + 60000), cleanupLeaseToken: randomUUID() }, $inc: { cleanupAttempts: 1 } }, { new: true, sort: { expiresAt: 1, _id: 1 } })
+      .select('+temporaryKey +objectKey +cleanupLeaseToken').maxTimeMS(3000);
     if (!upload) break;
     result.processed += 1;
     try {
-      if (upload.temporaryKey) await storage.remove(upload.temporaryKey);
-      if (upload.objectKey) await storage.remove(upload.objectKey);
+      if (upload.temporaryKey) await remove(upload.temporaryKey);
+      if (upload.objectKey) await remove(upload.objectKey);
       await releaseQuota(upload);
       writeGuard();
-      await Upload.deleteOne({ _id: upload._id, state: 'deleting', cleanupLeaseUntil: upload.cleanupLeaseUntil });
-      result.deleted += 1;
-    } catch { result.failed += 1; }
+      const deleted = await Upload.deleteOne({ _id: upload._id, state: 'deleting', cleanupLeaseToken: upload.cleanupLeaseToken }).maxTimeMS(3000);
+      result.deleted += deleted.deletedCount;
+    } catch { await failedCleanup(upload); }
   }
   return result;
 }

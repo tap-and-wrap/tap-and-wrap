@@ -1,8 +1,8 @@
 import { api, safePost, safePatch } from './api.js';
 
-async function get(path, params, signal) {
+async function get(path, params, signal, headers) {
   try {
-    const response = await api.get(path, { params, signal });
+    const response = await api.get(path, { params, signal, headers });
     return response.data.data;
   } catch (error) {
     if (error.code === 'ERR_CANCELED' || !path.startsWith('/public/')) throw error;
@@ -11,10 +11,11 @@ async function get(path, params, signal) {
     throw publicError;
   }
 }
-export const listProducts = (params = {}, signal) => get('/public/products', { ...params, limit: Math.min(params.limit ?? 20, 20) }, signal);
+export const listProducts = (params = {}, signal, { searchEventId } = {}) => get('/public/products', { includePriceRange: false, ...params, limit: Math.min(params.limit ?? 20, 20) }, signal, searchEventId ? { 'x-search-event-id': searchEventId } : undefined);
 export const getProduct = (slug, signal) => get(`/public/products/${encodeURIComponent(slug)}`, undefined, signal);
+export const getCategory = (slug, signal) => get(`/public/categories/${encodeURIComponent(slug)}`, undefined, signal);
 export const listCategories = (params = {}, signal) => get('/public/categories', { ...params, limit: Math.min(params.limit ?? 20, 20) }, signal);
-export const listAdminProducts = (params = {}, signal) => get('/admin/products', { ...params, limit: Math.min(params.limit ?? 20, 20) }, signal);
+export const listAdminProducts = (params = {}, signal) => get('/admin/products', { includePriceRange: false, ...params, limit: Math.min(params.limit ?? 20, 20) }, signal);
 export const getAdminProduct = (id, signal) => get(`/admin/products/${encodeURIComponent(id)}`, undefined, signal);
 export const getAdminProductPreview = (id, signal) => get(`/admin/products/${encodeURIComponent(id)}/preview`, undefined, signal);
 export const listAdminCategories = (params = {}, signal) => get('/admin/categories', { ...params, limit: Math.min(params.limit ?? 20, 20) }, signal);

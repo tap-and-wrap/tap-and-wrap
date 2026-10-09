@@ -13,7 +13,8 @@
     "test:seo": "node --test scripts/seo/*.test.js",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test": "playwright test"
+    "test": "node scripts/run-browser-tests.js",
+    "test:contracts": "node scripts/run-contract-tests.js"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.0",

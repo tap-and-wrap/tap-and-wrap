@@ -41,7 +41,7 @@ describe('Phase 1B catalog API contracts', { concurrency: false }, () => {
   }
 
   before(async () => {
-    database = await startTestDatabase({ models: [User, Session] });
+    database = await startTestDatabase({ models: [User, Session], transactions: true });
     server = app.listen(0, '127.0.0.1');
     await once(server, 'listening');
     baseUrl = `http://127.0.0.1:${server.address().port}`;
@@ -109,6 +109,31 @@ describe('Phase 1B catalog API contracts', { concurrency: false }, () => {
     }
     const selected = await request('/public/products?featured=true&sort=featured');
     assert.deepEqual(selected.body.products.map((product) => product.slug), ['sort-gamma', 'sort-alpha']);
+  });
+
+  it('skips unused range aggregation while retaining filtered counts, category scope and pagination', async (context) => {
+    await Product.create(Array.from({ length: 23 }, (_, index) => ready(`no-range-${index}`, { pricePiastres: 1000 + index })));
+    await Product.create(ready('no-range-draft', { status: 'draft', priceApproved: false }));
+    const aggregate = context.mock.method(Product, 'aggregate', () => { throw new Error('Unused range aggregate was executed'); });
+    const response = await request(`/public/products?includePriceRange=false&category=${main.slug}&subcategory=${child.slug}&availability=available&minPrice=1000&maxPrice=1022&page=2&limit=100&sort=price_asc`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.body.pagination, { page: 2, limit: 20, total: 23, pages: 2 });
+    assert.equal(response.body.products.length, 3);
+    assert.equal('priceRange' in response.body, false);
+    assert.equal(aggregate.mock.callCount(), 0);
+    const admin = await request('/admin/products?includePriceRange=false', { headers: adminHeaders });
+    assert.equal(admin.status, 200);
+    assert.equal('priceRange' in admin.body, false);
+    assert.equal(aggregate.mock.callCount(), 0);
+  });
+
+  it('strictly validates the optional range flag without relaxing price or query validation', async () => {
+    for (const suffix of ['includePriceRange=0', 'includePriceRange=off', 'includePriceRange=false&minPrice=-1', 'includePriceRange=false&unknown=true']) {
+      const response = await request(`/public/products?${suffix}`);
+      assert.equal(response.status, 400, suffix);
+    }
+    const reversed = await request('/public/products?includePriceRange=false&minPrice=200&maxPrice=100');
+    assert.equal(reversed.status, 400);
   });
 
   it('caps the selected best-seller homepage feed at eight approved available products', async () => {
@@ -195,7 +220,7 @@ describe('Phase 1B catalog API contracts', { concurrency: false }, () => {
     }));
     const update = await request(`/admin/products/${product._id}`, {
       method: 'PATCH', headers: adminHeaders,
-      body: { name: 'Fixture renamed', featured: true, featuredOrder: 2, bestSeller: true, bestSellerOrder: 1 },
+      body: { expectedRevision: product.__v, name: 'Fixture renamed', featured: true, featuredOrder: 2, bestSeller: true, bestSellerOrder: 1 },
     });
     assert.equal(update.status, 200);
     assert.equal(update.body.product.featured, true);

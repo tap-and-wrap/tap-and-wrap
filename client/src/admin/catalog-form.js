@@ -13,12 +13,19 @@ export function parsePriceInput(value, label = 'Price') {
   const input = String(value).trim();
   if (!input) return null;
   if (!/^\d+(?:\.\d{1,2})?$/.test(input)) {
-    throw new Error(`${label} must be a non-negative EGP amount with up to two decimal places.`);
+    throw priceValidationError(`${label} must be a non-negative EGP amount with up to two decimal places.`, label);
   }
   const [whole, fraction = ''] = input.split('.');
   const amount = BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0'));
-  if (amount > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error(`${label} is too large.`);
+  if (amount > BigInt(Number.MAX_SAFE_INTEGER)) throw priceValidationError(`${label} is too large.`, label);
   return Number(amount);
+}
+
+function priceValidationError(message, label) {
+  const error = new Error(message);
+  const variant = /^Variant (\d+) price$/.exec(label);
+  error.details = [{ field: variant ? `variants.${Number(variant[1]) - 1}.pricePiastres` : label === 'Compare-at price' ? 'compareAtPiastres' : 'pricePiastres', message }];
+  return error;
 }
 
 export function integerInput(value, label) {
@@ -83,9 +90,9 @@ export function createProductPayload(draft) {
   if (new Set(galleryKeys).size !== galleryKeys.length) throw new Error('Image references must be unique.');
   const pricePiastres = parsePriceInput(draft.price);
   const compareAtPiastres = parsePriceInput(draft.compareAt, 'Compare-at price');
-  if (draft.priceApproved && pricePiastres === null) throw new Error('Enter a price before approving it.');
+  if (draft.priceApproved && pricePiastres === null) throw priceValidationError('Enter a price before approving it.', 'Price');
   if (compareAtPiastres !== null && pricePiastres !== null && compareAtPiastres < pricePiastres) {
-    throw new Error('Compare-at price must be at least the product price.');
+    throw priceValidationError('Compare-at price must be at least the product price.', 'Compare-at price');
   }
   return {
     name: draft.name.trim(),

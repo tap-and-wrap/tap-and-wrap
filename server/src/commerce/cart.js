@@ -1,9 +1,10 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
 import { Cart } from '../models/Cart.js';
 import { env } from '../config/env.js';
 import { assertDatabaseWriteAllowed } from '../config/database-safety.js';
 import { quoteCartLine, publicCartLine } from './pricing.js';
+import { createPricingContext } from './pricing-context.js';
 import { transferUploadOwnership, attachUploadsToCart, detachUnusedCartUploads } from './uploads.js';
 import { commerceError, checkedMoney } from './errors.js';
 
@@ -13,19 +14,29 @@ export async function readCart(owner, { session } = {}) {
 }
 export async function quoteCart(owner, { session, strict = false } = {}) {
   const cart = await readCart(owner, { session });
+  const context = await createPricingContext(cart?.items || [], owner, { session });
   const items = [];
   for (const item of cart?.items || []) {
-    try { items.push(await quoteCartLine(item, owner, { session })); }
+    try {
+      const quoted = await quoteCartLine(item, owner, { session, context });
+      const expiries = quoted.uploadIds.map(id => context.uploads.get(String(id))?.expiresAt).filter(Boolean);
+      items.push({ ...quoted, ...(expiries.length ? { attachments: { status: 'temporary', expiresAt: new Date(Math.min(...expiries.map(date => date.getTime()))), replacementRequired: false } } : {}) });
+    }
     catch (error) {
       if (strict || !error.status || error.status >= 500) throw error;
-      items.push({ id: item.id, productId: String(item.productId), name: item.name || 'Unavailable product', slug: item.slug || null, mainImageUrl: item.mainImageUrl || null, quantity: item.quantity, valid: false, error: error.message, unitPricePiastres: null, lineTotalPiastres: null });
+      const uploadedFields = [...Object.entries(item.personalization || {}), ...Object.entries(item.customization?.fields || {})]
+        .filter(([key, value]) => /^[a-z][a-z0-9_-]{0,79}$/i.test(key) && Array.isArray(value) && value.length > 0).map(([key]) => key);
+      items.push({ id: item.id, productId: String(item.productId), name: item.name || 'Unavailable product', slug: item.slug || null, mainImageUrl: item.mainImageUrl || null, quantity: item.quantity, valid: false, error: error.message, errorCode: error.code || 'CART_ITEM_UNAVAILABLE',
+        ...(error.code === 'INVALID_UPLOAD_REFERENCES' && uploadedFields.length ? { attachments: { status: 'unavailable', replacementRequired: true, fieldKeys: [...new Set(uploadedFields)], expiresAt: null } } : {}), unitPricePiastres: null, lineTotalPiastres: null });
     }
   }
   return { document: cart, items, subtotalPiastres: checkedMoney(items.reduce((sum, item) => sum + (item.valid ? item.lineTotalPiastres : 0), 0)), quantity: items.reduce((sum, item) => sum + item.quantity, 0) };
 }
 export async function cartResponse(owner) {
   const quote = await quoteCart(owner);
-  return { cart: { items: quote.items.map(item => item.valid ? publicCartLine(item) : item), subtotalPiastres: quote.subtotalPiastres, quantity: quote.quantity }, checkoutEnabled: env.checkoutEnabled === true };
+  return { cart: { items: quote.items.map(item => item.valid ? publicCartLine(item) : item), subtotalPiastres: quote.subtotalPiastres, quantity: quote.quantity }, checkoutEnabled: env.checkoutEnabled === true,
+    // A UI scope identifier only, never an authorization credential or raw owner.
+    checkoutOwnerKey: createHash('sha256').update(`checkout-context:${owner}`).digest('hex') };
 }
 async function changeCart(owner, operation) {
   for (let attempt = 0; attempt < 5; attempt += 1) {

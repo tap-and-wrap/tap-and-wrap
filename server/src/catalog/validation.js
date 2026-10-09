@@ -8,6 +8,7 @@ const quantity = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const boundedText = (maximum) => z.string().trim().max(maximum);
 const imageKey = z.string().trim().min(1).max(500).refine(isSafeImageReference, 'Expected a safe relative image key');
 const bool = z.boolean();
+const expectedRevision = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 
 export const inventorySchema = z.object({
   mode: z.enum(['tracked', 'made_to_order']).optional(),
@@ -26,7 +27,7 @@ const variantSchema = z.object({
 }).strict();
 
 const personalizationFieldSchema = z.object({
-  key: z.string().regex(/^[a-z][a-z0-9_]{0,49}$/),
+  key: z.string().regex(/^[a-z][a-z0-9_-]{0,49}$/),
   label: boundedText(160).min(1),
   type: z.enum(['image', 'short_text', 'long_text', 'select']),
   required: bool.optional(),
@@ -69,8 +70,9 @@ const productFields = {
 };
 
 export const createProductSchema = z.object(productFields).strict();
-export const updateProductSchema = createProductSchema.partial().refine((body) => Object.keys(body).length > 0, 'Provide at least one field');
-export const publicationSchema = z.object({ status: z.enum(['draft', 'ready', 'hold']) }).strict();
+export const updateProductSchema = createProductSchema.partial().extend({ expectedRevision }).refine((body) => Object.keys(body).some((key) => key !== 'expectedRevision'), 'Provide at least one field');
+export const publicationSchema = z.object({ expectedRevision, status: z.enum(['draft', 'ready', 'hold']) }).strict();
+export const inventoryUpdateSchema = inventorySchema.extend({ expectedRevision }).refine((body) => Object.keys(body).some((key) => key !== 'expectedRevision'), 'Provide at least one inventory field');
 
 const categoryFields = {
   name: boundedText(160).min(1),
@@ -83,7 +85,7 @@ const categoryFields = {
 };
 
 export const createCategorySchema = z.object(categoryFields).strict();
-export const updateCategorySchema = createCategorySchema.partial().refine((body) => Object.keys(body).length > 0, 'Provide at least one field');
+export const updateCategorySchema = createCategorySchema.partial().extend({ expectedRevision }).refine((body) => Object.keys(body).some((key) => key !== 'expectedRevision'), 'Provide at least one field');
 
 const positiveIntegerQuery = z.string().regex(/^[1-9]\d{0,5}$/).transform(Number);
 const booleanQuery = z.enum(['true', 'false']).transform((value) => value === 'true');
@@ -99,6 +101,7 @@ const commonQueryFields = {
   maxPrice: z.string().regex(/^\d+$/).transform(Number).refine(Number.isSafeInteger).optional(),
   featured: booleanQuery.optional(),
   bestSeller: booleanQuery.optional(),
+  includePriceRange: booleanQuery.optional(),
 };
 
 export const publicProductQuerySchema = z.object(commonQueryFields).strict();
@@ -116,9 +119,12 @@ export const categoryQuerySchema = z.object({
   page: positiveIntegerQuery.refine((value) => value <= 200, 'Page cannot exceed 200').optional(),
   limit: positiveIntegerQuery.transform((value) => Math.min(value, 20)).optional(),
   parent: z.union([z.literal('root'), slug]).optional(),
+  includeProductCounts: booleanQuery.optional(),
   featured: booleanQuery.optional(),
   active: booleanQuery.optional(),
 }).strict();
+
+export const adminCategoryQuerySchema = categoryQuerySchema.extend({ search: boundedText(100).min(1).optional() });
 
 export function parseInput(schema, value) {
   const result = schema.safeParse(value);

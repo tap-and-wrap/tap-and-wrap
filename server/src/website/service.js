@@ -16,6 +16,7 @@ import { recordAdminAudit } from '../commerce/audit.js';
 import { evaluatePromotions } from '../commerce/promotions.js';
 import { assertDatabaseWriteAllowed } from '../config/database-safety.js';
 import { env } from '../config/env.js';
+import { prepareAdminRevision, adminRevision } from '../utils/admin-revision.js';
 
 const TIMEOUT = 3000;
 const objectId = z.string().regex(/^[a-f\d]{24}$/i);
@@ -31,15 +32,16 @@ const contact = z.object({
   }, 'Provide an HTTPS Instagram profile URL.').optional(), approved: z.boolean().optional(),
 }).strict();
 export const siteContentSchema = z.object({
+  expectedRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   about: section.optional(), contact: contact.optional(), privacyPolicy: section.optional(), refundPolicy: section.optional(), shippingPolicy: section.optional(), termsOfService: section.optional(),
   faq: z.array(z.object({ question: text(250).min(1), answer: text(3000).min(1) }).strict()).max(20).optional(), faqApproved: z.boolean().optional(),
-}).strict().refine((value) => Object.keys(value).length > 0, 'Provide at least one section.');
+}).strict().refine((value) => Object.keys(value).some((key) => key !== 'expectedRevision'), 'Provide at least one section.');
 const reviewFields = {
   productId: objectId.nullable().optional(), authorLabel: text(100).min(1), rating: z.number().int().min(1).max(5), text: text(3000).min(1),
   status: z.enum(['draft', 'published', 'hidden']).optional(), approved: z.boolean().optional(), consentConfirmed: z.boolean().optional(), sourceNote: text(2000).optional(), featured: z.boolean().optional(), displayOrder: z.number().int().min(0).max(100000).optional(),
 };
 export const createReviewSchema = z.object(reviewFields).strict();
-export const updateReviewSchema = createReviewSchema.partial().refine((value) => Object.keys(value).length > 0, 'Provide at least one review field.');
+export const updateReviewSchema = createReviewSchema.partial().extend({ expectedRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER) }).refine((value) => Object.keys(value).some((key) => key !== 'expectedRevision'), 'Provide at least one review field.');
 const integerQuery = z.string().regex(/^[1-9]\d{0,3}$/).transform(Number);
 export const websiteQuerySchema = z.object({
   page: integerQuery.refine((value) => value <= 200).optional(), limit: integerQuery.refine((value) => value <= 20).optional(),
@@ -108,7 +110,7 @@ export async function getPublicSiteContent() {
 }
 
 export async function getAdminSiteContent() {
-  return (await SiteContent.findOne({ key: 'website-v1' }).select('-updatedBy').lean().maxTimeMS(TIMEOUT)) || new SiteContent().toObject();
+  return adminRevision((await SiteContent.findOne({ key: 'website-v1' }).select('-updatedBy').lean().maxTimeMS(TIMEOUT)) || new SiteContent().toObject());
 }
 
 export async function auditedWebsiteMutation(actor, action, resourceType, resourceId, callback) {
@@ -121,6 +123,9 @@ export async function auditedWebsiteMutation(actor, action, resourceType, resour
       result = await callback(session);
       await recordAdminAudit(actor, { action, resourceType, resourceId: String(result?._id || resourceId), details: { status: result?.status ?? null, approved: result?.approved ?? null } }, { session });
     });
+  } catch (error) {
+    if (error.code === 11000 && resourceType === 'site_content') throw commerceError(409, 'EDIT_CONFLICT', 'Website content was created by another editor. Reload it before saving.');
+    throw error;
   } finally { await session.endSession(); }
   return result;
 }
@@ -128,6 +133,8 @@ export async function auditedWebsiteMutation(actor, action, resourceType, resour
 export async function updateSiteContent(actor, input) {
   return auditedWebsiteMutation(actor, 'website.content.edit', 'site_content', 'website-v1', async (session) => {
     const record = await SiteContent.findOne({ key: 'website-v1' }).session(session) || new SiteContent();
+    await prepareAdminRevision(record, input.expectedRevision, { session });
+    const creating = record.isNew;
     for (const name of ['about', 'contact', 'privacyPolicy', 'refundPolicy', 'shippingPolicy', 'termsOfService']) {
       if (!input[name]) continue;
       const previous = record[name]?.toObject() || {};
@@ -143,6 +150,10 @@ export async function updateSiteContent(actor, input) {
     if (input.faqApproved !== undefined) record.faqApproved = input.faqApproved;
     record.updatedBy = actor._id;
     await record.save({ session });
+    if (creating) {
+      await SiteContent.updateOne({ _id: record._id, __v: 0 }, { $set: { __v: 1 } }, { session, timestamps: false });
+      record.__v = 1;
+    }
     return record;
   });
 }
@@ -154,17 +165,17 @@ export async function listAdminReviews(query) {
   if (query.productId) filter.productId = query.productId;
   if (query.q) filter.$text = { $search: query.q };
   const [reviews, total] = await Promise.all([
-    Review.find(filter).select('productId authorLabel rating status approved consentConfirmed featured displayOrder createdAt updatedAt').populate({ path: 'productId', select: 'name slug' })
+    Review.find(filter).select('productId authorLabel rating status approved consentConfirmed featured displayOrder createdAt updatedAt __v').populate({ path: 'productId', select: 'name slug' })
       .sort({ updatedAt: -1, _id: -1 }).skip(page.skip).limit(page.limit).lean().maxTimeMS(TIMEOUT),
     Review.countDocuments(filter).maxTimeMS(TIMEOUT),
   ]);
-  return { reviews, pagination: paginationFor(page, total) };
+  return { reviews: reviews.map(adminRevision), pagination: paginationFor(page, total) };
 }
 
 export async function getAdminReview(id) {
   const review = await Review.findById(id).select('-createdBy -updatedBy').lean().maxTimeMS(TIMEOUT);
   if (!review) throw commerceError(404, 'REVIEW_NOT_FOUND', 'Review not found.');
-  return review;
+  return adminRevision(review);
 }
 
 export async function saveReview(actor, id, input) {
@@ -172,12 +183,14 @@ export async function saveReview(actor, id, input) {
     if (input.productId && !await Product.exists({ _id: input.productId }).session(session).maxTimeMS(TIMEOUT)) throw commerceError(400, 'INVALID_PRODUCT', 'Choose an existing product.');
     const review = id ? await Review.findById(id).session(session) : new Review({ createdBy: actor._id });
     if (!review) throw commerceError(404, 'REVIEW_NOT_FOUND', 'Review not found.');
+    if (id) await prepareAdminRevision(review, input.expectedRevision, { session });
     const changed = id && ['productId', 'authorLabel', 'rating', 'text', 'consentConfirmed', 'sourceNote'].some((key) => input[key] !== undefined && String(input[key] ?? '') !== String(review[key] ?? ''));
     if (changed && input.approved === undefined) {
       review.approved = false;
       if (review.status === 'published' && input.status === undefined) review.status = 'draft';
     }
-    review.set(input);
+    const { expectedRevision: _expectedRevision, ...patch } = input;
+    review.set(patch);
     review.updatedBy = actor._id;
     await review.save({ session });
     return review;

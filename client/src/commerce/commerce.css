@@ -46,7 +46,7 @@
 .commerce-field input:not([type="checkbox"]):not([type="radio"]), .commerce-field textarea, .commerce-field select { width: 100%; min-width: 0; min-height: 44px; padding: 11px 12px; border: 1px solid #eadad5; background: white; border-radius: 7px; color: #62483f; font: inherit; }
 .commerce-field input[type="file"] { max-width: 100%; font-size: .8rem; }
 .commerce-field textarea { resize: vertical; }
-.commerce-field [aria-invalid="true"] { border-color: #a23c32 !important; }
+.commerce-field input[aria-invalid="true"], .commerce-field select[aria-invalid="true"], .commerce-field textarea[aria-invalid="true"] { border-color: #a23c32; }
 .commerce-page .form-error { color: #a23c32; font-size: .9rem; }
 .commerce-payment, .commerce-option-group { border: 1px solid #eadad5; border-radius: 10px; padding: 20px; margin: 24px 0; min-width: 0; }
 .commerce-payment legend, .commerce-option-group legend { font-weight: 600; padding: 0 8px; }
@@ -107,7 +107,7 @@
 .commerce-private-dialog .commerce-heading { margin: 0; }
 .commerce-private-dialog button { min-width: 44px; min-height: 44px; }
 .catalog-card-action[type="button"] { width: 100%; cursor: pointer; font: inherit; }
-.catalog-card-action:disabled { cursor: default; opacity: .6; }
+.catalog-card-action:disabled { cursor: not-allowed; opacity: 1; color: var(--tw-ink, #62483F); background: #F1E8E4; border-color: var(--tw-control-border, #A58276); }
 .commerce-page button:focus-visible, .commerce-page a:focus-visible, .commerce-page input:focus-visible, .commerce-page select:focus-visible, .commerce-page textarea:focus-visible { outline: 2px solid #915b50; outline-offset: 3px; }
 @media (max-width: 900px) {
   .commerce-cart-layout, .commerce-checkout-layout { grid-template-columns: minmax(0, 1fr); gap: 30px; }

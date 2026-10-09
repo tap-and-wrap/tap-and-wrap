@@ -16,9 +16,15 @@ test('default Cloudflare configuration routes documents through the reviewed pri
 
 function fixtureEnv() {
   const seen = [];
-  const manifest = { version: 1, origin: 'https://shop.example', indexingEnabled: true, publicRoutes: ['/', '/shop', '/products/approved-product', '/categories/approved-category'], productSlugs: ['approved-product'], categorySlugs: ['approved-category'] };
+  const publicRoutes = ['/', '/shop', '/products/approved-product', '/categories/approved-category'];
+  const allRoutes = [...publicRoutes, '/cart', '/admin', '/my-orders', '/customize', '/404'];
+  const id = 'a'.repeat(64);
+  const createdAt = Date.now();
+  const routeFiles = Object.fromEntries(allRoutes.map((pathname) => [pathname, `/seo-pages/${id}/${pathname === '/' ? 'index' : pathname.slice(1)}.html`]));
+  const manifest = { version: 2, origin: 'https://shop.example', indexingEnabled: true, publicRoutes, indexableRoutes: publicRoutes, productSlugs: ['approved-product'], categorySlugs: ['approved-category'], routeFiles, publication: { version: 1, id, maximumAgeSeconds: 3600, generatedAt: new Date(createdAt).toISOString(), expiresAt: new Date(createdAt + 3600 * 1000).toISOString(), routes: publicRoutes.map((pathname) => ({ pathname, hash: id, indexable: true })) } };
   const assets = new Map([['/seo-manifest.json', JSON.stringify(manifest)], ['/index.html', '<html><h1>Fixture homepage</h1></html>'], ['/shop.html', '<html><h1>Fixture shop</h1></html>'], ['/cart.html', '<html><h1>Private cart shell</h1></html>'], ['/admin.html', '<html><h1>Private admin shell</h1></html>'], ['/my-orders.html', '<html><h1>Private orders shell</h1></html>'], ['/customize.html', '<html><h1>Customization shell</h1></html>'], ['/products/approved-product.html', '<html><h1>Approved Product</h1></html>'], ['/categories/approved-category.html', '<html><h1>Approved Category</h1></html>'], ['/404.html', '<html><h1>Page not found</h1></html>'], ['/sitemap.xml', '<urlset><url>Fixture sitemap</url></urlset>'], ['/assets/app.js', 'fixture-js']]);
-  return { seen, env: { SEO_INDEXING_ENABLED: 'true', ASSETS: { fetch: async (request) => { const pathname = new URL(request.url).pathname; seen.push(pathname); return new Response(assets.get(pathname) || 'Not found', { status: assets.has(pathname) ? 200 : 404, headers: { 'Content-Type': pathname.endsWith('.json') ? 'application/json' : pathname.endsWith('.js') ? 'text/javascript' : 'text/html' } }); } } } };
+  for (const pathname of allRoutes) assets.set(routeFiles[pathname], assets.get(pathname === '/' ? '/index.html' : `${pathname}.html`));
+  return { seen, manifest, assets, env: { SEO_INDEXING_ENABLED: 'true', SEO_EXPECTED_PUBLICATION_ID: id, ASSETS: { fetch: async (request) => { const pathname = new URL(request.url).pathname; seen.push(pathname); return new Response(assets.get(pathname) || 'Not found', { status: assets.has(pathname) ? 200 : 404, headers: { 'Content-Type': pathname.endsWith('.json') ? 'application/json' : pathname.endsWith('.js') ? 'text/javascript' : 'text/html' } }); } } } };
 }
 
 test('Cloudflare router serves approved static product/category HTML without an API request', async () => {
@@ -27,7 +33,7 @@ test('Cloudflare router serves approved static product/category HTML without an 
   assert.equal(response.status, 200);
   assert.match(await response.text(), /Approved Product/);
   assert.equal(response.headers.get('X-Robots-Tag'), null);
-  assert.deepEqual(seen, ['/seo-manifest.json', '/products/approved-product.html']);
+  assert.deepEqual(seen, ['/seo-manifest.json', `/seo-pages/${'a'.repeat(64)}/products/approved-product.html`]);
   const category = await handleSeoRequest(new Request('https://shop.example/categories/approved-category'), env);
   assert.equal(category.status, 200);
 });
@@ -85,4 +91,63 @@ test('missing bindings and manifest fail closed without indexing', async () => {
   const response = await handleSeoRequest(new Request('https://shop.example/products/unknown'), env);
   assert.match(response.headers.get('X-Robots-Tag'), /noindex/);
   assert.equal(response.headers.get('Cache-Control'), 'private, no-store');
+});
+
+test('expired or unreviewed publication IDs never serve stale product prices or structured data', async () => {
+  for (const expired of [true, false]) {
+    const { env, manifest, assets } = fixtureEnv();
+    if (expired) { manifest.publication.expiresAt = '2026-01-01T00:00:00Z'; assets.set('/seo-manifest.json', JSON.stringify(manifest)); }
+    else env.SEO_EXPECTED_PUBLICATION_ID = 'b'.repeat(64);
+    const response = await handleSeoRequest(new Request('https://shop.example/products/approved-product'), env);
+    assert.equal(response.status, 503);
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+    assert.match(response.headers.get('X-Robots-Tag'), /noindex/);
+    assert.equal((await response.text()).includes('Approved Product'), false);
+    const sitemap = await handleSeoRequest(new Request('https://shop.example/sitemap.xml'), env);
+    assert.equal((await sitemap.text()).includes('/products/approved-product'), false);
+  }
+});
+
+test('explicit withdrawal overrides the current snapshot and removes its sitemap discovery', async () => {
+  const { env } = fixtureEnv();
+  env.SEO_WITHDRAWN_PATHS = '/products/approved-product';
+  const response = await handleSeoRequest(new Request('https://shop.example/products/approved-product'), env);
+  assert.equal(response.status, 404);
+  assert.equal((await response.text()).includes('Approved Product'), false);
+  const sitemap = await handleSeoRequest(new Request('https://shop.example/sitemap.xml'), env);
+  const xml = await sitemap.text();
+  assert.equal(xml.includes('/products/approved-product'), false);
+  assert.equal(xml.includes('/categories/approved-category'), true);
+  env.SEO_WITHDRAWN_PATHS = '/admin/private';
+  assert.equal((await handleSeoRequest(new Request('https://shop.example/shop'), env)).status, 503);
+});
+
+test('thin-category noindex is a per-route contract and immutable generation URLs are not browseable', async () => {
+  const { env, manifest, assets } = fixtureEnv();
+  manifest.indexableRoutes = manifest.indexableRoutes.filter((pathname) => !pathname.startsWith('/categories/'));
+  assets.set('/seo-manifest.json', JSON.stringify(manifest));
+  const category = await handleSeoRequest(new Request('https://shop.example/categories/approved-category'), env);
+  assert.equal(category.status, 200);
+  assert.match(category.headers.get('X-Robots-Tag'), /noindex/);
+  assert.equal((await (await handleSeoRequest(new Request('https://shop.example/sitemap.xml'), env)).text()).includes('/categories/'), false);
+  assert.equal((await handleSeoRequest(new Request(`https://shop.example${manifest.routeFiles['/products/approved-product']}`), env)).status, 404);
+});
+
+test('every document, private shell, redirect and asset gets baseline browser security headers', async () => {
+  const { env } = fixtureEnv();
+  for (const pathname of ['/shop', '/admin/products', '/shop/', '/unknown', '/assets/app.js', '/sitemap.xml']) {
+    const response = await handleSeoRequest(new Request(`https://shop.example${pathname}`), env);
+    assert.equal(response.headers.get('X-Frame-Options'), 'DENY', pathname);
+    assert.equal(response.headers.get('X-Content-Type-Options'), 'nosniff');
+    assert.ok(response.headers.has('Content-Security-Policy-Report-Only'));
+    assert.equal(response.headers.has('Content-Security-Policy'), false);
+  }
+});
+
+test('Worker policy invalid origins fail closed, with no credential-bearing diagnostic body', async () => {
+  const { env } = fixtureEnv();
+  env.BROWSER_API_ORIGINS = 'https://private-user:private-password@api.example';
+  const response = await handleSeoRequest(new Request('https://shop.example/shop'), env);
+  assert.equal(response.status, 503);
+  assert.equal((await response.text()).includes('private-password'), false);
 });

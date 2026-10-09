@@ -1,5 +1,7 @@
 # Phase 1B: storefront and admin catalog integration
 
+Current UI conventions are superseded by [Batch 2](BATCH_2_FRONTEND.md): public filters have three accordions (Category, Availability, Price), decimal EGP text inputs and no slider or separate subcategory control. Nested category URLs and backend relationships remain intact. Optional `includePriceRange=false` skips the unused aggregation without changing pagination or eligibility. The original phase record below remains historical.
+
 The project remains JavaScript/JSX with separate React/Vite `client/` and Node/Express/Mongoose `server/` npm installations. Phase 1B connects catalog presentation and product management to the existing Phase 1A APIs. It does not create a cart, checkout, payment, file-upload or R2-upload implementation.
 
 The supplied transparent logo, fonts and white-led design tokens remain the visual foundation. The catalog has not been imported into a persistent database, and the audited workbook contains no approved merchant prices or stock.

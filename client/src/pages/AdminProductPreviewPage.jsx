@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { getAdminProductPreview } from '../services/catalog.js';
 import { ProductContent } from './ProductPage.jsx';
+import AdminLayout from '../admin/AdminLayout.jsx';
 
 function PreviewNotice({ product, id }) {
   const inventory = product.inventory || {};
@@ -38,11 +39,11 @@ export default function AdminProductPreviewPage() {
     staleTime: 0,
     gcTime: 0,
   });
-  if (query.isPending) return <main className="admin-shell"><p role="status">Loading authenticated product preview…</p></main>;
+  if (query.isPending) return <AdminLayout title="Saved product preview" busy><p className="admin-state" role="status">Loading authenticated product preview…</p></AdminLayout>;
   if (query.isError || !query.data?.product?.preview?.enabled) {
     const status = query.error?.response?.status;
-    return <main className="admin-shell admin-access-state"><h1>Staging preview unavailable</h1><p role="alert">{status === 401 ? 'Your administrator session has expired. Sign in again to access this preview.' : status === 403 ? 'Administrator permission is required to access this preview.' : 'A dedicated staging database and the staging preview setting are required. The product may also be unavailable.'}</p><p>Importing the catalog and configuring staging access require separate authorization. No draft product is loaded from public APIs.</p><div className="admin-preview-actions"><Link className="admin-button" to="/admin/products">Back to products</Link>{status === 401 ? <Link className="admin-button admin-button-secondary" to={`/login?returnTo=${encodeURIComponent(`/admin/products/${id}/preview`)}`}>Sign in</Link> : <button type="button" className="admin-button admin-button-secondary" onClick={() => query.refetch()}>Try again</button>}</div></main>;
+    return <AdminLayout title="Staging preview unavailable"><p role="alert">{status === 401 ? 'Your administrator session has expired. Sign in again to access this preview.' : status === 403 ? 'Administrator permission is required to access this preview.' : 'A dedicated staging database and the staging preview setting are required. The product may also be unavailable.'}</p><p>Importing the catalog and configuring staging access require separate authorization. No draft product is loaded from public APIs.</p><div className="admin-preview-actions"><Link className="admin-button" to="/admin/products">Back to products</Link>{status === 401 ? <Link className="admin-button admin-button-secondary" to={`/login?returnTo=${encodeURIComponent(`/admin/products/${id}/preview`)}`}>Sign in</Link> : <button type="button" className="admin-button admin-button-secondary" onClick={() => query.refetch()}>Try again</button>}</div></AdminLayout>;
   }
   const product = query.data.product;
-  return <ProductContent key={id} product={product} preview previewNotice={<PreviewNotice product={product} id={id} />} />;
+  return <AdminLayout title="Saved product preview"><ProductContent key={id} product={product} preview embedded previewNotice={<PreviewNotice product={product} id={id} />} /></AdminLayout>;
 }

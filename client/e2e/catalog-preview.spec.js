@@ -78,10 +78,14 @@ test('preview readiness and session failures give safe setup feedback without pu
   await expect(page.getByText(previewProduct.externalCatalogId, { exact: true })).toHaveCount(0);
   expect(requests.some((request) => request.path.startsWith('/public/products'))).toBe(false);
   await page.unroute('**/api/v1/**');
-  await mockCatalog(page, { role: 'admin', previewError: 401 });
+  const expired = await mockCatalog(page, { role: 'admin', previewError: 401 });
   await page.reload();
-  await expect(page.getByRole('alert')).toContainText('session has expired');
+  await expect(page.getByRole('heading', { name: 'Administrator sign in' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Sign in', exact: true })).toHaveAttribute('href', /returnTo=/);
+  await expect(page.getByText(previewProduct.externalCatalogId, { exact: true })).toHaveCount(0);
+  expect(draftRequests(expired.requests)).toHaveLength(1);
+  expect(expired.requests.filter(request => request.path === '/auth/me').length).toBeGreaterThanOrEqual(2);
+  expect(expired.requests.some(request => request.path.startsWith('/public/products'))).toBe(false);
 });
 
 test('product table and editor link to authenticated previews of saved records', async ({ page }) => {

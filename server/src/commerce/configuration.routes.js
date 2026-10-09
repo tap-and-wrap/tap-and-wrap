@@ -7,6 +7,7 @@ import CustomizationTemplate from '../models/CustomizationTemplate.js';
 import DiscountCode from '../models/DiscountCode.js';
 import BundleRule from '../models/BundleRule.js';
 import ShippingConfig from '../models/ShippingConfig.js';
+import { CommerceControl } from '../models/CommerceControl.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { csrfProtection } from '../middleware/csrf.js';
 import { env } from '../config/env.js';
@@ -18,6 +19,8 @@ import { configurationError, loadCustomizationTemplate, publicTemplatePresentati
 import { GOVERNORATES, shippingForGovernorate } from './promotions.js';
 import { recordAdminAudit } from './audit.js';
 import { captureAction } from '../tracking/service.js';
+import { prepareAdminRevision } from '../utils/admin-revision.js';
+import { validateCatalogCategoryReferences } from '../catalog/category-integrity.js';
 
 export const publicConfigurationRoutes = express.Router();
 export const adminConfigurationRoutes = express.Router();
@@ -31,6 +34,16 @@ const idParam = (req) => {
 const plainBody = (body, fields) => {
   if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some((field) => !fields.includes(field))) throw configurationError('Unsupported configuration fields.');
   return Object.fromEntries(Object.entries(body));
+};
+const revisionBody = (body, fields) => {
+  const { expectedRevision, ...values } = plainBody(body, [...fields, 'expectedRevision']);
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) throw configurationError('Load the record before saving and include its revision.', 'INVALID_REVISION');
+  return { expectedRevision, values };
+};
+const adminRecord = (record) => {
+  const plain = record?.toObject ? record.toObject() : record;
+  const { __v, ...fields } = plain;
+  return { ...fields, revision: __v ?? 0 };
 };
 const regex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const TEMPLATE_FIELDS = ['key', 'name', 'kind', 'status', 'active', 'pricingMode', 'baseAdjustmentPiastres', 'groups', 'fields', 'engraving'];
@@ -64,6 +77,10 @@ async function auditedMutation(req, action, resourceId, mutate) {
       result = await mutate(session);
       await recordAdminAudit(req.user, { action, resourceType: 'configuration', resourceId: String(result?._id || resourceId), details: { requestedFields: Object.keys(req.body || {}).slice(0,30), version: result?.version ?? null, status: result?.status ?? null } }, { session });
     });
+  } catch (error) {
+    if (error.code === 11000 && action === 'shipping.updated') throw configurationError('Shipping settings were created by another editor. Reload them before saving.', 'EDIT_CONFLICT', 409);
+    if (error.code === 11000 && action.startsWith('promotion.bundle.')) throw configurationError('Bundle capacity changed during this save. Reload the list before retrying.', 'EDIT_CONFLICT', 409);
+    throw error;
   } finally {
     await session.endSession();
   }
@@ -135,8 +152,8 @@ async function listConfiguration(Model, req, { fields, filters = {} } = {}) {
     if (hasTextIndex) filters.$text = { $search: JSON.stringify(req.query.search.trim()) };
     else filters.name = { $regex: regex(req.query.search.trim()), $options: 'i' };
   }
-  const [records, total] = await Promise.all([Model.find(filters).select(fields || '').sort({ updatedAt: -1, _id: -1 }).skip(skip).limit(limit).lean().maxTimeMS(3000), Model.countDocuments(filters).maxTimeMS(3000)]);
-  return { records, pagination: paginationPresentation(page, limit, total) };
+  const [records, total] = await Promise.all([Model.find(filters).select(fields ? `${fields} __v` : '').sort({ updatedAt: -1, _id: -1 }).skip(skip).limit(limit).lean().maxTimeMS(3000), Model.countDocuments(filters).maxTimeMS(3000)]);
+  return { records: records.map(adminRecord), pagination: paginationPresentation(page, limit, total) };
 }
 async function findRecord(Model, id, session) {
   let query = Model.findById(id).maxTimeMS(3000);
@@ -159,7 +176,7 @@ adminConfigurationRoutes.get('/templates', wrap(async (req, res) => {
   const { records, pagination } = await listConfiguration(CustomizationTemplate, req, { filters, fields: 'key name kind version status active pricingMode baseAdjustmentPiastres supersedes createdAt updatedAt' });
   respond(res, { templates: records, pagination });
 }));
-adminConfigurationRoutes.get('/templates/:id', wrap(async (req, res) => respond(res, { template: await findRecord(CustomizationTemplate, idParam(req)) })));
+adminConfigurationRoutes.get('/templates/:id', wrap(async (req, res) => respond(res, { template: adminRecord(await findRecord(CustomizationTemplate, idParam(req))) })));
 
 async function validateTemplateReferences(record, session) {
   const ids = [...new Set(record.groups.flatMap((group) => group.options.map((option) => option.componentId && String(option.componentId))).filter(Boolean))];
@@ -180,17 +197,22 @@ adminConfigurationRoutes.post('/templates', wrap(async (req, res) => {
     await validateTemplateReferences(record, session);
     return record.save({ session });
   });
-  respond(res, { template }, 201);
+  respond(res, { template: adminRecord(template) }, 201);
 }));
 
 async function reviseTemplate(req, forceRevision) {
   const id = idParam(req);
-  const values = plainBody(req.body, TEMPLATE_FIELDS);
+  const { values, expectedRevision } = revisionBody(req.body, TEMPLATE_FIELDS);
   let revisionCreated = false;
   const template = await auditedMutation(req, 'customization.template.updated', id, async (session) => {
     let record = await findRecord(CustomizationTemplate, id, session);
+    await prepareAdminRevision(record, expectedRevision, { session });
     const administrativeOnly = Object.keys(values).every((key) => ['active', 'status'].includes(key)) && values.status !== 'draft';
     if (forceRevision || (record.status !== 'draft' && !administrativeOnly)) {
+      // Fence the source version as well as the newly created revision. Two stale
+      // editors must not independently create successive revisions from one form.
+      const claimed = await CustomizationTemplate.updateOne({ _id: record._id, __v: record.__v }, { $inc: { __v: 1 } }, { session });
+      if (claimed.modifiedCount !== 1) throw configurationError('This record changed. Reload it before saving.', 'EDIT_CONFLICT', 409);
       const latest = await CustomizationTemplate.findOne({ key: record.key }).sort({ version: -1 }).session(session).select('version').lean().maxTimeMS(3000);
       const original = record.toObject();
       delete original._id;
@@ -208,7 +230,7 @@ async function reviseTemplate(req, forceRevision) {
     await validateTemplateReferences(record, session);
     return record.save({ session });
   });
-  return { template, revisionCreated };
+  return { template: adminRecord(template), revisionCreated };
 }
 adminConfigurationRoutes.patch('/templates/:id', wrap(async (req, res) => respond(res, await reviseTemplate(req, false))));
 adminConfigurationRoutes.post('/templates/:id/revisions', wrap(async (req, res) => respond(res, await reviseTemplate(req, true), 201)));
@@ -224,28 +246,24 @@ adminConfigurationRoutes.get('/components', wrap(async (req, res) => {
   const { records, pagination } = await listConfiguration(ComponentOption, req, { filters, fields: 'externalCatalogId name slug catalogRole status pricePiastres compareAtPiastres priceApproved inventory enabledForCustomization configurationApproved reviewRequired merchantReviewNotes createdAt updatedAt' });
   respond(res, { components: records, pagination });
 }));
-adminConfigurationRoutes.get('/components/:id', wrap(async (req, res) => respond(res, { component: await findRecord(ComponentOption, idParam(req)) })));
+adminConfigurationRoutes.get('/components/:id', wrap(async (req, res) => respond(res, { component: adminRecord(await findRecord(ComponentOption, idParam(req))) })));
 adminConfigurationRoutes.post('/components', wrap(async (req, res) => {
   const values = plainBody(req.body, [...COMPONENT_FIELDS, 'slug', 'categoryId', 'subcategoryId', 'externalCatalogId', 'mainImageKey', 'galleryKeys', 'sku', 'catalogRole']);
   const component = await auditedMutation(req, 'customization.component.created', 'new', async (session) => {
     const record = new ComponentOption({ ...values, catalogRole: values.catalogRole || 'Customization Option', status: 'draft', commerceRevision: 0 });
     if (record.configurationApproved && (record.reviewRequired || !record.enabledForCustomization || !record.priceApproved || !record.inventory.approved)) throw configurationError('Component approval requires resolved catalog review, enabled customization, approved prices and approved inventory.');
     await record.validate();
-    const category = await Category.findById(record.categoryId).session(session).lean().maxTimeMS(3000);
-    if (!category || category.parentId) throw configurationError('Choose a main category.');
-    if (record.subcategoryId) {
-      const subcategory = await Category.findById(record.subcategoryId).session(session).lean().maxTimeMS(3000);
-      if (!subcategory || String(subcategory.parentId) !== String(record.categoryId)) throw configurationError('Choose a subcategory belonging to the main category.');
-    }
+    await validateCatalogCategoryReferences(record.categoryId, record.subcategoryId, { session, fence: true });
     return record.save({ session });
   });
-  respond(res, { component }, 201);
+  respond(res, { component: adminRecord(component) }, 201);
 }));
 adminConfigurationRoutes.patch('/components/:id', wrap(async (req, res) => {
   const id = idParam(req);
-  const values = plainBody(req.body, COMPONENT_FIELDS);
+  const { values, expectedRevision } = revisionBody(req.body, COMPONENT_FIELDS);
   const component = await auditedMutation(req, 'customization.component.updated', id, async (session) => {
     const record = await findRecord(ComponentOption, id, session);
+    await prepareAdminRevision(record, expectedRevision, { session });
     const patch = { ...values };
     const has = (key) => Object.hasOwn(values, key);
     const priceChanged = ['pricePiastres', 'compareAtPiastres'].some((key) => has(key) && values[key] !== record[key]);
@@ -267,7 +285,7 @@ adminConfigurationRoutes.patch('/components/:id', wrap(async (req, res) => {
     await record.validate();
     return record.save({ session });
   });
-  respond(res, { component });
+  respond(res, { component: adminRecord(component) });
 }));
 
 function addPromotionRoutes(path, Model, fields, listKey, itemKey) {
@@ -276,7 +294,7 @@ function addPromotionRoutes(path, Model, fields, listKey, itemKey) {
     const { records, pagination } = await listConfiguration(Model, req, { fields: projection });
     respond(res, { [listKey]: records, pagination });
   }));
-  adminConfigurationRoutes.get(`${path}/:id`, wrap(async (req, res) => respond(res, { [itemKey]: await findRecord(Model, idParam(req)) })));
+  adminConfigurationRoutes.get(`${path}/:id`, wrap(async (req, res) => respond(res, { [itemKey]: adminRecord(await findRecord(Model, idParam(req))) })));
   adminConfigurationRoutes.post(path, wrap(async (req, res) => {
     const values = plainBody(req.body, fields);
     const record = await auditedMutation(req, `promotion.${itemKey}.created`, 'new', async (session) => {
@@ -285,19 +303,20 @@ function addPromotionRoutes(path, Model, fields, listKey, itemKey) {
       await validatePromotionReferences(document, itemKey, session);
       return document.save({ session });
     });
-    respond(res, { [itemKey]: record }, 201);
+    respond(res, { [itemKey]: adminRecord(record) }, 201);
   }));
   adminConfigurationRoutes.patch(`${path}/:id`, wrap(async (req, res) => {
     const id = idParam(req);
-    const values = plainBody(req.body, fields);
+    const { values, expectedRevision } = revisionBody(req.body, fields);
     const record = await auditedMutation(req, `promotion.${itemKey}.updated`, id, async (session) => {
       const document = await findRecord(Model, id, session);
+      await prepareAdminRevision(document, expectedRevision, { session });
       document.set(values);
       await document.validate();
       await validatePromotionReferences(document, itemKey, session);
       return document.save({ session });
     });
-    respond(res, { [itemKey]: record });
+    respond(res, { [itemKey]: adminRecord(record) });
   }));
 }
 async function validatePromotionReferences(document, kind, session) {
@@ -306,7 +325,13 @@ async function validatePromotionReferences(document, kind, session) {
   if (products.length !== ids.length) throw configurationError('A promotion product does not exist.');
   if (kind === 'bundle') {
     for (const item of document.items) if (item.variantKey && !products.find((product) => String(product._id) === String(item.productId))?.variants.some((variant) => variant.key === item.variantKey)) throw configurationError('A bundle variant does not exist.');
-    if (document.active && await BundleRule.countDocuments({ active: true, _id: { $ne: document._id } }).session(session).maxTimeMS(3000) >= 100) throw configurationError('At most 100 bundle rules may be active.');
+    if (document.active) {
+      // Count-then-save alone admits two concurrent activations at 99. This
+      // transaction-local fence serializes only bundle-capacity decisions.
+      assertDatabaseWriteAllowed(CommerceControl.db, env);
+      await CommerceControl.findOneAndUpdate({ _id: 'bundle-activation' }, { $inc: { revision: 1 } }, { upsert: true, new: true, session }).maxTimeMS(3000);
+      if (await BundleRule.countDocuments({ active: true, _id: { $ne: document._id } }).session(session).maxTimeMS(3000) >= 100) throw configurationError('At most 100 bundle rules may be active.', 'BUNDLE_CAPACITY', 409);
+    }
   } else if (document.categoryIds.length) {
     const categoryIds = [...new Set(document.categoryIds.map(String))];
     if (await Category.countDocuments({ _id: { $in: categoryIds } }).session(session).maxTimeMS(3000) !== categoryIds.length) throw configurationError('A discount category does not exist.');
@@ -317,25 +342,35 @@ addPromotionRoutes('/discounts', DiscountCode, DISCOUNT_FIELDS, 'discounts', 'di
 
 adminConfigurationRoutes.get('/shipping', wrap(async (req, res) => {
   const configuration = await ShippingConfig.findOne({ key: 'egypt-v1' }).lean().maxTimeMS(3000);
-  respond(res, { governorates: GOVERNORATES, configuration: configuration || { key: 'egypt-v1', cairoGizaPiastres: 9000, otherGovernoratesPiastres: 12000, approved: false } });
+  respond(res, { governorates: GOVERNORATES, configuration: configuration ? adminRecord(configuration) : { key: 'egypt-v1', cairoGizaPiastres: 9000, otherGovernoratesPiastres: 12000, approved: false, revision: 0 } });
 }));
 adminConfigurationRoutes.patch('/shipping', wrap(async (req, res) => {
-  const values = plainBody(req.body, ['cairoGizaPiastres', 'otherGovernoratesPiastres', 'approved']);
+  const { values, expectedRevision } = revisionBody(req.body, ['cairoGizaPiastres', 'otherGovernoratesPiastres', 'approved']);
   const configuration = await auditedMutation(req, 'shipping.updated', 'egypt-v1', async (session) => {
     const record = await ShippingConfig.findOne({ key: 'egypt-v1' }).session(session) || new ShippingConfig();
+    await prepareAdminRevision(record, expectedRevision, { session });
+    const creating = record.isNew;
     const ratesChanged = ['cairoGizaPiastres', 'otherGovernoratesPiastres'].some((key) => Object.hasOwn(values, key) && values[key] !== record[key]);
     record.set({ ...values, ...(ratesChanged && !Object.hasOwn(values, 'approved') ? { approved: false } : {}), updatedBy: req.user._id });
     await record.validate();
-    return record.save({ session });
+    await record.save({ session });
+    // Mongoose initializes new-document __v to zero during save. The blank
+    // singleton form also has revision zero, so advance after insertion atomically.
+    if (creating) {
+      await ShippingConfig.updateOne({ _id: record._id, __v: 0 }, { $set: { __v: 1 } }, { session, timestamps: false });
+      record.__v = 1;
+    }
+    return record;
   });
-  respond(res, { configuration });
+  respond(res, { configuration: adminRecord(configuration) });
 }));
 
 adminConfigurationRoutes.patch('/products/:id/configuration', wrap(async (req, res) => {
   const id = idParam(req);
-  const values = plainBody(req.body, ['personalization', 'customization']);
+  const { values, expectedRevision } = revisionBody(req.body, ['personalization', 'customization']);
   const product = await auditedMutation(req, 'product.configuration.updated', id, async (session) => {
     const record = await findRecord(Product, id, session);
+    await prepareAdminRevision(record, expectedRevision, { session });
     record.set(values);
     const customization = record.customization;
     if (customization.enabled || customization.serviceEntryEligible) {
@@ -346,5 +381,5 @@ adminConfigurationRoutes.patch('/products/:id/configuration', wrap(async (req, r
     await record.validate();
     return record.save({ session });
   });
-  respond(res, { product: { _id: String(product._id), name: product.name, slug: product.slug, status: product.status, personalization: product.personalization, customization: product.customization } });
+  respond(res, { product: { _id: String(product._id), name: product.name, slug: product.slug, status: product.status, personalization: product.personalization, customization: product.customization, revision: product.__v ?? 0 } });
 }));

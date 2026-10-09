@@ -144,7 +144,9 @@ test('account links are delivered only through the isolated provider and consume
   const delivered = [];
   setNotificationProviderForTests({ async send(event, options) { delivered.push({ event: event.event, actionUrl: options.actionUrl }); return { id: 'isolated-account-email' }; } });
   const outcome = await runNotificationBatch();
-  assert.equal(outcome.dead, 1); assert.equal(outcome.sent, 1);
+  assert.equal(outcome.dead, 0); assert.equal(outcome.sent, 1);
+  const consumed = await NotificationEvent.findOne({ event: 'password_reset' }).select('+sealedActionToken');
+  assert.equal(consumed.state, 'dead'); assert.equal(consumed.sealedActionToken, undefined);
   assert.deepEqual(delivered, [{ event: 'password_changed', actionUrl: undefined }]);
 });
 

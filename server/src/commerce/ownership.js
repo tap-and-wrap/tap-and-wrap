@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { env } from '../config/env.js';
-import { requireAuth } from '../middleware/auth.js';
+import { optionalAuth } from '../middleware/auth.js';
 
 const ownerFor = token => `guest:${createHash('sha256').update(token).digest('hex')}`;
 export function guestOwner(req) {
@@ -14,6 +14,9 @@ export function rotateGuestCookie(res) {
 }
 export function commerceOwner(req, res, next) {
   res.set('Cache-Control', 'private, no-store'); res.set('X-Robots-Tag', 'noindex, nofollow'); res.vary('Cookie');
-  if (req.cookies?.tw_session) return requireAuth(req, res, () => { req.commerceOwner = `user:${req.user._id}`; next(); });
-  req.commerceOwner = guestOwner(req) || rotateGuestCookie(res); next();
+  return optionalAuth(req, res, error => {
+    if (error) return next(error);
+    req.commerceOwner = req.user ? `user:${req.user._id}` : req.invalidSession ? rotateGuestCookie(res) : guestOwner(req) || rotateGuestCookie(res);
+    next();
+  });
 }

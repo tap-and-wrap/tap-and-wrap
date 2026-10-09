@@ -14,17 +14,19 @@ export function canonical(value) {
   return value;
 }
 export function fingerprint(value) { return createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex'); }
-export async function loadEligibleProduct(id, { session } = {}) {
+export async function loadEligibleProduct(id, { session, context } = {}) {
   if (!mongoose.isObjectIdOrHexString(id)) throw commerceError(400, 'INVALID_PRODUCT', 'Choose a valid product.');
-  const product = await Product.findOne({ ...publicProductFilter(), _id: id }).session(session || null).lean().maxTimeMS(3000);
+  const product = context ? context.products.get(String(id)) : await Product.findOne({ ...publicProductFilter(), _id: id }).session(session || null).lean().maxTimeMS(3000);
   if (!product) throw commerceError(409, 'PRODUCT_UNAVAILABLE', 'This product is no longer approved for ordering.');
-  const main = await Category.exists({ _id: product.categoryId, parentId: null, active: true }).session(session || null);
-  const child = !product.subcategoryId || await Category.exists({ _id: product.subcategoryId, parentId: product.categoryId, active: true }).session(session || null);
+  const mainRecord = context?.categories.get(String(product.categoryId));
+  const childRecord = context?.categories.get(String(product.subcategoryId));
+  const main = context ? mainRecord?.active && !mainRecord.parentId : await Category.exists({ _id: product.categoryId, parentId: null, active: true }).session(session || null);
+  const child = !product.subcategoryId || (context ? childRecord?.active && String(childRecord.parentId) === String(product.categoryId) : await Category.exists({ _id: product.subcategoryId, parentId: product.categoryId, active: true }).session(session || null));
   if (!main || !child || !productCanOrder(product)) throw commerceError(409, 'PRODUCT_UNAVAILABLE', 'This product is currently unavailable.');
   return product;
 }
 
-export async function validateFields(definitions, input = {}, owner, { productId, purpose = 'personalization', session } = {}) {
+export async function validateFields(definitions, input = {}, owner, { productId, purpose = 'personalization', session, context } = {}) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw commerceError(400, 'INVALID_PERSONALIZATION', 'Provide the configured personalization fields.');
   const allowed = new Set(definitions.map(field => field.key));
   if (Object.keys(input).some(key => !allowed.has(key))) throw commerceError(400, 'INVALID_PERSONALIZATION', 'An unsupported personalization field was provided.');
@@ -37,7 +39,7 @@ export async function validateFields(definitions, input = {}, owner, { productId
       if (!Array.isArray(ids) || ids.length < minimum || ids.length > field.maxFiles || new Set(ids).size !== ids.length || ids.some(id => typeof id !== 'string' || !mongoose.isObjectIdOrHexString(id))) {
         throw commerceError(400, 'INVALID_PHOTOS', `${field.label} requires ${minimum}–${field.maxFiles} distinct uploaded images.`);
       }
-      const records = await validateUploadReferences(ids, owner, { purpose, session });
+      const records = await validateUploadReferences(ids, owner, { purpose, session, context });
       for (const record of records) {
         if (String(record.productId) !== String(productId) || record.fieldKey !== field.key || record.sizeBytes > (field.maxBytes || 8 * 1024 * 1024)
           || !(field.acceptedMimeTypes || ['image/jpeg', 'image/png', 'image/webp']).includes(record.mimeType)) {
@@ -59,20 +61,20 @@ export async function validateFields(definitions, input = {}, owner, { productId
   return { values, uploadIds: uploads };
 }
 
-export async function quoteCartLine(line, owner, { session } = {}) {
+export async function quoteCartLine(line, owner, { session, context } = {}) {
   if (!Number.isSafeInteger(line.quantity) || line.quantity < 1 || line.quantity > 99) throw commerceError(400, 'INVALID_QUANTITY', 'Quantity must be between 1 and 99.');
-  const product = await loadEligibleProduct(line.productId, { session });
+  const product = await loadEligibleProduct(line.productId, { session, context });
   const variant = product.variants?.find(value => value.key === line.variantKey);
   if ((product.variants?.length && !variant) || (!product.variants?.length && line.variantKey)) throw commerceError(400, 'VARIANT_REQUIRED', 'Choose an available configured variant.');
   const stock = variant?.inventory || product.inventory;
   if (!inventoryCanOrder(stock) || (stock.mode === 'tracked' && stock.quantity < line.quantity)) throw commerceError(409, 'INSUFFICIENT_STOCK', 'The requested quantity is unavailable.');
   const basePrice = variant?.pricePiastres == null ? product.pricePiastres : variant.pricePiastres;
   if (variant?.pricePiastres != null && !variant.priceApproved) throw commerceError(409, 'PRICE_UNAPPROVED', 'The selected price is not approved.');
-  const personalized = await validateFields(product.personalization?.fields || [], line.personalization || {}, owner, { productId: product._id, session });
+  const personalized = await validateFields(product.personalization?.fields || [], line.personalization || {}, owner, { productId: product._id, session, context });
   let adjustment = 0, customization = null, customValues = null, componentClaims = [], extraUploads = [];
   if (line.customization) {
-    const quote = await quoteCustomization(product, line.customization, { session, requireFields: true });
-    const fields = await validateFields(quote.fields || [], line.customization.fields || {}, owner, { productId: product._id, purpose: 'artwork', session });
+    const quote = await quoteCustomization(product, line.customization, { session, context, requireFields: true });
+    const fields = await validateFields(quote.fields || [], line.customization.fields || {}, owner, { productId: product._id, purpose: 'artwork', session, context });
     adjustment = quote.adjustmentPiastres; customization = { ...quote.snapshot, fields: fields.values };
     customValues = { ...line.customization, fields: fields.values };
     componentClaims = quote.inventoryClaims || []; extraUploads = fields.uploadIds;

@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { validateDatabaseUri, assertConnectedDatabase, databaseDiagnostic } from '../src/config/database-safety.js';
 import { publicProductFilter } from '../src/catalog/product-policy.js';
 import { mediaUrlForKey, productCanOrder } from '../src/catalog/public-presentation.js';
+import { verifiedMediaEntries, MEDIA_VERIFICATION_SOURCE } from '../../client/src/seo/media-verification.js';
 
 export const SEO_PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 export const SEO_PAGE_SIZE = 20;
@@ -17,7 +18,7 @@ const CONTENT_FIELDS = { about: 1, contact: 1, privacyPolicy: 1, refundPolicy: 1
 export function parseSeoExportArguments(argv) {
   const options = { confirmRead: false, dryRun: false, target: null, output: null, contentOutput: null };
   const seen = new Set();
-  const values = new Map([['--target', 'target'], ['--output', 'output'], ['--content-output', 'contentOutput']]);
+  const values = new Map([['--target', 'target'], ['--output', 'output'], ['--content-output', 'contentOutput'], ['--media-verification', 'mediaVerification']]);
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index];
     if (seen.has(flag)) throw new Error('Duplicate SEO export argument');
@@ -104,8 +105,8 @@ export function exportProductDto(product, categories, mediaBaseUrl = '') {
   return {
     _id: String(product._id), name: plain(product.name, 240), slug: product.slug, description: plain(product.description, 10_000), category: presentation(main), subcategory: presentation(child),
     mainImageUrl: mediaUrlForKey(product.mainImageKey, mediaBaseUrl), pricePiastres: product.pricePiastres, compareAtPiastres: Number.isSafeInteger(product.compareAtPiastres) && product.compareAtPiastres > product.pricePiastres ? product.compareAtPiastres : null,
-    priceApproved: true, orderingAvailable: productCanOrder(product),
-    variants: variants.map((variant) => ({ key: plain(variant.key, 120), attributes: (variant.attributes || []).map(({ name, value }) => ({ name: plain(name, 120), value: plain(value, 120) })), pricePiastres: variant.pricePiastres ?? product.pricePiastres, orderingAvailable: productCanOrder({ inventory: variant.inventory }) })),
+    priceApproved: true, orderingAvailable: productCanOrder(product), inventoryMode: product.inventory.mode,
+    variants: variants.map((variant) => ({ key: plain(variant.key, 120), attributes: (variant.attributes || []).map(({ name, value }) => ({ name: plain(name, 120), value: plain(value, 120) })), pricePiastres: variant.pricePiastres ?? product.pricePiastres, orderingAvailable: productCanOrder({ inventory: variant.inventory }), inventoryMode: variant.inventory.mode })),
     updatedAt: dateString(product.updatedAt), seoEligibility: { status: 'ready', published: true, inventoryApproved: true, reviewRequired: false, categoriesActive: true },
   };
 }
@@ -144,7 +145,7 @@ async function pages(readPage, onBatch, maximumPages = SEO_MAX_PAGES) {
   throw new Error('SEO export exceeded the bounded page limit; no output was written');
 }
 
-export async function buildApprovedSeoExport(source, configuration = {}, { maximumPages = SEO_MAX_PAGES, now = new Date() } = {}) {
+export async function buildApprovedSeoExport(source, configuration = {}, { maximumPages = SEO_MAX_PAGES, now = new Date(), mediaVerification } = {}) {
   const mediaBaseUrl = approvedMediaOrigin(configuration.CATALOG_MEDIA_BASE_URL) ? configuration.CATALOG_MEDIA_BASE_URL : '';
   const categoryMap = new Map();
   const report = { sourceProducts: 0, sourceCategories: 0, excludedProducts: 0, excludedCategories: 0 };
@@ -174,9 +175,12 @@ export async function buildApprovedSeoExport(source, configuration = {}, { maxim
       if (dto.subcategory) categoryMap.get(dto.subcategory._id).productCount += 1;
     }
   }, maximumPages);
-  const catalog = { version: 1, source: 'approved-public-catalog', generatedAt: dateString(now), checkoutEnabled: configuration.CHECKOUT_ENABLED === 'true' && configuration.COMMERCE_LAUNCH_AUTHORIZED === 'true', mediaOrigins: mediaBaseUrl ? [approvedMediaOrigin(mediaBaseUrl)] : [], products, categories: [...categoryMap.values()] };
+  const mediaOrigins = mediaBaseUrl ? [approvedMediaOrigin(mediaBaseUrl)] : [];
+  const verified = verifiedMediaEntries(mediaVerification, mediaOrigins, now);
+  const objects = [...new Set(products.map((item) => item.mainImageUrl))].map((url) => verified.get(url)).filter(Boolean);
+  const catalog = { version: 1, source: 'approved-public-catalog', generatedAt: dateString(now), checkoutEnabled: configuration.CHECKOUT_ENABLED === 'true' && configuration.COMMERCE_LAUNCH_AUTHORIZED === 'true', mediaOrigins, mediaVerification: { version: 1, source: MEDIA_VERIFICATION_SOURCE, objects }, products, categories: [...categoryMap.values()] };
   const content = source.readSiteContent ? exportApprovedContent(await source.readSiteContent()) : { routes: {} };
-  return { catalog, content, report: { ...report, exportedProducts: products.length, exportedCategories: categoryMap.size, approvedContentPages: Object.keys(content.routes).length } };
+  return { catalog, content, report: { ...report, exportedProducts: products.length, exportedCategories: categoryMap.size, verifiedProductImages: products.filter((item) => verified.get(item.mainImageUrl)).length, unverifiedProductImages: products.filter((item) => !verified.get(item.mainImageUrl)).length, approvedContentPages: Object.keys(content.routes).length } };
 }
 
 export async function openReadOnlySeoSource(uri, settings) {
@@ -234,7 +238,16 @@ export async function runSeoCatalogExport(argv, { environment = process.env, log
   if (contentOutput) await assertRealExportPath(contentOutput);
   const source = await openSource(environment.MONGODB_URI, { ...settings, nodeEnv: environment.NODE_ENV || 'development' });
   try {
-    const result = await buildApprovedSeoExport(source, environment);
+    let mediaVerification;
+    if (options.mediaVerification) {
+      // Explicit ignored local artifact only; never read .env or contact media storage.
+      const destination = resolveSeoExportOutput(options.mediaVerification);
+      await assertRealExportPath(destination);
+      const { readFile, stat } = await import('node:fs/promises');
+      if (!(await stat(destination)).isFile() || (await stat(destination)).size > 10 * 1024 * 1024) throw new Error('Media verification artifact exceeds the allowed size');
+      mediaVerification = JSON.parse(await readFile(destination, 'utf8'));
+    }
+    const result = await buildApprovedSeoExport(source, environment, { mediaVerification });
     await writeOutput(output, result.catalog);
     if (contentOutput) await writeOutput(contentOutput, result.content);
     const report = { mode: 'authorized-read-only-export', target: settings.target, dbName: settings.dbName, databaseWrites: false, indexesCreated: false, dotenvLoaded: false, pageSize: SEO_PAGE_SIZE, ...result.report, output: path.relative(SEO_PROJECT_ROOT, output).split(path.sep).join('/'), contentOutput: contentOutput ? path.relative(SEO_PROJECT_ROOT, contentOutput).split(path.sep).join('/') : null };

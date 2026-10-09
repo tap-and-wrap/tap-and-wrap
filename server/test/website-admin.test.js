@@ -27,7 +27,13 @@ async function account(role, suffix = '') {
   const csrf = makeCsrfToken(env.sessionSecret);
   return { user, headers: { Cookie: `tw_session=${token}; tw_csrf=${csrf}`, Origin: env.clientOrigin, 'x-csrf-token': csrf } };
 }
-async function request(path, { method = 'GET', body, headers = admin?.headers || {} } = {}) {
+async function request(path, { method = 'GET', body, headers = admin?.headers || {}, autoRevision = true } = {}) {
+  if (autoRevision && method === 'PATCH' && body && body.expectedRevision === undefined) {
+    const match = path.match(/\/admin\/(?:website\/reviews|commerce\/bundles)\/([a-f\d]{24})$/i);
+    const record = path === '/admin/website/content' ? await SiteContent.findOne({ key: 'website-v1' }).select('__v').lean()
+      : match ? await (path.includes('/reviews/') ? Review : BundleRule).findById(match[1]).select('__v').lean() : null;
+    if (match || path === '/admin/website/content') body = { ...body, expectedRevision: record?.__v ?? 0 };
+  }
   const response = await fetch(`${base}/api/v1${path}`, { method, headers: { ...headers, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) }, body: body === undefined ? undefined : JSON.stringify(body) });
   const payload = await response.json();
   return { status: response.status, data: payload.data, error: payload.error, headers: response.headers };
@@ -306,4 +312,50 @@ test('public bundle lookup refuses to scan past the configured one-hundred-activ
   await BundleRule.insertMany(Array.from({ length: 100 }, (_, priority) => ({ name: `Isolated bound ${priority}`, published: true, active: true, priority, items: [{ productId: withdrawn._id, quantity: 1 }, { productId: first._id, quantity: 1 }], discountKind: 'fixed', discountValue: 500 })));
   await BundleRule.create({ name: 'Isolated over-limit fixture', published: true, active: true, priority: 100, items: [{ productId: first._id, quantity: 1 }, { productId: second._id, quantity: 1 }], discountKind: 'fixed', discountValue: 500 });
   assert.deepEqual((await request('/public/bundles')).data.bundles, []);
+});
+
+test('site-content revisions protect the first write and retain newer content after stale saves', async () => {
+  const path = '/admin/website/content';
+  const loaded = (await request(path)).data.content;
+  assert.equal(loaded.revision, 0);
+  assert.equal(loaded.__v, undefined);
+  assert.equal((await request(path, { method: 'PATCH', body: { about: { title: 'Missing revision', body: 'Not saved' } }, autoRevision: false })).status, 400);
+  const saved = await request(path, { method: 'PATCH', body: { expectedRevision: loaded.revision, about: { title: 'Newest content', body: 'Newest saved fixture' } } });
+  assert.equal(saved.status, 200, JSON.stringify(saved.error));
+  assert.equal(saved.data.content.revision, 1);
+  const stale = await request(path, { method: 'PATCH', body: { expectedRevision: loaded.revision, about: { title: 'Stale content', body: 'Must not overwrite' } } });
+  assert.equal(stale.status, 409);
+  assert.equal(stale.error.code, 'EDIT_CONFLICT');
+  assert.equal((await request(path)).data.content.about.title, 'Newest content');
+  assert.equal(await AdminAudit.countDocuments({ action: 'website.content.edit' }), 1);
+});
+
+test('review revisions reject stale forms and preserve source notes and publication decisions', async () => {
+  const record = await review();
+  const path = `/admin/website/reviews/${record._id}`;
+  const loaded = (await request(path)).data.review;
+  assert.equal(loaded.revision, 0);
+  assert.equal((await request(path, { method: 'PATCH', body: { status: 'hidden' }, autoRevision: false })).status, 400);
+  const saved = await request(path, { method: 'PATCH', body: { expectedRevision: loaded.revision, status: 'hidden' } });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.data.review.revision, 1);
+  const stale = await request(path, { method: 'PATCH', body: { expectedRevision: loaded.revision, status: 'published', text: 'Stale quotation', sourceNote: 'Stale provenance' } });
+  assert.equal(stale.status, 409);
+  const preserved = (await request(path)).data.review;
+  assert.equal(preserved.status, 'hidden');
+  assert.equal(preserved.text, record.text);
+  assert.equal(preserved.sourceNote, record.sourceNote);
+  assert.equal(await AdminAudit.countDocuments({ action: 'website.review.edit' }), 1);
+});
+
+test('concurrent first content writes and review edits each produce one winner without partial audits', async () => {
+  const contentResults = await Promise.all(['Content A', 'Content B'].map((title) => request('/admin/website/content', { method: 'PATCH', body: { expectedRevision: 0, about: { title, body: 'Concurrent synthetic content' } } })));
+  assert.deepEqual(contentResults.map((result) => result.status).sort(), [200, 409]);
+  assert.equal(contentResults.find((result) => result.status === 409).error.code, 'EDIT_CONFLICT');
+  const record = await review({ status: 'draft', approved: false });
+  const reviewResults = await Promise.all(['Quotation A', 'Quotation B'].map((text) => request(`/admin/website/reviews/${record._id}`, { method: 'PATCH', body: { expectedRevision: 0, text } })));
+  assert.deepEqual(reviewResults.map((result) => result.status).sort(), [200, 409]);
+  assert.equal(reviewResults.find((result) => result.status === 409).error.code, 'EDIT_CONFLICT');
+  assert.equal((await Review.findById(record._id)).__v, 1);
+  assert.equal(await AdminAudit.countDocuments(), 2);
 });

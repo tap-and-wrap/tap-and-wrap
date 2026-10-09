@@ -10,4 +10,6 @@ import { Upload } from '../models/Upload.js';
 import { UploadQuota } from '../models/UploadQuota.js';
 import { NotificationEvent } from '../models/NotificationEvent.js';
 import { AdminAudit } from '../models/AdminAudit.js';
-export const commerceModels = [Cart, Order, CheckoutIntent, DiscountRedemption, CustomizationTemplate, DiscountCode, BundleRule, ShippingConfig, Upload, UploadQuota, NotificationEvent, AdminAudit];
+import { CommerceControl } from '../models/CommerceControl.js';
+import { CommerceJobRun } from '../models/CommerceJobRun.js';
+export const commerceModels = [Cart, Order, CheckoutIntent, DiscountRedemption, CustomizationTemplate, DiscountCode, BundleRule, ShippingConfig, Upload, UploadQuota, NotificationEvent, AdminAudit, CommerceControl, CommerceJobRun];

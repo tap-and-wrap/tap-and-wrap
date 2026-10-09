@@ -18,7 +18,7 @@ variantSchema.pre('validate', function () {
   if (this.priceApproved && !Number.isSafeInteger(this.pricePiastres)) this.invalidate('pricePiastres', 'Variant approval requires an integer price');
 });
 const fieldSchema = new mongoose.Schema({
-  key: { type: String, required: true, match: /^[a-z][a-z0-9_]{0,49}$/ },
+  key: { type: String, required: true, match: /^[a-z][a-z0-9_-]{0,49}$/ },
   label: { type: String, required: true, trim: true, maxlength: 160 },
   type: { type: String, required: true, enum: ['image', 'short_text', 'long_text', 'select'] },
   required: { type: Boolean, default: false },

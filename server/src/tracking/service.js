@@ -4,6 +4,7 @@ import { assertDatabaseWriteAllowed } from '../config/database-safety.js';
 import { TrackingConsent } from '../models/TrackingConsent.js';
 import { MetaEvent, META_EVENTS } from '../models/MetaEvent.js';
 import { commerceError, checkedMoney } from '../commerce/errors.js';
+import { boundedOperation, shouldStop } from '../commerce/work-budget.js';
 
 let testProvider;
 export const tokenHash = (token) => createHash('sha256').update(token).digest('hex');
@@ -87,9 +88,9 @@ export function createMetaProvider(settings = process.env) {
   if (process.env.NODE_ENV === 'test') throw commerceError(503, 'TEST_PROVIDER_NOT_CONFIGURED', 'Live tracking is forbidden in tests.');
   const config = trackingSettings(settings);
   if (!config.capiEnabled) throw commerceError(503, 'META_DISABLED', 'Tracking delivery is disabled.');
-  return { async send(event) {
+  return { async send(event, { signal } = {}) {
     const response = await fetch(`https://graph.facebook.com/${settings.META_API_VERSION}/${config.pixelId}/events`, {
-      method: 'POST', signal: AbortSignal.timeout(15000), headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${settings.META_ACCESS_TOKEN}` },
+      method: 'POST', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000), headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${settings.META_ACCESS_TOKEN}` },
       body: JSON.stringify({ data: [{ event_name: event.name, event_time: Math.floor(new Date(event.createdAt).getTime() / 1000), event_id: event.eventId,
         action_source: 'website', event_source_url: config.origin + event.sourcePath,
         user_data: { external_id: [tokenHash(String(event.consentId))] }, custom_data: event.parameters }] }),
@@ -104,17 +105,19 @@ export function setMetaProviderForTests(provider) {
   if (process.env.NODE_ENV !== 'test') throw new Error('Test-only tracking adapter.');
   testProvider = provider;
 }
-export async function runMetaBatch({ batchSize = 20, now = new Date() } = {}) {
+export async function runMetaBatch({ batchSize = 20, now = new Date(), budget } = {}) {
   if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 100) throw new Error('Tracking batch size must be 1–100.');
   const config = trackingSettings();
   const mock = process.env.NODE_ENV === 'test' && testProvider;
   if (!config.enabled || !mock && (!config.capiEnabled || process.env.NODE_ENV === 'test')) return { enabled: false, sent: 0, failed: 0, suppressed: 0 };
   const provider = mock || createMetaProvider();
   const counts = { enabled: true, sent: 0, failed: 0, suppressed: 0 };
+  if (shouldStop(budget)) return { ...counts, stopped: true };
   assertDatabaseWriteAllowed(MetaEvent.db, env);
   const exhausted = await MetaEvent.find({ state: 'processing', leaseUntil: { $lte: now }, attempts: { $gte: 5 } }).select('_id').limit(batchSize).lean();
   if (exhausted.length) await MetaEvent.updateMany({ _id: { $in: exhausted.map(event => event._id) }, state: 'processing', leaseUntil: { $lte: now } }, { $set: { state: 'dead', lastErrorCode: 'RETRY_LIMIT' }, $unset: { leaseToken: 1, leaseUntil: 1 } });
   for (let index = 0; index < batchSize; index += 1) {
+    if (shouldStop(budget)) { counts.stopped = true; break; }
     const leaseToken = randomUUID();
     const event = await MetaEvent.findOneAndUpdate({ attempts: { $lt: 5 }, $or: [{ state: { $in: ['queued', 'failed'] }, nextAttemptAt: { $lte: now } }, { state: 'processing', leaseUntil: { $lte: now } }] },
       { $set: { state: 'processing', leaseToken, leaseUntil: new Date(now.getTime() + 120000) }, $inc: { attempts: 1 } }, { new: true, sort: { nextAttemptAt: 1, _id: 1 } }).select('+leaseToken').lean();
@@ -125,7 +128,7 @@ export async function runMetaBatch({ batchSize = 20, now = new Date() } = {}) {
       await MetaEvent.updateOne(filter, { $set: { state: 'suppressed' }, $unset: { leaseToken: 1, leaseUntil: 1 } }); counts.suppressed += 1; continue;
     }
     try {
-      const result = await provider.send(event);
+      const result = await boundedOperation(signal => provider.send(event, { signal }), { timeoutMs: 15000, budget, code: 'META_DELIVERY_TIMEOUT' });
       if (result?.accepted !== true) throw new Error('Tracking provider did not confirm acceptance.');
       const saved = await MetaEvent.updateOne(filter, { $set: { state: 'sent', sentAt: now }, $unset: { leaseToken: 1, leaseUntil: 1 } }); counts.sent += saved.modifiedCount;
     } catch {

@@ -14,12 +14,14 @@ const actionRequests = new Map();
 const acknowledgements = new Map();
 let seen = new Set();
 let purchases = new Set();
+let memoryChoice;
 try { seen = new Set(JSON.parse(sessionStorage.getItem(SEEN_KEY) || '[]').filter(value => typeof value === 'string').slice(-200)); } catch { /* Storage can be unavailable. */ }
 try { purchases = new Set(JSON.parse(localStorage.getItem(PURCHASE_KEY) || '[]').filter(value => typeof value === 'string').slice(-500)); } catch { /* Server acknowledgements provide durable deduplication. */ }
 
 export const globalPrivacyControl = () => navigator.globalPrivacyControl === true;
-export function trackingChoice() { try { return JSON.parse(localStorage.getItem(CHOICE_KEY) || 'null'); } catch { return null; } }
-function rememberChoice(choice, version) { try { localStorage.setItem(CHOICE_KEY, JSON.stringify({ choice, version })); } catch { /* Consent still remains in server cookie. */ } }
+export function trackingChoice() { if (memoryChoice) return memoryChoice; try { return JSON.parse(localStorage.getItem(CHOICE_KEY) || 'null'); } catch { return null; } }
+window.addEventListener('storage', event => { if (event.key === CHOICE_KEY || event.key === null) memoryChoice = undefined; });
+function rememberChoice(choice, version) { memoryChoice = { choice, version }; try { localStorage.setItem(CHOICE_KEY, JSON.stringify(memoryChoice)); } catch { /* Denial remains effective in memory even if cookie revocation fails. */ } }
 function denied() { return globalPrivacyControl() || trackingChoice()?.choice === 'declined'; }
 api.interceptors.request.use(request => {
   if (ENABLED && denied()) request.headers.set('x-tracking-consent', 'denied');
@@ -34,9 +36,10 @@ function validateReceipt(receipt) {
   const parameters = receipt.parameters;
   const allowed = new Set(['currency', 'value', 'content_type', 'content_ids', 'contents', 'num_items', 'payment_method', 'service_kind']);
   if (!parameters || Array.isArray(parameters) || typeof parameters !== 'object' || Object.keys(parameters).some(key => !allowed.has(key))) return null;
-  if (parameters.currency !== undefined && parameters.currency !== 'EGP' || parameters.value !== undefined && (!Number.isFinite(parameters.value) || parameters.value < 0)) return null;
+  const exactMoney = value => Number.isFinite(value) && value >= 0 && Number.isSafeInteger(Math.round(value * 100)) && Math.abs(value * 100 - Math.round(value * 100)) <= Math.max(0.000001, Number.EPSILON * Math.abs(value * 100) * 2);
+  if (parameters.currency !== undefined && parameters.currency !== 'EGP' || parameters.value !== undefined && !exactMoney(parameters.value)) return null;
   if (parameters.content_ids && (!Array.isArray(parameters.content_ids) || parameters.content_ids.length > 30 || parameters.content_ids.some(id => !/^[a-f0-9]{24}$/i.test(id)))) return null;
-  if (parameters.contents && (!Array.isArray(parameters.contents) || parameters.contents.length > 30 || parameters.contents.some(item => !item || Object.keys(item).some(key => !['id', 'quantity', 'item_price'].includes(key)) || !/^[a-f0-9]{24}$/i.test(item.id) || !Number.isSafeInteger(item.quantity) || item.quantity < 1 || item.quantity > 99 || !Number.isFinite(item.item_price) || item.item_price < 0))) return null;
+  if (parameters.contents && (!Array.isArray(parameters.contents) || parameters.contents.length > 30 || parameters.contents.some(item => !item || Object.keys(item).some(key => !['id', 'quantity', 'item_price'].includes(key)) || !/^[a-f0-9]{24}$/i.test(item.id) || !Number.isSafeInteger(item.quantity) || item.quantity < 1 || item.quantity > 99 || !exactMoney(item.item_price)))) return null;
   if (parameters.num_items !== undefined && (!Number.isSafeInteger(parameters.num_items) || parameters.num_items < 0)
     || parameters.payment_method !== undefined && !['cod', 'instapay'].includes(parameters.payment_method)
     || parameters.service_kind !== undefined && !['gift_box', 'laser_engraving', 'tray', 'generic'].includes(parameters.service_kind)

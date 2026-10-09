@@ -78,17 +78,22 @@ function numericCell(value, label, issues, { integer = false, optional = true } 
 }
 
 function priceCell(value, label, issues) {
-  const egp = numericCell(value, label, issues);
-  if (egp === null) return null;
-  const piastres = Math.round(egp * 100);
-  if (!Number.isSafeInteger(piastres) || Math.abs(egp * 100 - piastres) > 0.000001) {
+  if (blank(value)) return null;
+  const input = String(value).trim();
+  if ((typeof value !== 'number' && typeof value !== 'string') || !/^\d+(?:\.\d{1,2})?$/.test(input)) {
     issues.push(`${label} must contain at most two decimal places and fit in integer piastres`);
     return null;
   }
-  return piastres;
+  const [whole, fraction = ''] = input.split('.');
+  const piastres = BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0'));
+  if (piastres > BigInt(Number.MAX_SAFE_INTEGER)) {
+    issues.push(`${label} must contain at most two decimal places and fit in integer piastres`);
+    return null;
+  }
+  return Number(piastres);
 }
 
-function sourceCategoryKey(mainCategory, subcategory = '') {
+export function sourceCategoryKey(mainCategory, subcategory = '') {
   return JSON.stringify([normalizedName(mainCategory), normalizedName(subcategory)]);
 }
 
