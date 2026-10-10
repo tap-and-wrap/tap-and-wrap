@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useRef } from 'react';
+import { imageSizesForManaged } from '../admin/media-url.js';
 import { formatCatalogPrice } from '../utils/catalog.js';
 import { useCart } from '../commerce/CartContext.jsx';
 
@@ -15,7 +16,7 @@ export default function ProductCard({ product }) {
     <article ref={cardRef} className="catalog-card">
       <Link className="catalog-card-image" to={detailUrl} aria-label={`View ${product.name}`}>
         {product.mainImageUrl ? (
-          <img src={product.mainImageUrl} alt={product.name} width="600" height="600" loading="lazy" decoding="async" />
+          <img src={product.mainImageUrl} srcSet={imageSizesForManaged(product.mainImageUrl)} sizes="(max-width: 600px) 50vw, (max-width: 1000px) 33vw, 300px" alt={product.name} width="600" height="600" loading="lazy" decoding="async" />
         ) : <span className="catalog-image-placeholder" aria-hidden="true">Image coming soon</span>}
         <span className="catalog-card-badges">
           {product.bestSeller === true && <span>Best Seller</span>}

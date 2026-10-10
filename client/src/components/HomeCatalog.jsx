@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { listCategories, listProducts } from '../services/catalog.js';
 import ProductCard from './ProductCard.jsx';
 import './HomeCatalog.css';
+import { imageSizesForManaged } from '../admin/media-url.js';
 
 export function FeaturedCategories() {
   const query = useQuery({ queryKey: ['catalog', 'featured-categories'], queryFn: ({ signal }) => listCategories({ parent: 'root', featured: true, limit: 20 }, signal) });
@@ -10,7 +11,7 @@ export function FeaturedCategories() {
   if (query.isError) return <div className="catalog-state" role="alert"><p>Categories are unavailable at the moment.</p><button className="button button-outline" onClick={() => query.refetch()}>Try again</button></div>;
   if (!query.data.categories.length) return <p className="catalog-state">Our collection is being prepared. Check back soon.</p>;
   return <div className="home-category-grid">{query.data.categories.map(category => <Link className="home-category" key={category._id} to={`/categories/${encodeURIComponent(category.slug)}`}>
-    {category.imageUrl ? <img src={category.imageUrl} alt="" loading="lazy" width="320" height="240"/> : null}
+    {category.imageUrl ? <img src={category.imageUrl} srcSet={imageSizesForManaged(category.imageUrl)} sizes="(max-width: 600px) 80vw, 320px" alt="" loading="lazy" decoding="async" width="320" height="240"/> : null}
     <h3>{category.name}</h3><span>{category.productCount} {category.productCount === 1 ? 'product' : 'products'}</span>
   </Link>)}</div>;
 }

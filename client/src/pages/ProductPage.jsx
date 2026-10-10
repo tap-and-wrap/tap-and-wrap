@@ -8,6 +8,7 @@ import { formatCatalogPrice, variantLabel } from '../utils/catalog.js';
 import { useCart } from '../commerce/CartContext.jsx';
 import ConfiguredFields, { validateConfiguredFields } from '../commerce/ConfiguredFields.jsx';
 import { commerceError, discardUploads, uploadConfiguredFields } from '../commerce/api.js';
+import { imageSizesForManaged } from '../admin/media-url.js';
 import { ProductReviews } from '../components/PublicContent.jsx';
 import { ProductMetadata } from '../seo/PageMetadata.jsx';
 import { emitTracking } from '../tracking/client.js';
@@ -91,12 +92,12 @@ export function ProductContent({ product, relatedProducts = [], preview = false,
       <div className="product-detail-layout">
         <section className="product-gallery" aria-label="Product images">
           <div className="product-main-image">
-            {selectedImage?.url && !failedImages.includes(selectedImage.url) ? <img src={selectedImage.url} alt={`${product.name}${activeImage ? `, image ${activeImage + 1}` : ''}`} width="900" height="900" loading="eager" fetchPriority="high" decoding="async" onError={() => setFailedImages((previous) => [...previous, selectedImage.url])} />
+            {selectedImage?.url && !failedImages.includes(selectedImage.url) ? <img src={selectedImage.url} srcSet={imageSizesForManaged(selectedImage.url)} sizes="(max-width: 800px) 100vw, 50vw" alt={`${product.name}${activeImage ? `, image ${activeImage + 1}` : ''}`} width="900" height="900" loading="eager" fetchPriority="high" decoding="async" onError={() => setFailedImages((previous) => [...previous, selectedImage.url])} />
               : <span className="catalog-image-placeholder">{preview ? selectedImage ? `${selectedImage.isMain ? 'Main image · ' : ''}Image ${selectedImage.position} · Media not configured` : 'No image references recorded' : 'Image coming soon'}</span>}
             {!preview && product.bestSeller === true && <span className="product-image-badge">Best Seller</span>}
           </div>
           {images.length > 1 && <div className="product-thumbnails" aria-label="Choose product image">
-            {images.map((image, index) => <button key={preview ? image.position : image.url} type="button" className={activeImage === index ? 'is-active' : ''} aria-label={`View image ${image.position}${preview && image.isMain ? ' (main)' : ''}`} aria-pressed={activeImage === index} onClick={() => setActiveImage(index)}>{image.url ? <img src={image.url} alt="" width="100" height="100" loading="lazy" decoding="async" /> : <span className="product-preview-thumbnail">Image {image.position}{image.isMain && <small>Main</small>}</span>}</button>)}
+            {images.map((image, index) => <button key={preview ? image.position : image.url} type="button" className={activeImage === index ? 'is-active' : ''} aria-label={`View image ${image.position}${preview && image.isMain ? ' (main)' : ''}`} aria-pressed={activeImage === index} onClick={() => setActiveImage(index)}>{image.url ? <img src={image.url} srcSet={imageSizesForManaged(image.url)} sizes="100px" alt="" width="100" height="100" loading="lazy" decoding="async" /> : <span className="product-preview-thumbnail">Image {image.position}{image.isMain && <small>Main</small>}</span>}</button>)}
           </div>}
         </section>
         <section className="product-summary" aria-labelledby="product-title">
