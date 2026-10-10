@@ -1,5 +1,7 @@
 {
   "name": "tapandwrap-frontend",
+  "workers_dev": false,
+  "preview_urls": false,
   "main": "./worker/seo-worker.js",
   "compatibility_date": "2026-10-09",
   "assets": {
