@@ -42,24 +42,34 @@ test('real public query contract caps pages, counts filtered approvals and drive
   const base = `${api}/api/v1/public/products?q=ConnectedCatalogBatch3&sort=price_asc&includePriceRange=false`;
   const first = (await (await context.request.get(`${base}&limit=99`)).json()).data;
   const second = (await (await context.request.get(`${base}&page=2&limit=20`)).json()).data;
-  expect(first.pagination).toMatchObject({ page: 1, limit: 20, total: 25, pages: 2 });
-  expect(first.products).toHaveLength(20); expect(second.products).toHaveLength(5);
-  expect(first.products.map(product => product.pricePiastres)).toEqual(Array.from({ length: 20 }, (_, index) => 1100 + index * 100));
-  expect(first.products.every(product => product.priceApproved && !product.slug.includes('private'))).toBe(true);
-  for (const product of first.products) {
+  // Twenty-five orderable/stock-tracked fixtures plus two newly browsable Draft/Hold fixtures.
+  expect(first.pagination).toMatchObject({ page: 1, limit: 20, total: 27, pages: 2 });
+  expect(second.pagination).toMatchObject({ page: 2, limit: 20, total: 27, pages: 2 });
+  expect(first.products).toHaveLength(20); expect(second.products).toHaveLength(7);
+  const allProducts = [...first.products, ...second.products];
+  const confirmed = allProducts.filter(product => product.priceApproved);
+  expect(confirmed.map(product => product.pricePiastres)).toEqual(Array.from({ length: 25 }, (_, index) => 1100 + index * 100));
+  const unconfirmed = allProducts.filter(product => product.slug.startsWith('connected-private-'));
+  expect(unconfirmed.map(product => product.slug).sort()).toEqual(['connected-private-draft', 'connected-private-hold']);
+  for (const product of unconfirmed) {
+    expect(product.priceApproved).toBe(false);
+    expect(product.pricePiastres).toBeNull();
+    expect(product.orderingAvailable).toBe(false);
+  }
+  for (const product of allProducts) {
     expect(product.galleryKeys).toBeUndefined(); expect(product.galleryUrls).toBeUndefined(); expect(product.customization).toBeUndefined();
     expect(product.mainImageKey).toBeUndefined(); expect(product.mainImageUrl).toBeNull();
   }
   const available = (await (await context.request.get(`${base}&availability=available`)).json()).data;
   const soldOut = (await (await context.request.get(`${base}&availability=sold_out`)).json()).data;
-  expect(available.pagination.total).toBe(24); expect(soldOut.pagination.total).toBe(1);
-  expect(soldOut.products[0].orderingAvailable).toBe(false);
+  expect(available.pagination.total).toBe(24); expect(soldOut.pagination.total).toBe(3);
+  expect(soldOut.products.every(product => product.orderingAvailable === false)).toBe(true);
   expect((await context.request.get(`${base}&minPrice=1500&maxPrice=1200`)).status()).toBe(400);
   expect((await context.request.get(`${base}&minPrice=-1`)).status()).toBe(400);
   await page.goto('/shop?q=ConnectedCatalogBatch3&sort=price_asc');
   await expect(page.locator('.catalog-card')).toHaveCount(20);
   await page.getByRole('button', { name: 'Next page', exact: true }).click();
-  await expect(page.locator('.catalog-card')).toHaveCount(5); await expect(page).toHaveURL(/page=2/);
+  await expect(page.locator('.catalog-card')).toHaveCount(7); await expect(page).toHaveURL(/page=2/);
   await page.goBack(); await expect(page.locator('.catalog-card')).toHaveCount(20);
   await page.getByLabel('Minimum price (EGP)', { exact: true }).fill('12.');
   await expect(page.getByLabel('Minimum price (EGP)', { exact: true })).toHaveValue('12.');
@@ -95,7 +105,15 @@ test('real admin product edit rejects stale React drafts and unapproved publicat
   expect(persisted.pricePiastres).toBe(3); expect(persisted.priceApproved).toBe(false);
   const forbidden = await context.request.patch(`${api}/api/v1/admin/products/${product._id}/publication`, { headers, data: { expectedRevision: current.revision, status: 'ready' } });
   expect(forbidden.status()).toBe(400);
-  expect((await context.request.get(`${api}/api/v1/public/products/contract-stale-draft`)).status()).toBe(404);
+  const browsableDraft = await context.request.get(`${api}/api/v1/public/products/contract-stale-draft`);
+  expect(browsableDraft.status()).toBe(200);
+  const publicDraft = (await browsableDraft.json()).data.product;
+  expect(publicDraft.name).toBe('Contract stale draft');
+  expect(publicDraft.priceApproved).toBe(false);
+  expect(publicDraft.pricePiastres).toBeNull();
+  expect(publicDraft.orderingAvailable).toBe(false);
+  expect(publicDraft.mainImageKey).toBeUndefined();
+  expect(publicDraft.galleryKeys).toBeUndefined();
   const invalidOrigin = await context.request.patch(`${api}/api/v1/admin/products/${product._id}`, { headers: { ...headers, Origin: 'https://unapproved.synthetic.test' }, data: { expectedRevision: current.revision, name: 'Must not persist' } });
   expect(invalidOrigin.status()).toBe(403); expect((await invalidOrigin.json()).error.code).toBe('INVALID_ORIGIN');
 });

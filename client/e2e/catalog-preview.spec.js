@@ -34,7 +34,7 @@ test('authorized draft preview preserves numbered image positions without publis
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(previewPath);
   await expect(page.getByRole('heading', { name: previewProduct.name, exact: true })).toBeVisible();
-  await expect(page.getByRole('complementary', { name: 'Authenticated staging preview' })).toBeVisible();
+  await expect(page.getByRole('complementary', { name: 'Authenticated product preview' })).toBeVisible();
   await expect(page.getByText(previewProduct.externalCatalogId, { exact: true })).toBeVisible();
   await expect(page.getByText('3 saved references · Image 1 is the selected main photo', { exact: true })).toBeVisible();
   await expect(page.locator('.product-main-image')).toHaveText('Main image · Image 1 · Media not configured');
@@ -42,7 +42,7 @@ test('authorized draft preview preserves numbered image positions without publis
   await expect(page.locator('.product-main-image')).toHaveText('Image 2 · Media not configured');
   await page.getByRole('button', { name: 'View image 1 (main)', exact: true }).click();
   await expect(page.locator('.product-main-image')).toHaveText('Main image · Image 1 · Media not configured');
-  await expect(page.locator('.product-price')).toHaveText('Price awaiting approval');
+  await expect(page.locator('.product-price')).toHaveText('Price not confirmed yet');
   await expect(page.getByRole('button', { name: 'Ordering disabled', exact: true })).toBeDisabled();
   await expect(page.getByRole('link', { name: 'Customize This' })).toHaveCount(0);
   await expect(page.locator('input[type="file"]')).toHaveCount(1);
@@ -66,15 +66,15 @@ test('preview uses safe configured gallery URLs in source order and hides provis
   await page.getByRole('button', { name: 'View image 2', exact: true }).click();
   await expect(page.locator('.product-main-image img')).toHaveAttribute('src', fixture.gallerySlots[1].url);
   await page.getByLabel('Choose size / color').selectOption('unapproved');
-  await expect(page.locator('.product-price')).toHaveText('Price awaiting approval');
+  await expect(page.locator('.product-price')).toHaveText('Price not confirmed yet');
   await expect(page.getByRole('button', { name: 'Ordering disabled', exact: true })).toBeDisabled();
 });
 
 test('preview readiness and session failures give safe setup feedback without public fallback', async ({ page }) => {
   const { requests } = await mockCatalog(page, { role: 'admin', previewError: 503 });
   await page.goto(previewPath);
-  await expect(page.getByRole('heading', { name: 'Staging preview unavailable' })).toBeVisible();
-  await expect(page.getByRole('alert')).toContainText('dedicated staging database');
+  await expect(page.getByRole('heading', { name: 'Product preview unavailable' })).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('preview is unavailable');
   await expect(page.getByText(previewProduct.externalCatalogId, { exact: true })).toHaveCount(0);
   expect(requests.some((request) => request.path.startsWith('/public/products'))).toBe(false);
   await page.unroute('**/api/v1/**');

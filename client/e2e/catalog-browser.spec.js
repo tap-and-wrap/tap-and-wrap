@@ -115,7 +115,7 @@ test('product gallery, required options, stock and sticky controls preserve serv
   await page.getByLabel('Quantity', { exact: true }).fill('20');
   await expect(page.getByLabel('Quantity', { exact: true })).toHaveValue('3');
   await page.getByLabel('Choose size / color').selectOption('large-rose');
-  await expect(page.locator('.product-stock-status')).toHaveText('Sold Out');
+  await expect(page.locator('.product-stock-status')).toHaveText('Currently unavailable');
   await page.getByLabel('Choose size / color').selectOption('small-rose');
   await expect(page.getByRole('button', { name: 'Add to Cart', exact: true })).toBeEnabled();
   await expect(page.locator('.product-related .catalog-card')).toHaveCount(4);
@@ -167,9 +167,9 @@ test('admin edits invalidate approval and preserve untouched configuration and m
   await page.goto(`/admin/products/${adminProduct._id}/edit`);
   await expect(page.getByLabel('Product name', { exact: true })).toHaveValue(adminProduct.name);
   await page.getByRole('textbox', { name: /^Price \(EGP\)/ }).fill('12.34');
-  await expect(page.getByLabel('Approve product price', { exact: true })).not.toBeChecked();
-  await page.getByLabel('No Inventory Tracking / Made by Request', { exact: true }).check();
-  await expect(page.getByLabel('Approve product inventory', { exact: true })).not.toBeChecked();
+  await expect(page.getByLabel('Approve product price', { exact: true })).toHaveCount(0);
+  await page.getByLabel('Made on Demand — no stock tracking', { exact: true }).check();
+  await expect(page.getByLabel('Approve product inventory', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Set image 2 as main' }).click();
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(page.getByText('Changes saved.', { exact: true })).toBeVisible();
@@ -177,17 +177,18 @@ test('admin edits invalidate approval and preserve untouched configuration and m
   const { payload, csrf } = fixture.saves[0];
   expect(csrf).toBe('isolated-fixture-token');
   expect(payload.pricePiastres).toBe(1234);
-  expect(payload.priceApproved).toBe(false);
-  expect(payload.inventory).toMatchObject({ mode: 'made_to_order', quantity: null, approved: false });
+  expect(payload.priceApproved).toBe(true);
+  expect(payload.inventory).toMatchObject({ mode: 'made_to_order', quantity: null, approved: true });
   expect(payload.mainImageKey).toBe(adminProduct.galleryKeys[1]);
   for (const key of ['personalization', 'customization', 'externalCatalogId', 'catalogRole']) expect(payload).not.toHaveProperty(key);
 });
 
-test('admin add form defaults to ten provisional units and shows server validation feedback', async ({ page }) => {
+test('admin add form requires a real quantity and shows server validation feedback', async ({ page }) => {
   await mockCatalog(page, { role: 'admin', saveError: true });
   await page.goto('/admin/products/new');
-  await expect(page.getByLabel('Product quantity', { exact: true })).toHaveValue('10');
-  await expect(page.getByLabel('Approve product inventory', { exact: true })).not.toBeChecked();
+  await expect(page.getByLabel('Product quantity', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('Approve product inventory', { exact: true })).toHaveCount(0);
+  await page.getByLabel('Product quantity', { exact: true }).fill('4');
   await page.getByLabel('Product name', { exact: true }).fill('Fixture New Product');
   await page.getByRole('combobox', { name: 'Main category', exact: true }).selectOption('111111111111111111111111');
   await page.getByRole('button', { name: 'Save product', exact: true }).click();

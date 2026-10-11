@@ -1,16 +1,18 @@
 // Shared publication/inventory rules. No cart, checkout, or database mutation here.
 export function publicProductFilter() {
   return {
-    status: 'ready', published: true, priceApproved: true, pricePiastres: { $gte: 0 },
+    status: 'ready', published: true, priceApproved: true, pricePiastres: { $gt: 0 },
     'inventory.approved': true, reviewRequired: false,
     $nor: [
       { variants: { $elemMatch: { pricePiastres: { $ne: null }, priceApproved: { $ne: true } } } },
+      { variants: { $elemMatch: { pricePiastres: 0 } } },
       { variants: { $elemMatch: { 'inventory.approved': { $ne: true } } } },
     ],
   };
 }
 // A configured variant owns its stock counter; the parent availability switch
 // still disables the entire product, but its unused quantity cannot block variants.
+// Visibility and purchase eligibility are separate. A draft can be browsed, but not ordered.
 export function orderableProductStockFilter() {
   const stock = { $or: [{ 'inventory.mode': 'made_to_order' }, { 'inventory.mode': 'tracked', 'inventory.quantity': { $gt: 0 } }] };
   return { $and: [
@@ -24,13 +26,13 @@ export function orderableProductStockFilter() {
 export function getPublicationIssues(product) {
   const issues = [];
   const add = (field, message) => issues.push({ field, message });
-  if (!product.priceApproved || !Number.isSafeInteger(product.pricePiastres) || product.pricePiastres < 0) add('priceApproved', 'Ready products require an explicitly approved integer price');
+  if (!product.priceApproved || !Number.isSafeInteger(product.pricePiastres) || product.pricePiastres <= 0) add('priceApproved', 'Ready products require a confirmed positive price');
   if (!product.inventory?.approved) add('inventory.approved', 'Ready products require approved stock or an approved Made by Request mode');
   if (product.reviewRequired) add('reviewRequired', 'Resolve catalog review flags before making a product Ready');
   if (!product.categoryId) add('categoryId', 'Ready products require a main category');
   if (!product.mainImageKey) add('mainImageKey', 'Ready products require a selected main image');
   for (const variant of product.variants ?? []) {
-    if (variant.pricePiastres != null && !variant.priceApproved) add('variants', 'Variant prices must be approved before publication');
+    if (variant.pricePiastres != null && (!variant.priceApproved || variant.pricePiastres <= 0)) add('variants', 'Variant prices must be confirmed and positive before publication');
     if (!variant.inventory?.approved) add('variants', 'Variant inventory must be approved before publication');
   }
   return issues;

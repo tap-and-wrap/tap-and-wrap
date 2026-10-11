@@ -95,10 +95,11 @@ export function PublishedBundles() {
 export function ReviewCards({ reviews }) {
   return <div className="website-reviews">{reviews.map(review => <figure key={review.id}><p className="website-review-stars" aria-label={`${review.rating} out of 5 stars`}>{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</p><blockquote>{review.text}</blockquote><figcaption>{review.authorLabel}</figcaption></figure>)}</div>;
 }
-export function ProductReviews({ slug, preview }) {
+export function ProductReviews({ slug, preview, enabled = true }) {
   const [page, setPage] = useState(1);
-  const query = useQuery({ queryKey: ['website', 'reviews', slug, page], queryFn: ({ signal }) => getProductReviews(slug, page, signal), enabled: !preview, retry: false, staleTime: 60_000, refetchOnWindowFocus: false });
+  const query = useQuery({ queryKey: ['website', 'reviews', slug, page], queryFn: ({ signal }) => getProductReviews(slug, page, signal), enabled: !preview && enabled, retry: false, staleTime: 60_000, refetchOnWindowFocus: false });
   const reviews = query.data?.reviews || [];
+  if (!preview && !enabled) return null;
   return <section className="product-reviews" aria-labelledby="product-reviews-heading"><h2 id="product-reviews-heading">Product reviews</h2>{preview ? <p>Reviews are unavailable in draft preview.</p> : query.isPending ? <p role="status">Loading reviews…</p> : query.isError ? <div><p>Reviews are unavailable at the moment.</p><button className="catalog-text-button" onClick={() => query.refetch()}>Retry reviews</button></div> : !reviews.length ? <p>No owner-approved reviews have been published for this product.</p> : <><ReviewCards reviews={reviews}/>{query.data.pagination.pages > 1 && <nav className="commerce-pagination" aria-label="Review pages"><button disabled={page <= 1 || query.isFetching} onClick={() => setPage(page - 1)}>Previous</button><span>Page {page}</span><button disabled={page >= query.data.pagination.pages || query.isFetching} onClick={() => setPage(page + 1)}>Next</button></nav>}</>}</section>;
 }
 export function ApprovedFaq({ entries = [] }) {

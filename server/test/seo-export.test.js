@@ -71,7 +71,7 @@ test('product DTO preserves stable public identity while dropping galleries, pri
 });
 
 test('drafts, provisional prices/inventory, unresolved reviews and category mismatches cannot be exported', () => {
-  for (const change of [{ status: 'draft' }, { published: false }, { priceApproved: false }, { pricePiastres: null }, { inventory: { ...product.inventory, approved: false } }, { reviewRequired: true }, { subcategoryId: 'missing' }]) assert.equal(exportProductDto({ ...product, ...change }, categories), null);
+  for (const change of [{ status: 'draft' }, { published: false }, { priceApproved: false }, { pricePiastres: null }, { pricePiastres: 0 }, { inventory: { ...product.inventory, approved: false } }, { reviewRequired: true }, { subcategoryId: 'missing' }]) assert.equal(exportProductDto({ ...product, ...change }, categories), null);
   assert.equal(exportProductDto(product, new Map([[main._id, { ...categories.get(main._id), active: false }], [child._id, categories.get(child._id)]])), null);
   assert.equal(exportProductDto(product, new Map([[main._id, categories.get(main._id)], [child._id, { ...categories.get(child._id), parentId: 'wrong-main' }]])), null);
 });

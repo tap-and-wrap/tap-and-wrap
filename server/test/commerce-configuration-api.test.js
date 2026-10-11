@@ -226,7 +226,7 @@ test('legacy imported component revisions initialize only within an authorized e
   assert.equal(current.status, 'draft');
   assert.equal(current.priceApproved, false);
   assert.equal(current.inventory.approved, false);
-  assert.equal(current.inventory.quantity, 10);
+  assert.equal(current.inventory.quantity, 0);
 });
 after(async () => {
   if (server) await new Promise((resolve) => server.close(resolve));
@@ -280,7 +280,7 @@ test('components require explicit review resolution and merchant approval while 
   const created = await request('/api/v1/admin/commerce/components', { method: 'POST', body: { name: 'Isolated packaging', slug: 'isolated-packaging', categoryId: String(main._id), subcategoryId: String(child._id), catalogRole: 'Gift Packaging', mainImageKey: 'fixtures/packaging.webp', galleryKeys: ['fixtures/packaging.webp'], pricePiastres: 500, reviewRequired: true } });
   assert.equal(created.status, 201);
   const componentId = created.data.component._id;
-  assert.equal(created.data.component.inventory.quantity, 10);
+  assert.equal(created.data.component.inventory.quantity, 0);
   assert.equal(created.data.component.inventory.approved, false);
   const configuration = { enabledForCustomization: true, configurationApproved: true, priceApproved: true, inventory: { mode: 'tracked', quantity: 10, approved: true, available: true } };
   assert.equal((await request(`/api/v1/admin/commerce/components/${componentId}`, { method: 'PATCH', body: configuration })).status, 400);

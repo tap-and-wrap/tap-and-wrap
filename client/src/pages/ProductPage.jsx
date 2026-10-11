@@ -41,10 +41,10 @@ export function ProductContent({ product, relatedProducts = [], preview = false,
   const variants = product.variants || [];
   const variant = variants.find((item) => item.key === variantKey);
   const price = Number.isSafeInteger(variant?.pricePiastres) ? variant.pricePiastres : product.pricePiastres;
-  const approvedPrice = product.priceApproved === true && (!preview || variant?.priceApproved !== false) && Number.isSafeInteger(price) && price >= 0;
+  const approvedPrice = product.priceApproved === true && variant?.priceConfirmed !== false && (!preview || variant?.priceApproved !== false) && Number.isSafeInteger(price) && price > 0;
   const orderingAvailable = !preview && approvedPrice && product.orderingAvailable === true && (!variant || variant.orderingAvailable === true);
   const maximumQuantity = quantityLimit(variant?.inventory || product.inventory);
-  const displayPrice = approvedPrice ? formatCatalogPrice(price) : preview ? 'Price awaiting approval' : 'Price unavailable';
+  const displayPrice = approvedPrice ? formatCatalogPrice(price) : 'Price not confirmed yet';
   const personalizationFields = product.personalization?.fields || [];
   const canCustomize = !preview && product.customization?.enabled === true && Boolean(product.customization?.templateId) && Boolean(product.customization?.serviceKind);
 
@@ -103,7 +103,7 @@ export function ProductContent({ product, relatedProducts = [], preview = false,
           {product.category?.name && <p className="catalog-eyebrow">{product.category.name}</p>}
           <ProductHeading id="product-title">{product.name}</ProductHeading>
           <p className="catalog-price product-price"><span>{displayPrice}</span>{approvedPrice && Number.isSafeInteger(product.compareAtPiastres) && product.compareAtPiastres > price && <del>{formatCatalogPrice(product.compareAtPiastres)}</del>}</p>
-          <p className={`product-stock-status ${orderingAvailable ? '' : 'is-unavailable'}`}>{preview ? 'Preview only · Ordering disabled' : orderingAvailable ? product.inventory?.mode === 'made_to_order' ? 'Made by Request' : 'Available' : 'Sold Out'}</p>
+          <p className={`product-stock-status ${orderingAvailable ? '' : 'is-unavailable'}`}>{preview ? 'Preview only · Ordering disabled' : orderingAvailable ? product.inventory?.mode === 'made_to_order' ? 'Made by Request' : 'Available' : !approvedPrice ? 'Price not confirmed yet' : 'Currently unavailable'}</p>
           <form ref={purchaseRef} className="product-purchase-section" aria-label="Product options" onSubmit={addProduct} noValidate aria-busy={adding}>
             {variants.length > 0 && <div className="commerce-field"><label htmlFor={variantId}>Choose size / color</label>
               <select id={variantId} value={variantKey} disabled={adding} {...fieldErrorProps(variantId, fieldErrors.variant)} required onChange={(event) => {
@@ -113,11 +113,11 @@ export function ProductContent({ product, relatedProducts = [], preview = false,
                 setQuantity((current) => Math.min(current, quantityLimit(nextVariant?.inventory || product.inventory)));
               }}>
                 <option value="">Choose an option</option>
-                {variants.map((item) => <option key={item.key} value={item.key}>{variantLabel(item)}{!preview && item.orderingAvailable === false ? ' — Sold Out' : ''}</option>)}
+                {variants.map((item) => <option key={item.key} value={item.key}>{variantLabel(item)}{!preview && item.orderingAvailable === false ? ' — Unavailable' : ''}</option>)}
               </select>
               <FieldError id={variantId}>{fieldErrors.variant}</FieldError>
             </div>}
-            {personalizationFields.length > 0 && <fieldset className="product-personalization"><legend>Personalize your gift</legend><ConfiguredFields fields={personalizationFields} values={personalization} onChange={setPersonalization} errors={fieldErrors} disabled={preview || adding} /></fieldset>}
+            {personalizationFields.length > 0 && <fieldset className="product-personalization"><legend>Personalize your gift</legend><ConfiguredFields fields={personalizationFields} values={personalization} onChange={setPersonalization} errors={fieldErrors} disabled={preview || adding || !orderingAvailable} /></fieldset>}
             <div className="product-quantity-row">
               <label htmlFor={quantityId}>Quantity</label>
               <div className="product-quantity-controls">
@@ -126,7 +126,7 @@ export function ProductContent({ product, relatedProducts = [], preview = false,
                 <button type="button" aria-label="Increase quantity" disabled={adding || quantity >= maximumQuantity || !orderingAvailable} onClick={() => changeQuantity(quantity + 1)}><Plus size={16} /></button>
               </div>
             </div>
-            <button type="submit" className="button button-dark product-purchase-button" disabled={!orderingAvailable || adding || cart.pending} aria-describedby="product-ordering-notice">{preview ? 'Ordering disabled' : adding ? 'Adding…' : orderingAvailable ? 'Add to Cart' : 'Sold Out'}</button>
+            <button type="submit" className="button button-dark product-purchase-button" disabled={!orderingAvailable || adding || cart.pending} aria-describedby="product-ordering-notice">{preview ? 'Ordering disabled' : adding ? 'Adding…' : orderingAvailable ? 'Add to Cart' : 'Currently unavailable'}</button>
             {addError && <p role="alert" className="error-text">{addError}</p>}
             {adding && <p className="upload-progress" role="status"><progress aria-label="Adding your gift"/>{uploadStatus || 'Preparing your item…'}</p>}
             <p id="product-ordering-notice" className="product-ordering-notice">{preview ? 'This authenticated preview does not publish the product or enable cart, checkout or customization.' : personalizationFields.some(field => field.type === 'image') ? 'Your selected photos stay on this device until you press Add to Cart.' : 'Prices and availability are verified when adding to your cart.'}</p>
@@ -139,12 +139,12 @@ export function ProductContent({ product, relatedProducts = [], preview = false,
           </div>
         </section>
       </div>
-      <ProductReviews key={product.slug} slug={product.slug} preview={preview}/>
+      <ProductReviews key={product.slug} slug={product.slug} preview={preview} enabled={product.reviewsAvailable !== false}/>
       {relatedProducts.length > 0 && <section className="product-related" aria-labelledby="product-related-heading"><h2 id="product-related-heading">You May Also Like</h2><div className="catalog-grid catalog-related-grid">{relatedProducts.slice(0, 4).map((item) => <ProductCard key={item._id} product={item} />)}</div></section>}
       {showSticky && <div className="product-sticky-bar" aria-label="Purchase options">
         <div><p>{product.name}</p><span>{displayPrice}</span></div>
         {orderingAvailable && product.requiresOptions ? <button type="button" className="button button-dark" onClick={focusOptions}>Choose Options</button>
-          : <button type="button" className="button button-dark" disabled={!orderingAvailable || adding || cart.pending} onClick={() => purchaseRef.current.requestSubmit()}>{orderingAvailable ? 'Add to Cart' : 'Sold Out'}</button>}
+          : <button type="button" className="button button-dark" disabled={!orderingAvailable || adding || cart.pending} onClick={() => purchaseRef.current.requestSubmit()}>{orderingAvailable ? 'Add to Cart' : 'Currently unavailable'}</button>}
       </div>}
     </Container>
   );

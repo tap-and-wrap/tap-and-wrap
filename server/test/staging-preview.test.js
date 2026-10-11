@@ -111,7 +111,7 @@ describe('authenticated staging draft preview', { concurrency: false }, () => {
     assert.equal(preview.compareAtPiastres, null);
     assert.equal(preview.variants[0].pricePiastres, null);
     assert.equal(preview.priceApproved, false);
-    assert.equal(preview.inventory.quantity, 10);
+    assert.equal(preview.inventory.quantity, 0);
     assert.equal(preview.inventory.approved, false);
     assert.equal(preview.orderingAvailable, false);
     assert.equal(preview.variants[0].orderingAvailable, false);
@@ -129,18 +129,20 @@ describe('authenticated staging draft preview', { concurrency: false }, () => {
     assert.equal(preview.mainImageUrl, preview.gallerySlots[0].url);
     assert.equal(preview.gallerySlots[0].isMain, true);
   });
-  it('does not turn admin preview into a public draft-preview endpoint or change public category counts', async () => {
-    assert.equal((await request('/public/products/isolated-draft')).status, 404);
+  it('keeps preview private while allowing safe draft browsing in the public catalog', async () => {
+    assert.equal((await request('/public/products/isolated-draft')).status, 200);
     assert.equal((await request(`/public/products/${product._id}/preview`)).status, 404);
     const publicList = await request('/public/products?limit=100');
-    assert.deepEqual(publicList.body.data.products, []);
+    assert.equal(publicList.body.data.products.length, 1);
+    assert.equal(publicList.body.data.products[0].orderingAvailable, false);
+    assert.equal(publicList.body.data.products[0].pricePiastres, null);
     assert.equal(publicList.body.data.pagination.limit, 20);
     const adminList = await request('/admin/products?status=draft&limit=100&category=preview-main&subcategory=preview-child', adminCookie);
     assert.equal(adminList.body.data.pagination.limit, 20);
     assert.equal(adminList.body.data.pagination.total, 1);
     const categories = await request('/public/categories?parent=preview-main');
     assert.equal(categories.body.data.categories[0].slug, 'preview-child');
-    assert.equal(categories.body.data.categories[0].productCount, 0);
+    assert.equal(categories.body.data.categories[0].productCount, 1);
     assert.equal(mongoose.connection.name, 'tap_wrap_catalog_test');
   });
 });

@@ -28,7 +28,10 @@ router.get('/products', async (req, res) => {
 
 router.get('/products/:slug', async (req, res) => {
   const product = await getPublicProduct(parseSlug(req.params.slug));
-  const tracking = await captureAction(req, 'ViewContent', monetaryParameters([{ ...product, quantity: 1 }], product.pricePiastres), { sourcePath: `/products/${product.slug}` });
+  const parameters = product.priceApproved && Number.isSafeInteger(product.pricePiastres) && product.pricePiastres > 0
+    ? monetaryParameters([{ ...product, quantity: 1 }], product.pricePiastres)
+    : { content_type: 'product', content_ids: [product._id], num_items: 1 };
+  const tracking = await captureAction(req, 'ViewContent', parameters, { sourcePath: `/products/${product.slug}` });
   res.set('Cache-Control', tracking ? 'private, no-store' : 'public, max-age=0, must-revalidate');
   res.json({ ok: true, data: { product, tracking } });
 });

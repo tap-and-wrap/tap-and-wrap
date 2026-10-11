@@ -20,8 +20,12 @@ export function inventoryCanOrder(inventory) {
 }
 
 export function productCanOrder(product) {
-  if (!product.inventory?.approved || !product.inventory.available) return false;
-  return product.variants?.length ? product.variants.some((variant) => inventoryCanOrder(variant.inventory)) : inventoryCanOrder(product.inventory);
+  if (product.status !== 'ready' || product.published !== true || product.reviewRequired === true ||
+      product.priceApproved !== true || !Number.isSafeInteger(product.pricePiastres) || product.pricePiastres <= 0 ||
+      !product.mainImageKey || !product.categoryId || !product.inventory?.approved || !product.inventory.available) return false;
+  if (product.variants?.some(variant => (variant.pricePiastres != null &&
+      (!variant.priceApproved || variant.pricePiastres <= 0)) || !variant.inventory?.approved)) return false;
+  return product.variants?.length ? product.variants.some(variant => inventoryCanOrder(variant.inventory)) : inventoryCanOrder(product.inventory);
 }
 
 export function categoryPresentation(category) {
@@ -37,12 +41,13 @@ export function publicProductCard(product) {
     category: categoryPresentation(product.categoryId),
     subcategory: categoryPresentation(product.subcategoryId),
     mainImageUrl: mediaUrlForKey(product.mainImageKey),
-    pricePiastres: product.priceApproved ? product.pricePiastres : null,
-    compareAtPiastres: product.priceApproved ? product.compareAtPiastres ?? null : null,
-    priceApproved: Boolean(product.priceApproved),
+    pricePiastres: product.priceApproved && product.pricePiastres > 0 ? product.pricePiastres : null,
+    compareAtPiastres: product.priceApproved && product.pricePiastres > 0 ? product.compareAtPiastres ?? null : null,
+    priceApproved: Boolean(product.priceApproved && product.pricePiastres > 0),
     featured: Boolean(product.featured),
     bestSeller: Boolean(product.bestSeller),
     orderingAvailable: productCanOrder(product),
+    reviewsAvailable: Boolean(product.status === 'ready' && product.published && product.priceApproved && product.pricePiastres > 0 && !product.reviewRequired),
     requiresOptions: Boolean(product.variants?.length || product.personalization?.fields?.some((field) => field.required) || product.customization?.enabled),
   };
 }
@@ -60,9 +65,10 @@ export function publicProductDetail(product) {
     variants: (product.variants || []).map((variant) => ({
       key: variant.key,
       attributes: variant.attributes,
-      pricePiastres: variant.pricePiastres == null ? (product.priceApproved ? product.pricePiastres : null) : variant.priceApproved ? variant.pricePiastres : null,
+      pricePiastres: variant.pricePiastres == null ? (product.priceApproved && product.pricePiastres > 0 ? product.pricePiastres : null) : variant.priceApproved && variant.pricePiastres > 0 ? variant.pricePiastres : null,
+      priceConfirmed: variant.pricePiastres == null ? Boolean(product.priceApproved && product.pricePiastres > 0) : Boolean(variant.priceApproved && variant.pricePiastres > 0),
       inventory: publicInventory(variant.inventory),
-      orderingAvailable: inventoryCanOrder(variant.inventory),
+      orderingAvailable: productCanOrder(product) && inventoryCanOrder(variant.inventory) && (variant.pricePiastres == null || (variant.priceApproved && variant.pricePiastres > 0)),
     })),
     personalization: { fields: product.personalization?.fields || [] },
     customization: {

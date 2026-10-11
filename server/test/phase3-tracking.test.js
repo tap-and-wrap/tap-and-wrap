@@ -117,7 +117,7 @@ test('AddToCart fires only after successful server-priced add and never on rejec
   assert.equal((await add(browser)).status, 409);
   assert.equal(await MetaEvent.countDocuments(), before);
 });
-test('approved catalog views/searches produce receipts while draft records remain excluded', async () => {
+test('catalog views support draft browsing without emitting unconfirmed monetary values', async () => {
   const browser = client(); await consent(browser);
   const detail = data(await browser.request(`/public/products/${product.slug}`));
   assert.equal(detail.tracking.name, 'ViewContent'); assert.equal(detail.tracking.parameters.value, 120);
@@ -133,8 +133,13 @@ test('approved catalog views/searches produce receipts while draft records remai
   assert.equal((await browser.request('/public/products?q=Isolated', { headers: { 'x-search-event-id': 'invalid' } })).status, 400);
   assert.equal(await MetaEvent.countDocuments({ name: 'Search' }), 1);
   await Product.updateOne({ _id: product._id }, { $set: { status: 'draft', priceApproved: false } });
-  assert.equal((await browser.request(`/public/products/${product.slug}`)).status, 404);
-  assert.equal(await MetaEvent.countDocuments({ name: 'ViewContent' }), 1);
+  const draftView = await browser.request(`/public/products/${product.slug}`);
+  assert.equal(draftView.status, 200);
+  const previewTracking = data(draftView).tracking;
+  assert.equal(previewTracking.name, 'ViewContent');
+  assert.equal(Object.hasOwn(previewTracking.parameters, 'value'), false);
+  assert.equal(Object.hasOwn(previewTracking.parameters, 'contents'), false);
+  assert.equal(await MetaEvent.countDocuments({ name: 'ViewContent' }), 2);
 });
 test('COD purchase is a single order-placement event across retries, refreshes and admin status changes', async () => {
   const browser = client(); await consent(browser); await add(browser); env.checkoutEnabled = true;

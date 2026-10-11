@@ -70,7 +70,16 @@ async function routeRequest(request, env) {
   }
   if (canonicalPath === '/seo-manifest.json') return privateResponse(await env.ASSETS.fetch(request));
   if (manifest.indexingEnabled === true && (!fresh || env.SEO_INDEXING_ENABLED === 'true' && env.SEO_EXPECTED_PUBLICATION_ID !== manifest.publication.id)) return new Response('Catalog snapshot is awaiting an authorized refresh. Please try again later.', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Retry-After': '300', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow, noarchive' } });
-  if (!manifest.publicRoutes.includes(canonicalPath)) return privateResponse(await asset(env.ASSETS, request, '/404.html'), 404);
+  if (!manifest.publicRoutes.includes(canonicalPath)) {
+    // Browsable drafts have no SEO snapshot. Serve the public React shell with a
+    // noindex header, leaving the API to return 404 for genuinely unknown slugs.
+    // Never substitute this for a verified/indexed static product page.
+    if (env.SEO_INDEXING_ENABLED !== 'true' && /^\/(?:products|categories)\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(canonicalPath)) {
+      const shell = await asset(env.ASSETS, request, '/index.html');
+      if (shell.ok) return privateResponse(shell);
+    }
+    return privateResponse(await asset(env.ASSETS, request, '/404.html'), 404);
+  }
   if (pathname !== canonicalPath) { const target = new URL(request.url); target.pathname = canonicalPath; return Response.redirect(target, 308); }
   const response = await asset(env.ASSETS, request, manifest.routeFiles[canonicalPath]);
   if (!response.ok) return privateResponse(await asset(env.ASSETS, request, '/404.html'), 404);

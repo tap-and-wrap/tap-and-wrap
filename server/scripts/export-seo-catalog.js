@@ -4,7 +4,7 @@ import { realpath, mkdir, writeFile, rename, unlink } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { validateDatabaseUri, assertConnectedDatabase, databaseDiagnostic } from '../src/config/database-safety.js';
 import { publicProductFilter } from '../src/catalog/product-policy.js';
-import { mediaUrlForKey, productCanOrder } from '../src/catalog/public-presentation.js';
+import { mediaUrlForKey, inventoryCanOrder, productCanOrder } from '../src/catalog/public-presentation.js';
 import { verifiedMediaEntries, MEDIA_VERIFICATION_SOURCE } from '../../client/src/seo/media-verification.js';
 
 export const SEO_PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -95,9 +95,9 @@ export function exportCategoryDto(category, mediaBaseUrl = '') {
 }
 
 export function exportProductDto(product, categories, mediaBaseUrl = '') {
-  if (!product?._id || product.status !== 'ready' || product.published !== true || product.priceApproved !== true || product.inventory?.approved !== true || product.reviewRequired !== false || !Number.isSafeInteger(product.pricePiastres) || product.pricePiastres < 0 || !SLUG.test(product.slug || '') || !plain(product.name, 240)) return null;
+  if (!product?._id || product.status !== 'ready' || product.published !== true || product.priceApproved !== true || product.inventory?.approved !== true || product.reviewRequired !== false || !Number.isSafeInteger(product.pricePiastres) || product.pricePiastres <= 0 || !SLUG.test(product.slug || '') || !plain(product.name, 240)) return null;
   const variants = product.variants || [];
-  if (!Array.isArray(variants) || variants.some((variant) => variant.inventory?.approved !== true || variant.pricePiastres != null && (variant.priceApproved !== true || !Number.isSafeInteger(variant.pricePiastres) || variant.pricePiastres < 0))) return null;
+  if (!Array.isArray(variants) || variants.some((variant) => variant.inventory?.approved !== true || variant.pricePiastres != null && (variant.priceApproved !== true || !Number.isSafeInteger(variant.pricePiastres) || variant.pricePiastres <= 0))) return null;
   const main = categories.get(String(product.categoryId));
   const child = product.subcategoryId ? categories.get(String(product.subcategoryId)) : null;
   if (!main?.active || main.parentId || product.subcategoryId && (!child?.active || child.parentId !== main._id)) return null;
@@ -106,7 +106,7 @@ export function exportProductDto(product, categories, mediaBaseUrl = '') {
     _id: String(product._id), name: plain(product.name, 240), slug: product.slug, description: plain(product.description, 10_000), category: presentation(main), subcategory: presentation(child),
     mainImageUrl: mediaUrlForKey(product.mainImageKey, mediaBaseUrl), pricePiastres: product.pricePiastres, compareAtPiastres: Number.isSafeInteger(product.compareAtPiastres) && product.compareAtPiastres > product.pricePiastres ? product.compareAtPiastres : null,
     priceApproved: true, orderingAvailable: productCanOrder(product), inventoryMode: product.inventory.mode,
-    variants: variants.map((variant) => ({ key: plain(variant.key, 120), attributes: (variant.attributes || []).map(({ name, value }) => ({ name: plain(name, 120), value: plain(value, 120) })), pricePiastres: variant.pricePiastres ?? product.pricePiastres, orderingAvailable: productCanOrder({ inventory: variant.inventory }), inventoryMode: variant.inventory.mode })),
+    variants: variants.map((variant) => ({ key: plain(variant.key, 120), attributes: (variant.attributes || []).map(({ name, value }) => ({ name: plain(name, 120), value: plain(value, 120) })), pricePiastres: variant.pricePiastres ?? product.pricePiastres, orderingAvailable: productCanOrder(product) && inventoryCanOrder(variant.inventory), inventoryMode: variant.inventory.mode })),
     updatedAt: dateString(product.updatedAt), seoEligibility: { status: 'ready', published: true, inventoryApproved: true, reviewRequired: false, categoriesActive: true },
   };
 }

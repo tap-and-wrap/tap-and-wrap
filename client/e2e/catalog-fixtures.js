@@ -110,7 +110,7 @@ export async function mockCatalog(page, options = {}) {
         sessionRole = null;
         return reply({ code: 'UNAUTHORIZED', message: 'Administrator session expired' }, 401);
       }
-      if (options.previewError) return reply({ message: 'Staging preview is unavailable' }, options.previewError);
+      if (options.previewError) return reply({ message: 'Product preview is unavailable' }, options.previewError);
       return reply({ product: options.previewProduct || previewProduct });
     }
     if (path.startsWith('/admin/products/') && request.method() === 'GET') return reply({ product: savedProduct });

@@ -3,7 +3,7 @@ import { Category } from '../models/Category.js';
 import { ComponentOption } from '../models/ComponentOption.js';
 import { publicProductFilter, orderableProductStockFilter } from './product-policy.js';
 import { mediaUrlForKey, publicProductCard, publicProductDetail } from './public-presentation.js';
-import { stagingProductPresentation, isStagingPreviewEnabled } from './staging-preview.js';
+import { adminProductPreviewPresentation, isAdminPreviewEnabled } from './staging-preview.js';
 import { env } from '../config/env.js';
 import { assertDatabaseWriteAllowed } from '../config/database-safety.js';
 import { adminRevision, prepareAdminRevision, revisionOf } from '../utils/admin-revision.js';
@@ -12,9 +12,9 @@ import { validateCatalogCategoryReferences, fenceCategoryRelation } from './cate
 
 const QUERY_TIMEOUT_MS = 3000;
 const LIST_FIELDS = '_id name slug categoryId subcategoryId mainImageKey pricePiastres compareAtPiastres priceApproved sku inventory.mode inventory.available inventory.quantity inventory.approved featured featuredOrder bestSeller bestSellerOrder createdAt';
-const PUBLIC_LIST_FIELDS = `${LIST_FIELDS} variants.inventory personalization.fields.required customization.enabled`;
+const PUBLIC_LIST_FIELDS = `${LIST_FIELDS} status published reviewRequired variants.pricePiastres variants.priceApproved variants.inventory personalization.fields.required customization.enabled`;
 const ADMIN_LIST_FIELDS = `${LIST_FIELDS} __v externalCatalogId catalogRole status published priceApproved inventory.quantity inventory.approved reviewRequired updatedAt`;
-const PUBLIC_DETAIL_FIELDS = `${LIST_FIELDS} description galleryKeys variants personalization customization updatedAt`;
+const PUBLIC_DETAIL_FIELDS = `${LIST_FIELDS} status published reviewRequired description galleryKeys variants personalization customization updatedAt`;
 const ADMIN_DETAIL_FIELDS = `${ADMIN_LIST_FIELDS} description galleryKeys variants personalization customization merchantReviewNotes reviewReasons variantSourceNotes catalogConfidence`;
 const CATEGORY_FIELDS = '_id name slug parentId imageKey active featured order createdAt updatedAt __v';
 const SORTS = {
@@ -62,7 +62,7 @@ async function visibleProductFilter(categories) {
   const { mainIds, childGroups } = categories ?? await activeCategories();
   return {
     $and: [
-      publicProductFilter(),
+      // Allow existing Draft/Hold products to be browsed; purchasing stays guarded separately.
       { $or: [{ categoryId: { $in: mainIds }, subcategoryId: null }, ...childGroups] },
     ],
   };
@@ -96,7 +96,7 @@ async function filtersForQuery(query, admin) {
     if (query.maxPrice !== undefined) filters.pricePiastres.$lte = query.maxPrice;
   }
   if (query.availability) {
-    const available = orderableProductStockFilter();
+    const available = { $and: [publicProductFilter(), orderableProductStockFilter()] };
     filters.$and = query.availability === 'available' ? [available] : [{ $nor: [available] }];
   }
   if (query.category) {
@@ -131,7 +131,7 @@ export async function listProducts(query, { admin = false } = {}) {
   const visibility = admin ? null : await visibleProductFilter();
   const filter = admin ? filters : { $and: [visibility, filters] };
   const { pricePiastres: _priceBounds, ...rangeFilters } = filters;
-  const rangeFilter = admin ? { $and: [rangeFilters, { pricePiastres: { $type: 'number' } }] } : { $and: [visibility, rangeFilters] };
+  const rangeFilter = admin ? { $and: [rangeFilters, { pricePiastres: { $type: 'number' } }] } : { $and: [visibility, rangeFilters, { priceApproved: true, pricePiastres: { $gt: 0 } }] };
   const [products, total, priceRanges] = await Promise.all([
     Product.find(filter).select(admin ? ADMIN_LIST_FIELDS : PUBLIC_LIST_FIELDS)
       .populate(admin ? [] : [{ path: 'categoryId', select: 'name slug' }, { path: 'subcategoryId', select: 'name slug' }])
@@ -167,14 +167,14 @@ export async function getAdminProduct(id, { session } = {}) {
   return adminRevision(product);
 }
 
-export async function getStagingProductPreview(id) {
-  if (!isStagingPreviewEnabled(Product.db)) throw catalogError(404, 'STAGING_PREVIEW_UNAVAILABLE', 'Draft preview requires an explicitly enabled, validated staging database.');
+export async function getAdminProductPreview(id) {
+  if (!isAdminPreviewEnabled(Product.db)) throw catalogError(404, 'ADMIN_PREVIEW_UNAVAILABLE', 'The authenticated preview is unavailable for this database target.');
   const product = await Product.findById(id)
     .select(`${PUBLIC_DETAIL_FIELDS} externalCatalogId catalogRole status reviewRequired`)
     .populate([{ path: 'categoryId', select: 'name slug active' }, { path: 'subcategoryId', select: 'name slug active' }])
     .lean().maxTimeMS(QUERY_TIMEOUT_MS);
   if (!product) throw catalogError(404, 'PRODUCT_NOT_FOUND', 'Product not found');
-  return stagingProductPresentation(product);
+  return adminProductPreviewPresentation(product);
 }
 
 function mergeInventory(current, patch) {

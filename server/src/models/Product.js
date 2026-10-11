@@ -15,7 +15,7 @@ const variantSchema = new mongoose.Schema({
   inventory: { type: inventorySchema, default: () => ({}) },
 }, { _id: false, strict: 'throw' });
 variantSchema.pre('validate', function () {
-  if (this.priceApproved && !Number.isSafeInteger(this.pricePiastres)) this.invalidate('pricePiastres', 'Variant approval requires an integer price');
+  if (this.priceApproved && (!Number.isSafeInteger(this.pricePiastres) || this.pricePiastres <= 0)) this.invalidate('pricePiastres', 'Variant confirmed price must be positive');
 });
 const fieldSchema = new mongoose.Schema({
   key: { type: String, required: true, match: /^[a-z][a-z0-9_-]{0,49}$/ },
@@ -69,7 +69,7 @@ schema.pre('validate', function () {
   this.published = this.status === 'ready';
   if (this.galleryKeys.length && this.mainImageKey !== this.galleryKeys[0]) this.invalidate('mainImageKey', 'Main image must be the first gallery reference');
   if (this.mainImageKey && !this.galleryKeys.length) this.invalidate('galleryKeys', 'Main image must be present in the gallery');
-  if (this.priceApproved && !Number.isSafeInteger(this.pricePiastres)) this.invalidate('pricePiastres', 'Approval requires an integer price');
+  if (this.priceApproved && (!Number.isSafeInteger(this.pricePiastres) || this.pricePiastres <= 0)) this.invalidate('pricePiastres', 'Confirmed prices must be positive');
   if (this.compareAtPiastres != null && (this.pricePiastres == null || this.compareAtPiastres < this.pricePiastres)) this.invalidate('compareAtPiastres', 'Compare-at price must be at least the base price');
   if (new Set(this.variants.map(v => v.key)).size !== this.variants.length) this.invalidate('variants', 'Variant keys must be unique within a product');
   if (new Set(this.personalization.fields.map(f => f.key)).size !== this.personalization.fields.length) this.invalidate('personalization.fields', 'Personalization keys must be unique');

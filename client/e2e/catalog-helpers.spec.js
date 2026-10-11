@@ -59,12 +59,12 @@ test('inventory and selection order inputs require non-negative whole numbers', 
   }
 });
 
-test('a new draft keeps default stock provisional at ten', () => {
+test('a new draft does not fabricate inventory or a confirmed price', () => {
   const draft = createProductDraft();
   expect(draft.status).toBe('draft');
   expect(draft.price).toBe('');
   expect(draft.priceApproved).toBe(false);
-  expect(draft.inventory).toEqual({ mode: 'tracked', quantity: '10', approved: false, available: true });
+  expect(draft.inventory).toEqual({ mode: 'tracked', quantity: '', approved: false, available: true });
 });
 
 test('Made by Request saves without a stock quantity', () => {
@@ -113,8 +113,9 @@ test('duplicate gallery references are rejected before saving', () => {
   expect(() => createProductPayload(draftFixture({ galleryKeys: ['Tests/main.webp', 'Tests/main.webp'] }))).toThrow('unique');
 });
 
-test('empty approvals and compare-at prices below the price are rejected', () => {
-  expect(() => createProductPayload(draftFixture({ price: '', priceApproved: true }))).toThrow('before approving');
+test('blank or zero prices cannot be confirmed and compare-at prices must not be lower', () => {
+  expect(() => createProductPayload(draftFixture({ price: '', priceApproved: true }))).toThrow('Enter a confirmed price above zero.');
+  expect(() => createProductPayload(draftFixture({ price: '0', priceApproved: true }))).toThrow('Enter a confirmed price above zero.');
   expect(() => createProductPayload(draftFixture({ price: '12.34', compareAt: '12.33' }))).toThrow('at least');
 });
 

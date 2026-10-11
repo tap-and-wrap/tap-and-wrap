@@ -27,9 +27,10 @@ test('one authoritative category graph read preserves approval/hierarchy gates a
   const find = Category.find.bind(Category);
   const observed = context.mock.method(Category, 'find', (...args) => find(...args));
   const result = await listProducts({ page: 2, limit: 100, sort: 'price_asc', includePriceRange: false });
-  assert.deepEqual(result.pagination, { page: 2, limit: 20, total: 23, pages: 2 });
-  assert.equal(result.products.length, 3);
-  assert.deepEqual(result.products.map(product => product.pricePiastres), [1020, 1021, 1022]);
+  assert.deepEqual(result.pagination, { page: 2, limit: 20, total: 24, pages: 2 });
+  assert.equal(result.products.length, 4);
+  assert.deepEqual(result.products.map(product => product.pricePiastres), [1020, 1021, 1022, null]);
+  assert.equal(result.products.at(-1).orderingAvailable, false, 'Visible draft must remain unorderable.');
   const eligibilityReads = observed.mock.calls.filter(call => call.arguments[0]?.active === true).length;
   console.log(JSON.stringify({ measurement: 'catalog-category-graph', categoryFindCalls: observed.mock.callCount(), eligibilityReads, approvedCount: result.pagination.total }));
   assert.equal(eligibilityReads, 1, 'Category eligibility must use one fresh graph read, not a global stale cache.');

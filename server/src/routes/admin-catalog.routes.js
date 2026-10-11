@@ -3,7 +3,7 @@ import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { csrfProtection } from '../middleware/csrf.js';
 import { requireCatalogDatabase } from './catalog.routes.js';
 import {
-  listProducts, getAdminProduct, getStagingProductPreview, createProduct, updateProduct,
+  listProducts, getAdminProduct, getAdminProductPreview, createProduct, updateProduct,
   listCategories, getAdminCategory, createCategory, updateCategory,
 } from '../catalog/service.js';
 import {
@@ -11,7 +11,7 @@ import {
   createProductSchema, updateProductSchema, inventoryUpdateSchema, publicationSchema,
   createCategorySchema, updateCategorySchema,
 } from '../catalog/validation.js';
-import { requireStagingPreview } from '../catalog/staging-preview.js';
+import { requireAdminPreview } from '../catalog/staging-preview.js';
 
 const router = Router();
 router.use(requireCatalogDatabase, requireAuth, requireAdmin);
@@ -24,8 +24,9 @@ router.get('/products/:id', async (req, res) => {
   res.json({ ok: true, data: { product: await getAdminProduct(parseObjectId(req.params.id)) } });
 });
 
-router.get('/products/:id/preview', requireStagingPreview, async (req, res) => {
-  res.json({ ok: true, data: { product: await getStagingProductPreview(parseObjectId(req.params.id)) } });
+router.get('/products/:id/preview', requireAdminPreview, async (req, res) => {
+  res.set({ 'Cache-Control': 'private, no-store', 'X-Robots-Tag': 'noindex, nofollow, noarchive', 'Vary': 'Cookie' });
+  res.json({ ok: true, data: { product: await getAdminProductPreview(parseObjectId(req.params.id)) } });
 });
 
 router.post('/products', csrfProtection, async (req, res) => {

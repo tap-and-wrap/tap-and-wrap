@@ -39,7 +39,7 @@ export function integerInput(value, label) {
 function inventoryDraft(inventory = {}) {
   return {
     mode: inventory.mode || 'tracked',
-    quantity: inventory.mode === 'made_to_order' ? '' : String(inventory.quantity ?? 10),
+    quantity: inventory.mode === 'made_to_order' ? '' : (inventory.quantity == null ? '' : String(inventory.quantity)),
     approved: inventory.approved === true,
     available: inventory.available !== false,
   };
@@ -90,7 +90,7 @@ export function createProductPayload(draft) {
   if (new Set(galleryKeys).size !== galleryKeys.length) throw new Error('Image references must be unique.');
   const pricePiastres = parsePriceInput(draft.price);
   const compareAtPiastres = parsePriceInput(draft.compareAt, 'Compare-at price');
-  if (draft.priceApproved && pricePiastres === null) throw priceValidationError('Enter a price before approving it.', 'Price');
+  if (draft.priceApproved && (!Number.isSafeInteger(pricePiastres) || pricePiastres <= 0)) throw priceValidationError('Enter a confirmed price above zero.', 'Price');
   if (compareAtPiastres !== null && pricePiastres !== null && compareAtPiastres < pricePiastres) {
     throw priceValidationError('Compare-at price must be at least the product price.', 'Compare-at price');
   }
@@ -110,7 +110,7 @@ export function createProductPayload(draft) {
     galleryKeys,
     variants: draft.variants.map((variant, index) => {
       const variantPrice = parsePriceInput(variant.price, `Variant ${index + 1} price`);
-      if (variant.priceApproved && variantPrice === null) throw new Error(`Enter a price before approving variant ${index + 1}.`);
+      if (variant.priceApproved && (!Number.isSafeInteger(variantPrice) || variantPrice <= 0)) throw new Error(`Enter a confirmed price above zero for variant ${index + 1}.`);
       return {
         key: variant.key.trim(),
         sku: variant.sku.trim(),
@@ -130,7 +130,7 @@ export function createProductPayload(draft) {
 
 export function adminErrorMessage(error) {
   const status = error?.status || error?.response?.status;
-  if (status === 503) return 'The catalog service is unavailable. A configured staging database and API are required.';
+  if (status === 503) return 'The catalog service is temporarily unavailable. Try again shortly.';
   if (status === 401) return 'Your session has expired. Sign in again before saving.';
   if (status === 403) return 'Administrator permission is required for this action.';
   return error?.response?.data?.error?.message || error?.message || 'The request could not be completed. Please try again.';

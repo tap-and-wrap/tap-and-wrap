@@ -10,14 +10,16 @@ import AdminLayout from '../admin/AdminLayout.jsx';
 import { invalidateAdminDependencies } from '../admin/query-invalidation.js';
 
 function InventoryFields({ value, onChange, prefix = 'Product', name = 'inventory' }) {
-  function update(name, next) {
-    onChange({ ...value, [name]: next, ...(name === 'approved' ? {} : { approved: false }) });
+  function update(field, next) {
+    onChange({ ...value, [field]: next,
+      ...(field === 'quantity' ? { approved: /^\d+$/.test(next) && Number.isSafeInteger(Number(next)) } : {}),
+    });
   }
   return <div className="admin-inventory-fields">
-    <label className="admin-checkbox"><input name={`${name}.mode`} type="checkbox" checked={value.mode === 'made_to_order'} onChange={(event) => onChange({ ...value, mode: event.target.checked ? 'made_to_order' : 'tracked', quantity: event.target.checked ? '' : '10', approved: false })} />No Inventory Tracking / Made by Request{prefix !== 'Product' && <span className="admin-visually-hidden"> for {prefix}</span>}</label>
-    {value.mode === 'tracked' ? <label>{prefix} quantity<input name={`${name}.quantity`} type="text" inputMode="numeric" value={value.quantity} onChange={(event) => update('quantity', event.target.value)} required pattern="[0-9]+" /></label> : <p className="admin-help">Made by Request products do not deduct stock.</p>}
+    <label className="admin-checkbox"><input name={`${name}.mode`} type="checkbox" checked={value.mode === 'made_to_order'} onChange={(event) => onChange({ ...value, mode: event.target.checked ? 'made_to_order' : 'tracked', quantity: event.target.checked ? '' : '', approved: event.target.checked })} />Made on Demand — no stock tracking{prefix !== 'Product' && <span className="admin-visually-hidden"> for {prefix}</span>}</label>
+    {value.mode === 'tracked' ? <label>{prefix} quantity<input name={`${name}.quantity`} type="text" inputMode="numeric" value={value.quantity} onChange={(event) => update('quantity', event.target.value)} required pattern="[0-9]+" /></label> : <p className="admin-help">Made on Demand products do not deduct stock. Select this only for items you can create when ordered.</p>}
     <label className="admin-checkbox"><input name={`${name}.available`} type="checkbox" checked={value.available} onChange={(event) => update('available', event.target.checked)} />{prefix} available for ordering</label>
-    <label className="admin-checkbox"><input name={`${name}.approved`} type="checkbox" checked={value.approved} onChange={(event) => update('approved', event.target.checked)} />Approve {prefix.toLowerCase()} inventory</label>
+    {!value.approved && <p className="admin-help">Stock is not confirmed. Select Made on Demand, or enter the actual quantity to confirm it.</p>}
   </div>;
 }
 
@@ -41,7 +43,9 @@ function ProductEditor({ product, initialSaved }) {
   const fieldErrors = error?.response?.data?.error?.details || error?.details || [];
 
   function change(name, value) {
-    setDraft((current) => ({ ...current, [name]: value, ...(['price', 'compareAt'].includes(name) ? { priceApproved: false } : {}) }));
+    setDraft((current) => ({ ...current, [name]: value,
+      ...(name === 'price' ? { priceApproved: /^\d+(?:\.\d{1,2})?$/.test(value.trim()) && Number(value) > 0 } : {}),
+    }));
     setFeedback('');
   }
   function changeName(value) {
@@ -86,7 +90,7 @@ function ProductEditor({ product, initialSaved }) {
     finally { setSaving(false); }
   }
 
-  return <AdminLayout title={id ? 'Edit product' : 'Add product'} description="Approvals are explicit. Ready products must pass the server’s publication checks." actions={id && <Link className="admin-button admin-button-secondary" to={`/admin/products/${id}/preview`}>Preview saved product</Link>}>
+  return <AdminLayout title={id ? 'Edit product' : 'Add product'} description="All products are browsable. Only confirmed prices and real stock or Made on Demand products can be sold." actions={id && <Link className="admin-button admin-button-secondary" to={`/admin/products/${id}/preview`}>Preview saved product</Link>}>
     {id && <p><Link to={`/admin/products/${id}/configuration`}>Edit personalization and customization configuration</Link></p>}
     <AdminForm error={error} onSubmit={save} className="admin-product-form">
       <fieldset disabled={saving} className="admin-form-fields">
@@ -103,14 +107,13 @@ function ProductEditor({ product, initialSaved }) {
         </section>
 
         <section className="admin-panel"><h2>Price and publication</h2><div className="admin-form-grid">
-          <label>Price (EGP)<input name="pricePiastres" type="text" inputMode="decimal" value={draft.price} onChange={(event) => change('price', event.target.value)} placeholder="Not set" /><span className="admin-help">Leave blank when a merchant price has not been set.</span></label>
+          <label>Price (EGP)<input name="pricePiastres" type="text" inputMode="decimal" value={draft.price} onChange={(event) => change('price', event.target.value)} placeholder="Not confirmed" /><span className="admin-help">Blank or 0 means Price not confirmed yet. Customers cannot purchase until you enter a positive price.</span></label>
           <label>Compare-at price (EGP)<input name="compareAtPiastres" type="text" inputMode="decimal" value={draft.compareAt} onChange={(event) => change('compareAt', event.target.value)} placeholder="Optional" /></label>
-          <label className="admin-checkbox"><input name="priceApproved" type="checkbox" checked={draft.priceApproved} onChange={(event) => change('priceApproved', event.target.checked)} />Approve product price</label>
           <label>Publication status<select name="status" value={draft.status} onChange={(event) => change('status', event.target.value)}><option value="draft">Draft</option><option value="ready">Ready</option><option value="hold">Hold</option></select></label>
-        </div><p className="admin-help">Changing prices clears price approval. Only Ready products with approved prices, approved inventory, resolved review flags and active categories can appear publicly.</p>
+        </div><p className="admin-help">Products stay browsable in Draft/Hold. Choose Ready to enable purchases only after confirming the price, actual stock or Made on Demand, and resolving catalog issues. No extra approval checkboxes are needed.</p>
         </section>
 
-        <section className="admin-panel"><h2>Inventory and availability</h2><InventoryFields value={draft.inventory} onChange={(inventory) => change('inventory', inventory)} /><p className="admin-help">New stock-tracked products start with a provisional quantity of 10. Editing inventory clears its approval.</p></section>
+        <section className="admin-panel"><h2>Inventory and availability</h2><InventoryFields value={draft.inventory} onChange={(inventory) => change('inventory', inventory)} /><p className="admin-help">Imported quantities of 10 are placeholders until you type and confirm the real amount. New products require an actual quantity or Made on Demand.</p></section>
 
         <section className="admin-panel"><h2>Image gallery</h2><p className="admin-help">Manage existing image references. The first image is the selected main photo. Uploads are not available yet.</p>
           <ol className="admin-image-list">{draft.galleryKeys.map((key, index) => <li key={index}><label>Image {index + 1}{index === 0 ? ' (main)' : ''}<input name={`galleryKeys.${index}`} maxLength={500} value={key} onChange={(event) => change('galleryKeys', draft.galleryKeys.map((value, position) => position === index ? event.target.value : value))} /></label><div className="admin-image-actions"><button type="button" className="admin-button admin-button-secondary" disabled={index === 0} onClick={() => reorderImage(index, 0)} aria-label={`Set image ${index + 1} as main`}>Set main</button><button type="button" className="admin-button admin-button-secondary" disabled={index === 0} onClick={() => reorderImage(index, index - 1)} aria-label={`Move image ${index + 1} up`}>↑</button><button type="button" className="admin-button admin-button-secondary" disabled={index === draft.galleryKeys.length - 1} onClick={() => reorderImage(index, index + 1)} aria-label={`Move image ${index + 1} down`}>↓</button><button type="button" className="admin-text-button" onClick={() => change('galleryKeys', draft.galleryKeys.filter((_, position) => position !== index))} aria-label={`Remove image ${index + 1} reference`}>Remove reference</button></div></li>)}</ol>
@@ -122,15 +125,14 @@ function ProductEditor({ product, initialSaved }) {
           {draft.variants.map((variant, index) => <fieldset className="admin-variant" key={index}><legend>Variant {index + 1}</legend><div className="admin-form-grid">
             <label>Variant {index + 1} key<input name={`variants.${index}.key`} required maxLength={80} pattern="[a-z0-9][a-z0-9_-]*" value={variant.key} onChange={(event) => changeVariant(index, { key: event.target.value })} /></label>
             <label>Variant {index + 1} SKU<input name={`variants.${index}.sku`} maxLength={100} value={variant.sku} onChange={(event) => changeVariant(index, { sku: event.target.value })} /></label>
-            <label>Variant {index + 1} price (EGP)<input name={`variants.${index}.pricePiastres`} inputMode="decimal" value={variant.price} onChange={(event) => changeVariant(index, { price: event.target.value, priceApproved: false })} placeholder="Not set" /></label>
-            <label className="admin-checkbox"><input name={`variants.${index}.priceApproved`} type="checkbox" checked={variant.priceApproved} onChange={(event) => changeVariant(index, { priceApproved: event.target.checked })} />Approve variant {index + 1} price</label>
+            <label>Variant {index + 1} price (EGP)<input name={`variants.${index}.pricePiastres`} inputMode="decimal" value={variant.price} onChange={(event) => changeVariant(index, { price: event.target.value, priceApproved: /^\d+(?:\.\d{1,2})?$/.test(event.target.value.trim()) && Number(event.target.value) > 0 })} placeholder="Not set" /></label>
           </div>
           {variant.attributes.map((attribute, attributeIndex) => <div className="admin-attribute-row" key={attributeIndex}><label>Variant {index + 1} attribute {attributeIndex + 1} name<input name={`variants.${index}.attributes.${attributeIndex}.name`} required maxLength={80} value={attribute.name} onChange={(event) => changeVariant(index, { attributes: variant.attributes.map((item, position) => position === attributeIndex ? { ...item, name: event.target.value } : item) })} /></label><label>Variant {index + 1} attribute {attributeIndex + 1} value<input name={`variants.${index}.attributes.${attributeIndex}.value`} required maxLength={120} value={attribute.value} onChange={(event) => changeVariant(index, { attributes: variant.attributes.map((item, position) => position === attributeIndex ? { ...item, value: event.target.value } : item) })} /></label><button type="button" className="admin-text-button" onClick={() => changeVariant(index, { attributes: variant.attributes.filter((_, position) => position !== attributeIndex) })} aria-label={`Remove variant ${index + 1} attribute ${attributeIndex + 1}`}>Remove</button></div>)}
           <button type="button" className="admin-button admin-button-secondary" disabled={variant.attributes.length >= 10} onClick={() => changeVariant(index, { attributes: [...variant.attributes, { name: '', value: '' }] })}>Add variant {index + 1} attribute</button>
           <InventoryFields name={`variants.${index}.inventory`} prefix={`Variant ${index + 1}`} value={variant.inventory} onChange={(inventory) => changeVariant(index, { inventory })} />
           <button type="button" className="admin-text-button" onClick={() => change('variants', draft.variants.filter((_, position) => position !== index))}>Remove variant {index + 1}</button>
           </fieldset>)}
-          <button type="button" className="admin-button admin-button-secondary" disabled={draft.variants.length >= 30} onClick={() => change('variants', [...draft.variants, { key: '', sku: '', attributes: [], price: '', priceApproved: false, inventory: { mode: 'tracked', quantity: '10', approved: false, available: true } }])}>Add variant</button>
+          <button type="button" className="admin-button admin-button-secondary" disabled={draft.variants.length >= 30} onClick={() => change('variants', [...draft.variants, { key: '', sku: '', attributes: [], price: '', priceApproved: false, inventory: { mode: 'tracked', quantity: '', approved: false, available: true } }])}>Add variant</button>
         </section>
 
         <section className="admin-panel"><h2>Homepage selections</h2><p className="admin-help">Selections are made by an administrator. They do not imply sales rankings. Only publicly eligible products are shown; the homepage displays at most eight Best Sellers.</p><div className="admin-form-grid">

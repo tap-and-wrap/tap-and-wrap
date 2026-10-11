@@ -73,7 +73,7 @@ export default function CatalogFilters({
           <div className="catalog-filter-group-body">
             <label className="catalog-visually-hidden" htmlFor={`${id}-availability`}>Availability</label>
             <select id={`${id}-availability`} value={filters.availability} onChange={(event) => change({ availability: event.target.value })}>
-              <option value="">All availability</option><option value="available">Available</option><option value="sold_out">Sold Out</option>
+              <option value="">All availability</option><option value="available">Available</option><option value="sold_out">Not available for ordering</option>
             </select>
           </div>
         </details>

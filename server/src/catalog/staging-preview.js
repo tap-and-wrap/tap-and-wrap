@@ -12,9 +12,15 @@ export function isStagingPreviewEnabled(connection = mongoose.connection) {
     (connection.name === 'tapandwrap_staging' || isolatedPreviewTest(connection));
 }
 
-export function requireStagingPreview(req, res, next) {
-  if (!isStagingPreviewEnabled()) {
-    return res.status(404).json({ ok: false, error: { code: 'STAGING_PREVIEW_UNAVAILABLE', message: 'Draft preview requires an explicitly enabled, validated staging database.' } });
+export function isAdminPreviewEnabled(connection = mongoose.connection) {
+  if (isStagingPreviewEnabled(connection)) return true;
+  return env.nodeEnv === 'production' && env.databaseTarget === 'production' && env.productionDatabaseAuthorized === true &&
+    connection.readyState === 1 && connection.name === 'tapandwrap_production';
+}
+
+export function requireAdminPreview(req, res, next) {
+  if (!isAdminPreviewEnabled()) {
+    return res.status(404).json({ ok: false, error: { code: 'ADMIN_PREVIEW_UNAVAILABLE', message: 'The authenticated preview is unavailable for this database target.' } });
   }
   next();
 }
@@ -24,10 +30,11 @@ function previewCategory(category) {
   return value ? { ...value, active: category.active === true } : null;
 }
 
-export function stagingProductPresentation(product) {
+export function adminProductPreviewPresentation(product) {
   const detail = publicProductDetail(product);
   return {
     ...detail,
+    pricePiastres: product.priceApproved && product.pricePiastres > 0 ? product.pricePiastres : null,
     externalCatalogId: product.externalCatalogId || null,
     catalogRole: product.catalogRole,
     status: product.status,
@@ -47,3 +54,7 @@ export function stagingProductPresentation(product) {
     preview: { enabled: true, inventoryApproved: product.inventory.approved === true, reviewRequired: product.reviewRequired === true },
   };
 }
+
+// Compatibility for existing staging-only API tests.
+export const stagingProductPresentation = adminProductPreviewPresentation;
+export const requireStagingPreview = requireAdminPreview;

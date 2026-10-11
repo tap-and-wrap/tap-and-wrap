@@ -39,14 +39,14 @@ async function rejectsValidation(overrides) {
 }
 
 describe('catalog model validation', () => {
-  it('starts a product as a draft with unapproved price and ten provisional stock units', async () => {
+  it('starts a product as a draft without fabricated stock units', async () => {
     const product = new Product(productData());
     await product.validate();
     assert.equal(product.status, 'draft');
     assert.equal(product.published, false);
     assert.equal(product.pricePiastres, null);
     assert.equal(product.priceApproved, false);
-    assert.equal(product.inventory.quantity, 10);
+    assert.equal(product.inventory.quantity, 0);
     assert.equal(product.inventory.approved, false);
   });
 
@@ -83,7 +83,7 @@ describe('catalog model validation', () => {
   });
 
   it('deducts only the requested quantity for tracked stock', async () => {
-    const product = new Product(productData());
+    const product = new Product(productData({ inventory: { mode: 'tracked', quantity: 10, available: true } }));
     await product.validate();
     assert.equal(getStockDeduction(product.inventory, 3), 3);
     // The policy is a calculation; order and inventory persistence remain untouched.

@@ -12,7 +12,7 @@ export function isSafeImageReference(value) {
 export const imageReference = { validator: isSafeImageReference, message: 'Use a safe relative image reference, not a URL or filesystem path' };
 export const inventorySchema = new mongoose.Schema({
   mode: { type: String, enum: ['tracked', 'made_to_order'], default: 'tracked', required: true },
-  quantity: { type: Number, default: 10, validate: safeInteger },
+  quantity: { type: Number, default: 0, validate: safeInteger },
   approved: { type: Boolean, default: false },
   available: { type: Boolean, default: true },
 }, { _id: false, strict: 'throw' });

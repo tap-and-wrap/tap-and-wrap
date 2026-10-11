@@ -151,3 +151,28 @@ test('Worker policy invalid origins fail closed, with no credential-bearing diag
   assert.equal(response.status, 503);
   assert.equal((await response.text()).includes('private-password'), false);
 });
+
+
+test('unindexed draft product and category links load a noindex SPA shell without an SEO snapshot entry', async () => {
+  const { env, seen } = fixtureEnv();
+  env.SEO_INDEXING_ENABLED = 'false';
+  for (const path of ['/products/visible-draft', '/categories/browsable-category']) {
+    const response = await handleSeoRequest(new Request(`https://shop.example${path}`), env);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('X-Robots-Tag'), /noindex/);
+    assert.equal(response.headers.get('Cache-Control'), 'private, no-store');
+    assert.match(await response.text(), /Fixture homepage/);
+  }
+  assert.equal(seen.filter(path => path === '/index.html').length, 2);
+  const fakePrivate = await handleSeoRequest(new Request('https://shop.example/products/draft/private'), env);
+  assert.equal(fakePrivate.status, 404);
+  const withdrawn = '/products/visible-draft';
+  env.SEO_WITHDRAWN_PATHS = withdrawn;
+  assert.equal((await handleSeoRequest(new Request(`https://shop.example${withdrawn}`), env)).status, 404);
+});
+
+test('an enabled indexing mode never substitutes a dynamic draft shell for an approved SEO snapshot', async () => {
+  const { env } = fixtureEnv();
+  const response = await handleSeoRequest(new Request('https://shop.example/products/visible-draft'), env);
+  assert.equal(response.status, 404);
+});

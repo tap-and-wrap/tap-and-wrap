@@ -186,7 +186,11 @@ test('product-card links and buttons have visible boundaries, readable states an
   });
   await expect(actions.nth(0)).toHaveText('Add to Cart');
   await expect(actions.nth(1)).toHaveText('Choose Options');
-  await expect(actions.nth(2)).toBeDisabled();
+  // Browsable but unavailable products navigate to details without offering a cart action.
+  await expect(actions.nth(2)).toHaveText('View Details');
+  await expect(actions.nth(2)).toHaveAttribute('href', '/products/fixture-gift-3');
+  await expect(actions.nth(2)).toHaveAttribute('aria-label', 'View details: Fixture Gift 03');
+  await expect(page.locator('.catalog-card').nth(2).locator('button')).toHaveCount(0);
   for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     for (const action of [actions.nth(0), actions.nth(1), actions.nth(2)]) {
