@@ -195,12 +195,13 @@ test('admin add form requires a real quantity and shows server validation feedba
   await expect(page.getByRole('alert')).toContainText('Approve price before publication.');
 });
 
-test('homepage requests featured categories and at most eight explicitly selected eligible best sellers', async ({ page }) => {
+test('homepage requests all active main categories and prioritizes admin featured gifts', async ({ page }) => {
   const fixture = await mockCatalog(page);
   await page.goto('/');
   await expect(page.locator('.home-product-grid .catalog-card')).toHaveCount(8);
-  expect(fixture.requests.find((item) => item.path === '/public/products').params).toMatchObject({ bestSeller: 'true', sort: 'best_sellers', availability: 'available', limit: '8' });
-  expect(fixture.requests.find((item) => item.path === '/public/categories').params).toMatchObject({ parent: 'root', featured: 'true', limit: '20' });
+  expect(fixture.requests.find((item) => item.path === '/public/products').params).toMatchObject({ bestSeller: 'true', sort: 'best_sellers', limit: '8' });
+  expect(fixture.requests.find((item) => item.path === '/public/categories').params).toMatchObject({ parent: 'root', limit: '20' });
+  expect(fixture.requests.find((item) => item.path === '/public/categories').params.featured).toBeUndefined();
 });
 
 test('shop presents loading while the catalog response is pending', async ({ page }) => {

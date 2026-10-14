@@ -30,15 +30,17 @@ export function DeveloperHeroMedia({ video = developerContent.heroVideo }) {
   const source = video?.approved === true && localVideo(video.src) ? mobile && localVideo(video.mobileSrc) ? video.mobileSrc : video.src : null;
   const poster = mobile && localPoster(video?.mobilePoster) ? video.mobilePoster : localPoster(video?.poster) ? video.poster : undefined;
   const failed = failedSource === source;
-  const width = Number.isSafeInteger(video?.width) && video.width > 0 ? video.width : 1920;
-  const height = Number.isSafeInteger(video?.height) && video.height > 0 ? video.height : 1080;
+  const mediaWidth = mobile && Number.isSafeInteger(video?.mobileWidth) ? video.mobileWidth : video?.width;
+  const mediaHeight = mobile && Number.isSafeInteger(video?.mobileHeight) ? video.mobileHeight : video?.height;
+  const width = Number.isSafeInteger(mediaWidth) && mediaWidth > 0 ? mediaWidth : 1920;
+  const height = Number.isSafeInteger(mediaHeight) && mediaHeight > 0 ? mediaHeight : 1080;
   useEffect(() => {
     const element = videoRef.current;
     if (!element) return;
     if (reducedMotion || video?.autoplay !== true) element.pause();
     else void element.play().catch(() => { /* Autoplay policy: explicit Play remains available. */ });
   }, [source, reducedMotion, video?.autoplay, failed]);
-  if (!source) return <p className="editorial-note hero-media-note">Development preview · Owner-approved hero footage is awaiting delivery.</p>;
+  if (!source) return null;
   function togglePlayback() {
     if (playing) videoRef.current?.pause();
     else void videoRef.current?.play().catch(() => setFailedSource(source));
@@ -81,10 +83,11 @@ export function TrustStatistics({ claims = developerContent.trustStatistics }) {
     motion.addEventListener('change', motionChanged);
     return () => { observer?.disconnect(); cancelAnimationFrame(frame); motion.removeEventListener('change', motionChanged); };
   }, [statistics]);
-  return <section ref={rootRef} className="section website-trust" aria-label="Owner-approved trust information">{statistics.length === 4 ? <dl>{statistics.map((item, index) => {
+  if (statistics.length !== 4) return null;
+  return <section ref={rootRef} className="section website-trust" aria-label="Owner-approved trust information"><dl>{statistics.map((item, index) => {
     const finalValue = `${(item.value / item.scale).toLocaleString('en-US')}${item.suffix}`;
     return <div className="trust-statistic" key={item.id}><dt>{item.label}</dt><dd style={{ width: `${Math.max(5, finalValue.length) * .65}em` }}><span className="storefront-sr-only">{finalValue}</span><span ref={element => { counters.current[index] = element; }} aria-hidden="true">{finalValue}</span></dd></div>;
-  })}</dl> : <p className="editorial-note">Development preview · Trust figures will appear after owner approval.</p>}</section>;
+  })}</dl></section>;
 }
 export function PublishedBundles() {
   const query = useQuery({ queryKey: ['website', 'bundles'], queryFn: ({ signal }) => getPublishedBundles(signal), staleTime: 60_000, retry: false, refetchOnWindowFocus: false });

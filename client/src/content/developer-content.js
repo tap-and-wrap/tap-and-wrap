@@ -6,7 +6,15 @@
 // Claims below are owner-proposed, unverified marketing figures, NOT database metrics.
 // All four require approved=true, source, approvalEvidence and approvedAt before display.
 export const developerContent = Object.freeze({
-  heroVideo: null,
+  heroVideo: Object.freeze({
+    approved: true,
+    src: '/media/tap-wrap-desktop-hero.mp4',
+    mobileSrc: '/media/tap-wrap-mobile-hero.mp4',
+    poster: '/media/tap-wrap-desktop-hero-poster.webp',
+    mobilePoster: '/media/tap-wrap-mobile-hero-poster.webp',
+    width: 960, height: 570, mobileWidth: 480, mobileHeight: 854,
+    autoplay: true, loop: true,
+  }),
   trustStatistics: Object.freeze([
     { id: 'customers', value: 50000, scale: 1000, suffix: 'K+', label: 'Customers', approved: false, source: '', approvalEvidence: '', approvedAt: '' },
     { id: 'returning-customers', value: 90, scale: 1, suffix: '%+', label: 'Returning Customers', approved: false, source: '', approvalEvidence: '', approvedAt: '' },

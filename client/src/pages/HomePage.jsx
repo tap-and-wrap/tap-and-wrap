@@ -1,25 +1,30 @@
 import { Link } from 'react-router-dom';
-import { Gift, PenTool, ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight } from 'lucide-react';
 import { FeaturedCategories, BestSellerProducts } from '../components/HomeCatalog.jsx';
 import { ApprovedFaq, DeveloperHeroMedia, PublishedBundles, ReviewCards, TrustStatistics, useSiteContent } from '../components/PublicContent.jsx';
+import ServiceFilm from '../components/ServiceFilm.jsx';
+import '../home-media.css';
 
 export default function HomePage() {
   const content = useSiteContent();
   const reviews = content.data?.featuredReviews || [];
+  const faq = content.data?.faq || [];
   return <main>
-    <section className="hero" aria-labelledby="home-hero-heading">
-      <p className="eyebrow">A LITTLE MORE THAN A GIFT</p>
-      <h1 id="home-hero-heading">Makes someone’s heart flap <em>with Tap & Wrap.</em></h1>
-      <p className="hero-description">Thoughtful gifts, personal touches and beautiful moments — all wrapped with love.</p>
-      <div className="button-group"><Link to="/shop" className="button button-dark">Shop Gifts</Link><Link to="/customize" className="button button-outline">Customize a Gift</Link></div>
-      <DeveloperHeroMedia/>
+    <section className="hero home-media-hero" aria-labelledby="home-hero-heading">
+      <p className="eyebrow">THOUGHTFUL GIFTS, MADE PERSONAL</p>
+      <h1 id="home-hero-heading">Make their heart <em>flutter.</em></h1>
+      <div className="button-group"><Link to="/shop" className="button button-dark">Shop Gifts</Link><Link to="/customize" className="button button-outline">Customize Yours</Link></div>
+      <DeveloperHeroMedia />
     </section>
-    <TrustStatistics/>
-    <PublishedBundles/>
-    <section className="section"><div className="section-heading"><p className="eyebrow">BROWSE WITH LOVE</p><h2>Shop by Category</h2></div><FeaturedCategories/></section>
-    <section className="section"><div className="section-heading"><p className="eyebrow">CUSTOMER FAVORITES</p><h2>Best Sellers</h2><p>Thoughtful picks from our collection.</p></div><BestSellerProducts/></section>
-    <section className="section service-section"><div className="section-heading"><p className="eyebrow">MAKE IT YOURS</p><h2>A gift as unique as them</h2></div><div className="service-grid"><Link className="service-card" to="/customize/gift-box"><Gift size={32}/><h3>Build Your Gift Box</h3><p>Choose the pieces that make someone smile.</p><ArrowUpRight/></Link><Link className="service-card" to="/customize/laser-engraving"><PenTool size={32}/><h3>Laser Engraving</h3><p>Add a personal mark to an unforgettable gift.</p><ArrowUpRight/></Link></div></section>
-    <section className="section"><div className="section-heading"><p className="eyebrow">KIND WORDS</p><h2>What Our Customers Say</h2></div>{reviews.length ? <ReviewCards reviews={reviews}/> : <p className="placeholder-strip">Development preview · No owner-approved featured reviews have been published.</p>}</section>
-    <section className="section faq-section"><div className="section-heading"><p className="eyebrow">ANY QUESTIONS?</p><h2>Frequently Asked Questions</h2></div><ApprovedFaq entries={content.data?.faq}/>{content.isError && <button className="catalog-text-button" onClick={() => content.refetch()}>Retry website content</button>}</section>
+    <TrustStatistics />
+    <PublishedBundles />
+    <section className="section" aria-labelledby="home-categories-heading"><div className="section-heading"><p className="eyebrow">BROWSE WITH LOVE</p><h2 id="home-categories-heading">Shop by Category</h2></div><FeaturedCategories /></section>
+    <section className="section" aria-labelledby="home-featured-heading"><div className="section-heading"><p className="eyebrow">HANDPICKED FOR YOU</p><h2 id="home-featured-heading">Featured Gifts</h2><p>Thoughtful picks from our collection.</p></div><BestSellerProducts /></section>
+    <section className="section service-section" aria-labelledby="home-personal-heading"><div className="section-heading"><p className="eyebrow">MAKE IT YOURS</p><h2 id="home-personal-heading">A gift as unique as them</h2></div><div className="service-grid home-service-grid">
+      <article className="home-service-card"><ServiceFilm src="/media/tap-wrap-gift-box.mp4" poster="/media/tap-wrap-gift-box-poster.webp" title="Build Your Gift Box" /><Link className="home-service-detail" to="/customize/gift-box"><h3>Build Your Gift Box</h3><p>Choose the pieces that make someone smile.</p><span>Explore Gift Boxes <ArrowUpRight aria-hidden="true" size={20}/></span></Link></article>
+      <article className="home-service-card"><ServiceFilm src="/media/tap-wrap-laser-engraving.mp4" poster="/media/tap-wrap-laser-engraving-poster.webp" title="Laser Engraving" /><Link className="home-service-detail" to="/customize/laser-engraving"><h3>Laser Engraving</h3><p>Add a personal mark to an unforgettable gift.</p><span>Explore Engraving <ArrowUpRight aria-hidden="true" size={20}/></span></Link></article>
+    </div></section>
+    {reviews.length > 0 && <section className="section" aria-labelledby="home-reviews-heading"><div className="section-heading"><p className="eyebrow">KIND WORDS</p><h2 id="home-reviews-heading">What Our Customers Say</h2></div><ReviewCards reviews={reviews}/></section>}
+    {faq.length > 0 && <section className="section faq-section" aria-labelledby="home-faq-heading"><div className="section-heading"><p className="eyebrow">ANY QUESTIONS?</p><h2 id="home-faq-heading">Frequently Asked Questions</h2></div><ApprovedFaq entries={faq}/></section>}
   </main>;
 }

@@ -28,15 +28,15 @@ test('homepage orders actual sections and displays only approved fixture content
   await respond(page, '/public/site-content', content);
   await respond(page, '/public/bundles', { bundles: [{ id: 'bundle-fixture', name: 'Isolated Bundle', description: 'Approved fixture only.', discountKind: 'fixed', discountValue: 100, products: [{ ...cards[0], bundleQuantity: 2 }] }] });
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Makes someone’s heart flap with Tap & Wrap.');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Make their heart flutter.');
   await expect(page.locator('.home-product-grid > article')).toHaveCount(8);
   const headings = await page.locator('main h2').allTextContents();
-  expect(headings).toEqual(['Gift Bundles', 'Shop by Category', 'Best Sellers', 'A gift as unique as them', 'What Our Customers Say', 'Frequently Asked Questions']);
+  expect(headings).toEqual(['Gift Bundles', 'Shop by Category', 'Featured Gifts', 'A gift as unique as them', 'What Our Customers Say', 'Frequently Asked Questions']);
   await expect(page.getByText('Approved review fixture only.')).toBeVisible();
   await page.getByText('Is this a real merchant claim?').click();
   await expect(page.getByText('No. This is an isolated browser test.')).toBeVisible();
-  await expect(page.locator('main video')).toHaveCount(0);
-  await expect(page.getByText(/Owner-approved hero footage is awaiting delivery/)).toBeVisible();
+  await expect(page.locator('main video')).toHaveCount(3);
+  await expect(page.getByRole('button', { name: /Play hero video|Pause hero video/ })).toBeVisible();
 });
 
 test('missing public information is explicitly pending and never fabricates policies', async ({ page }) => {
@@ -49,13 +49,16 @@ test('missing public information is explicitly pending and never fabricates poli
   }
 });
 
-test('homepage waits for exactly eight eligible selections rather than inventing or padding cards', async ({ page }) => {
+test('homepage fills unselected featured slots with real browsable catalog products', async ({ page }) => {
   await mockCatalog(page);
-  await page.route('**/api/v1/public/products?*', route => route.fulfill({ headers: apiHeaders, json: { ok: true, data: { products: cards.filter(card => card.orderingAvailable).slice(0, 7), pagination: { page: 1, limit: 8, total: 7, pages: 1 } } } }));
+  await page.route('**/api/v1/public/products?*', route => {
+    const params = new URL(route.request().url()).searchParams;
+    const rows = params.get('bestSeller') === 'true' ? cards.slice(0, 3) : cards.slice(0, 20);
+    return route.fulfill({ headers: apiHeaders, json: { ok: true, data: { products: rows, pagination: { page: 1, limit: rows.length, total: rows.length, pages: 1 } } } });
+  });
   await page.goto('/');
-  await expect(page.getByText('The eight owner-selected gifts are being finalized.')).toBeVisible();
-  await expect(page.locator('.home-product-grid')).toHaveCount(0);
-  await expect(page.getByRole('contentinfo').getByRole('link', { name: 'WhatsApp', exact: true })).toHaveCount(0);
+  await expect(page.locator('.home-product-grid > article')).toHaveCount(8);
+  await expect(page.getByRole('heading', { level: 2, name: 'Featured Gifts' })).toBeVisible();
 });
 
 test('approved about and legal copy is escaped and has page-specific metadata', async ({ page }) => {

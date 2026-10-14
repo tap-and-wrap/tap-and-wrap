@@ -172,7 +172,7 @@ test('footer omits Explore and uses approved accessible icon destinations only',
 test('trust claims stay unpublished until all four have explicit evidence and approval', async ({ page }) => {
   await mockCatalog(page); await page.goto('/');
   await expect(page.locator('.trust-statistic')).toHaveCount(0);
-  await expect(page.getByText('Development preview · Trust figures will appear after owner approval.')).toBeVisible();
+  await expect(page.locator('.website-trust')).toHaveCount(0);
   await developerFixture(page, { heroVideo: null, trustStatistics: claims.map((item, index) => index === 2 ? { ...item, approvalEvidence: '' } : item) });
   await page.reload(); await expect(page.locator('.trust-statistic')).toHaveCount(0);
 });
@@ -223,12 +223,12 @@ test('hero selects safe approved responsive local media and preserves an honest 
   await developerFixture(page, { heroVideo: video, trustStatistics: [] });
   await page.route('**/media/**', route => route.abort());
   await page.emulateMedia({ reducedMotion: 'reduce' }); await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Makes someone’s heart flap with Tap & Wrap.');
-  await expect(page.locator('video')).toHaveAttribute('src', video.src);
-  await expect(page.locator('video')).toHaveAttribute('preload', 'none');
-  expect(await page.locator('video').evaluate(element => ({ muted: element.muted, paused: element.paused, inline: element.playsInline }))).toEqual({ muted: true, paused: true, inline: true });
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Make their heart flutter.');
+  await expect(page.locator('.hero-film video')).toHaveAttribute('src', video.src);
+  await expect(page.locator('.hero-film video')).toHaveAttribute('preload', 'none');
+  expect(await page.locator('.hero-film video').evaluate(element => ({ muted: element.muted, paused: element.paused, inline: element.playsInline }))).toEqual({ muted: true, paused: true, inline: true });
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.locator('video')).toHaveAttribute('src', video.mobileSrc);
+  await expect(page.locator('.hero-film video')).toHaveAttribute('src', video.mobileSrc);
   const frame = await page.locator('.hero-film').boundingBox();
   await page.getByRole('button', { name: 'Play hero video' }).click();
   await expect(page.getByText('The film is unavailable. You can still explore our gifts.')).toBeVisible();
@@ -239,8 +239,8 @@ test('hero selects safe approved responsive local media and preserves an honest 
 test('unapproved or remote hero sources cannot enter the storefront', async ({ page }) => {
   await mockCatalog(page);
   await developerFixture(page, { heroVideo: { approved: true, src: 'https://private-storage.invalid/private.webm', poster: 'https://private-storage.invalid/key' }, trustStatistics: [] });
-  await page.goto('/'); await expect(page.locator('main video')).toHaveCount(0);
-  await expect(page.getByText(/Owner-approved hero footage is awaiting delivery/)).toBeVisible();
+  await page.goto('/'); await expect(page.locator('.hero-film video')).toHaveCount(0);
+  await expect(page.locator('.home-service-media video')).toHaveCount(2);
 });
 
 test('configured hero playback controls and motion changes use the actual media element lifecycle', async ({ page }) => {
