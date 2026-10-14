@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { Menu, Pause, Play, Search, ShoppingBag, UserRound, X } from 'lucide-react';
+import { Menu, ShoppingBag, UserRound, X } from 'lucide-react';
 import { useCart } from '../commerce/CartContext.jsx';
 import { useSession } from '../auth/SessionProvider.jsx';
 import { commerceError } from '../commerce/api.js';
@@ -13,16 +13,8 @@ const primaryLinks = [
   { to: '/customize', text: 'Customize' },
   { to: '/about', text: 'About Us' },
 ];
-const announcements = ['THOUGHTFUL GIFTS, MADE PERSONAL', 'BUILD YOUR GIFT BOX', 'LASER ENGRAVING', 'UNLOCK THE MAGIC OF GIVING'];
-const announcement = announcements.join(' ✦ ');
-
 function AnnouncementBar() {
-  const [paused, setPaused] = useState(false);
-  return <div className="announcement announcement-marquee" data-paused={paused}>
-    <span className="storefront-sr-only">{announcement}</span>
-    <div className="announcement-window" aria-hidden="true"><div className="announcement-track">{[0, 1].map(group => <div className="announcement-group" key={group}>{announcements.map((item, index) => <span key={index}>{item}<span className="announcement-separator">✦</span></span>)}</div>)}</div></div>
-    <button type="button" className="announcement-pause" aria-label={paused ? 'Resume announcements' : 'Pause announcements'} aria-pressed={paused} onClick={() => setPaused(value => !value)}>{paused ? <Play size={15} aria-hidden="true"/> : <Pause size={15} aria-hidden="true"/>}</button>
-  </div>;
+  return <div className="announcement announcement-centered">Unlock the Magic of Giving✨</div>;
 }
 
 function NavigationDrawer({ links, onClose, admin, logout }) {
@@ -46,7 +38,6 @@ export default function Header() {
   const links = [...primaryLinks];
   if (session.ready && !session.user) links.push({ to: '/track-order', text: 'Track Order' });
   else if (role === 'customer') links.push({ to: '/my-orders', text: 'My Orders' });
-  else if (admin) links.push({ to: '/admin', text: 'Dashboard' });
   const accountDestination = admin ? '/admin' : session.user ? '/my-orders' : '/login';
   const logout = useMutation({ mutationFn: () => session.authenticate('/auth/logout', {}), onSuccess: () => { setOpen(false); navigate('/login', { replace: true }); } });
 
@@ -74,7 +65,6 @@ export default function Header() {
       <Link className="site-logo" to="/" aria-label="Tap and Wrap home"><img src="/tap-wrap-logo.webp" alt="Tap & Wrap" width="2000" height="667" /></Link>
       <nav className="desktop-navigation" aria-label="Main navigation"><ul>{links.map(item => <li key={item.to}><NavLink to={item.to} end={item.end}>{item.text}</NavLink></li>)}</ul></nav>
       <div className="header-actions">
-        <Link className="icon-button" to="/shop" aria-label="Shop and search" title="Shop and search"><Search size={20} aria-hidden="true"/></Link>
         {session.ready ? <Link className="icon-button" to={accountDestination} aria-label="Account" title={admin ? 'Admin dashboard' : session.user ? 'My account and orders' : 'Sign in'}><UserRound size={20} aria-hidden="true"/></Link> : <button className="icon-button" type="button" disabled aria-label={session.phase === 'error' ? 'Account unavailable' : 'Checking account'}><UserRound size={20} aria-hidden="true"/></button>}
         <Link className="icon-button" data-cart-anchor to="/cart" aria-label={`Cart${cart.quantity ? `, ${cart.quantity} items` : ''}`} title="Cart"><ShoppingBag size={20} aria-hidden="true"/>{cart.quantity > 0 && <span className="commerce-cart-count" aria-hidden="true">{cart.quantity > 99 ? '99+' : cart.quantity}</span>}</Link>
         {admin && <button className="header-signout" type="button" disabled={logout.isPending} onClick={() => logout.mutate()}>{logout.isPending ? 'Signing out…' : 'Sign out'}</button>}

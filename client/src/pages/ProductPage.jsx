@@ -41,8 +41,8 @@ export function ProductContent({ product, relatedProducts = [], preview = false,
   const variants = product.variants || [];
   const variant = variants.find((item) => item.key === variantKey);
   const price = Number.isSafeInteger(variant?.pricePiastres) ? variant.pricePiastres : product.pricePiastres;
-  const approvedPrice = product.priceApproved === true && (!preview || variant?.priceApproved !== false) && Number.isSafeInteger(price) && price >= 0;
-  const enquiryRequired = !preview && (product.browseOnly === true || !approvedPrice);
+  const approvedPrice = product.priceApproved === true && (!preview || variant?.priceApproved !== false) && Number.isSafeInteger(price) && price > 0;
+  const enquiryRequired = !preview && (product.browseOnly === true || !approvedPrice || product.orderingAvailable !== true || variant?.orderingAvailable === false);
   const orderingAvailable = !preview && !enquiryRequired && approvedPrice && product.orderingAvailable === true && (!variant || variant.orderingAvailable === true);
   const enquiryUrl = `https://wa.me/201508216472?text=${encodeURIComponent(`Hello Tap & Wrap, please confirm the price and availability of ${product.name}: https://tapandwrap.net/products/${encodeURIComponent(product.slug)}`)}`;
   const maximumQuantity = quantityLimit(variant?.inventory || product.inventory);
@@ -104,11 +104,11 @@ export function ProductContent({ product, relatedProducts = [], preview = false,
         <section className="product-summary" aria-labelledby="product-title">
           {product.category?.name && <p className="catalog-eyebrow">{product.category.name}</p>}
           <ProductHeading id="product-title">{product.name}</ProductHeading>
-          <p className="catalog-price product-price"><span>{displayPrice}</span>{approvedPrice && Number.isSafeInteger(product.compareAtPiastres) && product.compareAtPiastres > price && <del>{formatCatalogPrice(product.compareAtPiastres)}</del>}</p>
+          <p className="catalog-price product-price"><span>{displayPrice}</span>{!enquiryRequired && approvedPrice && Number.isSafeInteger(product.compareAtPiastres) && product.compareAtPiastres > price && <del>{formatCatalogPrice(product.compareAtPiastres)}</del>}</p>
           <p className={`product-stock-status ${orderingAvailable ? '' : 'is-unavailable'}`}>{preview ? 'Preview only · Ordering disabled' : enquiryRequired ? 'Price and availability on request' : orderingAvailable ? product.inventory?.mode === 'made_to_order' ? 'Made by Request' : 'Available' : 'Currently unavailable'}</p>
           <form ref={purchaseRef} className="product-purchase-section" aria-label="Product options" onSubmit={addProduct} noValidate aria-busy={adding}>
             {variants.length > 0 && <div className="commerce-field"><label htmlFor={variantId}>Choose size / color</label>
-              <select id={variantId} value={variantKey} disabled={adding || enquiryRequired} {...fieldErrorProps(variantId, fieldErrors.variant)} required onChange={(event) => {
+              <select id={variantId} value={variantKey} disabled={adding || product.browseOnly === true || !approvedPrice} {...fieldErrorProps(variantId, fieldErrors.variant)} required onChange={(event) => {
                 const nextKey = event.target.value;
                 const nextVariant = variants.find((item) => item.key === nextKey);
                 setVariantKey(nextKey);

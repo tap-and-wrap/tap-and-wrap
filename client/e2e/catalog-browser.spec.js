@@ -115,7 +115,8 @@ test('product gallery, required options, stock and sticky controls preserve serv
   await page.getByLabel('Quantity', { exact: true }).fill('20');
   await expect(page.getByLabel('Quantity', { exact: true })).toHaveValue('3');
   await page.getByLabel('Choose size / color').selectOption('large-rose');
-  await expect(page.locator('.product-stock-status')).toHaveText('Currently unavailable');
+  await expect(page.locator('.product-stock-status')).toHaveText('Price and availability on request');
+  await expect(page.locator('.product-purchase-section').getByRole('link', { name: 'Enquire on WhatsApp', exact: true })).toBeVisible();
   await page.getByLabel('Choose size / color').selectOption('small-rose');
   await expect(page.getByRole('button', { name: 'Add to Cart', exact: true })).toBeEnabled();
   await expect(page.locator('.product-related .catalog-card')).toHaveCount(4);

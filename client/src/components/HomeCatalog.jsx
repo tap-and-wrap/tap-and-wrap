@@ -39,7 +39,7 @@ export function FeaturedCategories() {
       const step = first ? first.getBoundingClientRect().width + 18 : node.clientWidth;
       const maxLeft = Math.max(0, node.scrollWidth - node.clientWidth);
       const pages = Math.max(1, Math.ceil(maxLeft / Math.max(1, step)) + 1);
-      const index = Math.min(pages - 1, Math.round(node.scrollLeft / Math.max(1, step)));
+      const index = maxLeft > 0 && node.scrollLeft >= maxLeft - 3 ? pages - 1 : Math.min(pages - 1, Math.round(node.scrollLeft / Math.max(1, step)));
       setSlide({ index, pages, hasPrevious: node.scrollLeft > 3, hasNext: node.scrollLeft < maxLeft - 3 });
     };
     update();
@@ -71,7 +71,7 @@ export function FeaturedCategories() {
     <nav className="home-category-navigation" aria-label="Category carousel navigation">
       <button type="button" className="home-slide-arrow" aria-label="Previous categories" disabled={!slide.hasPrevious} onClick={() => navigate(slide.index - 1)}>←</button>
       <div className="home-slide-dots" aria-label="Carousel positions">
-        {Array.from({ length: slide.pages }, (_, index) => <button type="button" key={index} className={`home-slide-dot${slide.index === index ? ' is-active' : ''}`} aria-label={`Show category slide ${index + 1}`} aria-current={slide.index === index ? 'true' : undefined} onClick={() => navigate(index)} />)}
+        {Array.from({ length: Math.min(5, slide.pages) }, (_, offset) => Math.max(0, Math.min(slide.index - 2, slide.pages - 5)) + offset).map(index => <button type="button" key={index} className={`home-slide-dot${slide.index === index ? ' is-active' : ''}`} aria-label={`Show category slide ${index + 1}`} aria-current={slide.index === index ? 'true' : undefined} onClick={() => navigate(index)} />)}
       </div>
       <button type="button" className="home-slide-arrow" aria-label="Next categories" disabled={!slide.hasNext} onClick={() => navigate(slide.index + 1)}>→</button>
     </nav>
@@ -81,7 +81,7 @@ export function FeaturedCategories() {
 
 export function BestSellerProducts() {
   const selected = useQuery({ queryKey: ['catalog', 'home-owner-picks'], queryFn: ({ signal }) => listProducts({ bestSeller: true, sort: 'best_sellers', limit: 8 }, signal) });
-  const fallback = useQuery({ queryKey: ['catalog', 'home-starter-picks'], queryFn: ({ signal }) => listProducts({ sort: 'newest', limit: 20 }, signal) });
+  const fallback = useQuery({ queryKey: ['catalog', 'home-starter-picks'], queryFn: ({ signal }) => listProducts({ sort: 'newest', limit: 8 }, signal) });
   const roots = useQuery({ queryKey: ['catalog', 'home-main-categories'], queryFn: ({ signal }) => listCategories({ parent: 'root', limit: 20 }, signal) });
   // One bounded request per distinct category rather than sampling 8 from the latest watches.
   const categoryCandidates = (roots.data?.categories || []).filter(category => category.productCount > 0).slice(0, 8);

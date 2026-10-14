@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { getPublishedBundles, getProductReviews, getSiteContent } from '../services/website.js';
@@ -45,7 +45,7 @@ export function DeveloperHeroMedia({ video = developerContent.heroVideo }) {
     if (playing) videoRef.current?.pause();
     else void videoRef.current?.play().catch(() => setFailedSource(source));
   }
-  return <figure className="hero-film" style={{ aspectRatio: `${width} / ${height}` }}>
+  return <figure className="hero-film" style={{ aspectRatio: `${width} / ${height}`, backgroundImage: poster ? `url("${poster}")` : undefined }}>
     {failed ? <>{poster && <img className="hero-film-poster" src={poster} width={width} height={height} alt="Owner-approved Tap & Wrap hero poster" fetchPriority="high"/>}<figcaption className="hero-film-error">The film is unavailable. You can still explore our gifts.</figcaption></> : <><video ref={videoRef} className="website-hero-video" src={source} muted playsInline loop={video?.loop === true} preload="none" poster={poster} width={width} height={height} aria-label="Tap & Wrap hero film" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)} onError={() => setFailedSource(source)}/><button className="hero-video-control" type="button" aria-label={playing ? 'Pause hero video' : 'Play hero video'} onClick={togglePlayback}>{playing ? 'Pause film' : 'Play film'}</button></>}
   </figure>;
 }
@@ -109,6 +109,46 @@ export function ProductReviews({ slug, preview, enabled = true }) {
   if (!preview && !enabled) return null;
   return <section className="product-reviews" aria-labelledby="product-reviews-heading"><h2 id="product-reviews-heading">Product reviews</h2>{preview ? <p>Reviews are unavailable in draft preview.</p> : query.isPending ? <p role="status">Loading reviews…</p> : query.isError ? <div><p>Reviews are unavailable at the moment.</p><button className="catalog-text-button" onClick={() => query.refetch()}>Retry reviews</button></div> : !reviews.length ? <p>No owner-approved reviews have been published for this product.</p> : <><ReviewCards reviews={reviews}/>{query.data.pagination.pages > 1 && <nav className="commerce-pagination" aria-label="Review pages"><button disabled={page <= 1 || query.isFetching} onClick={() => setPage(page - 1)}>Previous</button><span>Page {page}</span><button disabled={page >= query.data.pagination.pages || query.isFetching} onClick={() => setPage(page + 1)}>Next</button></nav>}</>}</section>;
 }
-export function ApprovedFaq({ entries = [] }) {
+export function ReviewMarquee({ reviews }) {
+  const [paused, setPaused] = useState(false);
+  return <div className="review-marquee" data-paused={paused}>
+    <button type="button" className="review-marquee-control catalog-text-button" aria-pressed={paused} onClick={() => setPaused(value => !value)}>{paused ? 'Resume reviews' : 'Pause reviews'}</button>
+    <div className="review-marquee-window" tabIndex={0} aria-label="Customer testimonials">
+      <div className="review-marquee-track">{[0, 1].map(copy => <div className="review-marquee-group" key={copy} aria-hidden={copy === 1 ? true : undefined}>{reviews.map(review => <figure key={review.id}>
+        <blockquote>{review.text}</blockquote>
+        <figcaption><span>{review.authorLabel}</span><span className="review-marquee-rating" aria-label={review.rating === 5 ? '5 out of 5 stars' : undefined}>{review.rating === 5 ? '★★★★★' : ''}</span></figcaption>
+      </figure>)}</div>)}</div>
+    </div>
+  </div>;
+}
+
+const faqCategories = ['Orders & Pricing', 'Shipping & Delivery', 'Personalization'];
+const faqCategoryByQuestion = {
+  'How do I place an order?': 0,
+  'Which payment methods do you accept?': 0,
+  'When will I hear from Tap & Wrap after placing an order?': 0,
+  'What if a product says its price is not confirmed yet?': 0,
+  'Is shipping included in the product price?': 1,
+  'How do I pay the delivery fee?': 1,
+  'How long does delivery take?': 1,
+  'Where do you deliver?': 1,
+  'How does Build Your Gift Box work?': 2,
+  'What can I personalize or laser engrave?': 2,
+  'Can I change or cancel a personalized order?': 2,
+};
+function FaqCard({ entry }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  return <article className="home-faq-card" data-open={open}>
+    <h3><button type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen(value => !value)}>{entry.question}<span aria-hidden="true">{open ? '−' : '+'}</span></button></h3>
+    <div id={id} className="home-faq-answer" aria-hidden={!open} inert={!open}><div><p>{entry.answer}</p></div></div>
+  </article>;
+}
+export function ApprovedFaq({ entries = [], categorized = false }) {
+  const [category, setCategory] = useState(0);
+  if (categorized && entries.length) return <div className="home-categorized-faq">
+    <div className="home-faq-categories" aria-label="FAQ categories">{faqCategories.map((label, index) => <button type="button" key={label} aria-pressed={category === index} onClick={() => setCategory(index)}>{label}</button>)}</div>
+    <div className="website-faq">{entries.filter(entry => (faqCategoryByQuestion[entry.question] ?? 0) === category).map(entry => <FaqCard key={entry.question} entry={entry}/>)}</div>
+  </div>;
   return entries.length ? <div className="website-faq">{entries.map(entry => <details key={entry.question}><summary>{entry.question}</summary><p>{entry.answer}</p></details>)}</div> : <p className="placeholder-strip">Development preview · FAQ answers are awaiting owner approval.</p>;
 }

@@ -32,7 +32,8 @@ test('homepage orders actual sections and displays only approved fixture content
   await expect(page.locator('.home-product-grid > article')).toHaveCount(8);
   const headings = await page.locator('main h2').allTextContents();
   expect(headings).toEqual(['Gift Bundles', 'Shop by Category', 'Featured Gifts', 'A gift as unique as them', 'What Our Customers Say', 'Frequently Asked Questions']);
-  await expect(page.getByText('Approved review fixture only.')).toBeVisible();
+  await expect(page.locator('.review-marquee-group').first().locator('figure')).toHaveCount(12);
+  await expect(page.getByText('Approved review fixture only.')).toHaveCount(0);
   await page.getByText('Is this a real merchant claim?').click();
   await expect(page.getByText('No. This is an isolated browser test.')).toBeVisible();
   await expect(page.locator('.home-service-media video')).toHaveCount(2);

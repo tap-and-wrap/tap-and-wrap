@@ -2,6 +2,26 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { inventoryCanOrder, mediaUrlForKey, publicProductCard, publicProductDetail } from '../src/catalog/public-presentation.js';
 
+test('enquiry products hide provisional quantities and variant prices while approved sold-out products remain unorderable', () => {
+  const product = {
+    _id: 'fixture', name: 'Gift', slug: 'gift', status: 'draft', published: false,
+    categoryId: { _id: 'category', name: 'Gifts', slug: 'gifts', active: true },
+    mainImageKey: 'Gifts/gift.webp', priceApproved: false, pricePiastres: 999,
+    inventory: { mode: 'tracked', quantity: 10, approved: false, available: true },
+    variants: [{ key: 'one', attributes: [], priceApproved: false, pricePiastres: 555, inventory: { mode: 'tracked', quantity: 10, approved: false, available: true } }],
+  };
+  const detail = publicProductDetail(product);
+  assert.equal(detail.browseOnly, true);
+  assert.equal(detail.pricePiastres, null);
+  assert.equal(detail.inventory.quantity, null);
+  assert.equal(detail.variants[0].pricePiastres, null);
+  assert.equal(detail.variants[0].inventory.quantity, null);
+  assert.equal(detail.orderingAvailable, false);
+  const soldOut = publicProductCard({ ...product, variants: [], status: 'ready', published: true, priceApproved: true, inventory: { ...product.inventory, approved: true, quantity: 0 } });
+  assert.equal(soldOut.pricePiastres, 999);
+  assert.equal(soldOut.orderingAvailable, false);
+});
+
 test('public image references require an explicit HTTPS media base', () => {
   assert.equal(mediaUrlForKey('Accessories/bag.webp', ''), null);
   assert.equal(mediaUrlForKey('Accessories/bag.webp', 'http://localhost:5173'), null);

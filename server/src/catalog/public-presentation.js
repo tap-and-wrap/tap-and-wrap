@@ -34,7 +34,7 @@ export function categoryPresentation(category) {
 }
 
 export function publicProductCard(product) {
-  const browseOnly = product.status === 'draft' || product.status === 'hold' || product.published === false || product.reviewRequired === true || product.categoryId?.active === false || product.subcategoryId?.active === false;
+  const browseOnly = product.status !== 'ready' || product.published !== true || product.reviewRequired === true || product.priceApproved !== true || !Number.isSafeInteger(product.pricePiastres) || product.pricePiastres <= 0 || product.inventory?.approved !== true || product.variants?.some(variant => (variant.pricePiastres != null && (variant.priceApproved !== true || variant.pricePiastres <= 0)) || variant.inventory?.approved !== true) || product.categoryId?.active === false || product.subcategoryId?.active === false;
   const priceApproved = !browseOnly && product.priceApproved === true && Number.isSafeInteger(product.pricePiastres);
   return {
     _id: String(product._id),
@@ -55,7 +55,7 @@ export function publicProductCard(product) {
 }
 
 function publicInventory(inventory) {
-  return { mode: inventory.mode, quantity: inventory.mode === 'tracked' ? inventory.quantity : null, available: inventoryCanOrder(inventory) };
+  return { mode: inventory.mode, quantity: inventory.approved === true && inventory.mode === 'tracked' ? inventory.quantity : null, available: inventoryCanOrder(inventory) };
 }
 
 export function publicProductDetail(product) {

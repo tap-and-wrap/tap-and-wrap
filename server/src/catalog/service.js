@@ -12,7 +12,7 @@ import { validateCatalogCategoryReferences, fenceCategoryRelation } from './cate
 
 const QUERY_TIMEOUT_MS = 3000;
 const LIST_FIELDS = '_id name slug categoryId subcategoryId mainImageKey pricePiastres compareAtPiastres priceApproved sku inventory.mode inventory.available inventory.quantity inventory.approved featured featuredOrder bestSeller bestSellerOrder createdAt';
-const PUBLIC_LIST_FIELDS = `${LIST_FIELDS} status published reviewRequired variants.inventory personalization.fields.required customization.enabled`;
+const PUBLIC_LIST_FIELDS = `${LIST_FIELDS} status published reviewRequired variants.inventory variants.pricePiastres variants.priceApproved personalization.fields.required customization.enabled`;
 const ADMIN_LIST_FIELDS = `${LIST_FIELDS} __v externalCatalogId catalogRole status published priceApproved inventory.quantity inventory.approved reviewRequired updatedAt`;
 // Never mix a parent and its dotted child in a MongoDB projection (Path collision).
 const PUBLIC_DETAIL_FIELDS = `${LIST_FIELDS} status published reviewRequired description galleryKeys variants personalization customization updatedAt`;
@@ -150,8 +150,14 @@ export async function listProducts(query, { admin = false } = {}) {
     query.includePriceRange === false ? Promise.resolve(null) : Product.aggregate([{ $match: rangeFilter }, { $group: { _id: null, min: { $min: '$pricePiastres' }, max: { $max: '$pricePiastres' } } }])
       .option({ maxTimeMS: QUERY_TIMEOUT_MS }),
   ]);
+  const enquiryCategories = admin && catalogBrowsePreviewIsEnabled() ? await activeCategories() : null;
+  const listedForEnquiry = product => enquiryCategories !== null && ['draft', 'hold'].includes(product.status) && (
+    product.subcategoryId == null
+      ? enquiryCategories.mainIds.some(id => sameId(id, product.categoryId))
+      : enquiryCategories.childGroups.some(group => sameId(group.categoryId, product.categoryId) && group.subcategoryId.$in.some(id => sameId(id, product.subcategoryId)))
+  );
   return {
-    products: admin ? products.map(adminRevision) : products.map(publicProductCard),
+    products: admin ? products.map(product => ({ ...adminRevision(product), listedForEnquiry: listedForEnquiry(product) })) : products.map(publicProductCard),
     pagination: paginationResult(pagination, total),
     ...(priceRanges === null ? {} : { priceRange: { min: priceRanges[0]?.min ?? null, max: priceRanges[0]?.max ?? null } }),
   };

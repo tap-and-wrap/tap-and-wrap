@@ -7,13 +7,36 @@
 @media(max-width:480px){.tracking-consent{bottom:.5rem;left:.5rem;right:.5rem;padding:1rem}.website-bundle,.website-reviews figure{padding:1.2rem}.website-contact-links{flex-direction:column}}
 
 /* Named owner-consented homepage testimonials: swipeable without distracting scrollbar. */
-.home-named-review-carousel { max-width: 1360px; margin-inline: auto; }
-.home-named-review-carousel .website-reviews { display: flex; gap: 18px; overflow-x: auto; overscroll-behavior-inline: contain; scroll-snap-type: x mandatory; scrollbar-width: none; padding: 8px 2px 18px; }
-.home-named-review-carousel .website-reviews::-webkit-scrollbar { display: none; }
-.home-named-review-carousel .website-reviews figure { flex: 0 0 calc((100% - 36px) / 3); scroll-snap-align: start; min-width: 0; }
-.home-named-review-carousel .website-reviews figcaption { font-weight: 650; color: #64131A; }
-@media (max-width: 900px) { .home-named-review-carousel .website-reviews figure { flex-basis: calc((100% - 18px) / 2); } }
-@media (max-width: 620px) { .home-named-review-carousel .website-reviews figure { flex-basis: min(86%, 360px); } }
-@media (prefers-reduced-motion: reduce) { .home-named-review-carousel .website-reviews { scroll-behavior: auto; } }
 
-.home-testimonials-note { text-align: center; color: #705952; font-size: .82rem; margin: -7px auto 20px; }
+.home-named-review-carousel { max-width: 1360px; margin-inline: auto; }
+.review-marquee-control { display: block; margin: 0 auto 16px; min-height: 44px; }
+.review-marquee-window { overflow: hidden; border-radius: 16px; }
+.review-marquee-track { display: flex; width: max-content; animation: reviews-travel 100s linear infinite; }
+.review-marquee-group { display: flex; gap: 18px; padding-right: 18px; flex: 0 0 auto; }
+.review-marquee-group figure { display: flex; flex-direction: column; width: clamp(260px, 29vw, 380px); margin: 0; padding: 26px; background: var(--tw-surface); border: 1px solid var(--tw-border); border-radius: 18px; }
+.review-marquee-group blockquote { margin: 0 0 28px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; }
+.review-marquee-group figcaption { display: flex; justify-content: space-between; align-items: end; gap: 12px; margin-top: auto; font-weight: 600; font-size: .875rem; color: var(--tw-ink); }
+.review-marquee-rating { min-width: 70px; color: var(--tw-button); white-space: nowrap; }
+.review-marquee:hover .review-marquee-track, .review-marquee:focus-within .review-marquee-track, .review-marquee[data-paused="true"] .review-marquee-track { animation-play-state: paused; }
+@keyframes reviews-travel { to { transform: translateX(-50%); } }
+.home-categorized-faq { max-width: 900px; margin-inline: auto; }
+.home-faq-categories { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-bottom: 24px; }
+.home-faq-categories button { min-height: 44px; padding: 10px 18px; border: 1px solid var(--tw-border); border-radius: 999px; background: var(--tw-surface); color: var(--tw-ink); cursor: pointer; }
+.home-faq-categories button[aria-pressed="true"] { background: var(--tw-button); color: white; border-color: var(--tw-button); }
+.home-categorized-faq .website-faq { display: grid; gap: 12px; }
+.home-faq-card { border: 1px solid var(--tw-border); background: var(--tw-surface); border-radius: 18px; overflow: hidden; }
+.home-faq-card h3 { margin: 0; font-family: var(--tw-font-body); font-size: 1rem; }
+.home-faq-card button { display: flex; align-items: center; justify-content: space-between; gap: 18px; width: 100%; min-height: 64px; padding: 18px 22px; text-align: left; background: transparent; border: 0; color: var(--tw-ink); cursor: pointer; font: inherit; line-height: 1.5; }
+.home-faq-card button span { flex: 0 0 auto; color: var(--tw-rose-dark); font-size: 24px; }
+.home-faq-answer { display: grid; grid-template-rows: 0fr; visibility: hidden; transition: grid-template-rows .25s ease, visibility .25s; }
+.home-faq-answer > div { min-height: 0; overflow: hidden; }
+.home-faq-card[data-open="true"] .home-faq-answer { grid-template-rows: 1fr; visibility: visible; }
+.home-faq-answer p { margin: 0; padding: 0 22px 22px; }
+@media (max-width: 620px) { .review-marquee-group figure { width: 260px; padding: 22px; } .home-faq-categories { gap: 8px; } .home-faq-categories button { padding-inline: 14px; font-size: .85rem; } }
+@media (prefers-reduced-motion: reduce) {
+  .review-marquee-track { animation: none; width: auto; }
+  .review-marquee-group { flex: 1; flex-wrap: wrap; padding: 0; }
+  .review-marquee-group figure { flex: 1 1 260px; }
+  .review-marquee-group[aria-hidden="true"], .review-marquee-control { display: none; }
+  .home-faq-answer { transition: none; }
+}

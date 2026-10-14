@@ -81,7 +81,7 @@ for (const role of [null, 'customer', 'admin']) {
       const nav = page.getByRole('navigation', { name: 'Main navigation', exact: true });
       await expect(nav.getByRole('link', { name: 'Track Order', exact: true })).toHaveCount(role ? 0 : 1);
       await expect(nav.getByRole('link', { name: 'My Orders', exact: true })).toHaveCount(role === 'customer' ? 1 : 0);
-      await expect(nav.getByRole('link', { name: 'Dashboard', exact: true })).toHaveCount(role === 'admin' ? 1 : 0);
+      await expect(nav.getByRole('link', { name: 'Dashboard', exact: true })).toHaveCount(0);
       await expect(nav.getByRole('link', { name: 'Contact', exact: true })).toHaveCount(0);
     });
   }
@@ -103,7 +103,7 @@ test('unknown sessions expose no role destinations, then account switching updat
   await expect(page.locator('.desktop-navigation')).toContainText('My Orders');
   fixture.switchRole('admin');
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await expect(page.locator('.desktop-navigation')).toContainText('Dashboard');
+  await expect(page.locator('.desktop-navigation')).not.toContainText('Dashboard');
   await page.locator('header').getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.locator('header').getByRole('link', { name: 'Account', exact: true })).toHaveAttribute('href', '/login');
@@ -138,20 +138,18 @@ test('mobile navigation supports keyboard containment, padding, backdrop, Escape
   await trigger.click(); await page.setViewportSize({ width: 1440, height: 900 }); await expect(dialog).toHaveCount(0);
 });
 
-test('announcement has seamless equal tracks, one accessible message, explicit pause and reduced-motion fallback', async ({ page }) => {
-  await mockCatalog(page); await page.goto('/');
-  await expect(page.locator('.announcement .storefront-sr-only')).toHaveText('THOUGHTFUL GIFTS, MADE PERSONAL ✦ BUILD YOUR GIFT BOX ✦ LASER ENGRAVING ✦ UNLOCK THE MAGIC OF GIVING');
-  await expect(page.locator('.announcement-window')).toHaveAttribute('aria-hidden', 'true');
-  const track = page.locator('.announcement-track');
-  const geometry = await track.evaluate(element => ({ width: element.getBoundingClientRect().width, groups: [...element.children].map(child => child.getBoundingClientRect().width), animation: getComputedStyle(element).animationName }));
-  expect(geometry.groups[0]).toBeCloseTo(geometry.groups[1], 0); expect(geometry.width).toBeCloseTo(geometry.groups[0] * 2, 0); expect(geometry.animation).toBe('announcement-travel');
-  await page.getByRole('button', { name: 'Pause announcements' }).focus();
-  await page.keyboard.press('Enter');
-  await expect(page.getByRole('button', { name: 'Resume announcements' })).toHaveAttribute('aria-pressed', 'true');
-  expect(await track.evaluate(element => getComputedStyle(element).animationPlayState)).toBe('paused');
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  expect(await track.evaluate(element => getComputedStyle(element).animationName)).toBe('none');
-  await expect(page.getByRole('button', { name: /announcements/ })).toBeHidden();
+test('announcement is one centered static sentence with no search or dashboard link', async ({ page }) => {
+  await mockCatalog(page, { role: 'admin' }); await page.goto('/');
+  await expect(page.locator('.announcement')).toHaveText('Unlock the Magic of Giving\u2728');
+  await expect(page.locator('.announcement-track, .announcement-pause')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Shop and search' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Dashboard', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Account', exact: true })).toHaveAttribute('href', '/admin');
+  for (const width of [320, 390, 768]) {
+    await page.setViewportSize({ width, height: 900 });
+    const logo = await page.locator('.site-logo').boundingBox();
+    const header = await page.locator('.site-header').boundingBox(); expect(Math.abs((logo.x + logo.width / 2) - (header.x + header.width / 2))).toBeLessThan(1);
+  }
 });
 
 test('footer omits Explore and uses approved accessible icon destinations only', async ({ page }) => {

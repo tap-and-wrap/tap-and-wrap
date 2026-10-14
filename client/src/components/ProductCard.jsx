@@ -6,8 +6,8 @@ import { useCart } from '../commerce/CartContext.jsx';
 export default function ProductCard({ product }) {
   const cardRef = useRef(null);
   const cart = useCart();
-  const approvedPrice = product.priceApproved === true && Number.isSafeInteger(product.pricePiastres) && product.pricePiastres >= 0;
-  const enquiryRequired = product.browseOnly === true || !approvedPrice;
+  const approvedPrice = product.priceApproved === true && Number.isSafeInteger(product.pricePiastres) && product.pricePiastres > 0;
+  const enquiryRequired = product.browseOnly === true || !approvedPrice || product.orderingAvailable !== true;
   const orderingAvailable = !enquiryRequired && product.orderingAvailable === true;
   const enquiryUrl = `https://wa.me/201508216472?text=${encodeURIComponent(`Hello Tap & Wrap, please confirm the price and availability of ${product.name}: https://tapandwrap.net/products/${encodeURIComponent(product.slug)}`)}`;
   const action = !orderingAvailable ? 'Sold Out' : product.requiresOptions ? 'Choose Options' : 'Add to Cart';
@@ -29,7 +29,7 @@ export default function ProductCard({ product }) {
         <h3><Link to={detailUrl}>{product.name}</Link></h3>
         <p className="catalog-price">
           <span>{enquiryRequired ? 'Price on request' : formatCatalogPrice(product.pricePiastres)}</span>
-          {approvedPrice && Number.isSafeInteger(product.compareAtPiastres) && product.compareAtPiastres > product.pricePiastres && (
+          {!enquiryRequired && approvedPrice && Number.isSafeInteger(product.compareAtPiastres) && product.compareAtPiastres > product.pricePiastres && (
             <del>{formatCatalogPrice(product.compareAtPiastres)}</del>
           )}
         </p>
