@@ -2,10 +2,11 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useCart } from '../commerce/CartContext';
-import ConfiguredFields, { validateConfiguredFields } from '../commerce/ConfiguredFields';
+import ConfiguredFields, { LocalFileField, validateConfiguredFields } from '../commerce/ConfiguredFields';
 import { commerceError, commerceGet, commercePost, discardUploads, money, uploadConfiguredFields } from '../commerce/api';
 import { emitTracking } from '../tracking/client';
 import { FieldError, fieldErrorProps, focusInvalidField } from '../components/FormFeedback.jsx';
+import '../engraving-choices.css';
 
 function useDelayed(value) {
   const [delayed, setDelayed] = useState(value);
@@ -31,6 +32,12 @@ function Configurator({ product, template }) {
   const prefix = useId();
   // Public templates already contain the normalized service fields and approved choices.
   const fields = template.fields || [];
+  const engraving = template.kind === 'laser_engraving';
+  const engravingSystemKeys = ['engraving_type', 'engraving_text', 'engraving_other_details', 'engraving_artwork'];
+  const standardFields = engraving ? fields.filter(field => !engravingSystemKeys.includes(field.key)) : fields;
+  const engravingTextField = fields.find(field => field.key === 'engraving_text');
+  const engravingArtworkField = fields.find(field => field.key === 'engraving_artwork');
+  const engravingType = values.engraving_type || '';
   const personalFields = product.personalization?.fields || [];
   const quoteFields = useMemo(() => Object.fromEntries(Object.entries(values).filter(([, value]) => !Array.isArray(value))), [values]);
   const delayedFields = useDelayed(quoteFields);
@@ -43,6 +50,13 @@ function Configurator({ product, template }) {
     event.preventDefault();
     if (saving || cart.pending) return;
     const nextErrors = validateConfiguredFields(fields, values);
+    if (engraving) {
+      if (!['name', 'design', 'other'].includes(engravingType)) nextErrors.engraving_type = 'Choose an engraving type.';
+      if (engravingType === 'name' && !values.engraving_text?.trim()) nextErrors.engraving_text = 'Enter the name or text to engrave.';
+      if (engravingType === 'other' && !values.engraving_other_details?.trim()) nextErrors.engraving_other_details = 'Describe the engraving type you want.';
+      if (engravingType === 'design' && !engravingArtworkField) nextErrors.engraving_type = 'This product does not support artwork uploads.';
+      if (engravingType === 'design' && engravingArtworkField && !(values.engraving_artwork || []).length) nextErrors.engraving_artwork = 'Upload your design.';
+    }
     const nextPersonalErrors = validateConfiguredFields(personalFields, personalization);
     if (product.variants?.length && !product.variants.some((variant) => variant.key === variantKey && variant.orderingAvailable !== false)) nextErrors.variantKey = 'Choose an available product option.';
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) nextErrors.quantity = 'Choose a whole quantity from 1 to 99.';
@@ -72,7 +86,39 @@ function Configurator({ product, template }) {
       const unavailable = !option.active || !option.available;
       return <div key={option.key} className="commerce-config-option"><label><input type="checkbox" checked={selected > 0} disabled={saving || locked || (unavailable && !selected)} onChange={(event) => selection(group, option, event.target.checked ? Math.max(option.minQuantity || 1, 1) : 0)} />{option.label}{unavailable && <span> — unavailable</span>}</label>{!unavailable && <span>{option.componentId && !Number.isSafeInteger(option.componentPricePiastres) ? 'Price unavailable' : money((option.componentPricePiastres || 0) + (option.priceAdjustmentPiastres || 0))}</span>}{selected > 0 && option.maxQuantity > 1 && <label className="commerce-option-quantity">Quantity<input type="number" min={option.minQuantity || 1} max={option.maxQuantity} value={selected} disabled={saving || locked} onChange={(event) => selection(group, option, Number(event.target.value))} /></label>}</div>;
     })}</fieldset>)}
-    <ConfiguredFields fields={fields} values={values} onChange={setValues} errors={errors} disabled={saving} />
+    {engraving && <fieldset className="commerce-option-group commerce-engraving-types">
+      <legend>What would you like engraved? *</legend>
+      <div className="commerce-engraving-choice-grid" role="radiogroup" aria-label="Engraving type">
+        {[{ key: 'name', label: 'Name / Text' }, { key: 'design', label: 'Design' }, { key: 'other', label: 'Other' }].map(choice => <label className={`commerce-engraving-choice${engravingType === choice.key ? ' is-selected' : ''}`} key={choice.key}>
+          <input type="radio" name={`${prefix}-engraving-type`} value={choice.key} checked={engravingType === choice.key} disabled={saving || (choice.key === 'design' && !engravingArtworkField)}
+            onChange={() => setValues(previous => ({ ...previous, engraving_type: choice.key, engraving_text: '', engraving_artwork: [], engraving_other_details: '' }))}/>
+          <span>{choice.label}</span>
+        </label>)}
+      </div>
+      {!engravingArtworkField && <p className="commerce-muted">Design upload is unavailable for this product; choose an engravable product that supports artwork.</p>}
+      <FieldError id={`${prefix}-engraving-type`}>{errors.engraving_type}</FieldError>
+      {engravingType === 'name' && engravingTextField && <ConfiguredFields
+        fields={[{ ...engravingTextField, required: true, label: 'Name or text to engrave' }]}
+        values={values} onChange={setValues} errors={errors} disabled={saving} />}
+      {engravingType === 'design' && engravingArtworkField && <LocalFileField
+        field={{ ...engravingArtworkField, required: true, minFiles: 1, label: 'Upload your design' }}
+        value={values.engraving_artwork || []}
+        onChange={files => setValues(previous => ({ ...previous, engraving_artwork: files }))}
+        error={errors.engraving_artwork} disabled={saving} />}
+      {engravingType === 'other' && <div className="commerce-field">
+        <label htmlFor={`${prefix}-engraving-other`}>Describe the type of engraving *</label>
+        <textarea id={`${prefix}-engraving-other`} name="engraving_other_details" rows={3} maxLength={600} required disabled={saving}
+          value={values.engraving_other_details || ''} {...fieldErrorProps(`${prefix}-engraving-other`, errors.engraving_other_details)}
+          onChange={event => setValues(previous => ({ ...previous, engraving_other_details: event.target.value }))}
+          placeholder="Tell us what you would like engraved (up to 300 characters)." />
+        <FieldError id={`${prefix}-engraving-other`}>{errors.engraving_other_details}</FieldError>
+      </div>}
+      {engravingType !== 'design' && engravingArtworkField?.required && <LocalFileField
+        field={engravingArtworkField} value={values.engraving_artwork || []}
+        onChange={files => setValues(previous => ({ ...previous, engraving_artwork: files }))}
+        error={errors.engraving_artwork} disabled={saving} />}
+    </fieldset>}
+    <ConfiguredFields fields={standardFields} values={values} onChange={setValues} errors={errors} disabled={saving} />
     {personalFields.length > 0 && <fieldset className="commerce-option-group"><legend>Product Personalization</legend><ConfiguredFields fields={personalFields} values={personalization} onChange={setPersonalization} errors={personalErrors} disabled={saving} /></fieldset>}
     <div className="commerce-field"><label htmlFor={`${prefix}-quantity`}>Quantity</label><input id={`${prefix}-quantity`} type="number" min="1" max="99" value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} required disabled={saving} {...fieldErrorProps(`${prefix}-quantity`, errors.quantity)}/><FieldError id={`${prefix}-quantity`}>{errors.quantity}</FieldError></div>
     <div className="commerce-config-total" aria-live="polite">{quote.isFetching ? <span>Calculating approved price…</span> : quotation?.unitPricePiastres != null ? <strong>{money(quotation.unitPricePiastres)} each</strong> : <span>Complete your selections to calculate the price.</span>}</div>

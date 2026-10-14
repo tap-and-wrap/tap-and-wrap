@@ -5,3 +5,15 @@
 .website-faq details{padding:1.2rem 0;border-bottom:1px solid #EADAD5}.website-faq summary{cursor:pointer;font-weight:500}.website-faq p,.website-owner-copy{white-space:pre-wrap;line-height:1.85;overflow-wrap:anywhere}.website-contact-links{display:flex;flex-wrap:wrap;gap:1rem;margin:1.5rem 0}.website-contact-links a{overflow-wrap:anywhere}.website-pending{border:1px solid #EADAD5;border-radius:12px;background:white;padding:1.5rem}.website-account-actions{display:flex;gap:1rem;flex-wrap:wrap;margin-block:1rem}.website-referrer-note{font-size:.85rem}.website-recovery .auth-form{margin-inline:0;max-width:500px;width:100%}
 .tracking-consent{position:fixed;bottom:1rem;left:1rem;right:1rem;margin:auto;max-width:740px;z-index:1100;background:#fff;border:1px solid #EADAD5;border-radius:14px;padding:1.25rem;box-shadow:0 8px 30px rgb(98 72 63 / 12%)}.tracking-consent p{margin-top:0;line-height:1.5}.tracking-consent .button-group{margin-top:.8rem;flex-wrap:wrap}.tracking-preferences{position:fixed;bottom:.75rem;left:.75rem;z-index:100;background:white;border:1px solid #EADAD5;border-radius:8px;padding:.5rem;color:#62483F}.tracking-consent button{min-height:44px}.tracking-consent .button-dark{background:#795045;color:white}
 @media(max-width:480px){.tracking-consent{bottom:.5rem;left:.5rem;right:.5rem;padding:1rem}.website-bundle,.website-reviews figure{padding:1.2rem}.website-contact-links{flex-direction:column}}
+
+/* Named owner-consented homepage testimonials: swipeable without distracting scrollbar. */
+.home-named-review-carousel { max-width: 1360px; margin-inline: auto; }
+.home-named-review-carousel .website-reviews { display: flex; gap: 18px; overflow-x: auto; overscroll-behavior-inline: contain; scroll-snap-type: x mandatory; scrollbar-width: none; padding: 8px 2px 18px; }
+.home-named-review-carousel .website-reviews::-webkit-scrollbar { display: none; }
+.home-named-review-carousel .website-reviews figure { flex: 0 0 calc((100% - 36px) / 3); scroll-snap-align: start; min-width: 0; }
+.home-named-review-carousel .website-reviews figcaption { font-weight: 650; color: #64131A; }
+@media (max-width: 900px) { .home-named-review-carousel .website-reviews figure { flex-basis: calc((100% - 18px) / 2); } }
+@media (max-width: 620px) { .home-named-review-carousel .website-reviews figure { flex-basis: min(86%, 360px); } }
+@media (prefers-reduced-motion: reduce) { .home-named-review-carousel .website-reviews { scroll-behavior: auto; } }
+
+.home-testimonials-note { text-align: center; color: #705952; font-size: .82rem; margin: -7px auto 20px; }

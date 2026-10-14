@@ -83,7 +83,7 @@ describe('Phase 1B catalog API contracts', { concurrency: false }, () => {
     assert.equal(response.body.products[0].category.slug, main.slug);
     assert.equal(response.body.products[0].subcategory.slug, child.slug);
     const soldOut = await request('/public/products?q=Ceramic&availability=sold_out');
-    assert.deepEqual(soldOut.body.products.map((product) => product.slug), ['draft-cheap', 'mug-out']);
+    assert.deepEqual(soldOut.body.products.map((product) => product.slug), ['mug-out']);
     assert.equal(soldOut.body.products[0].orderingAvailable, false);
   });
 
@@ -170,12 +170,12 @@ describe('Phase 1B catalog API contracts', { concurrency: false }, () => {
     const root = await request(`/public/categories/${main.slug}`);
     assert.equal(root.status, 200);
     assert.equal(root.body.category.parent, null);
-    assert.equal(root.body.category.productCount, 2);
+    assert.equal(root.body.category.productCount, 1);
     assert.equal('imageKey' in root.body.category, false);
     const detail = await request(`/public/categories/${child.slug}`);
     assert.equal(detail.status, 200);
     assert.deepEqual(detail.body.category.parent, { _id: String(main._id), name: main.name, slug: main.slug });
-    assert.equal(detail.body.category.productCount, 2);
+    assert.equal(detail.body.category.productCount, 1);
     main.active = false;
     await main.save();
     assert.equal((await request(`/public/categories/${main.slug}`)).status, 404);

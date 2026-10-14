@@ -55,7 +55,7 @@ test('price drafts retain natural typing, reject invalid values and convert only
   await priceMaximum(filters).fill('12.34');
   await filters.getByRole('button', { name: 'Apply filters' }).click();
   await expect(page).toHaveURL(/minPrice=0&maxPrice=1234/);
-  expect(productRequests(fixture).at(-1).params).toMatchObject({ minPrice: '0', maxPrice: '1234', q: 'Fixture', sort: 'name_desc', limit: '20' });
+  await expect.poll(() => productRequests(fixture).at(-1)?.params).toMatchObject({ minPrice: '0', maxPrice: '1234', q: 'Fixture', sort: 'name_desc', limit: '20' });
   await priceMinimum(filters).fill('   ');
   await priceMaximum(filters).fill('');
   await filters.getByRole('button', { name: 'Apply filters' }).click();

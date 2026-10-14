@@ -1,0 +1,8 @@
+/* Scoped to the laser-engraving configurator; preserves existing gift-box and product options. */
+.commerce-engraving-choice-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-block: 14px; }
+.commerce-engraving-choice { display: flex; align-items: center; justify-content: center; min-height: 56px; gap: 8px; border: 1px solid var(--tw-border); border-radius: 12px; background: var(--tw-surface); cursor: pointer; padding: 12px 10px; text-align: center; font-weight: 600; }
+.commerce-engraving-choice.is-selected { border-color: var(--tw-rose-dark); background: var(--tw-soft); box-shadow: inset 0 0 0 1px var(--tw-rose-dark); }
+.commerce-engraving-choice:has(input:focus-visible) { outline: 3px solid var(--tw-rose-dark); outline-offset: 3px; }
+.commerce-engraving-choice:has(input:disabled) { opacity: .52; cursor: not-allowed; }
+.commerce-engraving-choice input { flex: 0 0 auto; accent-color: var(--tw-rose-dark); }
+@media (max-width: 420px) { .commerce-engraving-choice-grid { grid-template-columns: 1fr; } }

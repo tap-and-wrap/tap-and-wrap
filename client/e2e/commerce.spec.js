@@ -90,14 +90,15 @@ test('laser engraving allows only configured material/font/placement and submits
   const fixture = await mockCommerce(page, { template });
   await page.goto('/customize/laser-engraving');
   await page.getByRole('combobox', { name: /^Engravable product/ }).selectOption(commerceProduct.slug);
-  await page.getByLabel('Engraving text', { exact: false }).fill('A thoughtful gift');
+  await page.getByRole('radio', { name: 'Name / Text' }).check();
+  await page.getByLabel('Name or text to engrave').fill('A thoughtful gift');
   await page.getByRole('combobox', { name: /^Material/ }).selectOption('approved_material');
   await page.getByRole('combobox', { name: /^Font/ }).selectOption('approved_style');
   await page.getByRole('combobox', { name: /^Placement/ }).selectOption('front');
   await expect(page.getByRole('button', { name: 'Add to Cart', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Add to Cart', exact: true }).click();
   await expect.poll(() => fixture.state.cart.items.length).toBe(1);
-  expect(fixture.state.cart.items[0].customization.fields).toMatchObject({ engraving_text: 'A thoughtful gift', engraving_material: 'approved_material', engraving_font: 'approved_style', engraving_placement: 'front' });
+  expect(fixture.state.cart.items[0].customization.fields).toMatchObject({ engraving_type: 'name', engraving_text: 'A thoughtful gift', engraving_material: 'approved_material', engraving_font: 'approved_style', engraving_placement: 'front' });
   expect(fixture.uploads).toHaveLength(0);
 });
 
@@ -105,11 +106,13 @@ test('normalized engraving DTO renders one control and uploads each artwork file
   const template = { ...commerceTemplate, kind: 'laser_engraving', groups: [], engraving: { textRequired: true, maxChars: 50, allowedTextLines: 1, maxCharsPerLine: 50, materials: [{ key: 'metal', label: 'Approved metal', active: true, adjustmentPiastres: 0 }], fonts: [{ key: 'style', label: 'Approved style', active: true, adjustmentPiastres: 0 }], placements: [], artworkAllowed: true, artworkRequired: true, artworkMaxFiles: 2, artworkMaxBytes: 5242880, artworkAcceptedMimeTypes: ['image/png'] } };
   const fixture = await mockCommerce(page, { template });
   await page.goto(`/products/${commerceProduct.slug}/customize`);
-  await expect(page.getByLabel('Engraving text', { exact: false })).toHaveCount(1);
+  await page.getByRole('radio', { name: 'Name / Text' }).check();
+  await expect(page.getByLabel('Name or text to engrave')).toHaveCount(1);
   await expect(page.getByRole('combobox', { name: /^Material/ })).toHaveCount(1);
   await expect(page.getByRole('combobox', { name: /^Font/ })).toHaveCount(1);
   await expect(page.getByLabel('Engraving artwork', { exact: false })).toHaveCount(1);
-  await page.getByLabel('Engraving text', { exact: false }).fill('A thoughtful gift');
+  await page.getByRole('radio', { name: 'Name / Text' }).check();
+  await page.getByLabel('Name or text to engrave').fill('A thoughtful gift');
   await page.getByRole('combobox', { name: /^Material/ }).selectOption('metal');
   await page.getByRole('combobox', { name: /^Font/ }).selectOption('style');
   await page.getByLabel('Engraving artwork', { exact: false }).setInputFiles([isolatedImageFile('first.png'), isolatedImageFile('second.png')]);
@@ -121,6 +124,56 @@ test('normalized engraving DTO renders one control and uploads each artwork file
   expect(fixture.calls.filter((call) => call.path === '/direct-upload')).toHaveLength(2);
   expect(fixture.state.cart.items[0].customization.fields.engraving_artwork).toEqual(fixture.uploads.map((upload) => upload.id));
   expect(fixture.calls.filter((call) => call.method === 'DELETE' && call.path.startsWith('/commerce/uploads/'))).toHaveLength(0);
+});
+
+test('laser engraving Other requires a description and carries the exact type into the cart', async ({ page }) => {
+  const template = { ...commerceTemplate, kind: 'laser_engraving', groups: [], engraving: {
+    textRequired: true, maxChars: 30, allowedTextLines: 1, maxCharsPerLine: 30,
+    materials: [{ key: 'wood', label: 'Wood', active: true, adjustmentPiastres: 0 }],
+    fonts: [{ key: 'simple', label: 'Simple', active: true, adjustmentPiastres: 0 }],
+    placements: [], artworkAllowed: false
+  } };
+  const fixture = await mockCommerce(page, { template });
+  await page.goto('/customize/laser-engraving');
+  await page.getByRole('combobox', { name: /^Engravable product/ }).selectOption(commerceProduct.slug);
+  await expect(page.getByRole('radio', { name: 'Design' })).toBeDisabled();
+  await page.getByRole('radio', { name: 'Other' }).check();
+  await page.getByRole('combobox', { name: /^Material/ }).selectOption('wood');
+  await page.getByRole('combobox', { name: /^Font/ }).selectOption('simple');
+  await page.getByRole('button', { name: 'Add to Cart', exact: true }).click();
+  await expect(page.getByText('Describe the engraving type you want.')).toBeVisible();
+  expect(fixture.state.cart.items).toHaveLength(0);
+  await page.getByLabel('Describe the type of engraving').fill('Engrave a family symbol');
+  await page.getByRole('button', { name: 'Add to Cart', exact: true }).click();
+  await expect.poll(() => fixture.state.cart.items.length).toBe(1);
+  expect(fixture.state.cart.items[0].customization.fields).toMatchObject({
+    engraving_type: 'other', engraving_other_details: 'Engrave a family symbol',
+    engraving_material: 'wood', engraving_font: 'simple'
+  });
+});
+
+test('laser engraving Design requires an approved artwork upload', async ({ page }) => {
+  const template = { ...commerceTemplate, kind: 'laser_engraving', groups: [], engraving: {
+    textRequired: true, maxChars: 30, allowedTextLines: 1, maxCharsPerLine: 30,
+    materials: [{ key: 'metal', label: 'Metal', active: true, adjustmentPiastres: 0 }],
+    fonts: [{ key: 'simple', label: 'Simple', active: true, adjustmentPiastres: 0 }],
+    placements: [], artworkAllowed: true, artworkRequired: false, artworkMaxFiles: 1,
+    artworkMaxBytes: 5242880, artworkAcceptedMimeTypes: ['image/png']
+  } };
+  const fixture = await mockCommerce(page, { template });
+  await page.goto('/customize/laser-engraving');
+  await page.getByRole('combobox', { name: /^Engravable product/ }).selectOption(commerceProduct.slug);
+  await page.getByRole('radio', { name: 'Design' }).check();
+  await page.getByRole('combobox', { name: /^Material/ }).selectOption('metal');
+  await page.getByRole('combobox', { name: /^Font/ }).selectOption('simple');
+  await page.getByRole('button', { name: 'Add to Cart', exact: true }).click();
+  await expect(page.getByText('Upload your design.')).toBeVisible();
+  await page.getByLabel('Upload your design').setInputFiles(isolatedImageFile('design.png'));
+  await page.getByRole('button', { name: 'Add to Cart', exact: true }).click();
+  await expect.poll(() => fixture.state.cart.items.length).toBe(1);
+  expect(fixture.uploads).toHaveLength(1);
+  expect(fixture.state.cart.items[0].customization.fields.engraving_type).toBe('design');
+  expect(fixture.state.cart.items[0].customization.fields.engraving_artwork).toEqual(fixture.uploads.map(upload => upload.id));
 });
 
 test('duplicate upload definitions fail before signing or transferring any file', async ({ page }) => {
@@ -479,7 +532,7 @@ test('customer order history shows approved totals, immutable text/options and r
 test('successful customer login explicitly merges eligible guest cart items', async ({ page }) => {
   const fixture = await mockCommerce(page, { cart: cartWithProduct() });
   await page.goto('/login');
-  await page.getByLabel(/Email/i).fill('isolated@example.test');
+  await page.getByRole('textbox', { name: 'Email Address' }).fill('isolated@example.test');
   await page.getByLabel(/Password/i).fill('LocalFixturePassword!123');
   await page.getByRole('button', { name: 'Log In', exact: true }).click();
   await expect.poll(() => fixture.calls.some((call) => call.path === '/commerce/cart/merge' && call.method === 'POST')).toBe(true);

@@ -1,7 +1,7 @@
 /* Shared interaction styles; visual surfaces retain the established brand tokens. */
 :root { --tw-control-border: #A58276; --tw-error: #A23C32; --tw-purchase-bar-height: 100px; }
 .skip-navigation { position: fixed; z-index: 2000; top: 12px; left: 16px; transform: translateY(-160%); padding: 13px 18px; border: 2px solid var(--tw-focus); border-radius: 8px; background: white; color: var(--tw-ink); font-weight: 600; }
-.skip-navigation:focus { transform: translateY(0); }
+.skip-navigation:focus-visible { transform: translateY(0); }
 .route-content { min-width: 0; }
 .route-content:focus:not(:focus-visible), .route-content h1:focus:not(:focus-visible) { outline: none; }
 /* Offset content destinations once, without making already-visible sticky

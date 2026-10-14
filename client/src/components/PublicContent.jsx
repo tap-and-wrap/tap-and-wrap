@@ -96,7 +96,11 @@ export function PublishedBundles() {
   return <section className="section" aria-labelledby="home-bundles-heading"><div className="section-heading"><p className="eyebrow">THOUGHTFUL COMBINATIONS</p><h2 id="home-bundles-heading">Gift Bundles</h2></div><div className="website-bundle-grid">{bundles.map(bundle => <article className="website-bundle" key={bundle.id}><h3>{bundle.name}</h3>{bundle.description && <p>{bundle.description}</p>}<p>{Number.isSafeInteger(bundle.effectiveDiscountPiastres) ? formatCatalogPrice(bundle.effectiveDiscountPiastres) : bundle.discountKind === 'percentage' ? `${bundle.discountValue / 100}%` : `Up to ${formatCatalogPrice(bundle.discountValue)}`} bundle saving when all configured items are eligible in your cart.</p><ul>{bundle.products.map(product => <li key={`${product._id}:${product.variantKey || ''}`}><Link to={`/products/${product.slug}`}>{product.name}</Link> × {product.bundleQuantity || 1}</li>)}</ul><p className="editorial-note">The server applies eligible bundle savings at checkout.</p></article>)}</div></section>;
 }
 export function ReviewCards({ reviews }) {
-  return <div className="website-reviews">{reviews.map(review => <figure key={review.id}><p className="website-review-stars" aria-label={`${review.rating} out of 5 stars`}>{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</p><blockquote>{review.text}</blockquote><figcaption>{review.authorLabel}</figcaption></figure>)}</div>;
+  return <div className="website-reviews">{reviews.map(review => <figure key={review.id}>
+    {Number.isInteger(review.rating) && review.rating >= 1 && review.rating <= 5 && <p className="website-review-stars" aria-label={`${review.rating} out of 5 stars`}>{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</p>}
+    <blockquote>{review.text}</blockquote>
+    {typeof review.authorLabel === 'string' && review.authorLabel.trim() && <figcaption>{review.authorLabel}</figcaption>}
+  </figure>)}</div>;
 }
 export function ProductReviews({ slug, preview, enabled = true }) {
   const [page, setPage] = useState(1);

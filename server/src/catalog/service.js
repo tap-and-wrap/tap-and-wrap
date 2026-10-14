@@ -3,7 +3,7 @@ import { Category } from '../models/Category.js';
 import { ComponentOption } from '../models/ComponentOption.js';
 import { publicProductFilter, orderableProductStockFilter } from './product-policy.js';
 import { mediaUrlForKey, publicProductCard, publicProductDetail } from './public-presentation.js';
-import { adminProductPreviewPresentation, isAdminPreviewEnabled } from './staging-preview.js';
+import { adminProductPreviewPresentation, isAdminPreviewEnabled, stagingProductPresentation, isStagingPreviewEnabled } from './staging-preview.js';
 import { env } from '../config/env.js';
 import { assertDatabaseWriteAllowed } from '../config/database-safety.js';
 import { adminRevision, prepareAdminRevision, revisionOf } from '../utils/admin-revision.js';
@@ -12,8 +12,9 @@ import { validateCatalogCategoryReferences, fenceCategoryRelation } from './cate
 
 const QUERY_TIMEOUT_MS = 3000;
 const LIST_FIELDS = '_id name slug categoryId subcategoryId mainImageKey pricePiastres compareAtPiastres priceApproved sku inventory.mode inventory.available inventory.quantity inventory.approved featured featuredOrder bestSeller bestSellerOrder createdAt';
-const PUBLIC_LIST_FIELDS = `${LIST_FIELDS} status published reviewRequired variants.pricePiastres variants.priceApproved variants.inventory personalization.fields.required customization.enabled`;
+const PUBLIC_LIST_FIELDS = `${LIST_FIELDS} status published reviewRequired variants.inventory personalization.fields.required customization.enabled`;
 const ADMIN_LIST_FIELDS = `${LIST_FIELDS} __v externalCatalogId catalogRole status published priceApproved inventory.quantity inventory.approved reviewRequired updatedAt`;
+// Never mix a parent and its dotted child in a MongoDB projection (Path collision).
 const PUBLIC_DETAIL_FIELDS = `${LIST_FIELDS} status published reviewRequired description galleryKeys variants personalization customization updatedAt`;
 const ADMIN_DETAIL_FIELDS = `${ADMIN_LIST_FIELDS} description galleryKeys variants personalization customization merchantReviewNotes reviewReasons variantSourceNotes catalogConfidence`;
 const CATEGORY_FIELDS = '_id name slug parentId imageKey active featured order createdAt updatedAt __v';
@@ -49,7 +50,7 @@ function sameId(left, right) {
 }
 
 async function activeCategories() {
-  const graph = await Category.find({ active: true }).select('_id parentId').lean().maxTimeMS(QUERY_TIMEOUT_MS);
+  const graph = await Category.find(catalogBrowsePreviewIsEnabled() ? {} : { active: true }).select('_id parentId').lean().maxTimeMS(QUERY_TIMEOUT_MS);
   const main = graph.filter((category) => !category.parentId);
   const mainIds = main.map((category) => category._id);
   const rootIds = new Set(mainIds.map(String));
@@ -58,11 +59,15 @@ async function activeCategories() {
   return { mainIds, childIds: children.map((category) => category._id), childGroups };
 }
 
+export function catalogBrowsePreviewIsEnabled() {
+  return env.catalogBrowsePreviewEnabled === true && env.checkoutEnabled !== true;
+}
+
 async function visibleProductFilter(categories) {
   const { mainIds, childGroups } = categories ?? await activeCategories();
   return {
     $and: [
-      // Allow existing Draft/Hold products to be browsed; purchasing stays guarded separately.
+      catalogBrowsePreviewIsEnabled() ? { $or: [publicProductFilter(), { status: { $in: ['draft', 'hold'] } }] } : publicProductFilter(),
       { $or: [{ categoryId: { $in: mainIds }, subcategoryId: null }, ...childGroups] },
     ],
   };
@@ -71,7 +76,7 @@ async function visibleProductFilter(categories) {
 async function categoryFromSlug(slugValue, publicOnly = false) {
   const category = await Category.findOne({ slug: slugValue }).select('_id parentId active').lean().maxTimeMS(QUERY_TIMEOUT_MS);
   if (!category) throw catalogError(404, 'CATEGORY_NOT_FOUND', 'Category not found');
-  if (publicOnly) {
+  if (publicOnly && !catalogBrowsePreviewIsEnabled()) {
     if (!category.active) throw catalogError(404, 'CATEGORY_NOT_FOUND', 'Category not found');
     if (category.parentId) {
       const parent = await Category.findOne({ _id: category.parentId, active: true, parentId: null }).select('_id').lean().maxTimeMS(QUERY_TIMEOUT_MS);
@@ -96,8 +101,13 @@ async function filtersForQuery(query, admin) {
     if (query.maxPrice !== undefined) filters.pricePiastres.$lte = query.maxPrice;
   }
   if (query.availability) {
-    const available = { $and: [publicProductFilter(), orderableProductStockFilter()] };
-    filters.$and = query.availability === 'available' ? [available] : [{ $nor: [available] }];
+    const available = orderableProductStockFilter();
+    // Browse-only records cannot satisfy the Available filter or masquerade as in-stock.
+    const orderable = catalogBrowsePreviewIsEnabled() && !admin ? { $and: [publicProductFilter(), available] } : available;
+    filters.$and = query.availability === 'available' ? [orderable] : [{ $nor: [orderable] }];
+  }
+  if (catalogBrowsePreviewIsEnabled() && !admin && (query.minPrice !== undefined || query.maxPrice !== undefined || ['price_asc', 'price_desc'].includes(query.sort))) {
+    filters.$and = [...(filters.$and || []), publicProductFilter()];
   }
   if (query.category) {
     const category = await categoryFromSlug(query.category, !admin);
@@ -131,10 +141,10 @@ export async function listProducts(query, { admin = false } = {}) {
   const visibility = admin ? null : await visibleProductFilter();
   const filter = admin ? filters : { $and: [visibility, filters] };
   const { pricePiastres: _priceBounds, ...rangeFilters } = filters;
-  const rangeFilter = admin ? { $and: [rangeFilters, { pricePiastres: { $type: 'number' } }] } : { $and: [visibility, rangeFilters, { priceApproved: true, pricePiastres: { $gt: 0 } }] };
+  const rangeFilter = admin ? { $and: [rangeFilters, { pricePiastres: { $type: 'number' } }] } : { $and: [visibility, rangeFilters, ...(catalogBrowsePreviewIsEnabled() ? [publicProductFilter()] : [])] };
   const [products, total, priceRanges] = await Promise.all([
     Product.find(filter).select(admin ? ADMIN_LIST_FIELDS : PUBLIC_LIST_FIELDS)
-      .populate(admin ? [] : [{ path: 'categoryId', select: 'name slug' }, { path: 'subcategoryId', select: 'name slug' }])
+      .populate(admin ? [] : [{ path: 'categoryId', select: 'name slug active' }, { path: 'subcategoryId', select: 'name slug active' }])
       .sort(SORTS[query.sort ?? 'newest']).skip(pagination.skip).limit(pagination.limit).lean().maxTimeMS(QUERY_TIMEOUT_MS),
     Product.countDocuments(filter).maxTimeMS(QUERY_TIMEOUT_MS),
     query.includePriceRange === false ? Promise.resolve(null) : Product.aggregate([{ $match: rangeFilter }, { $group: { _id: null, min: { $min: '$pricePiastres' }, max: { $max: '$pricePiastres' } } }])
@@ -151,12 +161,12 @@ export async function getPublicProduct(slugValue) {
   const visibility = await visibleProductFilter();
   const product = await Product.findOne({ $and: [visibility, { slug: slugValue }] })
     .select(PUBLIC_DETAIL_FIELDS)
-    .populate([{ path: 'categoryId', select: 'name slug' }, { path: 'subcategoryId', select: 'name slug' }])
+    .populate([{ path: 'categoryId', select: 'name slug active' }, { path: 'subcategoryId', select: 'name slug active' }])
     .lean().maxTimeMS(QUERY_TIMEOUT_MS);
   if (!product) throw catalogError(404, 'PRODUCT_NOT_FOUND', 'Product not found');
   const related = await Product.find({ $and: [visibility, { categoryId: product.categoryId._id, _id: { $ne: product._id } }] })
     .select(PUBLIC_LIST_FIELDS).sort(SORTS.featured).limit(4)
-    .populate([{ path: 'categoryId', select: 'name slug' }, { path: 'subcategoryId', select: 'name slug' }])
+    .populate([{ path: 'categoryId', select: 'name slug active' }, { path: 'subcategoryId', select: 'name slug active' }])
     .lean().maxTimeMS(QUERY_TIMEOUT_MS);
   return { ...publicProductDetail(product), relatedProducts: related.map(publicProductCard) };
 }
@@ -167,6 +177,8 @@ export async function getAdminProduct(id, { session } = {}) {
   return adminRevision(product);
 }
 
+// Restore the existing production/staging authenticated admin preview contract.
+// A previous catalog-browse patch accidentally dropped this named export.
 export async function getAdminProductPreview(id) {
   if (!isAdminPreviewEnabled(Product.db)) throw catalogError(404, 'ADMIN_PREVIEW_UNAVAILABLE', 'The authenticated preview is unavailable for this database target.');
   const product = await Product.findById(id)
@@ -175,6 +187,16 @@ export async function getAdminProductPreview(id) {
     .lean().maxTimeMS(QUERY_TIMEOUT_MS);
   if (!product) throw catalogError(404, 'PRODUCT_NOT_FOUND', 'Product not found');
   return adminProductPreviewPresentation(product);
+}
+
+export async function getStagingProductPreview(id) {
+  if (!isStagingPreviewEnabled(Product.db)) throw catalogError(404, 'STAGING_PREVIEW_UNAVAILABLE', 'Draft preview requires an explicitly enabled, validated staging database.');
+  const product = await Product.findById(id)
+    .select(`${PUBLIC_DETAIL_FIELDS} externalCatalogId catalogRole status reviewRequired`)
+    .populate([{ path: 'categoryId', select: 'name slug active' }, { path: 'subcategoryId', select: 'name slug active' }])
+    .lean().maxTimeMS(QUERY_TIMEOUT_MS);
+  if (!product) throw catalogError(404, 'PRODUCT_NOT_FOUND', 'Product not found');
+  return stagingProductPresentation(product);
 }
 
 function mergeInventory(current, patch) {
@@ -287,7 +309,7 @@ export async function listCategories(query, { admin = false } = {}) {
     categoryVisibility = await activeCategories();
     const { mainIds, childIds } = categoryVisibility;
     filter._id = { $in: [...mainIds, ...childIds] };
-    filter.active = true;
+    if (!catalogBrowsePreviewIsEnabled()) filter.active = true;
   } else if (query.active !== undefined) filter.active = query.active;
   if (query.parent === 'root') filter.parentId = null;
   else if (query.parent) filter.parentId = (await categoryFromSlug(query.parent, !admin))._id;
@@ -302,7 +324,7 @@ export async function listCategories(query, { admin = false } = {}) {
   return {
     categories: categories.map((category) => {
       const { imageKey, __v: _revision, ...publicCategory } = category;
-      return { ...(admin ? adminRevision(category) : { ...publicCategory, imageUrl: mediaUrlForKey(imageKey) }), ...(counts ? { productCount: counts.get(String(category._id)) ?? 0 } : {}) };
+      return { ...(admin ? adminRevision(category) : { ...publicCategory, browseOnly: catalogBrowsePreviewIsEnabled() && category.active !== true, imageUrl: mediaUrlForKey(imageKey) }), ...(counts ? { productCount: counts.get(String(category._id)) ?? 0 } : {}) };
     }),
     pagination: paginationResult(pagination, total),
   };
@@ -310,13 +332,13 @@ export async function listCategories(query, { admin = false } = {}) {
 
 export async function getPublicCategory(slugValue) {
   const reference = await categoryFromSlug(slugValue, true);
-  const category = await Category.findOne({ _id: reference._id, active: true }).select(CATEGORY_FIELDS).lean().maxTimeMS(QUERY_TIMEOUT_MS);
+  const category = await Category.findOne({ _id: reference._id, ...(catalogBrowsePreviewIsEnabled() ? {} : { active: true }) }).select(CATEGORY_FIELDS).lean().maxTimeMS(QUERY_TIMEOUT_MS);
   if (!category) throw catalogError(404, 'CATEGORY_NOT_FOUND', 'Category not found');
-  const parent = category.parentId ? await Category.findOne({ _id: category.parentId, active: true, parentId: null }).select('_id name slug').lean().maxTimeMS(QUERY_TIMEOUT_MS) : null;
+  const parent = category.parentId ? await Category.findOne({ _id: category.parentId, parentId: null, ...(catalogBrowsePreviewIsEnabled() ? {} : { active: true }) }).select('_id name slug').lean().maxTimeMS(QUERY_TIMEOUT_MS) : null;
   if (category.parentId && !parent) throw catalogError(404, 'CATEGORY_NOT_FOUND', 'Category not found');
   const counts = await categoryCounts([category._id], false);
   const { imageKey, __v: _revision, ...publicCategory } = category;
-  return { ...publicCategory, parent: parent ? { _id: String(parent._id), name: parent.name, slug: parent.slug } : null, imageUrl: mediaUrlForKey(imageKey), productCount: counts.get(String(category._id)) || 0 };
+  return { ...publicCategory, browseOnly: catalogBrowsePreviewIsEnabled() && category.active !== true, parent: parent ? { _id: String(parent._id), name: parent.name, slug: parent.slug } : null, imageUrl: mediaUrlForKey(imageKey), productCount: counts.get(String(category._id)) || 0 };
 }
 
 export async function getAdminCategory(id) {

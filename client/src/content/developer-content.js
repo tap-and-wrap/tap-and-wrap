@@ -3,8 +3,8 @@
 // { approved: true, src: '/media/hero-desktop.webm', mobileSrc: '/media/hero-mobile.webm',
 //   poster: '/media/hero-poster.webp', mobilePoster: '/media/hero-mobile-poster.webp',
 //   width: 1920, height: 1080, autoplay: true, loop: true }.
-// Claims below are owner-proposed, unverified marketing figures, NOT database metrics.
-// All four require approved=true, source, approvalEvidence and approvedAt before display.
+// Merchant-owner-approved figures, attested on 2026-10-14. These are owner assertions,
+// not independently audited or calculated from this site's database.
 export const developerContent = Object.freeze({
   heroVideo: Object.freeze({
     approved: true,
@@ -16,9 +16,9 @@ export const developerContent = Object.freeze({
     autoplay: true, loop: true,
   }),
   trustStatistics: Object.freeze([
-    { id: 'customers', value: 50000, scale: 1000, suffix: 'K+', label: 'Customers', approved: false, source: '', approvalEvidence: '', approvedAt: '' },
-    { id: 'returning-customers', value: 90, scale: 1, suffix: '%+', label: 'Returning Customers', approved: false, source: '', approvalEvidence: '', approvedAt: '' },
-    { id: 'reviews', value: 10000, scale: 1000, suffix: 'K+', label: 'Reviews', approved: false, source: '', approvalEvidence: '', approvedAt: '' },
-    { id: 'years', value: 9, scale: 1, suffix: '+', label: 'Years in the Market', approved: false, source: '', approvalEvidence: '', approvedAt: '' },
+    { id: 'customers', value: 50000, scale: 1000, suffix: 'K+', label: 'Customers', approved: true, source: 'Merchant owner confirmation', approvalEvidence: 'Owner verified and approved these four exact figures on 2026-10-14', approvedAt: '2026-10-14' },
+    { id: 'returning-customers', value: 90, scale: 1, suffix: '%+', label: 'Returning Customers', approved: true, source: 'Merchant owner confirmation', approvalEvidence: 'Owner verified and approved these four exact figures on 2026-10-14', approvedAt: '2026-10-14' },
+    { id: 'reviews', value: 10000, scale: 1000, suffix: 'K+', label: 'Reviews', approved: true, source: 'Merchant owner confirmation', approvalEvidence: 'Owner verified and approved these four exact figures on 2026-10-14', approvedAt: '2026-10-14' },
+    { id: 'years', value: 9, scale: 1, suffix: '+', label: 'Years in the Market', approved: true, source: 'Merchant owner confirmation', approvalEvidence: 'Owner verified and approved these four exact figures on 2026-10-14', approvedAt: '2026-10-14' },
   ]),
 });

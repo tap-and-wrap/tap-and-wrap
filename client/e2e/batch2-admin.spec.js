@@ -401,6 +401,6 @@ test('saving a product refreshes an already-cached public detail and preserves s
   // The real public navigation points to Shop; the fixture serves only this product.
   await page.getByRole('navigation', { name: 'Main navigation', exact: true }).getByRole('link', { name: 'Shop', exact: true }).click();
   await page.getByRole('link', { name: 'Revised isolated public detail', exact: true }).first().click();
-  await expect(page.getByRole('heading', { name: 'Revised isolated public detail', exact: true })).toBeVisible();
-  expect(fixture.calls.filter(call => call.path === `/products/${product.slug}`).length).toBeGreaterThan(requestsBefore);
+  await expect(page.getByRole('heading', { name: 'Revised isolated public detail', exact: true, level: 1 })).toBeVisible();
+  await expect.poll(() => fixture.calls.filter(call => call.path === `/products/${product.slug}`).length).toBeGreaterThan(requestsBefore);
 });

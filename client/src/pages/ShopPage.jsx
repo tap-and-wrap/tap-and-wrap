@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Search, SlidersHorizontal, ArrowDownUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import ProductCard from '../components/ProductCard.jsx';
 import CatalogFilters from '../components/CatalogFilters.jsx';
@@ -41,6 +41,9 @@ export default function ShopPage({ categorySlug, heading, categoryContext, categ
   } });
   const categories = useQuery({ queryKey: ['catalog', 'categories', 'root', 'choices'], enabled: !lockedCategory, queryFn: ({ signal }) => listCategories({ parent: 'root', limit: 20, includeProductCounts: false }, signal) });
   const selectedCategory = useQuery({ queryKey: ['catalog', 'category', params.category], enabled: !lockedCategory && Boolean(params.category) && Boolean(categories.data) && !categories.data.categories.some((category) => category.slug === params.category), retry: false, queryFn: async ({ signal }) => (await getCategory(params.category, signal)).category });
+  const [subcategoryPage, setSubcategoryPage] = useState(1);
+  useEffect(() => { setSubcategoryPage(1); }, [categorySlug]);
+  const children = useQuery({ queryKey: ['catalog', 'category-children', lockedCategory?.slug, subcategoryPage], enabled: Boolean(lockedCategory && !lockedSubcategory), queryFn: ({ signal }) => listCategories({ parent: lockedCategory.slug, page: subcategoryPage, limit: 20, includeProductCounts: false }, signal) });
   const rows = products.data?.products || [];
   useEffect(() => { if (products.data?.tracking) emitTracking(products.data.tracking); }, [products.data]);
   const pagination = products.data?.pagination;
@@ -106,6 +109,15 @@ export default function ShopPage({ categorySlug, heading, categoryContext, categ
         <button type="button" onClick={() => setDrawer('filters')}><SlidersHorizontal size={18} aria-hidden="true" />Filters</button>
         <button type="button" onClick={() => setDrawer('sort')}><ArrowDownUp size={18} aria-hidden="true" />Sort</button>
       </div>
+      {lockedCategory && !lockedSubcategory && children.data?.categories?.length > 0 && <nav className="catalog-subcategories" aria-label="Browse subcategories">
+        <h2>Browse {lockedCategory.name}</h2>
+        <div className="catalog-subcategories-list">{children.data.categories.map(item => <Link key={item._id} to={`/categories/${encodeURIComponent(item.slug)}`}>{item.name}</Link>)}</div>
+        {(children.data.pagination?.pages || 1) > 1 && <div className="catalog-subcategories-pagination">
+          <button type="button" disabled={subcategoryPage === 1 || children.isFetching} onClick={() => setSubcategoryPage(p => p - 1)}>Previous</button>
+          <span>{subcategoryPage} / {children.data.pagination.pages}</span>
+          <button type="button" disabled={subcategoryPage >= children.data.pagination.pages || children.isFetching} onClick={() => setSubcategoryPage(p => p + 1)}>Next</button>
+        </div>}
+      </nav>}
       <div className="catalog-shop-layout">
         <aside className="catalog-sidebar" aria-label="Product filters">
           <div className="catalog-sidebar-heading"><h2>Filters</h2></div>

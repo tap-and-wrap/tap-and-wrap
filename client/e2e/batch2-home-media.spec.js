@@ -22,20 +22,42 @@ test('twelve active main categories get their editorial thumbnails and real navi
     await expect(card.getByText('Shop Now')).toBeVisible();
   }
   await expect(page.getByRole('button', { name: 'Previous categories' })).toBeDisabled();
+  await expect(page.getByRole('link', { name: 'Shop All' }).first()).toHaveAttribute('href', '/shop');
+  await expect(page.locator('.home-slide-dot').first()).toHaveClass(/is-active/);
   await page.getByRole('button', { name: 'Next categories' }).click();
   await expect.poll(() => page.locator('.home-category-grid').evaluate(node => node.scrollLeft)).toBeGreaterThan(50);
 });
 
-test('desktop and mobile heroes select distinct optimized files; incomplete reviews are hidden', async ({ page }) => {
+test('desktop and mobile heroes show owner-consented named reviews without invented ratings', async ({ page }) => {
   await mockCatalog(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/');
   await expect(page.locator('.hero-film video')).toHaveAttribute('src', '/media/tap-wrap-desktop-hero.mp4');
+  await expect(page.locator('.home-hero-content')).toBeVisible();
+  await expect(page.locator('.website-trust .trust-statistic')).toHaveCount(4);
   await expect(page.locator('.home-service-media video')).toHaveCount(2);
   await expect(page.getByRole('heading', { name: 'Make their heart flutter.' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'What Our Customers Say' })).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'Frequently Asked Questions' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'What Our Customers Say' })).toBeVisible();
+  await expect(page.locator('.home-named-review-carousel figure')).toHaveCount(12);
+  await expect(page.locator('.home-named-review-carousel')).toContainText('Yasmin Khaled');
+  await expect(page.locator('.home-named-review-carousel .website-review-stars')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Frequently Asked Questions' })).toBeVisible();
+  await expect(page.locator('.website-faq details')).toHaveCount(11);
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator('.hero-film video')).toHaveAttribute('src', '/media/tap-wrap-mobile-hero.mp4');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('consented text-only customer feedback renders with no fabricated author or star rating', async ({ page }) => {
+  await mockCatalog(page);
+  await page.route('**/api/v1/public/site-content', route => route.fulfill({ headers, json: { ok: true, data: {
+    about: null, contact: null, policies: {}, faq: [],
+    featuredReviews: [{ id: 'isolated-text-only', authorLabel: null, rating: null, text: 'Isolated permission-confirmed customer feedback.' }],
+  } } }));
+  await page.goto('/');
+  const testimonials = page.locator('.website-reviews');
+  await expect(testimonials).toContainText('Isolated permission-confirmed customer feedback.');
+  await expect(testimonials.locator('.website-review-stars')).toHaveCount(0);
+  await expect(testimonials.locator('figcaption')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'What Our Customers Say' })).toBeVisible();
 });

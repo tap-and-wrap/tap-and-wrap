@@ -43,3 +43,17 @@ test('lightweight customer/admin order summaries omit private snapshots and unkn
   assert.deepEqual(admin.customer, { name: 'Fixture Customer', governorate: 'cairo' });
   assert.equal(admin.history, undefined);
 });
+
+test('laser engraving order snapshots show a selected type and Other request without private metadata', () => {
+  const withEngraving = structuredClone(snapshot);
+  withEngraving.lines[0].customization.engraving = {
+    type: 'other', otherDetails: 'A family crest', text: '', privateKey: secret,
+    engraving_material: { key: 'wood', label: 'Approved wood', privateKey: secret }
+  };
+  withEngraving.lines[0].customization.fields = { engraving_type: 'other', engraving_other_details: 'A family crest' };
+  const order = presentOrder(withEngraving);
+  assert.equal(order.lines[0].customization.engraving.type, 'other');
+  assert.equal(order.lines[0].customization.engraving.otherDetails, 'A family crest');
+  assert.equal(order.lines[0].customization.fields.engraving_other_details, 'A family crest');
+  assert.equal(JSON.stringify(order).includes(secret), false);
+});

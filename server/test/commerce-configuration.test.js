@@ -194,3 +194,38 @@ test('valid stored hyphenated template fields and upper bounds remain supported 
     await assert.rejects(new CustomizationTemplate(invalid).validate());
   }
 });
+
+
+test('laser engraving choices validate Names, Design and Other without changing approved pricing', () => {
+  const config = template(component(), { kind: 'laser_engraving', groups: [], fields: [], engraving: {
+    materials: [{ key: 'wood', label: 'Wood', active: true, adjustmentPiastres: 250 }],
+    fonts: [{ key: 'simple', label: 'Simple', active: true, adjustmentPiastres: 0 }],
+    placements: [], maxChars: 40, allowedTextLines: 1, maxCharsPerLine: 40, textRequired: true,
+    baseAdjustmentPiastres: 500, artworkAllowed: true, artworkRequired: false, artworkMaxFiles: 1,
+    artworkMaxBytes: 5242880, artworkAcceptedMimeTypes: ['image/png']
+  } });
+  const base = { engraving_material: 'wood', engraving_font: 'simple' };
+  const request = fields => input(config, { selections: [], fields: { ...base, ...fields } });
+  const name = evaluateCustomization(config, [], request({ engraving_type: 'name', engraving_text: 'Noor' }));
+  assert.equal(name.snapshot.engraving.type, 'name');
+  assert.equal(name.adjustmentPiastres, 750);
+  assert.throws(() => evaluateCustomization(config, [], request({ engraving_type: 'name' })), /name or text/i);
+  const other = evaluateCustomization(config, [], request({ engraving_type: 'other', engraving_other_details: 'A family symbol' }));
+  assert.equal(other.snapshot.engraving.otherDetails, 'A family symbol');
+  assert.equal(other.snapshot.engraving.type, 'other');
+  assert.throws(() => evaluateCustomization(config, [], request({ engraving_type: 'other' })), /describe/i);
+  assert.throws(() => evaluateCustomization(config, [], request({ engraving_type: 'other', engraving_other_details: 'a'.repeat(301) })), /too long/i);
+  const artworkId = String(id());
+  const design = evaluateCustomization(config, [], request({ engraving_type: 'design', engraving_artwork: [artworkId] }));
+  assert.equal(design.snapshot.engraving.type, 'design');
+  assert.deepEqual(design.snapshot.fields.engraving_artwork, [artworkId]);
+  assert.equal(design.adjustmentPiastres, 750);
+  assert.throws(() => evaluateCustomization(config, [], request({ engraving_type: 'design' })), /upload/i);
+  assert.throws(() => evaluateCustomization(config, [], request({ engraving_type: 'none' })), /available engraving type/i);
+  const noArtwork = { ...config, engraving: { ...config.engraving, artworkAllowed: false } };
+  assert.throws(() => evaluateCustomization(noArtwork, [], input(noArtwork, { selections: [], fields: { ...base, engraving_type: 'design' } })), /does not support/i);
+  // New requests are type-specific. Historical configurations with no type still work unchanged.
+  const historical = evaluateCustomization(config, [], request({ engraving_text: 'Existing cart' }));
+  assert.equal(historical.snapshot.engraving.text, 'Existing cart');
+  assert.equal(historical.snapshot.engraving.type, undefined);
+});

@@ -60,12 +60,12 @@ for (const width of [320, 375, 390, 440, 768, 1024, 1440, 1920]) {
       await page.keyboard.press('Escape'); await expect(drawer).toHaveCount(0);
     }
     await page.evaluate(() => window.scrollTo(0, 700));
-    await expect.poll(() => page.locator('.site-header').evaluate(element => Math.round(element.getBoundingClientRect().top))).toBe(0);
-    expect(await page.locator('.announcement').evaluate(element => element.getBoundingClientRect().bottom)).toBeLessThan(0);
-    expect(await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--site-header-height')))).toBeCloseTo((await page.locator('.site-header').boundingBox()).height, 0);
+    await expect.poll(() => page.locator('.site-header-stack').evaluate(element => Math.round(element.getBoundingClientRect().top))).toBe(0);
+    expect(await page.locator('.announcement').evaluate(element => Math.round(element.getBoundingClientRect().top))).toBe(0);
+    expect(await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--site-header-height')))).toBeCloseTo((await page.locator('.site-header-stack').boundingBox()).height, 0);
     if (width === 320 || width === 1440) {
       await page.evaluate(() => window.scrollTo(0, 0));
-      await expect.poll(() => page.locator('.site-header').evaluate(element => Math.round(element.getBoundingClientRect().top))).toBe(40);
+      await expect.poll(() => page.locator('.site-header-stack').evaluate(element => Math.round(element.getBoundingClientRect().top))).toBe(0);
       await page.screenshot({ path: `test-results/batch2-home-${width}.png`, fullPage: true });
     }
   });
@@ -140,12 +140,13 @@ test('mobile navigation supports keyboard containment, padding, backdrop, Escape
 
 test('announcement has seamless equal tracks, one accessible message, explicit pause and reduced-motion fallback', async ({ page }) => {
   await mockCatalog(page); await page.goto('/');
-  await expect(page.locator('.announcement .storefront-sr-only')).toHaveText('Thoughtful gifts, made personal — welcome to Tap & Wrap');
+  await expect(page.locator('.announcement .storefront-sr-only')).toHaveText('THOUGHTFUL GIFTS, MADE PERSONAL ✦ BUILD YOUR GIFT BOX ✦ LASER ENGRAVING ✦ UNLOCK THE MAGIC OF GIVING');
   await expect(page.locator('.announcement-window')).toHaveAttribute('aria-hidden', 'true');
   const track = page.locator('.announcement-track');
   const geometry = await track.evaluate(element => ({ width: element.getBoundingClientRect().width, groups: [...element.children].map(child => child.getBoundingClientRect().width), animation: getComputedStyle(element).animationName }));
   expect(geometry.groups[0]).toBeCloseTo(geometry.groups[1], 0); expect(geometry.width).toBeCloseTo(geometry.groups[0] * 2, 0); expect(geometry.animation).toBe('announcement-travel');
-  await page.getByRole('button', { name: 'Pause announcements' }).click();
+  await page.getByRole('button', { name: 'Pause announcements' }).focus();
+  await page.keyboard.press('Enter');
   await expect(page.getByRole('button', { name: 'Resume announcements' })).toHaveAttribute('aria-pressed', 'true');
   expect(await track.evaluate(element => getComputedStyle(element).animationPlayState)).toBe('paused');
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -169,10 +170,10 @@ test('footer omits Explore and uses approved accessible icon destinations only',
   }
 });
 
-test('trust claims stay unpublished until all four have explicit evidence and approval', async ({ page }) => {
+test('owner-approved trust claims appear but incomplete evidence still blocks publication', async ({ page }) => {
   await mockCatalog(page); await page.goto('/');
-  await expect(page.locator('.trust-statistic')).toHaveCount(0);
-  await expect(page.locator('.website-trust')).toHaveCount(0);
+  await expect(page.locator('.trust-statistic')).toHaveCount(4);
+  await expect(page.locator('.website-trust')).toBeVisible();
   await developerFixture(page, { heroVideo: null, trustStatistics: claims.map((item, index) => index === 2 ? { ...item, approvalEvidence: '' } : item) });
   await page.reload(); await expect(page.locator('.trust-statistic')).toHaveCount(0);
 });

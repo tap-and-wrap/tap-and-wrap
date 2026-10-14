@@ -2,8 +2,8 @@ import mongoose from 'mongoose';
 
 const schema = new mongoose.Schema({
   productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', default: null },
-  authorLabel: { type: String, required: true, trim: true, maxlength: 100 },
-  rating: { type: Number, required: true, min: 1, max: 5, validate: Number.isInteger },
+  authorLabel: { type: String, default: null, trim: true, maxlength: 100 },
+  rating: { type: Number, default: null, min: 1, max: 5, validate: { validator: value => value == null || Number.isInteger(value), message: 'Rating must be an integer when provided' } },
   text: { type: String, required: true, trim: true, maxlength: 3000 },
   status: { type: String, enum: ['draft', 'published', 'hidden'], default: 'draft' },
   approved: { type: Boolean, default: false },

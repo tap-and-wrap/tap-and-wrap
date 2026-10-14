@@ -236,3 +236,32 @@ test('product and admin editor layouts remain contained on mobile and tablet', a
     await page.screenshot({ path: path.startsWith('/admin') ? 'test-results/admin-mobile.png' : 'test-results/product-mobile.png', fullPage: true });
   }
 });
+
+test('browse-only products show no provisional prices or purchase action, and link to WhatsApp', async ({ page }) => {
+  await mockCatalog(page);
+  const browseCard = { ...detail, pricePiastres: null, compareAtPiastres: null, priceApproved: false, orderingAvailable: false, browseOnly: true, bestSeller: false, featured: false };
+  const headers = { 'access-control-allow-origin': 'http://127.0.0.1:5191', 'access-control-allow-credentials': 'true' };
+  await page.route('**/api/v1/public/products?*', async route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+    return route.fulfill({ headers, json: { ok: true, data: { products: [browseCard], pagination: { page: 1, limit: 20, total: 1, pages: 1 } } } });
+  });
+  await page.route(`**/api/v1/public/products/${browseCard.slug}`, async route => route.fulfill({ headers, json: { ok: true, data: { product: { ...browseCard, inventory: { mode: 'tracked', quantity: null, available: false }, variants: [], galleryUrls: [], personalization: { fields: [] } }, relatedProducts: [] } } }));
+  await page.goto('/shop');
+  await expect(page.locator('.catalog-card')).toHaveCount(1);
+  await expect(page.locator('.catalog-card')).toContainText('Price on request');
+  await expect(page.getByRole('link', { name: `Enquire on WhatsApp about ${browseCard.name}` })).toHaveAttribute('href', /wa\.me\/201508216472/);
+  await expect(page.locator('.catalog-card').getByRole('button', { name: /Add to Cart/ })).toHaveCount(0);
+  await page.goto(`/products/${browseCard.slug}`);
+  await expect(page.locator('.product-summary')).toContainText('Price on request');
+  await expect(page.locator('.product-summary').getByRole('link', { name: 'Enquire on WhatsApp' })).toHaveAttribute('href', /wa\.me\/201508216472/);
+  await expect(page.locator('.product-summary').getByRole('button', { name: 'Add to Cart' })).toHaveCount(0);
+});
+
+test('approved prelaunch FAQ fallback answers are visible without fabricating testimonials', async ({ page }) => {
+  await mockCatalog(page);
+  await page.goto('/');
+  await expect(page.locator('.website-faq details')).toHaveCount(11);
+  await expect(page.locator('.home-named-review-carousel figure')).toHaveCount(12);
+  await page.getByText('Is shipping included in the product price?', { exact: true }).click();
+  await expect(page.locator('.website-faq')).toContainText('does not include delivery');
+});

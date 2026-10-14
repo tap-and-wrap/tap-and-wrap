@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueries } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { listCategories, listProducts } from '../services/catalog.js';
 import ProductCard from './ProductCard.jsx';
@@ -26,22 +26,22 @@ function thumbnailFor(category) {
   const normalized = (category.name || category.slug || '').toLowerCase().replace(/&/g, ' ').replace(/\band\b/g, ' ').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   return categoryThumbnails[normalized] || categoryThumbnails[category.slug] || null;
 }
-function scrollCategories(node, direction) {
-  if (!node) return;
-  const first = node.querySelector('.home-category');
-  const step = first ? first.getBoundingClientRect().width + 18 : node.clientWidth;
-  node.scrollBy({ left: direction * step, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
-}
 export function FeaturedCategories() {
   const scroller = useRef(null);
-  const [ends, setEnds] = useState({ start: true, end: false });
-  // All active root categories appear, not only administratively 'featured' ones.
-  // The server's active/category graph gate is retained unchanged.
+  const [slide, setSlide] = useState({ index: 0, pages: 1, hasPrevious: false, hasNext: false });
+  // All active root categories remain controlled by the public catalog API.
   const query = useQuery({ queryKey: ['catalog', 'home-main-categories'], queryFn: ({ signal }) => listCategories({ parent: 'root', limit: 20 }, signal) });
   useEffect(() => {
     const node = scroller.current;
     if (!node) return;
-    const update = () => setEnds({ start: node.scrollLeft <= 3, end: node.scrollLeft + node.clientWidth >= node.scrollWidth - 3 });
+    const update = () => {
+      const first = node.querySelector('.home-category');
+      const step = first ? first.getBoundingClientRect().width + 18 : node.clientWidth;
+      const maxLeft = Math.max(0, node.scrollWidth - node.clientWidth);
+      const pages = Math.max(1, Math.ceil(maxLeft / Math.max(1, step)) + 1);
+      const index = Math.min(pages - 1, Math.round(node.scrollLeft / Math.max(1, step)));
+      setSlide({ index, pages, hasPrevious: node.scrollLeft > 3, hasNext: node.scrollLeft < maxLeft - 3 });
+    };
     update();
     const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(update) : null;
     resize?.observe(node);
@@ -49,33 +49,62 @@ export function FeaturedCategories() {
     window.addEventListener('resize', update);
     return () => { resize?.disconnect(); node.removeEventListener('scroll', update); window.removeEventListener('resize', update); };
   }, [query.data]);
+  const navigate = index => {
+    const node = scroller.current;
+    if (!node) return;
+    const first = node.querySelector('.home-category');
+    const step = first ? first.getBoundingClientRect().width + 18 : node.clientWidth;
+    const maxLeft = Math.max(0, node.scrollWidth - node.clientWidth);
+    const left = Math.min(maxLeft, Math.max(0, index * step));
+    node.scrollTo({ left, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+  };
   if (query.isPending) return <p className="catalog-state" role="status">Loading categories…</p>;
   if (query.isError) return <div className="catalog-state" role="alert"><p>Categories are unavailable at the moment.</p><button className="button button-outline" onClick={() => query.refetch()}>Try again</button></div>;
   if (!query.data.categories.length) return <p className="catalog-state">Explore our gifts in the <Link to="/shop">shop</Link>.</p>;
   return <div className="home-categories-wrap">
-    <div className="home-category-controls"><button type="button" aria-label="Previous categories" disabled={ends.start} onClick={() => scrollCategories(scroller.current, -1)}>‹</button><button type="button" aria-label="Next categories" disabled={ends.end} onClick={() => scrollCategories(scroller.current, 1)}>›</button></div>
     <div className="home-category-grid" ref={scroller} aria-label="Shop gift categories">
       {query.data.categories.map(category => <Link className="home-category" key={category._id} to={`/categories/${encodeURIComponent(category.slug)}`} aria-label={`Shop ${category.name}`}>
         <div className="home-category-image">{thumbnailFor(category) ? <img src={thumbnailFor(category)} alt="" loading="lazy" width="1200" height="900" /> : <span aria-hidden="true">Tap & Wrap</span>}</div>
         <div className="home-category-caption"><h3>{category.name}</h3><span className="home-category-cta">Shop Now <span aria-hidden="true">↗</span></span></div>
       </Link>)}
     </div>
+    <nav className="home-category-navigation" aria-label="Category carousel navigation">
+      <button type="button" className="home-slide-arrow" aria-label="Previous categories" disabled={!slide.hasPrevious} onClick={() => navigate(slide.index - 1)}>←</button>
+      <div className="home-slide-dots" aria-label="Carousel positions">
+        {Array.from({ length: slide.pages }, (_, index) => <button type="button" key={index} className={`home-slide-dot${slide.index === index ? ' is-active' : ''}`} aria-label={`Show category slide ${index + 1}`} aria-current={slide.index === index ? 'true' : undefined} onClick={() => navigate(index)} />)}
+      </div>
+      <button type="button" className="home-slide-arrow" aria-label="Next categories" disabled={!slide.hasNext} onClick={() => navigate(slide.index + 1)}>→</button>
+    </nav>
+    <div className="home-section-footer"><Link className="button button-dark home-shop-all" to="/shop">Shop All</Link></div>
   </div>;
 }
 
 export function BestSellerProducts() {
   const selected = useQuery({ queryKey: ['catalog', 'home-owner-picks'], queryFn: ({ signal }) => listProducts({ bestSeller: true, sort: 'best_sellers', limit: 8 }, signal) });
   const fallback = useQuery({ queryKey: ['catalog', 'home-starter-picks'], queryFn: ({ signal }) => listProducts({ sort: 'newest', limit: 20 }, signal) });
-  if (selected.isPending || fallback.isPending) return <p className="catalog-state" role="status">Loading featured gifts…</p>;
-  if (selected.isError || fallback.isError) return <div className="catalog-state" role="alert"><p>Featured gifts are unavailable at the moment.</p><button className="button button-outline" onClick={() => { selected.refetch(); fallback.refetch(); }}>Try again</button></div>;
+  const roots = useQuery({ queryKey: ['catalog', 'home-main-categories'], queryFn: ({ signal }) => listCategories({ parent: 'root', limit: 20 }, signal) });
+  // One bounded request per distinct category rather than sampling 8 from the latest watches.
+  const categoryCandidates = (roots.data?.categories || []).filter(category => category.productCount > 0).slice(0, 8);
+  const picks = useQueries({ queries: categoryCandidates.map(category => ({
+    queryKey: ['catalog', 'home-starter-category', category.slug],
+    queryFn: ({ signal }) => listProducts({ category: category.slug, sort: 'newest', limit: 1 }, signal),
+    enabled: (selected.data?.products?.length || 0) < 8,
+    staleTime: 300_000,
+  })) });
+  if (selected.isPending || fallback.isPending || roots.isPending || picks.some(query => query.isLoading)) return <p className="catalog-state" role="status">Loading featured gifts…</p>;
+  if (selected.isError || fallback.isError) return <div className="catalog-state" role="alert"><p>Featured gifts are unavailable at the moment.</p><button className="button button-outline" onClick={() => { selected.refetch(); fallback.refetch(); roots.refetch(); }}>Try again</button></div>;
   const ownerPicks = selected.data.products;
   const ids = new Set(ownerPicks.map(item => item._id));
-  // Stable, varied starter selection; explicit admin Best Seller flags override it.
+  const varied = picks.flatMap(query => query.data?.products || []).filter(item => {
+    if (ids.has(item._id)) return false;
+    ids.add(item._id);
+    return true;
+  });
   const starter = [...fallback.data.products].filter(item => !ids.has(item._id)).sort((a, b) => {
     const score = value => [...value.slug].reduce((acc, letter) => (acc * 31 + letter.charCodeAt(0)) >>> 0, 11939);
     return score(a) - score(b);
   });
-  const products = [...ownerPicks, ...starter].slice(0, 8);
+  const products = [...ownerPicks, ...varied, ...starter].slice(0, 8);
   if (!products.length) return <p className="catalog-state">Find something special in our <Link to="/shop">shop</Link>.</p>;
   return <div className="catalog-grid home-product-grid">{products.map(product => <ProductCard key={product._id} product={product}/>)}</div>;
 }

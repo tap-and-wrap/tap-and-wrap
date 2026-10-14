@@ -24,7 +24,13 @@ export function customizationFields(template) {
   const fields = (template.fields || []).map((field) => ({ ...plain(field) }));
   if (template.kind === 'laser_engraving') {
     const engraving = template.engraving;
-    fields.push({ key: 'engraving_text', label: 'Engraving text', type: (engraving.allowedTextLines || 1) > 1 ? 'textarea' : 'text', required: engraving.textRequired, maxChars: engraving.maxChars, allowedTextLines: engraving.allowedTextLines || 1, maxCharsPerLine: engraving.maxCharsPerLine || engraving.maxChars });
+    // These system-managed choices are appended at runtime, so approved template revisions stay immutable.
+    // Legacy carts without engraving_type remain readable; new storefront submissions always supply it.
+    fields.push({ key: 'engraving_type', label: 'Engraving type', type: 'select', required: false, maxChars: 12,
+      choices: ['name', 'design', 'other'], options: [{ key: 'name', label: 'Name / Text' }, { key: 'design', label: 'Design' }, { key: 'other', label: 'Other' }] });
+    fields.push({ key: 'engraving_other_details', label: 'Other engraving request', type: 'textarea', required: false, maxChars: 300 });
+    fields.push({ key: 'engraving_text', label: 'Engraving text', type: (engraving.allowedTextLines || 1) > 1 ? 'textarea' : 'text',
+      required: false, maxChars: engraving.maxChars, allowedTextLines: engraving.allowedTextLines || 1, maxCharsPerLine: engraving.maxCharsPerLine });
     for (const [property, key, label] of [['materials', 'engraving_material', 'Material'], ['fonts', 'engraving_font', 'Font'], ['placements', 'engraving_placement', 'Placement']]) {
       if (engraving[property]?.length) fields.push({ key, label, type: 'select', required: true, choices: engraving[property].filter((choice) => choice.active).map((choice) => choice.key), options: engraving[property].filter((choice) => choice.active).map((choice) => ({ key: choice.key, label: choice.label })) });
     }
@@ -116,6 +122,17 @@ export function evaluateCustomization(templateInput, componentsInput, input, { r
   let engravingSnapshot = null;
   if (template.kind === 'laser_engraving') {
     const engraving = template.engraving;
+    const engravingType = values.engraving_type || '';
+    // A missing type is tolerated only for pre-existing cart snapshots, which predate this feature.
+    if (requireFields) {
+      if (engravingType === 'name' && !values.engraving_text.trim()) throw configurationError('Enter the name or text to engrave.');
+      if (!engravingType && engraving.textRequired && !values.engraving_text.trim()) throw configurationError('Engraving text is required.');
+      if (engravingType === 'other' && !values.engraving_other_details.trim()) throw configurationError('Describe the engraving type you would like.');
+      if (engravingType === 'design') {
+        if (!engraving.artworkAllowed) throw configurationError('This product does not support an uploaded engraving design.');
+        if (!values.engraving_artwork?.length) throw configurationError('Upload a design to engrave.');
+      }
+    }
     let engravingAdjustment = engraving.baseAdjustmentPiastres || 0;
     const choices = {};
     for (const [property, key] of [['materials', 'engraving_material'], ['fonts', 'engraving_font'], ['placements', 'engraving_placement']]) {
@@ -129,7 +146,12 @@ export function evaluateCustomization(templateInput, componentsInput, input, { r
       }
     }
     adjustmentPiastres = sum(adjustmentPiastres, engravingAdjustment);
-    engravingSnapshot = { ...choices, text: values.engraving_text || '', adjustmentPiastres: engravingAdjustment };
+    engravingSnapshot = {
+      ...choices, text: values.engraving_text || '',
+      ...(engravingType ? { type: engravingType } : {}),
+      ...(engravingType === 'other' ? { otherDetails: values.engraving_other_details } : {}),
+      adjustmentPiastres: engravingAdjustment
+    };
   }
   return { adjustmentPiastres, snapshot: { templateId: stringId(template._id), templateKey: template.key, templateName: template.name, kind: template.kind, version: template.version, pricingMode: template.pricingMode, selections: snapshotSelections, fields: values, engraving: engravingSnapshot, adjustmentPiastres }, inventoryClaims, fields };
 }

@@ -41,7 +41,7 @@ export function adminProductPreviewPresentation(product) {
     sku: product.sku || '',
     category: previewCategory(product.categoryId),
     subcategory: previewCategory(product.subcategoryId),
-    inventory: { ...detail.inventory, approved: product.inventory.approved === true, available: false },
+    inventory: { ...detail.inventory, quantity: product.inventory.approved === true ? detail.inventory.quantity : 0, approved: product.inventory.approved === true, available: false },
     variants: detail.variants.map((variant, index) => ({
       ...variant,
       priceApproved: product.variants[index].pricePiastres == null ? product.priceApproved === true : product.variants[index].priceApproved === true,

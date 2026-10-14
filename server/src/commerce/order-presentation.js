@@ -15,7 +15,7 @@ function customization(value) {
   result.fields = configuredValues(value.fields);
   result.selections = (value.selections || []).map(selection => pick(selection, ['groupKey', 'groupLabel', 'optionKey', 'label', 'componentId', 'componentName', 'quantity', 'unitAdjustmentPiastres']));
   if (value.engraving) {
-    result.engraving = pick(value.engraving, ['text', 'adjustmentPiastres']);
+    result.engraving = pick(value.engraving, ['type', 'otherDetails', 'text', 'adjustmentPiastres']);
     for (const key of ['engraving_material', 'engraving_font', 'engraving_placement']) {
       if (value.engraving[key]) result.engraving[key] = pick(value.engraving[key], ['key', 'label', 'adjustmentPiastres']);
     }

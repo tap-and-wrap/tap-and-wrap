@@ -89,3 +89,22 @@
   .announcement-track { width: 100%; }
   .announcement-marquee { letter-spacing: .06em; font-size: 9px; }
 }
+
+/* One sticky group avoids the announcement scrolling away independently of navigation. */
+.site-header-stack { position: sticky; top: 0; z-index: 100; background: var(--tw-surface); }
+.site-header-stack .site-header { position: relative; top: auto; z-index: auto; }
+.announcement-marquee { height: 36px; min-height: 36px; }
+.announcement-marquee .announcement-group { min-width: 100vw; }
+.announcement-marquee .announcement-track { animation-duration: 42s; }
+.announcement-marquee .announcement-pause { position: absolute; width: 44px; height: 36px; right: 0; top: 0; opacity: 0; pointer-events: none; }
+.announcement-marquee .announcement-pause:focus-visible { opacity: 1; pointer-events: auto; outline: 2px solid var(--tw-focus); outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) { .announcement-marquee .announcement-pause { display: none; } }
+
+/* Read-only catalog preview subcategory navigation. */
+.catalog-subcategories{max-width:1320px;margin:0 auto 24px;padding:0 clamp(16px,3vw,48px)}
+.catalog-subcategories h2{font-size:clamp(1.3rem,2vw,1.8rem);margin:0 0 14px}
+.catalog-subcategories-list{display:flex;flex-wrap:wrap;gap:9px}
+.catalog-subcategories-list a{border:1px solid var(--tw-border);border-radius:999px;background:var(--tw-surface);padding:9px 15px;color:var(--tw-ink);text-decoration:none;font-size:.87rem}
+.catalog-subcategories-list a:is(:hover,:focus-visible){border-color:var(--tw-rose-dark)}
+.catalog-subcategories-pagination{display:flex;align-items:center;gap:16px;margin-top:14px}
+.catalog-subcategories-pagination button{border:1px solid var(--tw-border);padding:7px 12px;border-radius:8px;background:var(--tw-surface)}

@@ -82,10 +82,14 @@ export function productSeoSignature(product) {
 export function productMetadata(product, origin, { indexable = true, checkoutEnabled = false, mediaOrigins, mediaVerified } = {}) {
   const explicitlyPrivate = product?.preview?.enabled === true || product?.status && product.status !== 'ready' || product?.published === false || product?.reviewRequired === true || product?.inventory?.approved === false || product?.variants?.some((variant) => variant.priceApproved === false || variant.inventory?.approved === false);
   const eligible = !explicitlyPrivate && product?.priceApproved === true && Number.isSafeInteger(product.pricePiastres) && product.pricePiastres >= 0 && SLUG.test(product.slug || '') && Boolean(cleanText(product.name));
-  const pathname = eligible ? `/products/${product.slug}` : '/products/unavailable';
-  const imageUrl = eligible ? publicImageUrl(product.mainImageUrl, mediaOrigins) : null;
-  const title = eligible ? `${cleanText(product.name, 120)} | Tap & Wrap` : 'Product unavailable | Tap & Wrap';
-  const description = eligible ? cleanText(product.description) || `Explore ${cleanText(product.name, 100)} from Tap & Wrap.` : 'This product is not available.';
+  // In the explicitly enabled, non-purchasable catalog showcase, drafts have real
+  // titles and URLs but must never generate indexable Product or Offer markup.
+  const previewDisplay = product?.browseOnly === true && product?.preview?.enabled !== true && SLUG.test(product?.slug || '') && Boolean(cleanText(product?.name));
+  const displayable = eligible || previewDisplay;
+  const pathname = displayable ? `/products/${product.slug}` : '/products/unavailable';
+  const imageUrl = displayable ? publicImageUrl(product.mainImageUrl, mediaOrigins) : null;
+  const title = displayable ? `${cleanText(product.name, 120)} | Tap & Wrap` : 'Product unavailable | Tap & Wrap';
+  const description = displayable ? cleanText(product.description) || `Explore ${cleanText(product.name, 100)} from Tap & Wrap.` : 'This product is not available.';
   const url = canonicalUrl(origin, pathname);
   const structuredData = [];
   const indexEligible = eligible && Boolean(imageUrl) && mediaVerified !== false;

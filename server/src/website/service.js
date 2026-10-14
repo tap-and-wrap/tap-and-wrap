@@ -37,7 +37,7 @@ export const siteContentSchema = z.object({
   faq: z.array(z.object({ question: text(250).min(1), answer: text(3000).min(1) }).strict()).max(20).optional(), faqApproved: z.boolean().optional(),
 }).strict().refine((value) => Object.keys(value).some((key) => key !== 'expectedRevision'), 'Provide at least one section.');
 const reviewFields = {
-  productId: objectId.nullable().optional(), authorLabel: text(100).min(1), rating: z.number().int().min(1).max(5), text: text(3000).min(1),
+  productId: objectId.nullable().optional(), authorLabel: text(100).min(1).nullable().optional(), rating: z.number().int().min(1).max(5).nullable().optional(), text: text(3000).min(1),
   status: z.enum(['draft', 'published', 'hidden']).optional(), approved: z.boolean().optional(), consentConfirmed: z.boolean().optional(), sourceNote: text(2000).optional(), featured: z.boolean().optional(), displayOrder: z.number().int().min(0).max(100000).optional(),
 };
 export const createReviewSchema = z.object(reviewFields).strict();
@@ -53,7 +53,7 @@ export const notificationQuerySchema = websiteQuerySchema.pick({ page: true, lim
 export const websiteModels = [Review, SiteContent];
 const pageFor = (query) => ({ page: query.page ?? 1, limit: query.limit ?? 20, skip: ((query.page ?? 1) - 1) * (query.limit ?? 20) });
 const paginationFor = (page, total) => ({ page: page.page, limit: page.limit, total, pages: Math.ceil(total / page.limit) });
-export const reviewPresentation = (review) => ({ id: String(review._id), authorLabel: review.authorLabel, rating: review.rating, text: review.text, createdAt: review.createdAt });
+export const reviewPresentation = (review) => ({ id: String(review._id), authorLabel: review.authorLabel?.trim() || null, rating: Number.isInteger(review.rating) && review.rating >= 1 && review.rating <= 5 ? review.rating : null, text: review.text, createdAt: review.createdAt });
 
 async function eligibleProductBySlug(slug) {
   const product = await Product.findOne({ ...publicProductFilter(), slug }).select('_id categoryId subcategoryId').lean().maxTimeMS(TIMEOUT);

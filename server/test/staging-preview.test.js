@@ -130,6 +130,9 @@ describe('authenticated staging draft preview', { concurrency: false }, () => {
     assert.equal(preview.gallerySlots[0].isMain, true);
   });
   it('keeps preview private while allowing safe draft browsing in the public catalog', async () => {
+    const originalBrowsePreview = env.catalogBrowsePreviewEnabled;
+    env.catalogBrowsePreviewEnabled = true;
+    try {
     assert.equal((await request('/public/products/isolated-draft')).status, 200);
     assert.equal((await request(`/public/products/${product._id}/preview`)).status, 404);
     const publicList = await request('/public/products?limit=100');
@@ -144,5 +147,6 @@ describe('authenticated staging draft preview', { concurrency: false }, () => {
     assert.equal(categories.body.data.categories[0].slug, 'preview-child');
     assert.equal(categories.body.data.categories[0].productCount, 1);
     assert.equal(mongoose.connection.name, 'tap_wrap_catalog_test');
+    } finally { env.catalogBrowsePreviewEnabled = originalBrowsePreview; }
   });
 });

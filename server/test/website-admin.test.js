@@ -124,6 +124,24 @@ test('review publication requires explicit approval, quote permission and privat
   assert.equal(await AdminAudit.countDocuments({ action: 'website.review.create' }), 1);
 });
 
+test('authentic text-only testimonials require consent but never invent an author or rating', async () => {
+  const blocked = await request('/admin/website/reviews', { method: 'POST', body: reviewInput({ authorLabel: null, rating: null, consentConfirmed: false, featured: true }) });
+  assert.equal(blocked.status, 400);
+  assert.equal(await Review.countDocuments(), 0);
+  const created = await request('/admin/website/reviews', { method: 'POST', body: reviewInput({ authorLabel: null, rating: null, featured: true }) });
+  assert.equal(created.status, 201, JSON.stringify(created.error));
+  const featured = (await request('/public/site-content')).data.featuredReviews;
+  assert.equal(featured.length, 1);
+  assert.equal(featured[0].authorLabel, null);
+  assert.equal(featured[0].rating, null);
+  assert.equal(featured[0].sourceNote, undefined);
+  const adminRecord = (await request(`/admin/website/reviews/${created.data.review._id}`)).data.review;
+  assert.equal(adminRecord.authorLabel, null);
+  assert.equal(adminRecord.rating, null);
+  const invalidRating = await request(`/admin/website/reviews/${created.data.review._id}`, { method: 'PATCH', body: { rating: 4.5 } });
+  assert.equal(invalidRating.status, 400);
+});
+
 test('editing review text clears approval and hiding an authentic review removes public visibility', async () => {
   const record = await review({ featured: true });
   const changed = await request(`/admin/website/reviews/${record._id}`, { method: 'PATCH', body: { text: 'Unreviewed revised fixture.' } });

@@ -2,9 +2,11 @@ import { Link } from 'react-router-dom';
 import { Instagram, Mail, MessageCircle } from 'lucide-react';
 import { useSiteContent } from './PublicContent.jsx';
 import { whatsappUrl } from '../utils/contact.js';
+// Owner-approved public contact channels; an explicitly approved admin record overrides this fallback.
+const ownerContact = Object.freeze({ instagram: 'https://www.instagram.com/tapandwrap/', whatsapp: '+201508216472', email: 'tap.wrap22@gmail.com' });
 export default function Footer() {
   const content = useSiteContent();
-  const contact = content.data?.contact;
+  const contact = content.data?.contact ?? ownerContact;
   const whatsapp = whatsappUrl(contact?.whatsapp);
   const instagram = typeof contact?.instagram === 'string' && /^https:\/\/(?:www\.)?instagram\.com\/[a-zA-Z0-9._/-]+\/?$/.test(contact.instagram) ? contact.instagram : null;
   const email = typeof contact?.email === 'string' && /^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(contact.email) ? contact.email : null;

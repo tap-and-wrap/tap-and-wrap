@@ -9,6 +9,8 @@ export const env = {
   mongoUri: process.env.MONGODB_URI || '',
   databaseTarget: process.env.DATABASE_TARGET || 'local',
   stagingPreviewEnabled: process.env.STAGING_PREVIEW_ENABLED === 'true',
+  // Temporary read-only public showcase: does not approve prices, stock, or change database records.
+  catalogBrowsePreviewEnabled: process.env.CATALOG_BROWSE_PREVIEW_ENABLED === 'true',
   clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
   sessionSecret: process.env.SESSION_SECRET || '',
   // Both gates remain OFF unless an operator explicitly authorizes launch.

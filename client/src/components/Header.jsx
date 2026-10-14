@@ -13,13 +13,14 @@ const primaryLinks = [
   { to: '/customize', text: 'Customize' },
   { to: '/about', text: 'About Us' },
 ];
-const announcement = 'Thoughtful gifts, made personal — welcome to Tap & Wrap';
+const announcements = ['THOUGHTFUL GIFTS, MADE PERSONAL', 'BUILD YOUR GIFT BOX', 'LASER ENGRAVING', 'UNLOCK THE MAGIC OF GIVING'];
+const announcement = announcements.join(' ✦ ');
 
 function AnnouncementBar() {
   const [paused, setPaused] = useState(false);
   return <div className="announcement announcement-marquee" data-paused={paused}>
     <span className="storefront-sr-only">{announcement}</span>
-    <div className="announcement-window" aria-hidden="true"><div className="announcement-track">{[0, 1].map(group => <div className="announcement-group" key={group}>{[0, 1, 2].map(item => <span key={item}>{announcement}<span className="announcement-separator">✦</span></span>)}</div>)}</div></div>
+    <div className="announcement-window" aria-hidden="true"><div className="announcement-track">{[0, 1].map(group => <div className="announcement-group" key={group}>{announcements.map((item, index) => <span key={index}>{item}<span className="announcement-separator">✦</span></span>)}</div>)}</div></div>
     <button type="button" className="announcement-pause" aria-label={paused ? 'Resume announcements' : 'Pause announcements'} aria-pressed={paused} onClick={() => setPaused(value => !value)}>{paused ? <Play size={15} aria-hidden="true"/> : <Pause size={15} aria-hidden="true"/>}</button>
   </div>;
 }
@@ -66,8 +67,9 @@ export default function Header() {
   }, []);
 
   return <>
-    <AnnouncementBar/>
-    <header ref={headerRef} className="site-header">
+    <div ref={headerRef} className="site-header-stack">
+      <AnnouncementBar/>
+      <header className="site-header">
       <button type="button" className="icon-button menu-icon" aria-label="Open menu" aria-haspopup="dialog" aria-controls={open ? 'navigation-drawer' : undefined} aria-expanded={open} onClick={() => setOpen(true)}><Menu size={23} aria-hidden="true"/></button>
       <Link className="site-logo" to="/" aria-label="Tap and Wrap home"><img src="/tap-wrap-logo.webp" alt="Tap & Wrap" width="2000" height="667" /></Link>
       <nav className="desktop-navigation" aria-label="Main navigation"><ul>{links.map(item => <li key={item.to}><NavLink to={item.to} end={item.end}>{item.text}</NavLink></li>)}</ul></nav>
@@ -78,7 +80,8 @@ export default function Header() {
         {admin && <button className="header-signout" type="button" disabled={logout.isPending} onClick={() => logout.mutate()}>{logout.isPending ? 'Signing out…' : 'Sign out'}</button>}
       </div>
       {logout.error && !open && <p className="header-error" role="alert">{commerceError(logout.error)}</p>}
-    </header>
+      </header>
+    </div>
     {open && <NavigationDrawer links={links} onClose={() => setOpen(false)} admin={admin} logout={logout}/>}
   </>;
 }

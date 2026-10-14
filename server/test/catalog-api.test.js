@@ -116,6 +116,44 @@ describe('catalog API with an isolated MongoDB database', { concurrency: false }
     assert.equal(valid.status, 201);
   });
 
+  it('read-only browse preview includes draft/held catalog and inactive categories without publishing or enabling checkout', async () => {
+    const draft = await Product.create(productInput('preview-draft', { pricePiastres: 777777, priceApproved: false }));
+    const held = await Product.create(productInput('preview-held', { status: 'hold', pricePiastres: 123456, priceApproved: false }));
+    await Category.findByIdAndUpdate(child._id, { active: false });
+    const ordinary = await request('/public/products?limit=20');
+    assert.equal(ordinary.body.products.length, 0);
+    env.catalogBrowsePreviewEnabled = true;
+    try {
+      const visible = await request('/public/products?limit=20');
+      assert.equal(visible.status, 200);
+      assert.equal(visible.body.pagination.total, 2);
+      for (const card of visible.body.products) {
+        assert.equal(card.browseOnly, true);
+        assert.equal(card.pricePiastres, null);
+        assert.equal(card.priceApproved, false);
+        assert.equal(card.orderingAvailable, false);
+      }
+      const detail = await request('/public/products/preview-draft');
+      assert.equal(detail.status, 200);
+      assert.equal(detail.body.product.browseOnly, true);
+      assert.equal(detail.body.product.inventory.quantity, null);
+      assert.equal(detail.body.product.orderingAvailable, false);
+      assert.equal((await request('/public/products?availability=available')).body.pagination.total, 0);
+      const inactive = await request('/public/categories/child-fixture');
+      assert.equal(inactive.status, 200);
+      assert.equal(inactive.body.category.browseOnly, true);
+      const children = await request('/public/categories?parent=main-fixture');
+      assert.equal(children.body.pagination.total, 1);
+      assert.equal((await Product.findById(draft._id)).status, 'draft');
+      assert.equal((await Product.findById(held._id)).status, 'hold');
+      assert.equal((await Category.findById(child._id)).active, false);
+      const originalCheckout = env.checkoutEnabled;
+      env.checkoutEnabled = true;
+      try { assert.equal((await request('/public/products?limit=20')).body.pagination.total, 0); }
+      finally { env.checkoutEnabled = originalCheckout; }
+    } finally { env.catalogBrowsePreviewEnabled = false; }
+  });
+
   it('caps product pages at twenty and keeps list projections lightweight', async () => {
     await Product.create(Array.from({ length: 25 }, (_, index) => readyInput(`page-${String(index).padStart(2, '0')}`, { pricePiastres: 10000 + index })));
     await Product.create(productInput('draft-page-fixture'));
@@ -123,7 +161,7 @@ describe('catalog API with an isolated MongoDB database', { concurrency: false }
     assert.equal(first.status, 200);
     assert.equal(first.body.products.length, 20);
     assert.equal(first.body.pagination.limit, 20);
-    assert.equal(first.body.pagination.total, 26);
+    assert.equal(first.body.pagination.total, 25);
     assert.equal(first.body.products[0].pricePiastres, 10000);
     for (const product of first.body.products) {
       assert.equal('galleryKeys' in product, false);
@@ -134,8 +172,8 @@ describe('catalog API with an isolated MongoDB database', { concurrency: false }
     }
     const second = await request('/public/categories/main-fixture/products?page=2&sort=price_asc');
     assert.equal(second.status, 200);
-    assert.equal(second.body.products.length, 6);
-    assert.equal(second.body.pagination.total, 26);
+    assert.equal(second.body.products.length, 5);
+    assert.equal(second.body.pagination.total, 25);
     const admin = await request('/admin/products?limit=300', { headers: adminHeaders });
     assert.equal(admin.body.products.length, 20);
     assert.equal(admin.body.pagination.total, 26);
@@ -145,7 +183,7 @@ describe('catalog API with an isolated MongoDB database', { concurrency: false }
     assert.equal((await request('/public/products?q%5B%24ne%5D=x')).status, 400);
   });
 
-  it('lists draft and held items but never allows them to be ordered', async () => {
+  it('hides unapproved and unpublished items while showing approved sold-out products', async () => {
     const ready = await Product.create(readyInput('visible-fixture'));
     await Product.create(productInput('draft-fixture'));
     await Product.create(productInput('hold-fixture', { status: 'hold' }));
@@ -153,7 +191,6 @@ describe('catalog API with an isolated MongoDB database', { concurrency: false }
     // Public filters must protect readers even when records bypass Mongoose validation.
     for (const [slugValue, overrides] of [
       ['unapproved-price', { priceApproved: false }],
-      ['zero-price', { pricePiastres: 0, priceApproved: true }],
       ['unapproved-inventory', { inventory: { mode: 'tracked', quantity: 10, approved: false, available: true } }],
       ['unavailable-fixture', { inventory: { mode: 'tracked', quantity: 10, approved: true, available: false } }],
       ['review-fixture', { reviewRequired: true }],
@@ -164,15 +201,12 @@ describe('catalog API with an isolated MongoDB database', { concurrency: false }
     }
     const response = await request('/public/products');
     assert.equal(response.status, 200);
-    assert.deepEqual(response.body.products.map((product) => product.slug).sort(), [ready.slug, 'unavailable-fixture', 'draft-fixture', 'hold-fixture', 'unapproved-price', 'zero-price', 'unapproved-inventory', 'review-fixture', 'unapproved-variant-price', 'unapproved-variant-inventory'].sort());
+    assert.deepEqual(response.body.products.map((product) => product.slug).sort(), [ready.slug, 'unavailable-fixture'].sort());
     assert.equal(response.body.products.find((product) => product.slug === 'unavailable-fixture').orderingAvailable, false);
     assert.equal((await request('/public/products/unavailable-fixture')).status, 200);
-    for (const slugValue of ['draft-fixture', 'hold-fixture', 'unapproved-price', 'zero-price', 'unapproved-inventory', 'review-fixture', 'unapproved-variant-price', 'unapproved-variant-inventory']) {
-      assert.equal((await request(`/public/products/${slugValue}`)).status, 200, slugValue);
+    for (const slugValue of ['draft-fixture', 'hold-fixture', 'unapproved-price', 'unapproved-inventory', 'review-fixture', 'unapproved-variant-price', 'unapproved-variant-inventory']) {
+      assert.equal((await request(`/public/products/${slugValue}`)).status, 404, slugValue);
     }
-    const zero = await request('/public/products/zero-price');
-    assert.equal(zero.body.product.pricePiastres, null);
-    assert.equal(zero.body.product.orderingAvailable, false);
     const detail = await request('/public/products/visible-fixture');
     assert.equal(detail.status, 200);
     assert.deepEqual(detail.body.product.galleryUrls, []);
@@ -197,7 +231,7 @@ describe('catalog API with an isolated MongoDB database', { concurrency: false }
     await Product.create(productInput('count-draft'));
     let response = await request('/public/categories');
     assert.equal(response.status, 200);
-    assert.deepEqual(response.body.categories.map((category) => category.productCount), [2, 2]);
+    assert.deepEqual(response.body.categories.map((category) => category.productCount), [1, 1]);
     const update = await request(`/admin/categories/${main._id}`, { method: 'PATCH', headers: adminHeaders, body: { active: false } });
     assert.equal(update.status, 200);
     response = await request('/public/categories');
@@ -220,7 +254,7 @@ describe('catalog API with an isolated MongoDB database', { concurrency: false }
     const edited = await request(path, { method: 'PATCH', headers: adminHeaders, body: { pricePiastres: 13000, status: 'draft' } });
     assert.equal(edited.status, 200);
     assert.equal(edited.body.product.priceApproved, false);
-    assert.equal((await request('/public/products/approval-fixture')).status, 200);
+    assert.equal((await request('/public/products/approval-fixture')).status, 404);
   });
 
   it('resets stock approval on changes and keeps Made by Request quantity null', async () => {

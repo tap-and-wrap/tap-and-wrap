@@ -133,7 +133,11 @@ test('catalog views support draft browsing without emitting unconfirmed monetary
   assert.equal((await browser.request('/public/products?q=Isolated', { headers: { 'x-search-event-id': 'invalid' } })).status, 400);
   assert.equal(await MetaEvent.countDocuments({ name: 'Search' }), 1);
   await Product.updateOne({ _id: product._id }, { $set: { status: 'draft', priceApproved: false } });
-  const draftView = await browser.request(`/public/products/${product.slug}`);
+  const originalBrowsePreview = env.catalogBrowsePreviewEnabled;
+  env.catalogBrowsePreviewEnabled = true;
+  let draftView;
+  try { draftView = await browser.request(`/public/products/${product.slug}`); }
+  finally { env.catalogBrowsePreviewEnabled = originalBrowsePreview; }
   assert.equal(draftView.status, 200);
   const previewTracking = data(draftView).tracking;
   assert.equal(previewTracking.name, 'ViewContent');

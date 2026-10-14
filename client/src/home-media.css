@@ -18,3 +18,41 @@
 @media(max-width: 760px) { .home-service-grid { grid-template-columns: 1fr; } .home-service-card { min-height: 230px; } }
 @media(max-width: 410px) { .home-service-media { flex-basis: 42%; width: 42%; min-height: 220px; } .home-service-detail { padding: 18px 16px; } .home-service-detail h3 { font-size: 1.9rem; } .home-service-detail p { font-size: .84rem; margin: 10px 0 16px; } }
 @media(prefers-reduced-motion: reduce) { .home-service-card { transition: none; } }
+
+/* Overlay-style immersive hero: desktop collage and portrait mobile each cover the banner. */
+.home-media-hero {
+  position: relative; isolation: isolate; display: grid; place-items: center;
+  box-sizing: border-box; width: 100%; min-height: clamp(500px, 48vw, 720px);
+  padding: clamp(68px, 10vw, 130px) 22px !important; overflow: hidden;
+  background: #514039; text-align: center;
+}
+.home-media-hero .hero-film { position: absolute; z-index: 0; inset: 0; width: 100%; height: 100%; max-width: none;
+  margin: 0; border: 0; border-radius: 0; aspect-ratio: auto !important; }
+.home-media-hero .hero-film .website-hero-video, .home-media-hero .hero-film-poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.home-media-hero::after { content: ''; position: absolute; z-index: 1; inset: 0; pointer-events: none; background: linear-gradient(90deg, rgba(27,19,18,.55),rgba(27,19,18,.36),rgba(27,19,18,.50)); }
+.home-media-hero .home-hero-content { z-index: 2; position: relative; width: min(960px, 100%); }
+.home-media-hero .eyebrow { color: #FFF6F0; letter-spacing: .16em; margin: 0 0 16px; }
+.home-media-hero h1 { color: #fff; font-size: clamp(3.25rem, 6vw, 6.5rem); line-height: 1.02; max-width: 100%; margin: 0 auto 18px; text-shadow: 0 2px 20px rgba(0,0,0,.16); }
+.home-media-hero h1 em { color: #FFE0D4; }
+.home-media-hero .home-hero-subtitle { color: #FFF8F4; font-size: clamp(1rem, 1.45vw, 1.2rem); margin: 0 0 28px; }
+.home-media-hero .button-group { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+.home-media-hero .button-dark { background: #795045; border-color: #F3D7C9; color: #fff; }
+.home-media-hero .button-outline { background: rgba(30,20,17,.28); border-color: rgba(255,255,255,.9); color: #fff; }
+.home-media-hero .button-outline:hover { background: rgba(255,255,255,.17); }
+/* Playback controls are not printed over product footage, but appear for keyboard access. */
+.home-media-hero .hero-video-control, .home-service-media .home-service-video-toggle {
+  opacity: 0; transition: opacity .18s; pointer-events: auto; z-index: 5;
+}
+.home-media-hero .hero-video-control:focus-visible, .home-service-media .home-service-video-toggle:focus-visible {
+  opacity: 1; pointer-events: auto;
+}
+/* Hide permanent overlays without removing the accessible keyboard pause mechanism. */
+@media (max-width: 767px) {
+  .home-media-hero { min-height: clamp(600px, 78svh, 820px); padding: 90px 18px !important; }
+  .home-media-hero::after { background: linear-gradient(180deg, rgba(25,17,17,.48), rgba(25,17,17,.32) 40%, rgba(25,17,17,.62)); }
+  .home-media-hero h1 { font-size: clamp(3.3rem, 11vw, 4.6rem); }
+  .home-media-hero .button-group { align-items: center; flex-direction: row; }
+  .home-media-hero .button-group .button { padding-inline: 15px; }
+}
+@media(max-width:374px) { .home-media-hero .button-group { flex-direction: column; align-items: center; } .home-media-hero .button { min-width: 200px; } }
+@media (prefers-reduced-motion: reduce) { .home-media-hero .hero-video-control, .home-service-media .home-service-video-toggle { transition: none; } }

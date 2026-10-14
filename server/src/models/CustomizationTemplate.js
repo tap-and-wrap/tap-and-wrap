@@ -91,7 +91,7 @@ schema.pre('validate', function validateConfiguration() {
   }
   for (const [index, field] of this.fields.entries()) {
     if (field.minFiles > field.maxFiles || (field.type === 'image' && !field.acceptedMimeTypes.length)) this.invalidate(`fields.${index}`, 'Image limits and accepted formats are required.');
-    if (['engraving_text', 'engraving_material', 'engraving_font', 'engraving_placement', 'engraving_artwork'].includes(field.key)) this.invalidate(`fields.${index}.key`, 'This key is reserved for engraving.');
+    if (['engraving_type', 'engraving_other_details', 'engraving_text', 'engraving_material', 'engraving_font', 'engraving_placement', 'engraving_artwork'].includes(field.key)) this.invalidate(`fields.${index}.key`, 'This key is reserved for engraving.');
   }
   if (this.kind === 'laser_engraving') {
     if (!this.engraving || !this.engraving.materials.length || !this.engraving.fonts.length) this.invalidate('engraving', 'Explicit engraving materials and approved fonts are required.');

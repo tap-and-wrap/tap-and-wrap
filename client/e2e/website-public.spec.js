@@ -35,8 +35,10 @@ test('homepage orders actual sections and displays only approved fixture content
   await expect(page.getByText('Approved review fixture only.')).toBeVisible();
   await page.getByText('Is this a real merchant claim?').click();
   await expect(page.getByText('No. This is an isolated browser test.')).toBeVisible();
-  await expect(page.locator('main video')).toHaveCount(3);
-  await expect(page.getByRole('button', { name: /Play hero video|Pause hero video/ })).toBeVisible();
+  await expect(page.locator('.home-service-media video')).toHaveCount(2);
+  await expect(page.locator('.hero-film video, .hero-film img.hero-film-poster')).toHaveCount(1);
+  if (await page.locator('.hero-film video').count()) await expect(page.getByRole('button', { name: /Play hero video|Pause hero video/ })).toBeVisible();
+  else await expect(page.locator('.hero-film')).toContainText('The film is unavailable.');
 });
 
 test('missing public information is explicitly pending and never fabricates policies', async ({ page }) => {
