@@ -6,7 +6,7 @@ import { User } from '../models/User.js';
 import { Session } from '../models/Session.js';
 import { env, assertAuthConfig } from '../config/env.js';
 import { newSessionToken, hashSession, makeCsrfToken, validCsrfToken } from '../utils/tokens.js';
-import { requireAuth, optionalAuth, sessionCookieOptions } from '../middleware/auth.js';
+import { optionalAuth, sessionCookieOptions } from '../middleware/auth.js';
 import { newPasswordSchema } from '../utils/password.js';
 import { rotateGuestCookie } from '../commerce/ownership.js';
 import { csrfProtection } from '../middleware/csrf.js';
@@ -52,7 +52,7 @@ router.post('/login',authRateLimit,csrfProtection,async(req,res,next)=>{
   res.json({ok:true,data:{user:{id:String(user.id),name:user.name,email:user.email,role:user.role}}});
  } catch(e){next(e);}
 });
-router.get('/me',requireCatalogDatabase,requireAuth,(req,res)=>res.json({ok:true,data:{user:{id:String(req.user._id),name:req.user.name,email:req.user.email,role:req.user.role}}}));
+router.get('/me',requireCatalogDatabase,optionalAuth,(req,res)=>res.json({ok:true,data:{user:req.user?{id:String(req.user._id),name:req.user.name,email:req.user.email,role:req.user.role}:null}}));
 router.post('/logout',csrfProtection,optionalAuth,async(req,res,next)=>{
  try {assertDatabaseWriteAllowed(Session.db,env);if(req.session)await Session.deleteOne({_id:req.session._id});res.clearCookie('tw_session',cookieOptions);rotateGuestCookie(res);res.json({ok:true,data:{loggedOut:true}});}catch(e){next(e);}
 });

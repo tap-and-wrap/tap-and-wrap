@@ -70,6 +70,10 @@ for (const [name, options] of [['expired', { expired: true }], ['revoked', { aut
     const oldGuestOwner = `guest:${hashSession(oldGuest)}`;
     const privateItem = { id: 'sensitive-line', identity: 'sensitive-identity', productId: new mongoose.Types.ObjectId(), name: 'PRIVATE_FIXTURE_MARKER', quantity: 1, personalization: { name: 'PRIVATE_NOTE_MARKER' } };
     await Cart.create([{ owner: `user:${user._id}`, items: [privateItem], expiresAt: new Date(Date.now() + 3600000) }, { owner: oldGuestOwner, items: [privateItem], expiresAt: new Date(Date.now() + 3600000) }]);
+    const probe = await request('/auth/me', { cookies: { tw_session: token, tw_cart: oldGuest } });
+    assert.equal(probe.status, 200); assert.deepEqual(probe.body.data, { user: null });
+    assert.equal(probe.headers.get('x-session-expired'), '1');
+    assert.equal(cookie(probe, 'tw_session'), ''); assert.equal(cookie(probe, 'tw_cart'), '');
     const result = await request('/commerce/cart', { cookies: { tw_session: token, tw_cart: oldGuest } });
     assert.equal(result.status, 200); assert.deepEqual(result.body.data.cart.items, []);
     assert.equal(result.headers.get('x-session-expired'), '1');
@@ -99,7 +103,7 @@ test('session-probe-first recovery clears the pre-login guest cookie before anon
   await Cart.create({ owner: `guest:${hashSession(previousGuest)}`, items: [item], expiresAt: new Date(Date.now() + 3600000) });
   const cookies = { tw_session: token, tw_cart: previousGuest };
   const probe = await request('/auth/me', { cookies });
-  assert.equal(probe.status, 401); assert.equal(cookie(probe, 'tw_session'), ''); assert.equal(cookie(probe, 'tw_cart'), '');
+  assert.equal(probe.status, 200); assert.deepEqual(probe.body.data, { user: null }); assert.equal(cookie(probe, 'tw_session'), ''); assert.equal(cookie(probe, 'tw_cart'), '');
   for (const header of probe.headers.getSetCookie()) {
     const [key, value] = header.split(';')[0].split('=');
     if (!value) delete cookies[key]; else cookies[key] = value;
@@ -122,6 +126,19 @@ test('valid customer authorization remains isolated and logout deletes only its 
   assert.equal((await request('/auth/logout', { method: 'POST', cookies: { tw_session: token, tw_csrf: csrf }, body: {} })).status, 200);
   assert.equal(await Session.countDocuments({ tokenHash: hashSession(token) }), 0);
   assert.equal(await Session.countDocuments({ tokenHash: hashSession(second) }), 1);
+});
+
+test('guest session probes return null while invalid cookies clear and protected endpoints still reject', async () => {
+  const guest = await request('/auth/me');
+  assert.equal(guest.status, 200); assert.deepEqual(guest.body.data, { user: null });
+  assert.match(guest.headers.get('cache-control'), /no-store/);
+  for (const token of ['malformed', newSessionToken()]) {
+    const result = await request('/auth/me', { cookies: { tw_session: token } });
+    assert.equal(result.status, 200); assert.deepEqual(result.body.data, { user: null });
+    assert.equal(result.headers.get('x-session-expired'), '1');
+    assert.equal(cookie(result, 'tw_session'), '');
+  }
+  for (const path of ['/commerce/orders', '/admin/ping', '/auth/account-status']) assert.equal((await request(path)).status, 401);
 });
 
 test('new passwords validate UTF-8 bytes for ASCII, Arabic, Unicode and emoji', () => {

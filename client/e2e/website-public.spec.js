@@ -89,20 +89,20 @@ test('contact uses approved working contact links without a fake submission', as
   expect(fixture.requests.some(request => request.method === 'POST')).toBe(false);
 });
 
-test('product reviews are read-only, paginated and request twenty at most', async ({ page }) => {
-  await mockCatalog(page);
-  const reviewCalls = [];
-  await page.route('**/api/v1/public/products/*/reviews?*', async route => {
-    const query = new URL(route.request().url()).searchParams;
-    reviewCalls.push(Object.fromEntries(query));
-    return route.fulfill({ headers: apiHeaders, json: { ok: true, data: { reviews: [{ id: `review-${query.get('page')}`, rating: 5, authorLabel: 'Isolated reviewer', text: `Review fixture page ${query.get('page')}` }], pagination: { page: Number(query.get('page')), limit: 20, total: 21, pages: 2 } } } });
-  });
+test('product testimonials are brand-wide and make no product-review API requests', async ({ page }) => {
+  const fixture = await mockCatalog(page);
   await page.goto(`/products/${detail.slug}`);
-  await expect(page.getByText('Review fixture page 1')).toBeVisible();
+  const section = page.getByRole('region', { name: 'What Our Customers Say' });
+  await expect(section).toBeVisible();
+  await expect(section.locator('figure')).toHaveCount(12);
+  await expect(section.locator('.customer-words-stars')).toHaveCount(12);
+  await expect(page.locator('.product-reviews')).toHaveCount(0);
   await expect(page.getByRole('button', { name: /submit.*review/i })).toHaveCount(0);
-  await page.getByRole('navigation', { name: 'Review pages' }).getByRole('button', { name: 'Next' }).click();
-  await expect(page.getByText('Review fixture page 2')).toBeVisible();
-  expect(reviewCalls.every(call => Number(call.limit) === 20)).toBe(true);
+  expect(fixture.requests.some(request => /\/reviews$/.test(request.path))).toBe(false);
+  for (const data of await page.locator('script[type="application/ld+json"]').allTextContents()) {
+    expect(data).not.toContain('aggregateRating');
+    expect(data).not.toContain('reviewRating');
+  }
 });
 
 test('forgot password reports the generic queued result and uses CSRF', async ({ page }) => {

@@ -6,12 +6,14 @@
 .home-service-video-toggle { position: absolute; z-index: 1; bottom: 12px; left: 12px; min-width: 60px; min-height: 40px; border: 1px solid var(--tw-border); border-radius: 8px; color: var(--tw-ink); background: rgba(255,255,255,.92); font-size: 12px; }
 .home-service-detail { min-width: 0; padding: clamp(20px, 2.4vw, 32px); flex: 1; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; }
 .home-service-detail h3 { margin: 0; font-size: clamp(1.9rem, 3vw, 2.7rem); line-height: 1.05; }
+.customize-service-grid .home-service-detail h2 { margin: 0; font-size: clamp(1.9rem, 3vw, 2.7rem); line-height: 1.05; }
 .home-service-detail p { margin: 14px 0 22px; line-height: 1.55; font-size: .95rem; }
 .home-service-detail > span { display: inline-flex; align-items: center; gap: 9px; font-size: .83rem; font-weight: 650; color: var(--tw-rose-dark); }
 .home-service-detail:hover > span { text-decoration: underline; }
 @media(max-width: 760px) { .home-service-grid { grid-template-columns: 1fr; } .home-service-card { min-height: 230px; } }
 @media(max-width: 410px) { .home-service-media { flex-basis: 42%; width: 42%; min-height: 220px; } .home-service-detail { padding: 18px 16px; } .home-service-detail h3 { font-size: 1.9rem; } .home-service-detail p { font-size: .84rem; margin: 10px 0 16px; } }
 @media(prefers-reduced-motion: reduce) { .home-service-card { transition: none; } }
+@media(max-width:410px){.customize-service-grid .home-service-detail h2{font-size:clamp(1.3rem,6vw,1.9rem)}}
 
 /* Full-width footage keeps its source proportions; only extra vertical space uses the poster fill. */
 .hero.home-media-hero {

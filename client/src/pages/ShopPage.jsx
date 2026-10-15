@@ -102,6 +102,9 @@ export default function ShopPage({ categorySlug, heading, categoryContext, categ
         <h1>{heading || 'Shop Our Gifts'}</h1>
         <p>Find a thoughtful gift, made for the moment.</p>
       </header>
+      <div className={lockedCategory && !lockedSubcategory ? 'catalog-discovery catalog-discovery-paired' : 'catalog-discovery'}>
+      <div className="catalog-discovery-search">
+        {lockedCategory && !lockedSubcategory && <p className="catalog-control-heading" aria-hidden="true">Search products</p>}
       <form className="catalog-search" role="search" onSubmit={(event) => {
         event.preventDefault();
         const q = new FormData(event.currentTarget).get('q').trim();
@@ -112,11 +115,8 @@ export default function ShopPage({ categorySlug, heading, categoryContext, categ
         <Search size={20} aria-hidden="true" />
         <label className="catalog-visually-hidden" htmlFor="catalog-search">Search products by name</label>
         <input ref={searchRef} id="catalog-search" name="q" type="search" defaultValue={params.q} placeholder="Search products by name" maxLength="100" />
-        <button type="submit">Search</button>
+        <button type="submit" aria-label="Search"><span className="catalog-search-button-label">Search</span><Search className="catalog-search-submit-icon" size={18} aria-hidden="true"/></button>
       </form>
-      <div className="catalog-mobile-tools">
-        <button type="button" onClick={() => setDrawer('filters')}><SlidersHorizontal size={18} aria-hidden="true" />Filters</button>
-        <button type="button" onClick={() => setDrawer('sort')}><ArrowDownUp size={18} aria-hidden="true" />Sort</button>
       </div>
       {lockedCategory && !lockedSubcategory && <nav className="catalog-subcategories" aria-label="Browse subcategories">
         <h2><label htmlFor="catalog-subcategory">Browse {lockedCategory.name}</label></h2>
@@ -129,6 +129,11 @@ export default function ShopPage({ categorySlug, heading, categoryContext, categ
         {children.isError && <div className="catalog-inline-error" role="alert"><p>Subcategories could not be loaded.</p><button type="button" className="catalog-text-button" onClick={() => children.refetch()}>Retry subcategories</button></div>}
         {children.isSuccess && !children.data.categories.length && <p role="status">No subcategories in this category.</p>}
       </nav>}
+      </div>
+      <div className="catalog-mobile-tools">
+        <button type="button" onClick={() => setDrawer('filters')}><SlidersHorizontal size={18} aria-hidden="true" />Filters</button>
+        <button type="button" onClick={() => setDrawer('sort')}><ArrowDownUp size={18} aria-hidden="true" />Sort</button>
+      </div>
       <div className="catalog-shop-layout">
         <aside className="catalog-sidebar" aria-label="Product filters">
           <div className="catalog-sidebar-heading"><h2>Filters</h2></div>

@@ -10,6 +10,7 @@ import { useCart } from '../commerce/CartContext.jsx';
 import ConfiguredFields, { validateConfiguredFields } from '../commerce/ConfiguredFields.jsx';
 import { commerceError, discardUploads, uploadConfiguredFields } from '../commerce/api.js';
 import { ProductReviews } from '../components/PublicContent.jsx';
+import CustomerWords from '../components/CustomerWords.jsx';
 import { ProductMetadata } from '../seo/PageMetadata.jsx';
 import { emitTracking } from '../tracking/client.js';
 import { FieldError, fieldErrorProps, focusInvalidField } from '../components/FormFeedback.jsx';
@@ -143,7 +144,7 @@ export function ProductContent({ product, relatedProducts = [], preview = false,
           </div>
         </section>
       </div>
-      <ProductReviews key={product.slug} slug={product.slug} preview={preview}/>
+      {preview ? <ProductReviews key={product.slug} slug={product.slug} preview/> : <CustomerWords/>}
       {relatedProducts.length > 0 && <section className="product-related" aria-labelledby="product-related-heading"><h2 id="product-related-heading">You May Also Like</h2><div className="catalog-grid catalog-related-grid">{relatedProducts.slice(0, 4).map((item) => <ProductCard key={item._id} product={item} />)}</div></section>}
       {showSticky && <div className="product-sticky-bar" aria-label="Purchase options">
         <div><p>{product.name}</p><span>{displayPrice}</span></div>

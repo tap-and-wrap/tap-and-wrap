@@ -17,7 +17,7 @@ async function fixture(context) {
     const payload = method === 'POST' ? request.postDataJSON() : null;
     state.calls.push({ path, method, token: request.headers()['x-csrf-token'], payload });
     const reply = (data, status = 200, code, extraHeaders = {}) => route.fulfill({ headers: { ...headers, ...extraHeaders }, status, json: status < 400 ? { ok: true, data } : { ok: false, error: { code: code || 'UNAUTHORIZED', message: code || 'Sign in required.' } } });
-    if (path === '/auth/me') return state.meFailure ? reply({}, 503, 'ACCOUNT_UNAVAILABLE') : state.user ? reply({ user: state.user }) : reply({}, 401);
+    if (path === '/auth/me') return state.meFailure ? reply({}, 503, 'ACCOUNT_UNAVAILABLE') : reply({ user: state.user });
     if (path === '/auth/csrf') { if (state.hold?.path === path) { state.hold.started(); await state.hold.wait; } return reply({ csrfToken: state.csrf }); }
     if (path === '/auth/login' || path === '/auth/signup') {
       if (state.loginHold && payload.email === userA.email) { state.loginHold.started(); await state.loginHold.wait; }
@@ -71,6 +71,42 @@ async function signIn(page) {
   await page.getByRole('button', { name: 'Log In', exact: true }).click();
   await expect(page).toHaveURL(/\/my-orders$/);
 }
+
+test('confirmed guests skip focus and route probes but allow explicit refresh', async ({ page, context }) => {
+  const state = await fixture(context); state.user = null;
+  await page.goto('/shop');
+  await expect(page.getByRole('heading', { name: 'No products found' })).toBeVisible();
+  const probes = () => state.calls.filter(call => call.path === '/auth/me').length;
+  expect(probes()).toBe(1);
+  for (let index = 0; index < 4; index++) {
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await spa(page, index % 2 ? '/shop' : '/customize');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  }
+  await page.waitForTimeout(150);
+  expect(probes()).toBe(1);
+  await page.evaluate(() => import('/src/auth/session.js').then(({ refreshSession }) => refreshSession()));
+  expect(probes()).toBe(2);
+  await expect(page.getByRole('link', { name: 'Account', exact: true })).toHaveAttribute('href', '/login');
+});
+
+test('a guest observes cross-tab login and authenticated focus still detects revocation', async ({ page, context }) => {
+  const state = await fixture(context); state.user = null;
+  await page.goto('/shop');
+  await expect(page.getByRole('heading', { name: 'No products found' })).toBeVisible();
+  const second = await context.newPage();
+  await second.goto('/login'); await signIn(second);
+  await expect(page.getByRole('link', { name: 'Account', exact: true })).toHaveAttribute('href', '/my-orders');
+  await spa(page, '/my-orders');
+  await expect(page.getByRole('heading', { name: '#222222' })).toBeVisible();
+  const generation = await page.evaluate(() => import('/src/auth/session.js').then(({ sessionSnapshot }) => sessionSnapshot().generation));
+  state.user = null;
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.getByRole('link', { name: 'Sign in to view your orders' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '#222222' })).toHaveCount(0);
+  expect(await page.evaluate(() => import('/src/auth/session.js').then(({ sessionSnapshot }) => sessionSnapshot().generation))).toBeGreaterThan(generation);
+  await second.close();
+});
 function held(path) {
   let release, started;
   const wait = new Promise(resolve => { release = resolve; });

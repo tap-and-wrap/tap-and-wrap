@@ -56,7 +56,7 @@ export async function mockCatalog(page, options = {}) {
     if (path === '/public/site-content') return reply({ about: null, contact: null, policies: {}, faq: [], featuredReviews: [] });
     if (path === '/public/bundles') return reply({ bundles: [] });
     if (/^\/public\/products\/[^/]+\/reviews$/.test(path)) return reply({ reviews: [], pagination: { page: 1, limit: 20, total: 0, pages: 0 } });
-    if (path === '/auth/me') return sessionRole ? reply({ user: { id: 'fixture-user', name: 'Fixture User', role: sessionRole } }) : reply({ code: 'UNAUTHORIZED', message: 'Sign in required' }, 401);
+    if (path === '/auth/me') return reply({ user: sessionRole ? { id: 'fixture-user', name: 'Fixture User', role: sessionRole } : null });
     if (path === '/admin/ping') return sessionRole === 'admin' && !options.denyAdmin ? reply({ admin: true }) : reply({ message: 'Admin required' }, 403);
     if (path === '/auth/csrf') return reply({ csrfToken: 'isolated-fixture-token' });
     if (path === '/commerce/cart') return reply({ cart: { items: [], quantity: 0, subtotalPiastres: 0 }, checkoutEnabled: false });

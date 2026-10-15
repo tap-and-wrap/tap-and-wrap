@@ -101,6 +101,25 @@ html:has(.home-media-hero) { scrollbar-gutter: stable; }
 .catalog-subcategory-select:focus-visible{outline:2px solid var(--tw-rose-dark);outline-offset:3px}
 .catalog-subcategory-select:disabled{cursor:default}
 
+.catalog-search-submit-icon{display:none}
+.catalog-discovery-paired{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;margin:0 0 28px}
+.catalog-discovery-paired .catalog-discovery-search,.catalog-discovery-paired .catalog-subcategories{min-width:0}
+.catalog-discovery-paired .catalog-subcategories{max-width:none;margin:0;padding:0}
+.catalog-discovery-paired .catalog-control-heading,.catalog-discovery-paired .catalog-subcategories h2{height:24px;margin:0 0 12px;font-family:var(--tw-font-display);font-size:1.35rem;font-weight:500;line-height:24px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.catalog-discovery-paired .catalog-search{box-sizing:border-box;width:100%;height:52px;margin:0;padding:3px 3px 3px 12px;gap:8px;border-radius:8px}
+.catalog-discovery-paired .catalog-search button{min-height:44px}
+.catalog-discovery-paired .catalog-subcategory-select{box-sizing:border-box;max-width:none;min-width:0;height:52px;min-height:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:640px){
+  .catalog-discovery-paired{gap:8px;margin-bottom:20px}
+  .catalog-discovery-paired .catalog-control-heading,.catalog-discovery-paired .catalog-subcategories h2{font-size:1rem;margin-bottom:6px}
+  .catalog-discovery-paired .catalog-search{padding-left:7px;gap:4px}
+  .catalog-discovery-paired .catalog-search>svg,.catalog-discovery-paired .catalog-search-button-label{display:none}
+  .catalog-discovery-paired .catalog-search-submit-icon{display:block}
+  .catalog-discovery-paired .catalog-search button{display:grid;place-items:center;flex:0 0 44px;min-width:44px;padding:8px}
+  .catalog-discovery-paired .catalog-search input{font-size:.75rem}
+  .catalog-discovery-paired .catalog-subcategory-select{font-size:.72rem;padding:8px 5px}
+}
+
 
 @media (max-width: 1023px) {
   .site-header { grid-template-columns: 1fr auto 1fr; }

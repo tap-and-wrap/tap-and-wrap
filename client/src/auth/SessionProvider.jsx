@@ -14,7 +14,12 @@ export function SessionProvider({ children }) {
       if (channel) channel.postMessage('changed');
       else try { localStorage.setItem('tap-wrap-session-change', `${Date.now()}:${Math.random()}`); } catch { /* Focus verification still works. */ }
     };
-    const focus = () => { if (sessionSnapshot().phase !== 'transition') void refreshSession(); };
+    const focus = () => {
+      const current = sessionSnapshot();
+      // A verified guest stays a guest until an explicit probe or auth event.
+      // Verified accounts still check expiry/revocation when returning to a tab.
+      if (current.phase !== 'transition' && !(current.phase === 'ready' && !current.user)) void refreshSession();
+    };
     const storage = event => { if (event.key === 'tap-wrap-session-change') sessionChangedElsewhere(); };
     if (channel) channel.onmessage = sessionChangedElsewhere;
     configureSession(cache, notify);
