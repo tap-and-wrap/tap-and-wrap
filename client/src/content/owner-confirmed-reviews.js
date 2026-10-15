@@ -1,77 +1,78 @@
 // Confirmed owner-provided names matched to original screenshot numbers.
 // Quote permission reported by the owner; English quotes are editorial adaptations, not verbatim.
-// No star ratings are asserted; #71 collage has no standalone quote.
+// The brand owner explicitly confirmed five-star ratings for these 12 featured reviews.
+// Non-featured candidates retain unconfirmed ratings; #71 collage has no standalone quote.
 export const ownerFeaturedReviews = Object.freeze([
   {
     "id": "TAW-R021",
     "authorLabel": "Yasmin Khaled",
-    "rating": null,
+    "rating": 5,
     "text": "The gift arrived! Thank you for your patience and effort. He loved it, and it won’t be the last time."
   },
   {
     "id": "TAW-R048",
     "authorLabel": "Noura Tarek",
-    "rating": null,
+    "rating": 5,
     "text": "Everything was perfect, and my mom was so happy with the gift. Thank you!"
   },
   {
     "id": "TAW-R061",
     "authorLabel": "Mayar Ahmed",
-    "rating": null,
+    "rating": 5,
     "text": "It’s amazing! You’ll be my go-to from now on. You saved my day!"
   },
   {
     "id": "TAW-R042",
     "authorLabel": "Sara Mohamed",
-    "rating": null,
+    "rating": 5,
     "text": "The colors, glitter roses, and little lights are perfect. I trusted your taste, and I was right!"
   },
   {
     "id": "TAW-R074",
     "authorLabel": "Joudy Mahmoud",
-    "rating": null,
+    "rating": 5,
     "text": "The whole order is beautiful! Thank you for your effort—it turned out exactly how I wanted."
   },
   {
     "id": "TAW-R017",
     "authorLabel": "Nada Mostafa",
-    "rating": null,
+    "rating": 5,
     "text": "I’m so happy with all the details and how the box looks!"
   },
   {
     "id": "TAW-R049",
     "authorLabel": "Shorouk Ahmed",
-    "rating": null,
+    "rating": 5,
     "text": "The gift is so nice! Definitely not the last time I’ll order."
   },
   {
     "id": "TAW-R054",
     "authorLabel": "Raghda Ahmed",
-    "rating": null,
+    "rating": 5,
     "text": "Just perfect! Exactly how I imagined it."
   },
   {
     "id": "TAW-R059",
     "authorLabel": "Marwa Hassan",
-    "rating": null,
+    "rating": 5,
     "text": "It’s beyond beautiful! Thank you for the packaging and everything."
   },
   {
     "id": "TAW-R036",
     "authorLabel": "Mai Hassan",
-    "rating": null,
+    "rating": 5,
     "text": "The flowers look stunning, and the boxes are so chic!"
   },
   {
     "id": "TAW-R016",
     "authorLabel": "Karim Mohamed",
-    "rating": null,
+    "rating": 5,
     "text": "Thank you so much for your services. You’ve been amazing!"
   },
   {
     "id": "TAW-R003",
     "authorLabel": "Nour Khaled",
-    "rating": null,
+    "rating": 5,
     "text": "I love it! This made me so happy. Thank you so much!"
   }
 ]);
