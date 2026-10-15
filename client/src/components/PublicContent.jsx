@@ -1,3 +1,5 @@
+import { productHref } from '../../../shared/product-paths.mjs';
+import TestimonialCard from './TestimonialCard.jsx';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -93,7 +95,7 @@ export function PublishedBundles() {
   const query = useQuery({ queryKey: ['website', 'bundles'], queryFn: ({ signal }) => getPublishedBundles(signal), staleTime: 60_000, retry: false, refetchOnWindowFocus: false });
   const bundles = query.data?.bundles || [];
   if (!bundles.length) return null;
-  return <section className="section" aria-labelledby="home-bundles-heading"><div className="section-heading"><p className="eyebrow">THOUGHTFUL COMBINATIONS</p><h2 id="home-bundles-heading">Gift Bundles</h2></div><div className="website-bundle-grid">{bundles.map(bundle => <article className="website-bundle" key={bundle.id}><h3>{bundle.name}</h3>{bundle.description && <p>{bundle.description}</p>}<p>{Number.isSafeInteger(bundle.effectiveDiscountPiastres) ? formatCatalogPrice(bundle.effectiveDiscountPiastres) : bundle.discountKind === 'percentage' ? `${bundle.discountValue / 100}%` : `Up to ${formatCatalogPrice(bundle.discountValue)}`} bundle saving when all configured items are eligible in your cart.</p><ul>{bundle.products.map(product => <li key={`${product._id}:${product.variantKey || ''}`}><Link to={`/products/${product.slug}`}>{product.name}</Link> × {product.bundleQuantity || 1}</li>)}</ul><p className="editorial-note">The server applies eligible bundle savings at checkout.</p></article>)}</div></section>;
+  return <section className="section" aria-labelledby="home-bundles-heading"><div className="section-heading"><p className="eyebrow">THOUGHTFUL COMBINATIONS</p><h2 id="home-bundles-heading">Gift Bundles</h2></div><div className="website-bundle-grid">{bundles.map(bundle => <article className="website-bundle" key={bundle.id}><h3>{bundle.name}</h3>{bundle.description && <p>{bundle.description}</p>}<p>{Number.isSafeInteger(bundle.effectiveDiscountPiastres) ? formatCatalogPrice(bundle.effectiveDiscountPiastres) : bundle.discountKind === 'percentage' ? `${bundle.discountValue / 100}%` : `Up to ${formatCatalogPrice(bundle.discountValue)}`} bundle saving when all configured items are eligible in your cart.</p><ul>{bundle.products.map(product => <li key={`${product._id}:${product.variantKey || ''}`}><Link to={productHref(product)}>{product.name}</Link> × {product.bundleQuantity || 1}</li>)}</ul><p className="editorial-note">The server applies eligible bundle savings at checkout.</p></article>)}</div></section>;
 }
 export function ReviewCards({ reviews }) {
   return <div className="website-reviews">{reviews.map(review => <figure key={review.id}>
@@ -112,10 +114,7 @@ export function ProductReviews({ slug, preview, enabled = true }) {
 export function ReviewMarquee({ reviews }) {
   return <div className="review-marquee">
     <div className="review-marquee-window" tabIndex={0} aria-label="Customer testimonials">
-      <div className="review-marquee-track">{[0, 1].map(copy => <div className="review-marquee-group" key={copy} aria-hidden={copy === 1 ? true : undefined}>{reviews.map(review => <figure key={review.id}>
-        <blockquote>{review.text}</blockquote>
-        <figcaption><span>{review.authorLabel}</span><span className="review-marquee-rating" aria-label={review.rating === 5 ? '5 out of 5 stars' : undefined}>{review.rating === 5 ? '★★★★★' : ''}</span></figcaption>
-      </figure>)}</div>)}</div>
+      <div className="review-marquee-track">{[0, 1].map(copy => <div className="review-marquee-group" key={copy} aria-hidden={copy === 1 ? true : undefined}>{reviews.map(review => <TestimonialCard key={review.id} review={review}/>)}</div>)}</div>
     </div>
   </div>;
 }

@@ -13,6 +13,22 @@ const product = { _id: 'product-one', slug: 'fixture-product', name: 'Fixture Pr
 const mediaVerification = { version: 1, source: 'authorized-media-object-verification', objects: [{ approved: true, url: product.mainImageUrl, sha256: 'a'.repeat(64), sizeBytes: 18000, width: 900, height: 900, contentType: 'image/webp', objectVersion: 'fixture-v1', verifiedAt: '2026-01-01T00:00:00Z', validUntil: '2099-01-01T00:00:00Z' }] };
 function catalog(patch = {}) { return { version: 1, source: 'approved-public-catalog', generatedAt: new Date().toISOString(), mediaOrigins: ['https://media.example'], mediaVerification: structuredClone(mediaVerification), products: [structuredClone(product)], categories: [structuredClone(root), structuredClone(child)], checkoutEnabled: false, ...patch }; }
 
+test('permanent product paths govern static canonicals, links and sitemap while identities stay unchanged', () => {
+  const source = catalog();
+  source.products[0].publicPath = '/products/readable-gift';
+  source.products[0].publicAliases = ['historic-gift'];
+  const plan = buildSeoPlan({ catalog: source, siteOrigin: origin, publish: true });
+  const route = plan.routes.get('/products/readable-gift');
+  assert.ok(route); assert.equal(plan.routes.has('/products/fixture-product'), false);
+  assert.match(renderRouteHtml(template, route, origin), /rel="canonical" href="https:\/\/shop.example\/products\/readable-gift"/);
+  assert.match(plan.routes.get('/shop').body, /href="\/products\/readable-gift"/);
+  assert.match(sitemapXml(plan), /\/products\/readable-gift/);
+  assert.equal(plan.catalog.products[0].slug, 'fixture-product');
+  const duplicate = { ...source.products[0], _id: 'another-product', slug: 'another-stored-slug' };
+  assert.throws(() => validateCatalog({ ...source, products: [...source.products, duplicate] }), /Conflicting product addresses/);
+  assert.throws(() => validateCatalog({ ...source, products: [{ ...source.products[0], publicPath: 'https://untrusted.example' }] }), /Invalid public product path/);
+});
+
 test('canonical origin rejects credentials, HTTP, paths, queries and local targets', () => {
   assert.equal(canonicalOrigin(origin), origin);
   for (const invalid of ['http://shop.example', 'https://secret:password@shop.example', 'https://shop.example/path', 'https://shop.example/?secret=1', 'https://shop.example/#x', 'https://localhost', 'https://127.0.0.1']) assert.equal(canonicalOrigin(invalid), null);

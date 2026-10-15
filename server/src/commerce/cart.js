@@ -7,6 +7,7 @@ import { quoteCartLine, publicCartLine } from './pricing.js';
 import { createPricingContext } from './pricing-context.js';
 import { transferUploadOwnership, attachUploadsToCart, detachUnusedCartUploads } from './uploads.js';
 import { commerceError, checkedMoney } from './errors.js';
+import { attachProductPaths } from '../catalog/product-addresses.js';
 
 const expiresAt = () => new Date(Date.now() + 30 * 86400000);
 export async function readCart(owner, { session } = {}) {
@@ -34,7 +35,10 @@ export async function quoteCart(owner, { session, strict = false } = {}) {
 }
 export async function cartResponse(owner) {
   const quote = await quoteCart(owner);
-  return { cart: { items: quote.items.map(item => item.valid ? publicCartLine(item) : item), subtotalPiastres: quote.subtotalPiastres, quantity: quote.quantity }, checkoutEnabled: env.checkoutEnabled === true,
+  const items = quote.items.map(item => item.valid ? publicCartLine(item) : item);
+  const paths = await attachProductPaths(items.filter(item => item.slug).map(item => ({ _id: item.productId, slug: item.slug })));
+  const byProduct = new Map(paths.map(product => [String(product._id), product.publicPath]));
+  return { cart: { items: items.map(item => item.slug && byProduct.get(String(item.productId)) ? { ...item, publicPath: byProduct.get(String(item.productId)) } : item), subtotalPiastres: quote.subtotalPiastres, quantity: quote.quantity }, checkoutEnabled: env.checkoutEnabled === true,
     // A UI scope identifier only, never an authorization credential or raw owner.
     checkoutOwnerKey: createHash('sha256').update(`checkout-context:${owner}`).digest('hex') };
 }

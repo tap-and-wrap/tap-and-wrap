@@ -1,3 +1,4 @@
+import { productHref } from '../../../shared/product-paths.mjs';
 import { Link } from 'react-router-dom';
 import { useRef } from 'react';
 import { formatCatalogPrice } from '../utils/catalog.js';
@@ -9,9 +10,9 @@ export default function ProductCard({ product }) {
   const approvedPrice = product.priceApproved === true && Number.isSafeInteger(product.pricePiastres) && product.pricePiastres > 0;
   const enquiryRequired = product.browseOnly === true || !approvedPrice || product.orderingAvailable !== true;
   const orderingAvailable = !enquiryRequired && product.orderingAvailable === true;
-  const enquiryUrl = `https://wa.me/201508216472?text=${encodeURIComponent(`Hello Tap & Wrap, please confirm the price and availability of ${product.name}: https://tapandwrap.net/products/${encodeURIComponent(product.slug)}`)}`;
+  const enquiryUrl = `https://wa.me/201508216472?text=${encodeURIComponent(`Hello Tap & Wrap, please confirm the price and availability of ${product.name}: https://tapandwrap.net${productHref(product)}`)}`;
   const action = !orderingAvailable ? 'Sold Out' : product.requiresOptions ? 'Choose Options' : 'Add to Cart';
-  const detailUrl = `/products/${encodeURIComponent(product.slug)}`;
+  const detailUrl = productHref(product);
 
   return (
     <article ref={cardRef} className="catalog-card">

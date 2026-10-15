@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { productHref } from '../../../shared/product-paths.mjs';
 import { useCart } from '../commerce/CartContext';
 import { commerceError, money } from '../commerce/api';
 
@@ -11,7 +12,7 @@ export default function CartPage() {
     {!cart.items.length ? <div className="commerce-empty"><p>Your cart is empty.</p><Link className="button button-primary" to="/shop">Explore the shop</Link></div> : <div className="commerce-cart-layout">
       <section aria-label="Cart items" className="commerce-cart-items">{cart.items.map((item) => {
         const ProductLink = item.slug ? Link : 'div';
-        const detailUrl = item.slug ? `/products/${item.slug}` : undefined;
+        const detailUrl = item.slug ? productHref(item) : undefined;
         return <article key={item.id} className="commerce-cart-item">
         <ProductLink to={detailUrl} className="commerce-cart-photo">{item.mainImageUrl ? <img src={item.mainImageUrl} alt={item.name} loading="lazy" /> : <span>Product image</span>}</ProductLink>
         <div className="commerce-cart-item-content"><ProductLink to={detailUrl}><h2>{item.name || 'Unavailable product'}</h2></ProductLink>{item.variantKey && <p className="commerce-muted">{item.variantLabel || item.variantKey}</p>}

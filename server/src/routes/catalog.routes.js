@@ -31,7 +31,10 @@ router.get('/products/:slug', async (req, res) => {
   const parameters = product.priceApproved && Number.isSafeInteger(product.pricePiastres) && product.pricePiastres > 0
     ? monetaryParameters([{ ...product, quantity: 1 }], product.pricePiastres)
     : { content_type: 'product', content_ids: [product._id], num_items: 1 };
-  const tracking = await captureAction(req, 'ViewContent', parameters, { sourcePath: `/products/${product.slug}` });
+  // The legacy response is used only to replace history. Count the canonical
+  // request, rather than inventing a second view for that same navigation.
+  const tracking = product.publicPath && product.publicPath !== `/products/${req.params.slug}` ? null
+    : await captureAction(req, 'ViewContent', parameters, { sourcePath: product.publicPath || `/products/${product.slug}` });
   res.set('Cache-Control', tracking ? 'private, no-store' : 'public, max-age=0, must-revalidate');
   res.json({ ok: true, data: { product, tracking } });
 });

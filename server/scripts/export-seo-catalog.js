@@ -181,6 +181,24 @@ export async function buildApprovedSeoExport(source, configuration = {}, { maxim
       if (dto.subcategory) categoryMap.get(dto.subcategory._id).productCount += 1;
     }
   }, maximumPages);
+  if (configuration.PRODUCT_ALIASES_ENABLED === 'true') {
+    if (!source.readProductAddressPage) throw new Error('Alias-enabled SEO export requires the authoritative registry');
+    for (let offset = 0; offset < products.length; offset += 20) {
+      const batch = products.slice(offset, offset + 20);
+      const addresses = [];
+      await pages(params => source.readProductAddressPage({ ...params, productIds: batch.map(product => product._id) }), rows => {
+        addresses.push(...rows);
+        if (addresses.length > 2000) throw new Error('Product alias export bound exceeded');
+      }, maximumPages);
+      for (const product of batch) {
+        const owned = addresses.filter(address => String(address.productId) === product._id);
+        const canonical = owned.filter(address => address.canonical === true);
+        if (canonical.length !== 1 || !owned.some(address => address.slug === product.slug) || owned.some(address => !SLUG.test(address.slug || ''))) throw new Error('Product aliases are incomplete or invalid');
+        product.publicPath = `/products/${canonical[0].slug}`;
+        product.publicAliases = owned.filter(address => address.slug !== canonical[0].slug).map(address => address.slug);
+      }
+    }
+  }
   const mediaOrigins = mediaBaseUrl ? [approvedMediaOrigin(mediaBaseUrl)] : [];
   const verified = verifiedMediaEntries(mediaVerification, mediaOrigins, now);
   const objects = [...new Set(products.map((item) => item.mainImageUrl))].map((url) => verified.get(url)).filter(Boolean);
@@ -213,6 +231,7 @@ export async function openReadOnlySeoSource(uri, settings) {
       return page('products', { $and: [publicProductFilter(), { categoryId: { $in: mainIds } }, { $or: [{ subcategoryId: null }, { subcategoryId: { $in: childIds } }] }] }, PRODUCT_FIELDS, params);
     },
     readSiteContent: async () => { validate(); return connection.db.collection('sitecontents').findOne({ key: 'website-v1' }, { projection: CONTENT_FIELDS, maxTimeMS: 3000 }); },
+    readProductAddressPage: params => page('productaddresses', { productId: { $in: params.productIds.map(id => new mongoose.Types.ObjectId(id)) } }, { slug: 1, productId: 1, canonical: 1 }, params),
     close: () => connection.close(),
   };
 }

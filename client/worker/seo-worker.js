@@ -14,6 +14,7 @@ async function manifestFor(assets, request) {
     if (value.publicRoutes.some((pathname) => typeof pathname !== 'string' || !/^\/(?:[a-z0-9-]+(?:\/[a-z0-9-]+)*)?$/.test(pathname) || !value.routeFiles[pathname]) || value.indexableRoutes.some((pathname) => !value.publicRoutes.includes(pathname))) return null;
     if (Object.values(value.routeFiles).some((file) => typeof file !== 'string' || !new RegExp(`^/seo-pages/${value.publication.id}/(?:[a-z0-9-]+/)*[a-z0-9-]+\\.html$`).test(file))) return null;
     if (value.categoryRedirects && (typeof value.categoryRedirects !== 'object' || Array.isArray(value.categoryRedirects) || Object.keys(value.categoryRedirects).length > 10_000 || Object.entries(value.categoryRedirects).some(([from, to]) => !/^\/categories\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(from) || !/^\/categories\/[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)?$/.test(to) || !value.publicRoutes.includes(to) || value.publicRoutes.includes(from)))) return null;
+    if (value.productRedirects && (typeof value.productRedirects !== 'object' || Array.isArray(value.productRedirects) || Object.keys(value.productRedirects).length > 100_000 || Object.entries(value.productRedirects).some(([from,to]) => !/^\/products\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(from) || !/^\/products\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(to) || !value.publicRoutes.includes(to) || value.publicRoutes.includes(from)))) return null;
     return value;
   } catch { return null; }
 }
@@ -50,10 +51,11 @@ async function routeRequest(request, env) {
   const manifest = await manifestFor(env.ASSETS, request);
   const canonicalPath = pathname === '/' ? '/' : pathname.replace(/\/+$/, '');
   const withdrawn = withdrawalPaths(env.SEO_WITHDRAWN_PATHS);
-  for (const [legacy, friendly] of Object.entries(manifest?.categoryRedirects || {})) if (withdrawn.has(legacy)) withdrawn.add(friendly);
+  for (const [legacy, friendly] of Object.entries({ ...manifest?.categoryRedirects, ...manifest?.productRedirects })) if (withdrawn.has(legacy)) withdrawn.add(friendly);
   if (withdrawn.has(canonicalPath) || /^\/seo-pages(?:\/|$)/.test(canonicalPath)) return privateResponse(await asset(env.ASSETS, request, manifest?.routeFiles?.['/404'] || '/404.html'), 404);
   const customize = PRODUCT_CUSTOMIZE.exec(canonicalPath);
-  if (PRIVATE_DOCUMENT.test(canonicalPath) || customize && manifest?.productSlugs.includes(customize[1])) {
+  if (customize && (withdrawn.has(`/products/${customize[1]}`) || withdrawn.has(manifest?.productRedirects?.[`/products/${customize[1]}`]))) return privateResponse(await asset(env.ASSETS, request, '/404.html'), 404);
+  if (PRIVATE_DOCUMENT.test(canonicalPath) || customize && (manifest?.productSlugs.includes(customize[1]) || manifest?.productRedirects?.[`/products/${customize[1]}`])) {
     const root = canonicalPath.split('/')[1];
     const shell = customize ? '/customize.html' : root === 'orders' ? '/my-orders.html' : `/${root}.html`;
     const response = await asset(env.ASSETS, request, manifest?.routeFiles?.[shell.replace(/\.html$/, '')] || shell);
@@ -72,7 +74,7 @@ async function routeRequest(request, env) {
   }
   if (canonicalPath === '/seo-manifest.json') return privateResponse(await env.ASSETS.fetch(request));
   if (manifest.indexingEnabled === true && (!fresh || env.SEO_INDEXING_ENABLED === 'true' && env.SEO_EXPECTED_PUBLICATION_ID !== manifest.publication.id)) return new Response('Catalog snapshot is awaiting an authorized refresh. Please try again later.', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Retry-After': '300', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow, noarchive' } });
-  const categoryTarget = manifest.categoryRedirects?.[canonicalPath];
+  const categoryTarget = manifest.categoryRedirects?.[canonicalPath] || manifest.productRedirects?.[canonicalPath];
   if (categoryTarget) {
     if (withdrawn.has(categoryTarget)) return privateResponse(await asset(env.ASSETS, request, manifest.routeFiles['/404'] || '/404.html'), 404);
     const target = new URL(request.url);

@@ -1,3 +1,4 @@
+import { productHref } from '../../../shared/product-paths.mjs';
 import { categoryPublicPaths, categoryHref } from '../../../shared/category-paths.mjs';
 import { mkdir, readFile, writeFile, rm, stat, realpath, rename, rmdir, copyFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -45,12 +46,13 @@ function validDate(value) {
 }
 
 function sanitizeProduct(product, categories, mediaOrigins, verifiedMedia) {
+  if (product.publicPath && !/^\/products\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(product.publicPath)) throw new Error('Invalid public product path');
   const category = categories.find((entry) => entry._id === String(product.category?._id) && !entry.parentId);
   if (!category) return null;
   const subcategory = product.subcategory ? categories.find((entry) => entry._id === String(product.subcategory._id) && entry.parentId === category._id) : null;
   if (product.subcategory && !subcategory) return null;
   return {
-    _id: String(product._id), name: cleanText(product.name, 160), slug: product.slug, description: cleanText(product.description, 10_000), category, subcategory,
+    _id: String(product._id), name: cleanText(product.name, 160), slug: product.slug, publicPath: productHref(product), publicAliases: product.publicAliases || [], description: cleanText(product.description, 10_000), category, subcategory,
     mainImageUrl: publicImageUrl(product.mainImageUrl, mediaOrigins), mediaVerified: Boolean(verifiedMedia.get(publicImageUrl(product.mainImageUrl, mediaOrigins))), media: verifiedMedia.get(publicImageUrl(product.mainImageUrl, mediaOrigins)) || null,
     pricePiastres: product.pricePiastres, priceApproved: true, orderingAvailable: product.orderingAvailable === true,
     compareAtPiastres: Number.isSafeInteger(product.compareAtPiastres) && product.compareAtPiastres > product.pricePiastres ? product.compareAtPiastres : null,
@@ -110,12 +112,20 @@ export function validateCatalog(catalog = {}, { now = new Date() } = {}) {
     products.push(safeProduct);
   }
   validateUniqueSlugs(products, 'product');
+  const productOwners = new Map();
+  for (const product of products) {
+    if (!Array.isArray(product.publicAliases) || product.publicAliases.length > 100) throw new Error('Invalid product aliases');
+    for (const slug of [product.slug, product.publicPath.split('/').at(-1), ...product.publicAliases]) {
+      if (!SLUG.test(slug) || productOwners.has(slug) && productOwners.get(slug) !== product._id) throw new Error('Conflicting product addresses');
+      productOwners.set(slug, product._id);
+    }
+  }
   return { products, categories, checkoutEnabled: catalog.checkoutEnabled === true, mediaOrigins, report };
 }
 
 function productCards(products, emptyMessage = 'No eligible products are included in this approved export.') {
   if (!products.length) return paragraph(emptyMessage);
-  return `<ul class="seo-product-list">${products.slice(0, 20).map((product) => `<li>${product.mainImageUrl ? `<img src="${escapeHtml(product.mainImageUrl)}" alt="${escapeHtml(product.name)}" width="400" height="400" loading="lazy" decoding="async">` : ''}<h2>${link(`/products/${product.slug}`, product.name)}</h2>${paragraph(money(product.pricePiastres))}${product.category ? paragraph(product.category.name) : ''}</li>`).join('')}</ul>`;
+  return `<ul class="seo-product-list">${products.slice(0, 20).map((product) => `<li>${product.mainImageUrl ? `<img src="${escapeHtml(product.mainImageUrl)}" alt="${escapeHtml(product.name)}" width="400" height="400" loading="lazy" decoding="async">` : ''}<h2>${link(productHref(product), product.name)}</h2>${paragraph(money(product.pricePiastres))}${product.category ? paragraph(product.category.name) : ''}</li>`).join('')}</ul>`;
 }
 
 function staticBody(pathname, catalog, hasCatalogExport) {
@@ -284,7 +294,7 @@ export async function writeSeoOutput({ outputDirectory = path.join(CLIENT_DIRECT
     files.push(generatedFilename);
   }
   const changeReport = comparePublications(previous?.publication, publication);
-  const manifest = { version: 2, origin: plan.origin, indexingEnabled: plan.report.indexingEnabled, publicRoutes: [...plan.routes.values()].filter((route) => route.indexable || !PRIVATE_STATIC.includes(route.pathname) && route.pathname !== '/404').map((route) => route.pathname), indexableRoutes: [...plan.routes.values()].filter((route) => route.indexable).map((route) => route.pathname), productSlugs: plan.catalog.products.map((product) => product.slug), categorySlugs: plan.catalog.categories.map((category) => category.slug), categoryRedirects: Object.fromEntries(plan.catalog.categories.filter(category => categoryHref(category) !== `/categories/${category.slug}`).map(category => [`/categories/${category.slug}`, categoryHref(category)])), routeFiles, publication };
+  const manifest = { version: 2, origin: plan.origin, indexingEnabled: plan.report.indexingEnabled, publicRoutes: [...plan.routes.values()].filter((route) => route.indexable || !PRIVATE_STATIC.includes(route.pathname) && route.pathname !== '/404').map((route) => route.pathname), indexableRoutes: [...plan.routes.values()].filter((route) => route.indexable).map((route) => route.pathname), productSlugs: plan.catalog.products.map(product => productHref(product).split('/').at(-1)), productRedirects: Object.fromEntries(plan.catalog.products.flatMap(product => [...new Set([product.slug, ...product.publicAliases])].filter(slug => `/products/${slug}` !== productHref(product)).map(slug => [`/products/${slug}`, productHref(product)]))), categorySlugs: plan.catalog.categories.map((category) => category.slug), categoryRedirects: Object.fromEntries(plan.catalog.categories.filter(category => categoryHref(category) !== `/categories/${category.slug}`).map(category => [`/categories/${category.slug}`, categoryHref(category)])), routeFiles, publication };
   for (const file of ['sitemap.xml', 'robots.txt', 'seo-manifest.json', 'seo-change-report.json', OWNED_FILE, '.assetsignore']) await assertRealLocation(resolvedOutput, path.join(resolvedOutput, file));
   // No deploy happens here. Worker-visible publication switches only after every
   // immutable document is ready; interrupted preparation leaves the old manifest.

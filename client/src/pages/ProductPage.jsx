@@ -1,6 +1,7 @@
+import { productHref } from '../../../shared/product-paths.mjs';
 import { categoryHref } from '../../../shared/category-paths.mjs';
 import { useEffect, useId, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronRight, Minus, Plus } from 'lucide-react';
 import { getProduct } from '../services/catalog.js';
@@ -46,7 +47,7 @@ export function ProductContent({ product, relatedProducts = [], preview = false,
   const approvedPrice = product.priceApproved === true && (!preview || variant?.priceApproved !== false) && Number.isSafeInteger(price) && price > 0;
   const enquiryRequired = !preview && (product.browseOnly === true || !approvedPrice || product.orderingAvailable !== true || variant?.orderingAvailable === false);
   const orderingAvailable = !preview && !enquiryRequired && approvedPrice && product.orderingAvailable === true && (!variant || variant.orderingAvailable === true);
-  const enquiryUrl = `https://wa.me/201508216472?text=${encodeURIComponent(`Hello Tap & Wrap, please confirm the price and availability of ${product.name}: https://tapandwrap.net/products/${encodeURIComponent(product.slug)}`)}`;
+  const enquiryUrl = `https://wa.me/201508216472?text=${encodeURIComponent(`Hello Tap & Wrap, please confirm the price and availability of ${product.name}: https://tapandwrap.net${productHref(product)}`)}`;
   const maximumQuantity = quantityLimit(variant?.inventory || product.inventory);
   const displayPrice = enquiryRequired ? 'Price on request' : approvedPrice ? formatCatalogPrice(price) : preview ? 'Price awaiting approval' : 'Price unavailable';
   const personalizationFields = product.personalization?.fields || [];
@@ -135,7 +136,7 @@ export function ProductContent({ product, relatedProducts = [], preview = false,
             {addError && <p role="alert" className="error-text">{addError}</p>}
             {adding && <p className="upload-progress" role="status"><progress aria-label="Adding your gift"/>{uploadStatus || 'Preparing your item…'}</p>}
             <p id="product-ordering-notice" className="product-ordering-notice">{preview ? 'This authenticated preview does not publish the product or enable cart, checkout or customization.' : enquiryRequired ? 'This item is for browsing only. Our team will confirm price, options, and availability on WhatsApp; online purchase is disabled.' : personalizationFields.some(field => field.type === 'image') ? 'Your selected photos stay on this device until you press Add to Cart.' : 'Prices and availability are verified when adding to your cart.'}</p>
-            {canCustomize && !enquiryRequired && <Link className="catalog-secondary-button product-customize-button" to={`/products/${encodeURIComponent(product.slug)}/customize`}>Customize This</Link>}
+            {canCustomize && !enquiryRequired && <Link className="catalog-secondary-button product-customize-button" to={`${productHref(product)}/customize`}>Customize This</Link>}
           </form>
           <div className="product-accordions">
             <details open><summary>Description</summary><div className="product-description">{product.description || 'No description has been provided yet.'}</div></details>
@@ -158,6 +159,7 @@ export function ProductContent({ product, relatedProducts = [], preview = false,
 
 export default function ProductPage() {
   const { slug } = useParams();
+  const location = useLocation();
   const { checkoutEnabled } = useCart();
   const query = useQuery({ queryKey: ['catalog', 'product', slug], queryFn: ({ signal }) => getProduct(slug, signal) });
   useEffect(() => { if (query.data?.tracking) emitTracking(query.data.tracking); }, [query.data]);
@@ -165,5 +167,6 @@ export default function ProductPage() {
   if (query.isLoading) return <main className="catalog-product-page">{metadata}<div className="catalog-state" role="status"><h1>Loading product…</h1></div></main>;
   if (query.isError) return <main className="catalog-product-page">{metadata}<div className="catalog-state" role="alert"><h1>{query.error?.status === 404 ? 'Product not found' : 'We couldn’t load this product'}</h1><p>{query.error?.message || 'Please try again in a moment.'}</p><div className="catalog-state-actions"><Link className="catalog-secondary-button" to="/shop">Back to Shop</Link>{query.error?.status !== 404 && <button type="button" className="button button-dark" onClick={() => query.refetch()}>Try again</button>}</div></div></main>;
   if (!query.data?.product) return <main className="catalog-product-page">{metadata}<div className="catalog-state"><h1>Product not found</h1><Link className="catalog-secondary-button" to="/shop">Back to Shop</Link></div></main>;
+  if (location.pathname !== productHref(query.data.product)) return <Navigate replace to={`${productHref(query.data.product)}${location.search}`} />;
   return <>{metadata}<ProductContent key={slug} product={query.data.product} relatedProducts={query.data.relatedProducts || query.data.product.relatedProducts || []}/></>;
 }

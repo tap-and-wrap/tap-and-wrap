@@ -91,6 +91,7 @@ function uncertainCommit(error, callbackCompleted) {
  */
 export async function applyCatalogPlan(plan, { Product, ComponentOption, Category, batchSize = 50, onProgress } = {}) {
   requireValidPlan(plan);
+  if (process.env.PRODUCT_ALIASES_ENABLED === 'true') throw new Error('Alias-enabled bulk imports require maintenance mode and a reviewed address backfill before reactivation.');
   if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 100) throw new Error('Batch size must be an integer from 1 to 100');
   if (![Product, ComponentOption, Category].every((Model) => typeof Model === 'function')) throw new Error('Explicit staging/test models are required');
   const models = [Product, ComponentOption, Category];

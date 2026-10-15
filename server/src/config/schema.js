@@ -1,5 +1,7 @@
 import { isDeepStrictEqual } from 'node:util';
 import { Product } from '../models/Product.js';
+import { ProductAddress } from '../models/ProductAddress.js';
+import { env } from './env.js';
 import { Category } from '../models/Category.js';
 import { ComponentOption } from '../models/ComponentOption.js';
 import { User } from '../models/User.js';
@@ -13,7 +15,7 @@ import { MetaEvent } from '../models/MetaEvent.js';
 import { assertDatabaseWriteAllowed, DatabaseSafetyError } from './database-safety.js';
 
 export const databaseModels = [...new Set([Product, Category, ComponentOption, User, Session, ...commerceModels,
-  ...websiteModels, AccountActionToken, EmailRateWindow, TrackingConsent, MetaEvent])];
+  ...websiteModels, AccountActionToken, EmailRateWindow, TrackingConsent, MetaEvent, ...(env.productAliasesEnabled ? [ProductAddress] : [])])];
 
 function sameKeys(required, actual) {
   const entries = Object.entries(required);

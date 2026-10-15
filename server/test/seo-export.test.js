@@ -28,6 +28,24 @@ function sourceFixture(products = [product]) {
   return { calls, source: { readMainCategoryPage: pagedFixture([main], calls.main), readSubcategoryPage: pagedFixture([child], calls.children), readProductPage: pagedFixture(products, calls.products), readSiteContent: async () => null, close: async () => { closed += 1; } }, closed: () => closed };
 }
 
+test('alias-enabled SEO exports consume indexed registry pages and reject incomplete canonical identity', async () => {
+  const fixture = sourceFixture();
+  const addressCalls = [];
+  const rows = [
+    { _id: '444444444444444444444444', productId: product._id, slug: product.slug, canonical: false },
+    { _id: '555555555555555555555555', productId: product._id, slug: 'readable-gift', canonical: true },
+  ];
+  fixture.source.readProductAddressPage = pagedFixture(rows, addressCalls);
+  const { catalog } = await buildApprovedSeoExport(fixture.source, { PRODUCT_ALIASES_ENABLED: 'true' });
+  assert.equal(catalog.products[0].publicPath, '/products/readable-gift');
+  assert.deepEqual(catalog.products[0].publicAliases, [product.slug]);
+  assert.equal(catalog.products[0].slug, product.slug);
+  assert.equal(addressCalls[0].limit, 20);
+  assert.ok(buildSeoPlan({ catalog }).routes.has('/products/readable-gift'));
+  fixture.source.readProductAddressPage = pagedFixture(rows.slice(0, 1), []);
+  await assert.rejects(buildApprovedSeoExport(fixture.source, { PRODUCT_ALIASES_ENABLED: 'true' }), /incomplete/);
+});
+
 test('SEO export retains public collision paths while keeping inactive identity records private', async () => {
   const { source } = sourceFixture();
   const hidden = { ...main, _id: '444444444444444444444444', slug: 'hidden-root', active: false };

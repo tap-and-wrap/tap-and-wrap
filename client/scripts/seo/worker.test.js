@@ -177,6 +177,23 @@ test('an enabled indexing mode never substitutes a dynamic draft shell for an ap
   assert.equal(response.status, 404);
 });
 
+test('product aliases redirect to reviewed canonical pages and preserve queries and private customization access', async () => {
+  const { env, assets, manifest } = fixtureEnv();
+  manifest.productRedirects = { '/products/legacy-product-id': '/products/approved-product' };
+  const save = () => assets.set('/seo-manifest.json', JSON.stringify(manifest)); save();
+  const response = await handleSeoRequest(new Request('https://shop.example/products/legacy-product-id?q=gift'), env);
+  assert.equal(response.status, 308);
+  assert.equal(response.headers.get('location'), 'https://shop.example/products/approved-product?q=gift');
+  const customization = await handleSeoRequest(new Request('https://shop.example/products/legacy-product-id/customize'), env);
+  assert.equal(customization.status, 200); assert.match(customization.headers.get('cache-control'), /no-store/);
+  env.SEO_WITHDRAWN_PATHS = '/products/legacy-product-id';
+  assert.equal((await handleSeoRequest(new Request('https://shop.example/products/approved-product'), env)).status, 404);
+  assert.equal((await handleSeoRequest(new Request('https://shop.example/products/legacy-product-id/customize'), env)).status, 404);
+  delete env.SEO_WITHDRAWN_PATHS;
+  manifest.productRedirects['/products/legacy-product-id'] = 'https://untrusted.example'; save();
+  assert.equal((await handleSeoRequest(new Request('https://shop.example/products/legacy-product-id'), env)).status, 503);
+});
+
 test('legacy category redirects preserve queries and obey withdrawal/freshness guards', async () => {
   const { env, assets, manifest } = fixtureEnv();
   const from = '/categories/approved-category-12345678';

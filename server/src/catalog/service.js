@@ -1,3 +1,4 @@
+import { attachProductPaths, productIdentityFilter, reserveProductAddresses } from './product-addresses.js';
 import { categoryPublicPaths } from '../../../shared/category-paths.mjs';
 import { Product } from '../models/Product.js';
 import { Category } from '../models/Category.js';
@@ -160,7 +161,7 @@ export async function listProducts(query, { admin = false } = {}) {
       : enquiryCategories.childGroups.some(group => sameId(group.categoryId, product.categoryId) && group.subcategoryId.$in.some(id => sameId(id, product.subcategoryId)))
   );
   return {
-    products: admin ? products.map(product => ({ ...adminRevision(product), listedForEnquiry: listedForEnquiry(product) })) : products.map(publicProductCard),
+    products: admin ? products.map(product => ({ ...adminRevision(product), listedForEnquiry: listedForEnquiry(product) })) : await attachProductPaths(products.map(publicProductCard)),
     pagination: paginationResult(pagination, total),
     ...(priceRanges === null ? {} : { priceRange: { min: priceRanges[0]?.min ?? null, max: priceRanges[0]?.max ?? null } }),
   };
@@ -169,7 +170,7 @@ export async function listProducts(query, { admin = false } = {}) {
 export async function getPublicProduct(slugValue) {
   const graph = await activeCategories();
   const visibility = await visibleProductFilter(graph);
-  const product = await Product.findOne({ $and: [visibility, { slug: slugValue }] })
+  const product = await Product.findOne({ $and: [visibility, await productIdentityFilter(slugValue)] })
     .select(PUBLIC_DETAIL_FIELDS)
     .populate([{ path: 'categoryId', select: 'name slug active' }, { path: 'subcategoryId', select: 'name slug active' }])
     .lean().maxTimeMS(QUERY_TIMEOUT_MS);
@@ -180,7 +181,7 @@ export async function getPublicProduct(slugValue) {
     .lean().maxTimeMS(QUERY_TIMEOUT_MS);
   const detail = publicProductDetail(product);
   for (const key of ['category', 'subcategory']) if (detail[key]) detail[key].publicPath = graph.publicPaths.get(String(detail[key]._id));
-  return { ...detail, relatedProducts: related.map(publicProductCard) };
+  return { ...(await attachProductPaths([detail]))[0], relatedProducts: await attachProductPaths(related.map(publicProductCard)) };
 }
 
 export async function getAdminProduct(id, { session } = {}) {
@@ -247,7 +248,7 @@ async function catalogAudit(actor, type, action, record, input, beforeRevision, 
     details: { revisionBefore: beforeRevision, revisionAfter: revisionOf(record), changedFields: fields.slice(0, 20), changedFieldCount: fields.length } }, { session });
 }
 
-async function catalogTransaction(work) {
+async function catalogTransaction(work, attempt = 0) {
   const session = await Product.db.startSession();
   try {
     let result;
@@ -257,6 +258,7 @@ async function catalogTransaction(work) {
     await session.withTransaction(async () => { result = await work(session); });
     return result;
   } catch (error) {
+    if (error.code === 11000 && /product_address_unique|product_canonical_unique/.test(error.message) && attempt < 5) return catalogTransaction(work, attempt + 1);
     if (error.code === 20) throw catalogError(503, 'TRANSACTIONS_REQUIRED', 'Catalog mutations require a transaction-capable database.');
     throw error;
   } finally { await session.endSession(); }
@@ -270,6 +272,7 @@ export async function createProduct(input, { actor } = {}) {
     if (input.inventory) product.inventory = mergeInventory(product.inventory, input.inventory);
     if (input.variants) product.variants = normalizeVariants([], input.variants);
     assertDatabaseWriteAllowed(Product.db, env);
+    await reserveProductAddresses(product, { session });
     await product.save({ session });
     await catalogAudit(actor, 'product', 'created', product, input, null, session);
     return getAdminProduct(product._id, { session });
@@ -291,8 +294,10 @@ export async function updateProduct(id, input, { actor } = {}) {
   if (input.inventory) patch.inventory = mergeInventory(product.inventory, input.inventory);
   if (input.variants) patch.variants = normalizeVariants(product.variants, input.variants);
   if (input.customization) patch.customization = { ...product.customization.toObject(), ...input.customization };
+  await reserveProductAddresses(product, { session });
   product.set(patch);
   assertDatabaseWriteAllowed(Product.db, env);
+  await reserveProductAddresses(product, { session });
   await product.save({ session });
   await catalogAudit(actor, 'product', 'updated', product, patch, beforeRevision, session);
   return getAdminProduct(product._id, { session });

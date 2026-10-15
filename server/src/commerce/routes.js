@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { attachProductPaths } from '../catalog/product-addresses.js';
+import { productHref } from '../../../shared/product-paths.mjs';
 import { z } from 'zod';
 import { rateLimit } from 'express-rate-limit';
 import { pipeline } from 'node:stream/promises';
@@ -91,8 +93,10 @@ commerceRoutes.get('/cart', async (req, res) => res.json({ ok: true, data: await
 commerceRoutes.post('/cart/items', async (req, res) => res.status(201).json({ ok: true, data: await addCartItem(req.commerceOwner, cartItem.parse(req.body), {
   onAdded: async (item) => {
     const parameters = monetaryParameters([item], item.unitPricePiastres * item.quantity);
-    const event = await captureAction(req, 'AddToCart', parameters, { sourcePath: `/products/${item.slug}` });
-    const customized = item.customized ? await captureAction(req, 'CustomizedAddToCart', parameters, { sourcePath: `/products/${item.slug}` }) : null;
+    const [product] = await attachProductPaths([{ _id: item.productId, slug: item.slug }]);
+    const sourcePath = productHref(product);
+    const event = await captureAction(req, 'AddToCart', parameters, { sourcePath });
+    const customized = item.customized ? await captureAction(req, 'CustomizedAddToCart', parameters, { sourcePath }) : null;
     return [event, customized].filter(Boolean);
   },
 }) }));

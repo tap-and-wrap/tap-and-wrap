@@ -1,3 +1,4 @@
+import { productHref } from '../../../shared/product-paths.mjs';
 import { categoryHref } from '../../../shared/category-paths.mjs';
 export const BRAND_NAME = 'Tap & Wrap';
 export const HERO_HEADLINE = 'Makes someone’s heart flap with Tap & Wrap.';
@@ -77,7 +78,7 @@ export function productSeoSignature(product) {
   const category = (value) => value ? { id: String(value._id || ''), name: cleanText(value.name, 160), slug: SLUG.test(value.slug || '') ? value.slug : null } : null;
   const mode = (value) => ['tracked', 'made_to_order'].includes(value?.inventoryMode || value?.inventory?.mode) ? value.inventoryMode || value.inventory.mode : null;
   const price = (value) => Number.isSafeInteger(value) && value >= 0 ? value : null;
-  return JSON.stringify({ name: cleanText(product?.name, 160), slug: SLUG.test(product?.slug || '') ? product.slug : null, description: cleanText(product?.description, 160), category: category(product?.category), subcategory: category(product?.subcategory), image: publicImageUrl(product?.mainImageUrl), price: price(product?.pricePiastres), compareAt: Number.isSafeInteger(product?.compareAtPiastres) && product.compareAtPiastres > product?.pricePiastres ? product.compareAtPiastres : null, orderingAvailable: product?.orderingAvailable === true, inventoryMode: mode(product), variants: (product?.variants || []).map((variant) => ({ price: price(variant.pricePiastres), orderingAvailable: product?.orderingAvailable === true && variant.orderingAvailable === true, inventoryMode: mode(variant) })) });
+  return JSON.stringify({ publicPath: product?.slug ? productHref(product) : null, name: cleanText(product?.name, 160), slug: SLUG.test(product?.slug || '') ? product.slug : null, description: cleanText(product?.description, 160), category: category(product?.category), subcategory: category(product?.subcategory), image: publicImageUrl(product?.mainImageUrl), price: price(product?.pricePiastres), compareAt: Number.isSafeInteger(product?.compareAtPiastres) && product.compareAtPiastres > product?.pricePiastres ? product.compareAtPiastres : null, orderingAvailable: product?.orderingAvailable === true, inventoryMode: mode(product), variants: (product?.variants || []).map((variant) => ({ price: price(variant.pricePiastres), orderingAvailable: product?.orderingAvailable === true && variant.orderingAvailable === true, inventoryMode: mode(variant) })) });
 }
 
 export function productMetadata(product, origin, { indexable = true, checkoutEnabled = false, mediaOrigins, mediaVerified } = {}) {
@@ -87,7 +88,7 @@ export function productMetadata(product, origin, { indexable = true, checkoutEna
   // titles and URLs but must never generate indexable Product or Offer markup.
   const previewDisplay = product?.browseOnly === true && product?.preview?.enabled !== true && SLUG.test(product?.slug || '') && Boolean(cleanText(product?.name));
   const displayable = eligible || previewDisplay;
-  const pathname = displayable ? `/products/${product.slug}` : '/products/unavailable';
+  const pathname = displayable ? productHref(product) : '/products/unavailable';
   const imageUrl = displayable ? publicImageUrl(product.mainImageUrl, mediaOrigins) : null;
   const title = displayable ? `${cleanText(product.name, 120)} | Tap & Wrap` : 'Product unavailable | Tap & Wrap';
   const description = displayable ? cleanText(product.description) || `Explore ${cleanText(product.name, 100)} from Tap & Wrap.` : 'This product is not available.';

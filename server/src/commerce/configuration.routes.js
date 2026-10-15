@@ -1,3 +1,4 @@
+import { attachProductPaths, productIdentityFilter } from '../catalog/product-addresses.js';
 import express from 'express';
 import mongoose from 'mongoose';
 import { Product } from '../models/Product.js';
@@ -107,19 +108,20 @@ publicConfigurationRoutes.get('/customization/services/:kind/products', wrap(asy
     { $facet: { products: [{ $sort: { name: 1, _id: 1 } }, { $skip: skip }, { $limit: limit }, { $project: { name: 1, slug: 1, pricePiastres: 1, compareAtPiastres: 1, priceApproved: 1, featured: 1, bestSeller: 1, status: 1, published: 1, reviewRequired: 1, inventory: 1, mainImageKey: 1, variants: 1, 'personalization.fields.required': 1, 'customization.enabled': 1, categoryId: { $arrayElemAt: ['$mainCategory', 0] }, subcategoryId: { $arrayElemAt: ['$subCategory', 0] } } }], count: [{ $count: 'total' }] } }
   ];
   const [result] = await Product.aggregate(pipeline).option({ maxTimeMS: 3000 });
-  respond(res, { products: (result?.products || []).map(publicProductCard), pagination: paginationPresentation(page, limit, result?.count?.[0]?.total || 0) });
+  respond(res, { products: await attachProductPaths((result?.products || []).map(publicProductCard)), pagination: paginationPresentation(page, limit, result?.count?.[0]?.total || 0) });
 }));
 
 publicConfigurationRoutes.get('/customization/products/:slug', wrap(async (req, res) => {
-  if (!/^[a-z0-9][a-z0-9-]{0,199}$/.test(req.params.slug)) throw configurationError('This product is not available.', 'NOT_FOUND', 404);
-  const record = await Product.findOne({ ...publicProductFilter(), slug: req.params.slug }).select('_id').lean().maxTimeMS(3000);
+  if (req.params.slug.length > 300 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(req.params.slug)) throw configurationError('This product is not available.', 'NOT_FOUND', 404);
+  const record = await Product.findOne({ ...publicProductFilter(), ...await productIdentityFilter(req.params.slug) }).select('_id').lean().maxTimeMS(3000);
   if (!record) throw configurationError('This product is not available.', 'NOT_FOUND', 404);
   const product = await loadEligibleProduct(record._id);
   const { template, components } = await loadCustomizationTemplate(product);
-  const sourcePath = ['gift_box', 'laser_engraving'].includes(template.kind) ? `/customize/${template.kind.replaceAll('_', '-')}` : `/products/${product.slug}`;
-  const tracking = await captureAction(req, 'CustomizationStart', { service_kind: template.kind }, { sourcePath, dedupKey: `template:${template._id}:${template.version}:product:${product._id}` });
   await Product.populate(product, [{ path: 'categoryId', select: 'name slug' }, { path: 'subcategoryId', select: 'name slug' }]);
-  respond(res, { product: { ...publicProductCard(product), personalization: { fields: product.personalization?.fields || [] }, variants: (product.variants || []).map((variant) => ({ key: variant.key, attributes: variant.attributes, pricePiastres: variant.pricePiastres == null ? product.pricePiastres : (variant.priceApproved ? variant.pricePiastres : null), priceApproved: variant.pricePiastres == null ? Boolean(product.priceApproved) : Boolean(variant.priceApproved), available: Boolean(variant.inventory?.approved && variant.inventory?.available && (variant.inventory.mode === 'made_to_order' || variant.inventory.quantity > 0)) })) }, template: publicTemplatePresentation(template, components), tracking });
+  const [publicCard] = await attachProductPaths([publicProductCard(product)]);
+  const sourcePath = ['gift_box', 'laser_engraving'].includes(template.kind) ? `/customize/${template.kind.replaceAll('_', '-')}` : publicCard.publicPath;
+  const tracking = await captureAction(req, 'CustomizationStart', { service_kind: template.kind }, { sourcePath, dedupKey: `template:${template._id}:${template.version}:product:${product._id}` });
+  respond(res, { product: { ...publicCard, personalization: { fields: product.personalization?.fields || [] }, variants: (product.variants || []).map((variant) => ({ key: variant.key, attributes: variant.attributes, pricePiastres: variant.pricePiastres == null ? product.pricePiastres : (variant.priceApproved ? variant.pricePiastres : null), priceApproved: variant.pricePiastres == null ? Boolean(product.priceApproved) : Boolean(variant.priceApproved), available: Boolean(variant.inventory?.approved && variant.inventory?.available && (variant.inventory.mode === 'made_to_order' || variant.inventory.quantity > 0)) })) }, template: publicTemplatePresentation(template, components), tracking });
 }));
 
 publicConfigurationRoutes.post('/customization/quote', csrfProtection, wrap(async (req, res) => {

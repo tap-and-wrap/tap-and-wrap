@@ -8,15 +8,29 @@
 
 /* Full-width owner-consented homepage testimonials. */
 
+.page-shell.account-page{box-sizing:border-box;width:min(100%,556px);max-width:556px;margin-inline:auto;padding:52px 28px 72px}
+.account-page>.eyebrow,.account-page>h1{text-align:center}
+.account-page>h1{font-size:clamp(2.6rem,5vw,3.7rem);line-height:1.1;margin-bottom:30px}
+.account-page .auth-form,.website-recovery .account-page .auth-form{width:100%;max-width:500px;margin-inline:auto}
+.account-page .page-back{margin:0 0 32px;text-align:left}
+.account-page a{text-decoration:underline;text-underline-offset:3px}
+.account-page a:hover{text-decoration-thickness:2px;color:var(--tw-rose-dark)}
+.account-page a:focus-visible{outline:2px solid var(--tw-focus);outline-offset:4px;border-radius:2px}
+.auth-links{display:flex;justify-content:space-between;align-items:baseline;gap:12px 18px;flex-wrap:wrap;margin-top:20px;font-size:.85rem}
+.auth-links p{margin:0}
+.account-page .hint,.account-page .website-referrer-note{font-size:.82rem;line-height:1.7}
+@media(max-width:600px){.page-shell.account-page{padding:36px 20px 56px}}
+
 .section.home-reviews-section { padding-inline: 0; max-width: none; width: 100%; min-width: 0; }
 .home-reviews-section > .section-heading { padding-inline: clamp(20px, 5vw, 76px); }
 .home-named-review-carousel { width: 100%; min-width: 0; }
 .review-marquee-window { width: 100%; overflow: hidden; }
 .review-marquee-track { display: flex; width: max-content; animation: reviews-travel 100s linear infinite; }
 .review-marquee-group { display: flex; gap: 18px; padding-right: 18px; flex: 0 0 auto; }
-.review-marquee-group figure { display: flex; flex-direction: column; width: clamp(260px, 29vw, 380px); margin: 0; padding: 26px; background: var(--tw-surface); border: 1px solid var(--tw-border); border-radius: 18px; }
-.review-marquee-group blockquote { margin: 0 0 28px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; }
-.review-marquee-group figcaption { display: flex; justify-content: space-between; align-items: end; gap: 12px; margin-top: auto; font-weight: 600; font-size: .875rem; color: var(--tw-ink); }
+.testimonial-card { display: flex; flex-direction: column; margin: 0; padding: 26px; background: var(--tw-surface); border: 1px solid var(--tw-border); border-radius: 18px; }
+.testimonial-card blockquote { margin: 0 0 28px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; }
+.testimonial-card figcaption { display: flex; justify-content: space-between; align-items: end; gap: 12px; margin-top: auto; font-weight: 600; font-size: .875rem; color: var(--tw-ink); }
+.review-marquee-group figure { width: clamp(260px, 29vw, 380px); }
 .review-marquee-rating { min-width: 70px; color: #A98243; white-space: nowrap; }
 .review-marquee:hover .review-marquee-track, .review-marquee:focus-within .review-marquee-track { animation-play-state: paused; }
 @keyframes reviews-travel { to { transform: translateX(-50%); } }
@@ -33,7 +47,7 @@
 .home-faq-answer > div { min-height: 0; overflow: hidden; }
 .home-faq-card[data-open="true"] .home-faq-answer { grid-template-rows: 1fr; visibility: visible; }
 .home-faq-answer p { margin: 0; padding: 0 22px 22px; }
-@media (max-width: 620px) { .review-marquee-group figure { width: 260px; padding: 22px; } .home-faq-categories { gap: 6px; } .home-faq-categories button { padding-inline: 8px; font-size: .8rem; } }
+@media (max-width: 620px) { .review-marquee-group figure { width: 260px; } .testimonial-card { padding: 22px; } .home-faq-categories { gap: 6px; } .home-faq-categories button { padding-inline: 8px; font-size: .8rem; } }
 @media (prefers-reduced-motion: reduce) {
   .review-marquee-track { animation: none; width: auto; }
   .review-marquee-group { flex: 1; flex-wrap: wrap; padding: 0; }

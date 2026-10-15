@@ -1,3 +1,4 @@
+import { attachProductPaths, productIdentityFilter } from '../catalog/product-addresses.js';
 import mongoose from 'mongoose';
 import { z } from 'zod';
 import { Product } from '../models/Product.js';
@@ -56,7 +57,7 @@ const paginationFor = (page, total) => ({ page: page.page, limit: page.limit, to
 export const reviewPresentation = (review) => ({ id: String(review._id), authorLabel: review.authorLabel?.trim() || null, rating: Number.isInteger(review.rating) && review.rating >= 1 && review.rating <= 5 ? review.rating : null, text: review.text, createdAt: review.createdAt });
 
 async function eligibleProductBySlug(slug) {
-  const product = await Product.findOne({ ...publicProductFilter(), slug }).select('_id categoryId subcategoryId').lean().maxTimeMS(TIMEOUT);
+  const product = await Product.findOne({ ...publicProductFilter(), ...await productIdentityFilter(slug) }).select('_id categoryId subcategoryId').lean().maxTimeMS(TIMEOUT);
   if (!product) throw commerceError(404, 'PRODUCT_NOT_FOUND', 'Product not found.');
   const category = await Category.findOne({ _id: product.categoryId, active: true, parentId: null }).select('_id').lean().maxTimeMS(TIMEOUT);
   const child = !product.subcategoryId || await Category.findOne({ _id: product.subcategoryId, active: true, parentId: product.categoryId }).select('_id').lean().maxTimeMS(TIMEOUT);
@@ -284,7 +285,7 @@ export async function listPublicBundles(now = new Date()) {
         if (['PRICING_INVALID', 'PROMOTION_UNAVAILABLE'].includes(error.code)) continue;
         throw error;
       }
-      bundles.push({ id: String(bundle._id), name: bundle.name, description: bundle.description || '', products: cards, discountKind: bundle.discountKind, discountValue: bundle.discountValue,
+      bundles.push({ id: String(bundle._id), name: bundle.name, description: bundle.description || '', products: await attachProductPaths(cards), discountKind: bundle.discountKind, discountValue: bundle.discountValue,
         bundleSubtotalPiastres: pricing.subtotalPiastres, effectiveDiscountPiastres: pricing.discountPiastres, bundleTotalPiastres: pricing.totalPiastres });
       if (bundles.length === 8) break;
     }

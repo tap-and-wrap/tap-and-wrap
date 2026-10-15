@@ -40,6 +40,7 @@ export function publicProductCard(product) {
     _id: String(product._id),
     name: product.name,
     slug: product.slug,
+    publicPath: product.publicPath || `/products/${product.slug}`,
     category: categoryPresentation(product.categoryId),
     subcategory: categoryPresentation(product.subcategoryId),
     mainImageUrl: mediaUrlForKey(product.mainImageKey),

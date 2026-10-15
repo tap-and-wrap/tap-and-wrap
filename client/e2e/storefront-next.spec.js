@@ -43,6 +43,8 @@ for (const width of [320, 1440]) {
     const previous = section.getByRole('button', { name: 'Previous testimonials' });
     const next = section.getByRole('button', { name: 'Next testimonials' });
     await expect(track.locator('figure')).toHaveCount(12);
+    await expect(track).toHaveCSS('scrollbar-width', 'none');
+    await expect(track.locator('figure').first()).toHaveCSS('min-height', '0px');
     await expect(track.locator('figcaption > span:first-child')).toHaveText(ownerFeaturedReviews.map(review => review.authorLabel));
     await expect(previous).toBeDisabled();
     await expect(next).toBeEnabled();
@@ -74,6 +76,10 @@ for (const width of [320, 1440]) {
     await track.press('Home');
     await expect(previous).toBeDisabled();
     await section.getByRole('heading').click();
+    const [trackBox, previousBox, nextBox] = await Promise.all([track.boundingBox(), previous.boundingBox(), next.boundingBox()]);
+    expect(previousBox.y).toBeGreaterThanOrEqual(trackBox.y + trackBox.height);
+    expect(Math.abs(previousBox.y - nextBox.y)).toBeLessThan(1);
+    expect(previousBox.x).toBeLessThan(nextBox.x);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await section.screenshot({ path: `test-results/customer-words-${width}.png` });
   });
