@@ -1,7 +1,7 @@
 // Isolated browser fixtures only. No catalog import, database, cart or payment request.
 import { blockExternalRequests } from './network-fixture.js';
-export const category = { _id: '111111111111111111111111', name: 'Fixture Gifts', slug: 'fixture-gifts', parentId: null, active: true, featured: true, productCount: 41 };
-export const subcategory = { _id: '222222222222222222222222', name: 'Fixture Keepsakes', slug: 'fixture-keepsakes', parentId: category._id, active: true, productCount: 41 };
+export const category = { _id: '111111111111111111111111', name: 'Fixture Gifts', slug: 'fixture-gifts', publicPath: '/categories/fixture-gifts', parentId: null, active: true, featured: true, productCount: 41 };
+export const subcategory = { _id: '222222222222222222222222', name: 'Fixture Keepsakes', slug: 'fixture-keepsakes', publicPath: '/categories/fixture-gifts/fixture-keepsakes', parentId: category._id, active: true, productCount: 41 };
 export const cards = Array.from({ length: 41 }, (_, index) => ({
   _id: String(index + 100).padStart(24, '0'), name: `Fixture Gift ${String(index + 1).padStart(2, '0')}`, slug: `fixture-gift-${index + 1}`,
   category, subcategory, mainImageUrl: null, pricePiastres: 1000 + index * 100, compareAtPiastres: index === 0 ? 2000 : null,
@@ -63,7 +63,7 @@ export async function mockCatalog(page, options = {}) {
     if (path === '/commerce/checkout/config') return reply({ enabled: false, governorates: [], instaPayNumber: '01060673073' });
     if (path.endsWith('/categories')) return reply({ categories: (url.searchParams.get('parent') === 'root' ? [category] : [subcategory]).map((entry) => path.startsWith('/admin/') ? adminCategories.get(entry._id) : entry), pagination: { page: 1, limit: 20, total: 1, pages: 1 } });
     if (path.startsWith('/public/categories/')) {
-      const selected = path.endsWith(`/${category.slug}`) ? { ...category, parent: null } : path.endsWith(`/${subcategory.slug}`) ? { ...subcategory, parent: category } : null;
+      const selected = path.endsWith(`/${category.slug}`) ? { ...category, parent: null } : (path.endsWith(`/${subcategory.slug}`) || path === `/public/categories/${category.slug}/children/fixture-keepsakes`) ? { ...subcategory, parent: category } : null;
       return selected ? reply({ category: selected }) : reply({ message: 'Category not found' }, 404);
     }
     if (path.startsWith('/admin/categories/')) {

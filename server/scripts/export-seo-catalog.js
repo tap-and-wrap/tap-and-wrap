@@ -1,3 +1,4 @@
+import { categoryPublicPaths } from '../../shared/category-paths.mjs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { realpath, mkdir, writeFile, rename, unlink } from 'node:fs/promises';
@@ -161,6 +162,11 @@ export async function buildApprovedSeoExport(source, configuration = {}, { maxim
   await pages(source.readMainCategoryPage, (rows) => registerCategories(rows), maximumPages);
   const mainIds = [...categoryMap.keys()];
   await pages((params) => source.readSubcategoryPage({ ...params, mainIds }), (rows) => registerCategories(rows, true), maximumPages);
+  // Include inactive identities for collision stability, but never export them.
+  const identities = [];
+  if (source.readCategoryIdentityPage) await pages(source.readCategoryIdentityPage, rows => identities.push(...rows), maximumPages);
+  const paths = categoryPublicPaths(identities.length ? identities : [...categoryMap.values()]);
+  for (const category of categoryMap.values()) category.publicPath = paths.get(category._id);
   const products = [];
   const slugs = new Set();
   const ids = new Set();
@@ -198,6 +204,7 @@ export async function openReadOnlySeoSource(uri, settings) {
     return result;
   };
   return {
+    readCategoryIdentityPage: (params) => page('categories', {}, { _id: 1, name: 1, slug: 1, parentId: 1 }, params),
     readMainCategoryPage: (params) => page('categories', { active: true, parentId: null }, CATEGORY_FIELDS, params),
     readSubcategoryPage: (params) => page('categories', { active: true, parentId: { $in: params.mainIds.map((id) => categoryIds.get(id)).filter(Boolean) } }, CATEGORY_FIELDS, params),
     readProductPage: (params) => {

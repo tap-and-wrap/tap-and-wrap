@@ -133,7 +133,7 @@ test('runtime metadata rejects explicit drafts/previews and gives private pages 
 
 test('subcategory metadata and crawlable HTML preserve the active parent breadcrumb', () => {
   const plan = buildSeoPlan({ catalog: catalog(), siteOrigin: origin, publish: true });
-  const route = plan.routes.get('/categories/fixture-keepsakes');
+  const route = plan.routes.get('/categories/fixture-gifts/fixture-keepsakes');
   const crumb = route.structuredData.find((entry) => entry['@type'] === 'BreadcrumbList');
   assert.deepEqual(crumb.itemListElement.map((entry) => entry.name), ['Home', 'Shop', root.name, child.name]);
   assert.match(route.body, /aria-label="Parent category"/);

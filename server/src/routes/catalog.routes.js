@@ -48,4 +48,6 @@ router.get('/categories/:slug/products', async (req, res) => {
   res.json({ ok: true, data: await listProducts({ ...query, category: parseSlug(req.params.slug) }) });
 });
 
+router.get('/categories/:slug/children/:child', async (req, res) => res.json({ ok: true, data: { category: await getPublicCategory(parseSlug(req.params.slug), parseSlug(req.params.child)) } }));
+
 export default router;

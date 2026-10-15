@@ -39,6 +39,7 @@ export default function App() {
   <Route path="/" element={<HomePage/>}/>
   <Route path="/shop" element={<ShopPage/>}/>
   <Route path="/categories/:slug" element={<CategoryPage/>}/>
+  <Route path="/categories/:slug/:child" element={<CategoryPage/>}/>
   <Route path="/products/:slug" element={<ProductPage/>}/>
   <Route path="/products/:slug/customize" element={<CustomizationPage/>}/>
   <Route path="/customize" element={<CustomizePage/>}/>

@@ -156,14 +156,14 @@ test('Worker policy invalid origins fail closed, with no credential-bearing diag
 test('unindexed draft product and category links load a noindex SPA shell without an SEO snapshot entry', async () => {
   const { env, seen } = fixtureEnv();
   env.SEO_INDEXING_ENABLED = 'false';
-  for (const path of ['/products/visible-draft', '/categories/browsable-category']) {
+  for (const path of ['/products/visible-draft', '/categories/browsable-category', '/categories/browsable-category/child']) {
     const response = await handleSeoRequest(new Request(`https://shop.example${path}`), env);
     assert.equal(response.status, 200);
     assert.match(response.headers.get('X-Robots-Tag'), /noindex/);
     assert.equal(response.headers.get('Cache-Control'), 'private, no-store');
     assert.match(await response.text(), /Fixture homepage/);
   }
-  assert.equal(seen.filter(path => path === '/index.html').length, 2);
+  assert.equal(seen.filter(path => path === '/index.html').length, 3);
   const fakePrivate = await handleSeoRequest(new Request('https://shop.example/products/draft/private'), env);
   assert.equal(fakePrivate.status, 404);
   const withdrawn = '/products/visible-draft';
@@ -175,4 +175,24 @@ test('an enabled indexing mode never substitutes a dynamic draft shell for an ap
   const { env } = fixtureEnv();
   const response = await handleSeoRequest(new Request('https://shop.example/products/visible-draft'), env);
   assert.equal(response.status, 404);
+});
+
+test('legacy category redirects preserve queries and obey withdrawal/freshness guards', async () => {
+  const { env, assets, manifest } = fixtureEnv();
+  const from = '/categories/approved-category-12345678';
+  manifest.categoryRedirects = { [from]: '/categories/approved-category' };
+  const save = () => assets.set('/seo-manifest.json', JSON.stringify(manifest));
+  save();
+  const response = await handleSeoRequest(new Request(`https://shop.example${from}?q=gift&sort=newest&page=2`), env);
+  assert.equal(response.status, 308);
+  assert.equal(response.headers.get('Location'), 'https://shop.example/categories/approved-category?q=gift&sort=newest&page=2');
+  env.SEO_WITHDRAWN_PATHS = '/categories/approved-category';
+  assert.equal((await handleSeoRequest(new Request(`https://shop.example${from}`), env)).status, 404);
+  env.SEO_WITHDRAWN_PATHS = from;
+  assert.equal((await handleSeoRequest(new Request('https://shop.example/categories/approved-category'), env)).status, 404);
+  delete env.SEO_WITHDRAWN_PATHS;
+  manifest.publication.expiresAt = new Date(Date.now() - 1000).toISOString(); save();
+  assert.equal((await handleSeoRequest(new Request(`https://shop.example${from}`), env)).status, 503);
+  manifest.categoryRedirects[from] = 'https://untrusted.example'; save();
+  assert.equal((await handleSeoRequest(new Request(`https://shop.example${from}`), env)).status, 503);
 });

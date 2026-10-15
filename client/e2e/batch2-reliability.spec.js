@@ -570,6 +570,7 @@ test('nested native dialogs retain focus and scroll locking until the final dial
   const opener = page.getByRole('button', { name: 'Filters', exact: false });
   await opener.click();
   const first = page.getByRole('dialog');
+  await first.locator('summary').filter({ hasText: /^Price$/ }).click();
   const minimum = first.getByLabel('Minimum price (EGP)', { exact: false });
   await minimum.focus();
   await page.evaluate(async () => {

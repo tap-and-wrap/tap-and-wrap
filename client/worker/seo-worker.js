@@ -13,6 +13,7 @@ async function manifestFor(assets, request) {
     if (value.publication.version !== 1 || !Number.isSafeInteger(value.publication.maximumAgeSeconds) || value.publication.maximumAgeSeconds < 60 || value.publication.maximumAgeSeconds > 86400 || Date.parse(value.publication.expiresAt) - Date.parse(value.publication.generatedAt) > value.publication.maximumAgeSeconds * 1000) return null;
     if (value.publicRoutes.some((pathname) => typeof pathname !== 'string' || !/^\/(?:[a-z0-9-]+(?:\/[a-z0-9-]+)*)?$/.test(pathname) || !value.routeFiles[pathname]) || value.indexableRoutes.some((pathname) => !value.publicRoutes.includes(pathname))) return null;
     if (Object.values(value.routeFiles).some((file) => typeof file !== 'string' || !new RegExp(`^/seo-pages/${value.publication.id}/(?:[a-z0-9-]+/)*[a-z0-9-]+\\.html$`).test(file))) return null;
+    if (value.categoryRedirects && (typeof value.categoryRedirects !== 'object' || Array.isArray(value.categoryRedirects) || Object.keys(value.categoryRedirects).length > 10_000 || Object.entries(value.categoryRedirects).some(([from, to]) => !/^\/categories\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(from) || !/^\/categories\/[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)?$/.test(to) || !value.publicRoutes.includes(to) || value.publicRoutes.includes(from)))) return null;
     return value;
   } catch { return null; }
 }
@@ -36,7 +37,7 @@ function withdrawalPaths(value) {
   if (!value) return new Set();
   if (typeof value !== 'string' || value.length > 50000) throw new Error('Invalid withdrawal configuration');
   const values = value.split(',').map((entry) => entry.trim());
-  if (values.length > 500 || values.some((entry) => !/^\/(?:products|categories)\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(entry))) throw new Error('Invalid withdrawal configuration');
+  if (values.length > 500 || values.some((entry) => !/^\/(?:products\/[a-z0-9]+(?:-[a-z0-9]+)*|categories\/[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)?)$/.test(entry))) throw new Error('Invalid withdrawal configuration');
   return new Set(values);
 }
 
@@ -49,6 +50,7 @@ async function routeRequest(request, env) {
   const manifest = await manifestFor(env.ASSETS, request);
   const canonicalPath = pathname === '/' ? '/' : pathname.replace(/\/+$/, '');
   const withdrawn = withdrawalPaths(env.SEO_WITHDRAWN_PATHS);
+  for (const [legacy, friendly] of Object.entries(manifest?.categoryRedirects || {})) if (withdrawn.has(legacy)) withdrawn.add(friendly);
   if (withdrawn.has(canonicalPath) || /^\/seo-pages(?:\/|$)/.test(canonicalPath)) return privateResponse(await asset(env.ASSETS, request, manifest?.routeFiles?.['/404'] || '/404.html'), 404);
   const customize = PRODUCT_CUSTOMIZE.exec(canonicalPath);
   if (PRIVATE_DOCUMENT.test(canonicalPath) || customize && manifest?.productSlugs.includes(customize[1])) {
@@ -70,11 +72,18 @@ async function routeRequest(request, env) {
   }
   if (canonicalPath === '/seo-manifest.json') return privateResponse(await env.ASSETS.fetch(request));
   if (manifest.indexingEnabled === true && (!fresh || env.SEO_INDEXING_ENABLED === 'true' && env.SEO_EXPECTED_PUBLICATION_ID !== manifest.publication.id)) return new Response('Catalog snapshot is awaiting an authorized refresh. Please try again later.', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Retry-After': '300', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow, noarchive' } });
+  const categoryTarget = manifest.categoryRedirects?.[canonicalPath];
+  if (categoryTarget) {
+    if (withdrawn.has(categoryTarget)) return privateResponse(await asset(env.ASSETS, request, manifest.routeFiles['/404'] || '/404.html'), 404);
+    const target = new URL(request.url);
+    target.pathname = categoryTarget;
+    return new Response(null, { status: 308, headers: { Location: target.href, 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' } });
+  }
   if (!manifest.publicRoutes.includes(canonicalPath)) {
     // Browsable drafts have no SEO snapshot. Serve the public React shell with a
     // noindex header, leaving the API to return 404 for genuinely unknown slugs.
     // Never substitute this for a verified/indexed static product page.
-    if (env.SEO_INDEXING_ENABLED !== 'true' && /^\/(?:products|categories)\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(canonicalPath)) {
+    if (env.SEO_INDEXING_ENABLED !== 'true' && /^\/(?:products\/[a-z0-9]+(?:-[a-z0-9]+)*|categories\/[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)?)$/.test(canonicalPath)) {
       const shell = await asset(env.ASSETS, request, '/index.html');
       if (shell.ok) return privateResponse(shell);
     }

@@ -1,3 +1,4 @@
+import { categoryPublicPaths, categoryHref } from '../../../shared/category-paths.mjs';
 import { mkdir, readFile, writeFile, rm, stat, realpath, rename, rmdir, copyFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
@@ -31,7 +32,7 @@ function isApprovedProduct(product) {
 
 function sanitizeCategory(category, mediaOrigins) {
   return {
-    _id: String(category._id), name: cleanText(category.name, 160), slug: category.slug, parentId: category.parentId ? String(category.parentId) : null, active: true,
+    publicPath: category.publicPath, _id: String(category._id), name: cleanText(category.name, 160), slug: category.slug, parentId: category.parentId ? String(category.parentId) : null, active: true,
     imageUrl: publicImageUrl(category.imageUrl, mediaOrigins), productCount: Number.isSafeInteger(category.productCount) && category.productCount >= 0 ? category.productCount : 0,
     updatedAt: validDate(category.updatedAt),
   };
@@ -85,6 +86,18 @@ export function validateCatalog(catalog = {}, { now = new Date() } = {}) {
     return false;
   }).map((category) => sanitizeCategory(category, mediaOrigins));
   validateUniqueSlugs(categories, 'category');
+  const paths = categoryPublicPaths(categories);
+  const publicPaths = new Set();
+  for (const category of categories) {
+    category.publicPath ||= paths.get(category._id);
+    if (!/^\/categories\/[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)?$/.test(category.publicPath) || publicPaths.has(category.publicPath)) throw new Error('Invalid or duplicate category public path');
+    publicPaths.add(category.publicPath);
+  }
+  for (const category of categories) {
+    const parent = category.parentId && categories.find(entry => entry._id === category.parentId);
+    if (parent && category.publicPath.slice(0, category.publicPath.lastIndexOf('/')) !== parent.publicPath) throw new Error('Category public path does not match its parent');
+    if (!parent && category.publicPath.split('/').length !== 3) throw new Error('Invalid root category public path');
+  }
   const products = [];
   for (const [index, product] of catalog.products.entries()) {
     if (!isApprovedProduct(product) || !product._id || !SLUG.test(product.slug || '') || !cleanText(product.name)) {
@@ -106,7 +119,7 @@ function productCards(products, emptyMessage = 'No eligible products are include
 }
 
 function staticBody(pathname, catalog, hasCatalogExport) {
-  const links = `<nav aria-label="Gift categories"><ul>${catalog.categories.filter((category) => !category.parentId).map((category) => `<li>${link(`/categories/${category.slug}`, category.name)}</li>`).join('')}</ul></nav>`;
+  const links = `<nav aria-label="Gift categories"><ul>${catalog.categories.filter((category) => !category.parentId).map((category) => `<li>${link(categoryHref(category), category.name)}</li>`).join('')}</ul></nav>`;
   if (pathname === '/' || pathname === '/shop') return links + productCards(catalog.products, hasCatalogExport ? undefined : 'Development placeholder: an approved catalog export has not been provided.');
   if (pathname === '/customize') return `<ul><li>${link('/customize/gift-box', 'Build Your Gift Box')}</li><li>${link('/customize/laser-engraving', 'Laser Engraving')}</li></ul>`;
   return paragraph('Available options and approved prices are loaded from the catalog. No product or material is eligible unless explicitly configured.');
@@ -138,20 +151,20 @@ export function buildSeoPlan({ catalog: input, content = {}, siteOrigin, publish
     const indexableCount = products.filter((product) => product.mediaVerified).length;
     const children = catalog.categories.filter((child) => child.parentId === category._id);
     const parent = category.parentId ? catalog.categories.find((entry) => entry._id === category.parentId) : null;
-    const crumb = breadcrumbs(origin, [{ name: 'Home', pathname: '/' }, { name: 'Shop', pathname: '/shop' }, ...(parent ? [{ name: parent.name, pathname: `/categories/${parent.slug}` }] : []), { name: category.name, pathname: `/categories/${category.slug}` }]);
-    add(`/categories/${category.slug}`, { title: `${category.name} Gifts | Tap & Wrap`, description: `Browse approved ${category.name} products from Tap & Wrap.`, heading: `${category.name} Gifts`, imageUrl: category.imageUrl, body: `${parent ? `<nav aria-label="Parent category">${link(`/categories/${parent.slug}`, parent.name)}</nav>` : ''}${children.length ? `<nav aria-label="Subcategories">${children.map((child) => link(`/categories/${child.slug}`, child.name)).join(' ')}</nav>` : ''}${productCards(products)}${products.length > 20 ? paragraph('Use the shop filters and pagination to explore more products in this category.') + link(`/shop?category=${category.slug}`, 'View all products in this category') : ''}`, structuredData: crumb ? [crumb] : [], updatedAt: category.updatedAt });
-    routes.get(`/categories/${category.slug}`).indexable = publish && Boolean(origin) && indexableCount >= minimumCategoryProducts;
-    routes.get(`/categories/${category.slug}`).minimumCategoryProducts = minimumCategoryProducts;
+    const crumb = breadcrumbs(origin, [{ name: 'Home', pathname: '/' }, { name: 'Shop', pathname: '/shop' }, ...(parent ? [{ name: parent.name, pathname: categoryHref(parent) }] : []), { name: category.name, pathname: categoryHref(category) }]);
+    add(categoryHref(category), { title: `${category.name} Gifts | Tap & Wrap`, description: `Browse approved ${category.name} products from Tap & Wrap.`, heading: `${category.name} Gifts`, imageUrl: category.imageUrl, body: `${parent ? `<nav aria-label="Parent category">${link(categoryHref(parent), parent.name)}</nav>` : ''}${children.length ? `<nav aria-label="Subcategories">${children.map((child) => link(categoryHref(child), child.name)).join(' ')}</nav>` : ''}${productCards(products)}${products.length > 20 ? paragraph('Use the shop filters and pagination to explore more products in this category.') + link(`/shop?category=${category.slug}`, 'View all products in this category') : ''}`, structuredData: crumb ? [crumb] : [], updatedAt: category.updatedAt });
+    routes.get(categoryHref(category)).indexable = publish && Boolean(origin) && indexableCount >= minimumCategoryProducts;
+    routes.get(categoryHref(category)).minimumCategoryProducts = minimumCategoryProducts;
   }
   for (const product of catalog.products) {
     const metadata = productMetadata(product, origin, { indexable: publish, checkoutEnabled: catalog.checkoutEnabled, mediaOrigins: catalog.mediaOrigins, mediaVerified: product.mediaVerified });
     metadata.sourceFingerprint = stableDigest(product);
     metadata.imageDimensions = product.media ? { width: product.media.width, height: product.media.height } : null;
-    add(metadata.pathname, { ...metadata, heading: product.name, updatedAt: product.updatedAt, body: `${product.mainImageUrl ? `<img src="${escapeHtml(product.mainImageUrl)}" alt="${escapeHtml(product.name)}" width="900" height="900" decoding="async">` : ''}${paragraph(money(product.pricePiastres))}${product.variants.length ? paragraph(`Configured variant prices: ${[...new Set(product.variants.map((variant) => money(variant.pricePiastres)))].join(', ')}.`) : ''}${product.compareAtPiastres ? `<p>Compare-at price: <del>${escapeHtml(money(product.compareAtPiastres))}</del></p>` : ''}${paragraph(product.description)}${link(`/categories/${product.category.slug}`, product.category.name)}${product.subcategory ? ` ${link(`/categories/${product.subcategory.slug}`, product.subcategory.name)}` : ''}${paragraph(catalog.checkoutEnabled ? product.orderingAvailable ? 'Ordering options are available in the product form.' : 'Currently unavailable for ordering.' : 'Checkout is currently disabled.')}` });
+    add(metadata.pathname, { ...metadata, heading: product.name, updatedAt: product.updatedAt, body: `${product.mainImageUrl ? `<img src="${escapeHtml(product.mainImageUrl)}" alt="${escapeHtml(product.name)}" width="900" height="900" decoding="async">` : ''}${paragraph(money(product.pricePiastres))}${product.variants.length ? paragraph(`Configured variant prices: ${[...new Set(product.variants.map((variant) => money(variant.pricePiastres)))].join(', ')}.`) : ''}${product.compareAtPiastres ? `<p>Compare-at price: <del>${escapeHtml(money(product.compareAtPiastres))}</del></p>` : ''}${paragraph(product.description)}${link(categoryHref(product.category), product.category.name)}${product.subcategory ? ` ${link(categoryHref(product.subcategory), product.subcategory.name)}` : ''}${paragraph(catalog.checkoutEnabled ? product.orderingAvailable ? 'Ordering options are available in the product form.' : 'Currently unavailable for ordering.' : 'Checkout is currently disabled.')}` });
   }
   for (const pathname of PRIVATE_STATIC) add(pathname, { title: 'Your Tap & Wrap account', heading: 'Tap & Wrap', description: '', body: paragraph('This page requires the interactive application. Private information is never included in this HTML.'), indexable: false, structuredData: [] });
   add('/404', { title: 'Page not found | Tap & Wrap', heading: 'Page not found', description: 'This page is not available.', body: paragraph('This page is not available.') + link('/shop', 'Browse the shop'), indexable: false, structuredData: [] });
-  return { origin, routes, catalog, sourceGeneratedAt: input?.generatedAt || null, report: { ...catalog.report, approvedProducts: catalog.products.length, activeCategories: catalog.categories.length, generatedRoutes: routes.size, indexableRoutes: [...routes.values()].filter((route) => route.indexable).length, indexingEnabled: publish && Boolean(origin), checkoutOffersEnabled: catalog.checkoutEnabled, minimumCategoryProducts, nonindexableCategorySlugs: catalog.categories.filter((category) => !routes.get(`/categories/${category.slug}`).indexable).map((category) => category.slug), approvedContentRoutes: CONTENT_ROUTES.filter((pathname) => routes.get(pathname).indexable), ownerContentMissing: CONTENT_ROUTES.filter((pathname) => !routes.get(pathname).indexable) } };
+  return { origin, routes, catalog, sourceGeneratedAt: input?.generatedAt || null, report: { ...catalog.report, approvedProducts: catalog.products.length, activeCategories: catalog.categories.length, generatedRoutes: routes.size, indexableRoutes: [...routes.values()].filter((route) => route.indexable).length, indexingEnabled: publish && Boolean(origin), checkoutOffersEnabled: catalog.checkoutEnabled, minimumCategoryProducts, nonindexableCategorySlugs: catalog.categories.filter((category) => !routes.get(categoryHref(category)).indexable).map((category) => category.slug), approvedContentRoutes: CONTENT_ROUTES.filter((pathname) => routes.get(pathname).indexable), ownerContentMissing: CONTENT_ROUTES.filter((pathname) => !routes.get(pathname).indexable) } };
 }
 
 function headMarkup(route, origin) {
@@ -271,7 +284,7 @@ export async function writeSeoOutput({ outputDirectory = path.join(CLIENT_DIRECT
     files.push(generatedFilename);
   }
   const changeReport = comparePublications(previous?.publication, publication);
-  const manifest = { version: 2, origin: plan.origin, indexingEnabled: plan.report.indexingEnabled, publicRoutes: [...plan.routes.values()].filter((route) => route.indexable || !PRIVATE_STATIC.includes(route.pathname) && route.pathname !== '/404').map((route) => route.pathname), indexableRoutes: [...plan.routes.values()].filter((route) => route.indexable).map((route) => route.pathname), productSlugs: plan.catalog.products.map((product) => product.slug), categorySlugs: plan.catalog.categories.map((category) => category.slug), routeFiles, publication };
+  const manifest = { version: 2, origin: plan.origin, indexingEnabled: plan.report.indexingEnabled, publicRoutes: [...plan.routes.values()].filter((route) => route.indexable || !PRIVATE_STATIC.includes(route.pathname) && route.pathname !== '/404').map((route) => route.pathname), indexableRoutes: [...plan.routes.values()].filter((route) => route.indexable).map((route) => route.pathname), productSlugs: plan.catalog.products.map((product) => product.slug), categorySlugs: plan.catalog.categories.map((category) => category.slug), categoryRedirects: Object.fromEntries(plan.catalog.categories.filter(category => categoryHref(category) !== `/categories/${category.slug}`).map(category => [`/categories/${category.slug}`, categoryHref(category)])), routeFiles, publication };
   for (const file of ['sitemap.xml', 'robots.txt', 'seo-manifest.json', 'seo-change-report.json', OWNED_FILE, '.assetsignore']) await assertRealLocation(resolvedOutput, path.join(resolvedOutput, file));
   // No deploy happens here. Worker-visible publication switches only after every
   // immutable document is ready; interrupted preparation leaves the old manifest.

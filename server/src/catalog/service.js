@@ -1,3 +1,4 @@
+import { categoryPublicPaths } from '../../../shared/category-paths.mjs';
 import { Product } from '../models/Product.js';
 import { Category } from '../models/Category.js';
 import { ComponentOption } from '../models/ComponentOption.js';
@@ -50,13 +51,15 @@ function sameId(left, right) {
 }
 
 async function activeCategories() {
-  const graph = await Category.find(catalogBrowsePreviewIsEnabled() ? {} : { active: true }).select('_id parentId').lean().maxTimeMS(QUERY_TIMEOUT_MS);
+  const identities = await Category.find({}).select('_id parentId name slug active').lean().maxTimeMS(QUERY_TIMEOUT_MS);
+  const publicPaths = categoryPublicPaths(identities);
+  const graph = identities.filter(category => catalogBrowsePreviewIsEnabled() || category.active);
   const main = graph.filter((category) => !category.parentId);
   const mainIds = main.map((category) => category._id);
   const rootIds = new Set(mainIds.map(String));
   const children = graph.filter((category) => category.parentId && rootIds.has(String(category.parentId)));
   const childGroups = mainIds.map((id) => ({ categoryId: id, subcategoryId: { $in: children.filter((child) => sameId(child.parentId, id)).map((child) => child._id) } }));
-  return { mainIds, childIds: children.map((category) => category._id), childGroups };
+  return { mainIds, childIds: children.map((category) => category._id), childGroups, identities, publicPaths };
 }
 
 export function catalogBrowsePreviewIsEnabled() {
@@ -164,7 +167,8 @@ export async function listProducts(query, { admin = false } = {}) {
 }
 
 export async function getPublicProduct(slugValue) {
-  const visibility = await visibleProductFilter();
+  const graph = await activeCategories();
+  const visibility = await visibleProductFilter(graph);
   const product = await Product.findOne({ $and: [visibility, { slug: slugValue }] })
     .select(PUBLIC_DETAIL_FIELDS)
     .populate([{ path: 'categoryId', select: 'name slug active' }, { path: 'subcategoryId', select: 'name slug active' }])
@@ -174,7 +178,9 @@ export async function getPublicProduct(slugValue) {
     .select(PUBLIC_LIST_FIELDS).sort(SORTS.featured).limit(4)
     .populate([{ path: 'categoryId', select: 'name slug active' }, { path: 'subcategoryId', select: 'name slug active' }])
     .lean().maxTimeMS(QUERY_TIMEOUT_MS);
-  return { ...publicProductDetail(product), relatedProducts: related.map(publicProductCard) };
+  const detail = publicProductDetail(product);
+  for (const key of ['category', 'subcategory']) if (detail[key]) detail[key].publicPath = graph.publicPaths.get(String(detail[key]._id));
+  return { ...detail, relatedProducts: related.map(publicProductCard) };
 }
 
 export async function getAdminProduct(id, { session } = {}) {
@@ -330,21 +336,27 @@ export async function listCategories(query, { admin = false } = {}) {
   return {
     categories: categories.map((category) => {
       const { imageKey, __v: _revision, ...publicCategory } = category;
-      return { ...(admin ? adminRevision(category) : { ...publicCategory, browseOnly: catalogBrowsePreviewIsEnabled() && category.active !== true, imageUrl: mediaUrlForKey(imageKey) }), ...(counts ? { productCount: counts.get(String(category._id)) ?? 0 } : {}) };
+      return { ...(admin ? adminRevision(category) : { ...publicCategory, publicPath: categoryVisibility.publicPaths.get(String(category._id)), browseOnly: catalogBrowsePreviewIsEnabled() && category.active !== true, imageUrl: mediaUrlForKey(imageKey) }), ...(counts ? { productCount: counts.get(String(category._id)) ?? 0 } : {}) };
     }),
     pagination: paginationResult(pagination, total),
   };
 }
 
-export async function getPublicCategory(slugValue) {
-  const reference = await categoryFromSlug(slugValue, true);
+export async function getPublicCategory(slugValue, childSegment) {
+  const graph = await activeCategories();
+  const pathname = `/categories/${slugValue}${childSegment ? `/${childSegment}` : ''}`;
+  // Legacy identity wins; friendly children resolve only by their full path.
+  const legacy = !childSegment && graph.identities.find(category => category.slug === slugValue);
+  const identity = legacy || graph.identities.find(category => graph.publicPaths.get(String(category._id)) === pathname);
+  if (!identity) throw catalogError(404, 'CATEGORY_NOT_FOUND', 'Category not found');
+  const reference = await categoryFromSlug(identity.slug, true);
   const category = await Category.findOne({ _id: reference._id, ...(catalogBrowsePreviewIsEnabled() ? {} : { active: true }) }).select(CATEGORY_FIELDS).lean().maxTimeMS(QUERY_TIMEOUT_MS);
   if (!category) throw catalogError(404, 'CATEGORY_NOT_FOUND', 'Category not found');
   const parent = category.parentId ? await Category.findOne({ _id: category.parentId, parentId: null, ...(catalogBrowsePreviewIsEnabled() ? {} : { active: true }) }).select('_id name slug').lean().maxTimeMS(QUERY_TIMEOUT_MS) : null;
   if (category.parentId && !parent) throw catalogError(404, 'CATEGORY_NOT_FOUND', 'Category not found');
-  const counts = await categoryCounts([category._id], false);
+  const counts = await categoryCounts([category._id], false, graph);
   const { imageKey, __v: _revision, ...publicCategory } = category;
-  return { ...publicCategory, browseOnly: catalogBrowsePreviewIsEnabled() && category.active !== true, parent: parent ? { _id: String(parent._id), name: parent.name, slug: parent.slug } : null, imageUrl: mediaUrlForKey(imageKey), productCount: counts.get(String(category._id)) || 0 };
+  return { ...publicCategory, publicPath: graph.publicPaths.get(String(category._id)), browseOnly: catalogBrowsePreviewIsEnabled() && category.active !== true, parent: parent ? { _id: String(parent._id), name: parent.name, slug: parent.slug, publicPath: graph.publicPaths.get(String(parent._id)) } : null, imageUrl: mediaUrlForKey(imageKey), productCount: counts.get(String(category._id)) || 0 };
 }
 
 export async function getAdminCategory(id) {

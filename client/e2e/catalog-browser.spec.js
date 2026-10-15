@@ -25,9 +25,12 @@ test('shop requests twenty products and keeps server filters, counts, sorting an
   const filters = page.locator('.catalog-sidebar');
   await expect(filters.getByRole('slider')).toHaveCount(0);
   await expect(filters.locator('summary')).toHaveText(['Category', 'Availability', 'Price']);
+  await filters.locator('summary').filter({ hasText: /^Category$/ }).click();
   await filters.getByRole('combobox', { name: 'Category', exact: true }).selectOption('fixture-gifts');
   await expect(filters.getByRole('combobox', { name: 'Subcategory', exact: true })).toHaveCount(0);
+  await filters.locator('summary').filter({ hasText: /^Availability$/ }).click();
   await filters.getByLabel('Availability').selectOption('available');
+  await filters.locator('summary').filter({ hasText: /^Price$/ }).click();
   await filters.getByLabel('Minimum price (EGP)').fill('12.00');
   await filters.getByLabel('Maximum price (EGP)').fill('15.00');
   await filters.getByRole('button', { name: 'Apply filters' }).click();
@@ -57,6 +60,7 @@ test('mobile drawers contain focus, support Escape and apply and clear filters',
   await expect(dialog).toHaveCount(0);
   await expect(trigger).toBeFocused();
   await trigger.click();
+  await dialog.locator('summary').filter({ hasText: /^Availability$/ }).click();
   await dialog.getByLabel('Availability').selectOption('sold_out');
   await dialog.getByRole('button', { name: 'View Results' }).click();
   await expect(page.locator('.catalog-results-toolbar')).toContainText('1 product');

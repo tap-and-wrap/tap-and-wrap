@@ -52,7 +52,7 @@ export default function CatalogFilters({
   return (
     <form ref={form} className={`catalog-filters ${mobile ? 'catalog-filters-mobile' : ''}`} onSubmit={apply} noValidate>
       <div className="catalog-filter-fields">
-        <details className="catalog-filter-group" open>
+        <details className="catalog-filter-group">
           <summary>Category<ChevronDown size={18} aria-hidden="true" /></summary>
           <div className="catalog-filter-group-body">
             <label className="catalog-visually-hidden" htmlFor={`${id}-category`}>Category</label>
@@ -68,7 +68,7 @@ export default function CatalogFilters({
             {categoriesError && !fixedCategory && <div className="catalog-inline-error" role="alert"><p>Categories could not be loaded.</p><button type="button" onClick={retryCategories}>Retry categories</button></div>}
           </div>
         </details>
-        <details className="catalog-filter-group" open>
+        <details className="catalog-filter-group">
           <summary>Availability<ChevronDown size={18} aria-hidden="true" /></summary>
           <div className="catalog-filter-group-body">
             <label className="catalog-visually-hidden" htmlFor={`${id}-availability`}>Availability</label>
@@ -77,7 +77,7 @@ export default function CatalogFilters({
             </select>
           </div>
         </details>
-        <details className="catalog-filter-group" data-price-section open>
+        <details className="catalog-filter-group" data-price-section>
           <summary>Price<ChevronDown size={18} aria-hidden="true" /></summary>
           <div className="catalog-filter-group-body">
             <p id={`${id}-price-hint`} className="catalog-filter-context">Enter an amount in EGP. Leave blank for no limit.</p>

@@ -1,3 +1,4 @@
+import { categoryHref } from '../../../shared/category-paths.mjs';
 export const BRAND_NAME = 'Tap & Wrap';
 export const HERO_HEADLINE = 'Makes someone’s heart flap with Tap & Wrap.';
 export const PUBLIC_STATIC_ROUTES = Object.freeze({
@@ -108,7 +109,7 @@ export function productMetadata(product, origin, { indexable = true, checkoutEna
     }
     structuredData.push(schema);
     const entries = [{ name: 'Home', pathname: '/' }, { name: 'Shop', pathname: '/shop' }];
-    if (product.category?.slug && SLUG.test(product.category.slug)) entries.push({ name: product.category.name, pathname: `/categories/${product.category.slug}` });
+    if (product.category?.slug && SLUG.test(product.category.slug)) entries.push({ name: product.category.name, pathname: categoryHref(product.category) });
     entries.push({ name: product.name, pathname });
     const crumb = breadcrumbs(origin, entries);
     if (crumb) structuredData.push(crumb);

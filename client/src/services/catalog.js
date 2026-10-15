@@ -15,6 +15,18 @@ export const listProducts = (params = {}, signal, { searchEventId } = {}) => get
 export const getProduct = (slug, signal) => get(`/public/products/${encodeURIComponent(slug)}`, undefined, signal);
 export const getCategory = (slug, signal) => get(`/public/categories/${encodeURIComponent(slug)}`, undefined, signal);
 export const listCategories = (params = {}, signal) => get('/public/categories', { ...params, limit: Math.min(params.limit ?? 20, 20) }, signal);
+// Bound requests to the API's twenty-item / two-hundred-page contract.
+export async function listCategoryChildren(parent, signal) {
+  const categories = [];
+  for (let page = 1; page <= 200; page++) {
+    const result = await listCategories({ parent, page, limit: 20, includeProductCounts: false }, signal);
+    const pages = result.pagination?.pages;
+    if (!Number.isInteger(pages) || pages < 0 || pages > 200) throw new Error('Subcategories could not be loaded.');
+    categories.push(...result.categories);
+    if (page >= pages) return { categories };
+  }
+  throw new Error('Subcategories could not be loaded.');
+}
 export const listAdminProducts = (params = {}, signal) => get('/admin/products', { includePriceRange: false, ...params, limit: Math.min(params.limit ?? 20, 20) }, signal);
 export const getAdminProduct = (id, signal) => get(`/admin/products/${encodeURIComponent(id)}`, undefined, signal);
 export const getAdminProductPreview = (id, signal) => get(`/admin/products/${encodeURIComponent(id)}/preview`, undefined, signal);

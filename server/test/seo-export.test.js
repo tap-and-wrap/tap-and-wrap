@@ -28,6 +28,20 @@ function sourceFixture(products = [product]) {
   return { calls, source: { readMainCategoryPage: pagedFixture([main], calls.main), readSubcategoryPage: pagedFixture([child], calls.children), readProductPage: pagedFixture(products, calls.products), readSiteContent: async () => null, close: async () => { closed += 1; } }, closed: () => closed };
 }
 
+test('SEO export retains public collision paths while keeping inactive identity records private', async () => {
+  const { source } = sourceFixture();
+  const hidden = { ...main, _id: '444444444444444444444444', slug: 'hidden-root', active: false };
+  source.readCategoryIdentityPage = pagedFixture([main, child, hidden], []);
+  const { catalog } = await buildApprovedSeoExport(source);
+  assert.equal(catalog.categories.length, 2);
+  assert.equal(catalog.categories[0].publicPath, `/categories/category-id-${main._id}`);
+  assert.equal(catalog.categories[1].publicPath, `/categories/category-id-${main._id}/isolated-keepsakes`);
+  assert.equal(JSON.stringify(catalog).includes('hidden-root'), false);
+  const plan = buildSeoPlan({ catalog, siteOrigin: 'https://shop.example' });
+  assert.ok(plan.routes.has(catalog.categories[1].publicPath));
+  assert.equal(plan.routes.get(catalog.categories[1].publicPath).indexable, false);
+});
+
 test('default export command is offline and does not load dotenv, connect, or write files', async () => {
   let connections = 0; let writes = 0; const logs = [];
   const result = await runSeoCatalogExport([], { environment: { MONGODB_URI: 'mongodb+srv://secret-user:secret-password@not-contacted.example/production' }, log: (message) => logs.push(message), openSource: async () => { connections += 1; }, writeOutput: async () => { writes += 1; } });

@@ -41,8 +41,10 @@ test('category routes use exact active-category metadata and server filtering on
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
   await page.getByRole('button', { name: 'Filters', exact: true }).click();
   const drawer = page.getByRole('dialog');
+  await drawer.locator('summary').filter({ hasText: /^Category$/ }).click();
   await expect(drawer.getByRole('combobox', { name: 'Category', exact: true })).toBeDisabled();
   await expect(drawer.getByRole('combobox', { name: 'Category', exact: true })).toHaveValue(category.slug);
+  await drawer.locator('summary').filter({ hasText: /^Availability$/ }).click();
   await drawer.getByRole('combobox', { name: 'Availability', exact: true }).selectOption('available');
   await drawer.getByRole('button', { name: 'View Results' }).click();
   await expect(page).toHaveURL(new RegExp(`/categories/${category.slug}\\?availability=available`));
@@ -61,6 +63,7 @@ test('subcategory pages lock both relations and retain the main-category breadcr
   await page.goto(`/categories/${subcategory.slug}?category=incorrect&subcategory=incorrect`);
   await expect(page.getByRole('heading', { level: 1, name: `${subcategory.name} Gifts` })).toBeVisible();
   const filters = page.locator('.catalog-sidebar');
+  await filters.locator('summary').filter({ hasText: /^Category$/ }).click();
   await expect(filters.getByRole('combobox', { name: 'Category', exact: true })).toBeDisabled();
   await expect(filters.getByRole('combobox', { name: 'Category', exact: true })).toHaveValue(subcategory.slug);
   await expect(filters.getByRole('combobox', { name: 'Subcategory', exact: true })).toHaveCount(0);
@@ -69,11 +72,12 @@ test('subcategory pages lock both relations and retain the main-category breadcr
   const initial = requests.filter((request) => request.path === '/public/products').at(-1).params;
   expect(initial).toMatchObject({ category: category.slug, subcategory: subcategory.slug, limit: '20' });
   expect(requests.some((request) => request.path === '/public/categories')).toBeFalsy();
+  await filters.locator('summary').filter({ hasText: /^Availability$/ }).click();
   await filters.getByRole('combobox', { name: 'Availability', exact: true }).selectOption('available');
   await filters.getByRole('button', { name: 'Apply filters' }).click();
-  await expect(page).toHaveURL(`/categories/${subcategory.slug}?availability=available`);
+  await expect(page).toHaveURL(`${subcategory.publicPath}?availability=available`);
   await filters.getByRole('button', { name: 'Clear All' }).click();
-  await expect(page).toHaveURL(`/categories/${subcategory.slug}`);
+  await expect(page).toHaveURL(subcategory.publicPath);
   expect(requests.filter((request) => request.path === '/public/products').at(-1).params).toMatchObject({ category: category.slug, subcategory: subcategory.slug });
 });
 

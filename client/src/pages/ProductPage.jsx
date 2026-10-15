@@ -1,3 +1,4 @@
+import { categoryHref } from '../../../shared/category-paths.mjs';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -87,7 +88,7 @@ export function ProductContent({ product, relatedProducts = [], preview = false,
       {previewNotice}
       <nav className="product-breadcrumbs" aria-label="Breadcrumb">
         <Link to={preview ? '/admin/products' : '/shop'}>{preview ? 'Admin products' : 'Shop'}</Link>
-        {product.category && <><ChevronRight size={14} aria-hidden="true" /><Link to={`${preview ? '/admin/products' : '/shop'}?category=${encodeURIComponent(product.category.slug)}`}>{product.category.name}</Link></>}
+        {product.category && <><ChevronRight size={14} aria-hidden="true" /><Link to={preview ? `/admin/products?category=${encodeURIComponent(product.category.slug)}` : categoryHref(product.category)}>{product.category.name}</Link></>}
         <ChevronRight size={14} aria-hidden="true" /><span aria-current="page">{product.name}</span>
       </nav>
       <div className="product-detail-layout">

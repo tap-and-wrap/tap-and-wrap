@@ -20,6 +20,8 @@ test('three keyboard accordion groups preserve drafts and never request subcateg
   await expect(filters.locator('summary')).toHaveText(['Category', 'Availability', 'Price']);
   await expect(filters.locator('input[type=range]')).toHaveCount(0);
   await expect(filters.getByRole('combobox', { name: 'Subcategory', exact: true })).toHaveCount(0);
+  await expect(filters.locator('details[open]')).toHaveCount(0);
+  await filters.locator('summary').filter({ hasText: /^Price$/ }).click();
   await priceMinimum(filters).fill('12.');
   const price = filters.locator('summary').filter({ hasText: /^Price$/ });
   await price.focus();
@@ -27,6 +29,7 @@ test('three keyboard accordion groups preserve drafts and never request subcateg
   await expect(priceMinimum(filters)).toBeHidden();
   await page.keyboard.press('Space');
   await expect(priceMinimum(filters)).toHaveValue('12.');
+  await filters.locator('summary').filter({ hasText: /^Category$/ }).click();
   await filters.getByLabel('Category', { exact: true }).selectOption(category.slug);
   expect(fixture.requests.filter((request) => request.path === '/public/categories').every((request) => request.params.parent === 'root')).toBe(true);
   expect(productRequests(fixture)).toHaveLength(1);
@@ -42,6 +45,7 @@ test('price drafts retain natural typing, reject invalid values and convert only
   await expect(page.locator('.catalog-card')).toHaveCount(20);
   const filters = page.locator('.catalog-sidebar');
   const initialCount = productRequests(fixture).length;
+  await filters.locator('summary').filter({ hasText: /^Price$/ }).click();
   for (const amount of ['-1', '12.345', '1e2', 'not money', '90071992547409.92']) {
     await priceMinimum(filters).fill(amount);
     await filters.getByRole('button', { name: 'Apply filters' }).click();
@@ -56,6 +60,7 @@ test('price drafts retain natural typing, reject invalid values and convert only
   await filters.getByRole('button', { name: 'Apply filters' }).click();
   await expect(page).toHaveURL(/minPrice=0&maxPrice=1234/);
   await expect.poll(() => productRequests(fixture).at(-1)?.params).toMatchObject({ minPrice: '0', maxPrice: '1234', q: 'Fixture', sort: 'name_desc', limit: '20' });
+  await filters.locator('summary').filter({ hasText: /^Price$/ }).click();
   await priceMinimum(filters).fill('   ');
   await priceMaximum(filters).fill('');
   await filters.getByRole('button', { name: 'Apply filters' }).click();
@@ -67,6 +72,7 @@ test('reversed price errors open their accordion and focus associated inputs wit
   await page.goto('/shop');
   await expect(page.locator('.catalog-card')).toHaveCount(20);
   const filters = page.locator('.catalog-sidebar');
+  await filters.locator('summary').filter({ hasText: /^Price$/ }).click();
   await priceMinimum(filters).fill('30');
   await priceMaximum(filters).fill('20');
   await filters.locator('summary').filter({ hasText: /^Price$/ }).click();
@@ -137,8 +143,9 @@ test('main category routes discard hidden legacy subcategory filters while prese
   await expect(page.locator('.catalog-card')).toHaveCount(20);
   expect(productRequests(fixture).every((request) => request.params.category === category.slug && !request.params.subcategory)).toBe(true);
   await page.goto(`/categories/${subcategory.slug}?subcategory=obsolete-hidden-refinement&q=Fixture`);
-  await expect(page).toHaveURL(`/categories/${subcategory.slug}?q=Fixture`);
+  await expect(page).toHaveURL(`${subcategory.publicPath}?q=Fixture`);
   await expect(select).toHaveValue(subcategory.slug);
+  await page.locator('.catalog-sidebar summary').filter({ hasText: /^Category$/ }).click();
   await expect(page.locator('.catalog-sidebar').getByText(`Within ${category.name}`, { exact: true })).toBeVisible();
   await expect(page.locator('.catalog-card')).toHaveCount(20);
   expect(productRequests(fixture).at(-1).params).toMatchObject({ category: category.slug, subcategory: subcategory.slug, limit: '20' });
@@ -151,6 +158,7 @@ test('invalid URL prices are explained and block requests until corrected withou
   expect(productRequests(fixture)).toHaveLength(0);
   const filters = page.locator('.catalog-sidebar');
   await expect(priceMinimum(filters)).toHaveValue('-1');
+  await filters.locator('summary').filter({ hasText: /^Price$/ }).click();
   await priceMinimum(filters).fill('1.23');
   await filters.getByRole('button', { name: 'Apply filters' }).click();
   await expect(page).toHaveURL('/shop?q=Fixture&sort=name_asc&minPrice=123');

@@ -1,15 +1,17 @@
+import { categoryHref } from '../../../shared/category-paths.mjs';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, SlidersHorizontal, ArrowDownUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import ProductCard from '../components/ProductCard.jsx';
 import CatalogFilters from '../components/CatalogFilters.jsx';
 import CatalogDialog from '../components/CatalogDialog.jsx';
-import { getCategory, listCategories, listProducts } from '../services/catalog.js';
+import { getCategory, listCategories, listCategoryChildren, listProducts } from '../services/catalog.js';
 import { applyCatalogFilters, catalogApiParams, catalogPriceErrors, CATALOG_SORTS, readCatalogParams } from '../utils/catalog.js';
 import { emitTracking } from '../tracking/client.js';
 
 export default function ShopPage({ categorySlug, heading, categoryContext, categoryBreadcrumbs }) {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [drawer, setDrawer] = useState(null);
   const resultsRef = useRef(null);
@@ -41,9 +43,7 @@ export default function ShopPage({ categorySlug, heading, categoryContext, categ
   } });
   const categories = useQuery({ queryKey: ['catalog', 'categories', 'root', 'choices'], enabled: !lockedCategory, queryFn: ({ signal }) => listCategories({ parent: 'root', limit: 20, includeProductCounts: false }, signal) });
   const selectedCategory = useQuery({ queryKey: ['catalog', 'category', params.category], enabled: !lockedCategory && Boolean(params.category) && Boolean(categories.data) && !categories.data.categories.some((category) => category.slug === params.category), retry: false, queryFn: async ({ signal }) => (await getCategory(params.category, signal)).category });
-  const [subcategoryPage, setSubcategoryPage] = useState(1);
-  useEffect(() => { setSubcategoryPage(1); }, [categorySlug]);
-  const children = useQuery({ queryKey: ['catalog', 'category-children', lockedCategory?.slug, subcategoryPage], enabled: Boolean(lockedCategory && !lockedSubcategory), queryFn: ({ signal }) => listCategories({ parent: lockedCategory.slug, page: subcategoryPage, limit: 20, includeProductCounts: false }, signal) });
+  const children = useQuery({ queryKey: ['catalog', 'category-children', lockedCategory?.slug], retry: false, enabled: Boolean(lockedCategory && !lockedSubcategory), queryFn: ({ signal }) => listCategoryChildren(lockedCategory.slug, signal) });
   const rows = products.data?.products || [];
   useEffect(() => { if (products.data?.tracking) emitTracking(products.data.tracking); }, [products.data]);
   const pagination = products.data?.pagination;
@@ -82,7 +82,16 @@ export default function ShopPage({ categorySlug, heading, categoryContext, categ
     lockedCategory,
     lockedSubcategory,
     onClear: clearFilters,
-    onApply: (filters) => { searchAction.current = null; setSearchParams(filterUrl(filters)); setDrawer(null); },
+    onApply: (filters) => {
+      searchAction.current = null;
+      const next = filterUrl(filters);
+      const choice = categories.data?.categories.find(category => category.slug === filters.category) || selectedCategory.data;
+      if (!lockedCategory && filters.category && choice?.slug === filters.category && choice.publicPath) {
+        next.delete('category');
+        navigate(`${categoryHref(choice)}${next.size ? `?${next}` : ''}`);
+      } else setSearchParams(next);
+      setDrawer(null);
+    },
   };
 
   return (
@@ -109,14 +118,16 @@ export default function ShopPage({ categorySlug, heading, categoryContext, categ
         <button type="button" onClick={() => setDrawer('filters')}><SlidersHorizontal size={18} aria-hidden="true" />Filters</button>
         <button type="button" onClick={() => setDrawer('sort')}><ArrowDownUp size={18} aria-hidden="true" />Sort</button>
       </div>
-      {lockedCategory && !lockedSubcategory && children.data?.categories?.length > 0 && <nav className="catalog-subcategories" aria-label="Browse subcategories">
-        <h2>Browse {lockedCategory.name}</h2>
-        <div className="catalog-subcategories-list">{children.data.categories.map(item => <Link key={item._id} to={`/categories/${encodeURIComponent(item.slug)}`}>{item.name}</Link>)}</div>
-        {(children.data.pagination?.pages || 1) > 1 && <div className="catalog-subcategories-pagination">
-          <button type="button" disabled={subcategoryPage === 1 || children.isFetching} onClick={() => setSubcategoryPage(p => p - 1)}>Previous</button>
-          <span>{subcategoryPage} / {children.data.pagination.pages}</span>
-          <button type="button" disabled={subcategoryPage >= children.data.pagination.pages || children.isFetching} onClick={() => setSubcategoryPage(p => p + 1)}>Next</button>
-        </div>}
+      {lockedCategory && !lockedSubcategory && <nav className="catalog-subcategories" aria-label="Browse subcategories">
+        <h2><label htmlFor="catalog-subcategory">Browse {lockedCategory.name}</label></h2>
+        <select id="catalog-subcategory" className="catalog-subcategory-select" value="" disabled={children.isPending || children.isError || !children.data?.categories.length}
+          onChange={event => { if (event.target.value) navigate(event.target.value); }}>
+          <option value="">Choose a subcategory</option>
+          {(children.data?.categories || []).map(item => <option key={item._id} value={categoryHref(item)}>{item.name}</option>)}
+        </select>
+        {children.isPending && <p role="status">Loading subcategories…</p>}
+        {children.isError && <div className="catalog-inline-error" role="alert"><p>Subcategories could not be loaded.</p><button type="button" className="catalog-text-button" onClick={() => children.refetch()}>Retry subcategories</button></div>}
+        {children.isSuccess && !children.data.categories.length && <p role="status">No subcategories in this category.</p>}
       </nav>}
       <div className="catalog-shop-layout">
         <aside className="catalog-sidebar" aria-label="Product filters">
