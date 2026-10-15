@@ -1,8 +1,20 @@
 /* Storefront composition. Brand colours/fonts remain in design-system.css. */
+/* Full-bleed homepage media uses the available width without a reserved left scrollbar gutter. */
+html:has(.home-media-hero) { scrollbar-gutter: stable; }
 :root { --site-header-height: 76px; --site-header-min-height: 76px; --site-header-offset: calc(var(--site-header-height) + 16px); }
 .storefront-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 
-.announcement-centered { display: flex; align-items: center; justify-content: center; min-height: 36px; padding: 4px 12px; background: var(--tw-soft); font-family: var(--tw-font-display); font-style: italic; font-size: 20px; letter-spacing: .02em; text-align: center; }
+.announcement-marquee { height: 34px; padding: 0; overflow: hidden; background: var(--tw-soft); font-family: var(--tw-font-body); font-style: italic; font-size: 12px; letter-spacing: .03em; text-transform: none; }
+.announcement-track { display: flex; width: 200%; height: 100%; animation: announcement-travel 24s linear infinite; }
+.announcement-message { flex: 0 0 50%; display: flex; align-items: center; justify-content: center; white-space: nowrap; }
+.announcement-marquee:hover .announcement-track, .site-header-stack:focus-within .announcement-track { animation-play-state: paused; }
+@keyframes announcement-travel { to { transform: translateX(-50%); } }
+@media (max-width: 767px) { .announcement-marquee { font-size: 11px; } }
+@media (prefers-reduced-motion: reduce) {
+  .announcement-track { animation: none; width: 100%; }
+  .announcement-message { flex-basis: 100%; }
+  .announcement-message + .announcement-message { display: none; }
+}
 
 .site-header { position: sticky; top: 0; z-index: 100; min-height: var(--site-header-min-height); display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 8px; padding: 10px clamp(12px, 3vw, 48px); }
 .site-header .site-logo { width: clamp(98px, 20vw, 168px); justify-self: start; display: flex; align-items: center; min-height: 44px; }
@@ -13,6 +25,10 @@
 .header-error { grid-column: 1 / -1; margin: 0; font-size: .85rem; color: var(--tw-error); }
 .drawer-account { padding: 20px 24px; border-top: 1px solid var(--tw-border); margin-top: auto; }
 .drawer-account p { margin: 0 0 8px; font-size: .875rem; }
+.drawer-account-actions { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.drawer-account-actions .catalog-text-button, .drawer-account-actions .icon-button { min-height: 44px; }
+.drawer-account-actions .catalog-text-button { display: inline-flex; align-items: center; }
+.drawer-account-actions .icon-button { width: 44px; flex: 0 0 44px; display: grid; place-items: center; }
 .navigation-drawer { overscroll-behavior: contain; width: min(400px, calc(100vw - 64px)); }
 
 .hero { padding: clamp(58px, 7vw, 96px) clamp(20px, 5vw, 76px) 52px; min-height: 0; }

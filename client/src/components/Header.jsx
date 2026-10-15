@@ -14,15 +14,19 @@ const primaryLinks = [
   { to: '/about', text: 'About Us' },
 ];
 function AnnouncementBar() {
-  return <div className="announcement announcement-centered">Unlock the Magic of Giving✨</div>;
+  const message = 'Unlock the Magic of Giving✨';
+  return <div className="announcement announcement-marquee">
+    <span className="storefront-sr-only">{message}</span>
+    <div className="announcement-track" aria-hidden="true">{[0, 1].map(copy => <span className="announcement-message" key={copy}>{message}</span>)}</div>
+  </div>;
 }
 
-function NavigationDrawer({ links, onClose, admin, logout }) {
+function NavigationDrawer({ links, onClose, admin, logout, accountDestination, sessionReady, loggedIn }) {
   const { dialogRef, dialogProps } = useModalDialog({ onClose });
   return <dialog ref={dialogRef} {...dialogProps} id="navigation-drawer" className="navigation-drawer" aria-labelledby="navigation-title" aria-modal="true">
     <div className="drawer-header"><h2 id="navigation-title">Explore Tap & Wrap</h2><button type="button" className="icon-button" onClick={onClose} aria-label="Close menu" autoFocus><X size={22} aria-hidden="true"/></button></div>
     <nav className="drawer-nav" aria-label="Main navigation"><ul>{links.map(item => <li key={item.to}><NavLink to={item.to} end={item.end} onClick={onClose}>{item.text}</NavLink></li>)}</ul></nav>
-    {admin && <div className="drawer-account"><p>Administrator account</p><button className="catalog-text-button" type="button" disabled={logout.isPending} onClick={() => logout.mutate()}>{logout.isPending ? 'Signing out…' : 'Sign out'}</button>{logout.error && <p role="alert">{commerceError(logout.error)}</p>}</div>}
+    {sessionReady && <div className="drawer-account">{admin && <p>Administrator account</p>}<div className="drawer-account-actions">{loggedIn ? <button className="catalog-text-button" type="button" disabled={logout.isPending} onClick={() => logout.mutate()}>{logout.isPending ? 'Signing out…' : 'Sign out'}</button> : <Link className="catalog-text-button" to="/login" onClick={onClose}>Login</Link>}<Link className="icon-button" to={accountDestination} aria-label="Account" onClick={onClose}><UserRound size={22} aria-hidden="true"/></Link></div>{logout.error && <p role="alert">{commerceError(logout.error)}</p>}</div>}
   </dialog>;
 }
 
@@ -72,6 +76,6 @@ export default function Header() {
       {logout.error && !open && <p className="header-error" role="alert">{commerceError(logout.error)}</p>}
       </header>
     </div>
-    {open && <NavigationDrawer links={links} onClose={() => setOpen(false)} admin={admin} logout={logout}/>}
+    {open && <NavigationDrawer links={links} onClose={() => setOpen(false)} admin={admin} logout={logout} accountDestination={accountDestination} sessionReady={session.ready} loggedIn={Boolean(session.user)}/>}
   </>;
 }

@@ -4,11 +4,29 @@ import { approvedFaqFallback } from '../src/content/final-faq.js';
 
 test('named testimonial marquee pauses and reduced motion exposes one complete copy', async ({ page }) => {
   await mockCatalog(page); await page.goto('/');
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    const control = page.getByRole('button', { name: /Pause hero video|Play hero video/ });
+    await page.getByRole('heading', { level: 1 }).click();
+    await expect(control).toHaveCSS('opacity', '0');
+    await page.keyboard.press('Tab');
+    await control.focus();
+    await expect(control).toHaveCSS('opacity', '1');
+    await page.keyboard.press('Tab');
+    await expect(control).toHaveCSS('opacity', '0');
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
   const groups = page.locator('.review-marquee-group');
   await expect(groups.first().locator('figure')).toHaveCount(12);
   await expect(groups.nth(1)).toHaveAttribute('aria-hidden', 'true');
-  await expect(groups.first().locator('.review-marquee-rating')).toHaveText(Array(12).fill(''));
-  await page.getByRole('button', { name: 'Pause reviews', exact: true }).click();
+  await expect(groups.first().locator('.review-marquee-rating')).toHaveText(Array(12).fill('★★★★★'));
+  await expect(page.getByRole('button', { name: /Pause reviews|Resume reviews/ })).toHaveCount(0);
+  await expect(page.getByText('Customer feedback translated or lightly edited for clarity.')).toHaveCount(0);
+  const window = page.locator('.review-marquee-window');
+  const bounds = await window.boundingBox();
+  expect(bounds.x).toBe(0);
+  expect(bounds.width).toBe(await page.evaluate(() => document.documentElement.getBoundingClientRect().width));
+  await window.focus();
   expect(await page.locator('.review-marquee-track').evaluate(node => getComputedStyle(node).animationPlayState)).toBe('paused');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   expect(await page.locator('.review-marquee-track').evaluate(node => getComputedStyle(node).animationName)).toBe('none');
@@ -17,7 +35,12 @@ test('named testimonial marquee pauses and reduced motion exposes one complete c
 
 test('FAQ categories preserve all eleven exact approved answers', async ({ page }) => {
   await mockCatalog(page); await page.goto('/');
-  for (const [label, count] of [['Orders & Pricing', 4], ['Shipping & Delivery', 4], ['Personalization', 3]]) {
+  for (const width of [1440, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    const positions = await page.locator('.home-faq-categories button').evaluateAll(buttons => buttons.map(button => button.getBoundingClientRect().top));
+    expect(Math.max(...positions) - Math.min(...positions)).toBeLessThan(1);
+  }
+  for (const [label, count] of [['Orders', 4], ['Shipping', 4], ['Personalization', 3]]) {
     await page.getByRole('button', { name: label, exact: true }).click();
     const questions = page.locator('.home-faq-card');
     await expect(questions).toHaveCount(count);

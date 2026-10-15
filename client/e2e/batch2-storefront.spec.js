@@ -83,6 +83,15 @@ for (const role of [null, 'customer', 'admin']) {
       await expect(nav.getByRole('link', { name: 'My Orders', exact: true })).toHaveCount(role === 'customer' ? 1 : 0);
       await expect(nav.getByRole('link', { name: 'Dashboard', exact: true })).toHaveCount(0);
       await expect(nav.getByRole('link', { name: 'Contact', exact: true })).toHaveCount(0);
+      if (width < 1024) {
+        const row = page.locator('.drawer-account-actions');
+        await expect(row.getByRole('link', { name: 'Account', exact: true })).toHaveAttribute('href', role === 'admin' ? '/admin' : role === 'customer' ? '/my-orders' : '/login');
+        await expect(page.locator('.drawer-account').getByText('Administrator account', { exact: true })).toHaveCount(role === 'admin' ? 1 : 0);
+        if (role) await row.getByRole('button', { name: 'Sign out', exact: true }).click();
+        else await row.getByRole('link', { name: 'Login', exact: true }).click();
+        await expect(page).toHaveURL(/\/login$/);
+        await expect(page.getByRole('dialog')).toHaveCount(0);
+      }
     });
   }
 }
@@ -138,10 +147,13 @@ test('mobile navigation supports keyboard containment, padding, backdrop, Escape
   await trigger.click(); await page.setViewportSize({ width: 1440, height: 900 }); await expect(dialog).toHaveCount(0);
 });
 
-test('announcement is one centered static sentence with no search or dashboard link', async ({ page }) => {
+test('announcement marquee repeats only one message with no search or dashboard link', async ({ page }) => {
   await mockCatalog(page, { role: 'admin' }); await page.goto('/');
-  await expect(page.locator('.announcement')).toHaveText('Unlock the Magic of Giving\u2728');
-  await expect(page.locator('.announcement-track, .announcement-pause')).toHaveCount(0);
+  await expect(page.locator('.announcement .storefront-sr-only')).toHaveText('Unlock the Magic of Giving\u2728');
+  await expect(page.locator('.announcement-message')).toHaveText(Array(2).fill('Unlock the Magic of Giving\u2728'));
+  await expect(page.locator('.announcement-track')).toHaveAttribute('aria-hidden', 'true');
+  expect(await page.locator('.announcement-track').evaluate(node => getComputedStyle(node).animationName)).toBe('announcement-travel');
+  await expect(page.locator('.announcement-pause')).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Shop and search' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Dashboard', exact: true })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Account', exact: true })).toHaveAttribute('href', '/admin');
@@ -149,7 +161,27 @@ test('announcement is one centered static sentence with no search or dashboard l
     await page.setViewportSize({ width, height: 900 });
     const logo = await page.locator('.site-logo').boundingBox();
     const header = await page.locator('.site-header').boundingBox(); expect(Math.abs((logo.x + logo.width / 2) - (header.x + header.width / 2))).toBeLessThan(1);
+    const media = page.locator('.hero-film video, .hero-film-poster');
+    const geometry = await media.evaluate(node => ({ width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height, ratio: Number(node.getAttribute('width')) / Number(node.getAttribute('height')) }));
+    const viewportWidth = await page.evaluate(() => document.documentElement.getBoundingClientRect().width);
+    expect(geometry.width).toBeCloseTo(viewportWidth, 0);
+    if (width < 768) {
+      await expect(media).toHaveCSS('object-fit', 'cover');
+      const frame = await page.locator('.hero-film').boundingBox();
+      expect(geometry.height).toBeCloseTo(frame.height, 0);
+    } else expect(geometry.width / geometry.height).toBeCloseTo(geometry.ratio, 2);
+    const hero = await page.locator('.home-media-hero').boundingBox();
+    expect(hero.y + hero.height).toBeGreaterThanOrEqual(899);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
+  await page.getByRole('button', { name: 'Open menu', exact: true }).click();
+  const drawer = page.locator('.drawer-account-actions');
+  await expect(drawer.getByRole('link', { name: 'Account', exact: true })).toHaveAttribute('href', '/admin');
+  const row = await drawer.evaluate(node => [...node.children].map(child => child.getBoundingClientRect().y + child.getBoundingClientRect().height / 2));
+  expect(Math.max(...row) - Math.min(...row)).toBeLessThan(1);
+  await page.keyboard.press('Escape');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  expect(await page.locator('.announcement-track').evaluate(node => getComputedStyle(node).animationName)).toBe('none');
 });
 
 test('footer omits Explore and uses approved accessible icon destinations only', async ({ page }) => {

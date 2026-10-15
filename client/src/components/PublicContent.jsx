@@ -110,9 +110,7 @@ export function ProductReviews({ slug, preview, enabled = true }) {
   return <section className="product-reviews" aria-labelledby="product-reviews-heading"><h2 id="product-reviews-heading">Product reviews</h2>{preview ? <p>Reviews are unavailable in draft preview.</p> : query.isPending ? <p role="status">Loading reviews…</p> : query.isError ? <div><p>Reviews are unavailable at the moment.</p><button className="catalog-text-button" onClick={() => query.refetch()}>Retry reviews</button></div> : !reviews.length ? <p>No owner-approved reviews have been published for this product.</p> : <><ReviewCards reviews={reviews}/>{query.data.pagination.pages > 1 && <nav className="commerce-pagination" aria-label="Review pages"><button disabled={page <= 1 || query.isFetching} onClick={() => setPage(page - 1)}>Previous</button><span>Page {page}</span><button disabled={page >= query.data.pagination.pages || query.isFetching} onClick={() => setPage(page + 1)}>Next</button></nav>}</>}</section>;
 }
 export function ReviewMarquee({ reviews }) {
-  const [paused, setPaused] = useState(false);
-  return <div className="review-marquee" data-paused={paused}>
-    <button type="button" className="review-marquee-control catalog-text-button" aria-pressed={paused} onClick={() => setPaused(value => !value)}>{paused ? 'Resume reviews' : 'Pause reviews'}</button>
+  return <div className="review-marquee">
     <div className="review-marquee-window" tabIndex={0} aria-label="Customer testimonials">
       <div className="review-marquee-track">{[0, 1].map(copy => <div className="review-marquee-group" key={copy} aria-hidden={copy === 1 ? true : undefined}>{reviews.map(review => <figure key={review.id}>
         <blockquote>{review.text}</blockquote>
@@ -122,7 +120,7 @@ export function ReviewMarquee({ reviews }) {
   </div>;
 }
 
-const faqCategories = ['Orders & Pricing', 'Shipping & Delivery', 'Personalization'];
+const faqCategories = ['Orders', 'Shipping', 'Personalization'];
 const faqCategoryByQuestion = {
   'How do I place an order?': 0,
   'Which payment methods do you accept?': 0,

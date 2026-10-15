@@ -9,7 +9,7 @@ import '../home-media.css';
 
 export default function HomePage() {
   const content = useSiteContent();
-  const reviews = ownerFeaturedReviews.map(review => ({ ...review, rating: content.data?.featuredReviews?.find(published => published.id === review.id)?.rating ?? review.rating }));
+  const reviews = ownerFeaturedReviews;
   const faq = content.data?.faq?.length ? content.data.faq : approvedFaqFallback;
   return <main>
     <section className="hero home-media-hero" aria-labelledby="home-hero-heading">
@@ -29,7 +29,7 @@ export default function HomePage() {
       <article className="home-service-card"><ServiceFilm src="/media/tap-wrap-gift-box.mp4" poster="/media/tap-wrap-gift-box-poster.webp" title="Build Your Gift Box" /><Link className="home-service-detail" to="/customize/gift-box"><h3>Build Your Gift Box</h3><p>Choose the pieces that make someone smile.</p><span>Explore Gift Boxes <ArrowUpRight aria-hidden="true" size={20}/></span></Link></article>
       <article className="home-service-card"><ServiceFilm src="/media/tap-wrap-laser-engraving.mp4" poster="/media/tap-wrap-laser-engraving-poster.webp" title="Laser Engraving" /><Link className="home-service-detail" to="/customize/laser-engraving"><h3>Laser Engraving</h3><p>Add a personal mark to an unforgettable gift.</p><span>Explore Engraving <ArrowUpRight aria-hidden="true" size={20}/></span></Link></article>
     </div></section>
-    {reviews.length > 0 && <section className="section" aria-labelledby="home-reviews-heading"><div className="section-heading"><p className="eyebrow">KIND WORDS</p><h2 id="home-reviews-heading">What Our Customers Say</h2></div><p className="home-testimonials-note">Customer feedback translated or lightly edited for clarity.</p><div className="home-named-review-carousel"><ReviewMarquee reviews={reviews}/></div></section>}
+    {reviews.length > 0 && <section className="section home-reviews-section" aria-labelledby="home-reviews-heading"><div className="section-heading"><p className="eyebrow">KIND WORDS</p><h2 id="home-reviews-heading">What Our Customers Say</h2></div><div className="home-named-review-carousel"><ReviewMarquee reviews={reviews}/></div></section>}
     {faq.length > 0 && <section className="section faq-section" aria-labelledby="home-faq-heading"><div className="section-heading"><p className="eyebrow">ANY QUESTIONS?</p><h2 id="home-faq-heading">Frequently Asked Questions</h2></div><ApprovedFaq entries={faq} categorized/></section>}
   </main>;
 }
