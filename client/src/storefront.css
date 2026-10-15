@@ -7,7 +7,6 @@ html:has(.home-media-hero) { scrollbar-gutter: stable; }
 .announcement-marquee { height: 34px; padding: 0; overflow: hidden; background: var(--tw-soft); font-family: var(--tw-font-body); font-style: italic; font-size: 12px; letter-spacing: .03em; text-transform: none; }
 .announcement-track { display: flex; width: 200%; height: 100%; animation: announcement-travel 24s linear infinite; }
 .announcement-message { flex: 0 0 50%; display: flex; align-items: center; justify-content: center; white-space: nowrap; }
-.announcement-marquee:hover .announcement-track, .site-header-stack:focus-within .announcement-track { animation-play-state: paused; }
 @keyframes announcement-travel { to { transform: translateX(-50%); } }
 @media (max-width: 767px) { .announcement-marquee { font-size: 11px; } }
 @media (prefers-reduced-motion: reduce) {
