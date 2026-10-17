@@ -110,9 +110,19 @@ test('browser history restores applied prices while discarded drafts never reach
   await page.goto('/shop');
   await expect(page.locator('.catalog-card')).toHaveCount(20);
   const filters = page.locator('.catalog-sidebar');
+  const priceAccordion = filters.locator('details').filter({ has: page.locator('summary').filter({ hasText: /^Price$/ }) });
+  await filters.locator('summary').filter({ hasText: /^Price$/ }).click();
+  await expect(priceAccordion).toHaveAttribute('open', '');
   await priceMinimum(filters).fill('12.34');
   await filters.getByRole('button', { name: 'Apply filters' }).click();
   await expect(page).toHaveURL(/minPrice=1234/);
+  // The applied URL changes CatalogFilters' React key. Await the newly
+  // mounted (closed) accordion, not the soon-to-be-detached open accordion.
+  // Otherwise a click can succeed on the old instance, then React replaces it
+  // with a closed instance before fill() runs.
+  await expect(priceAccordion).not.toHaveAttribute('open', '');
+  await priceAccordion.locator('summary').click();
+  await expect(priceMinimum(filters)).toBeVisible();
   await priceMinimum(filters).fill('99.');
   await page.goBack();
   await expect(page).toHaveURL('/shop');
@@ -194,10 +204,20 @@ test('product-card links and buttons have visible boundaries, readable states an
   });
   await expect(actions.nth(0)).toHaveText('Add to Cart');
   await expect(actions.nth(1)).toHaveText('Choose Options');
-  // Browsable but unavailable products navigate to details without offering a cart action.
-  await expect(actions.nth(2)).toHaveText('View Details');
-  await expect(actions.nth(2)).toHaveAttribute('href', '/products/fixture-gift-3');
-  await expect(actions.nth(2)).toHaveAttribute('aria-label', 'View details: Fixture Gift 03');
+  // Unavailable products remain browsable but cannot be added to cart.
+  // The current enquiry-first policy offers WhatsApp with the canonical product URL.
+  const enquiryAction = actions.nth(2);
+  await expect(enquiryAction).toHaveText('Enquire on WhatsApp');
+  await expect(enquiryAction).toHaveAttribute('aria-label', 'Enquire on WhatsApp about Fixture Gift 03');
+  await expect(enquiryAction).toHaveAttribute('target', '_blank');
+  await expect(enquiryAction).toHaveAttribute('rel', /noopener.*noreferrer/);
+  const enquiryHref = new URL(await enquiryAction.getAttribute('href'));
+  expect(enquiryHref.origin).toBe('https://wa.me');
+  expect(enquiryHref.pathname).toBe('/201508216472');
+  expect(enquiryHref.searchParams.get('text')).toContain('Fixture Gift 03');
+  expect(enquiryHref.searchParams.get('text')).toContain('https://tapandwrap.net/products/fixture-gift-3');
+  await expect(page.locator('.catalog-card').nth(2).getByRole('link', { name: 'View Fixture Gift 03' }))
+    .toHaveAttribute('href', '/products/fixture-gift-3');
   await expect(page.locator('.catalog-card').nth(2).locator('button')).toHaveCount(0);
   for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 1000 });

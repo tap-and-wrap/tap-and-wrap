@@ -53,6 +53,7 @@ const engravingSchema = new mongoose.Schema({
   artworkAcceptedMimeTypes: { type: [{ type: String, enum: ['image/jpeg', 'image/png', 'image/webp'] }], default: ['image/jpeg', 'image/png', 'image/webp'] }
 }, { _id: false, strict: 'throw' });
 const schema = new mongoose.Schema({
+  usage: { type: String, enum: ['enquiry', 'priced'], default: 'priced' },
   key,
   name: { type: String, required: true, trim: true, maxlength: 160 },
   kind: { type: String, enum: ['gift_box', 'laser_engraving', 'tray', 'generic'], required: true },
@@ -74,6 +75,9 @@ schema.index({ updatedAt: -1, _id: -1 });
 schema.index({ status: 1, kind: 1, updatedAt: -1, _id: -1 });
 schema.index({ name: 'text' }, { name: 'customization_template_search', default_language: 'none' });
 schema.pre('validate', function validateConfiguration() {
+  if (this.usage === 'enquiry' && this.groups.length) this.invalidate('groups', 'Request templates contain questions. Offer components through their service and availability fields instead.');
+  if (this.usage === 'enquiry' && (this.fields.filter(field => field.type === 'image').some(field => field.maxFiles > 5 || field.maxBytes > 8388608)
+    || this.fields.filter(field => field.type === 'image').reduce((sum, field) => sum + Math.max(field.minFiles, field.required ? 1 : 0), 0) > 5)) this.invalidate('fields', 'Requests support at most five reference images in total, up to 8 MB each.');
   const unique = (values, path) => {
     if (new Set(values.map((value) => value.key)).size !== values.length) this.invalidate(path, 'Keys must be unique.');
   };
@@ -93,14 +97,14 @@ schema.pre('validate', function validateConfiguration() {
     if (field.minFiles > field.maxFiles || (field.type === 'image' && !field.acceptedMimeTypes.length)) this.invalidate(`fields.${index}`, 'Image limits and accepted formats are required.');
     if (['engraving_type', 'engraving_other_details', 'engraving_text', 'engraving_material', 'engraving_font', 'engraving_placement', 'engraving_artwork'].includes(field.key)) this.invalidate(`fields.${index}.key`, 'This key is reserved for engraving.');
   }
-  if (this.kind === 'laser_engraving') {
+  if (this.kind === 'laser_engraving' && this.usage !== 'enquiry') {
     if (!this.engraving || !this.engraving.materials.length || !this.engraving.fonts.length) this.invalidate('engraving', 'Explicit engraving materials and approved fonts are required.');
   }
   if (this.engraving) {
     for (const property of ['materials', 'fonts', 'placements']) unique(this.engraving[property], `engraving.${property}`);
     if (this.engraving.artworkRequired && !this.engraving.artworkAllowed) this.invalidate('engraving.artworkRequired', 'Required artwork must be enabled.');
     if (this.engraving.artworkAllowed && !this.engraving.artworkAcceptedMimeTypes.length) this.invalidate('engraving.artworkAcceptedMimeTypes', 'Configure accepted artwork image formats.');
-    if (this.kind === 'laser_engraving' && this.status === 'approved' && this.active) {
+    if (this.kind === 'laser_engraving' && this.usage !== 'enquiry' && this.status === 'approved' && this.active) {
       for (const property of ['materials', 'fonts', 'placements']) if ((property !== 'placements' || this.engraving.placements.length) && !this.engraving[property].some((choice) => choice.active)) this.invalidate(`engraving.${property}`, 'An active approved engraving choice is required.');
     }
   }

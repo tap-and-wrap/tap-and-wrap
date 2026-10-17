@@ -41,6 +41,8 @@ const personalizationFieldSchema = z.object({
 }).strict();
 
 const productFields = {
+  ownerWorkflow: z.literal(true).optional(),
+  optionStructure: z.enum(['single', 'variants', 'unresolved']).optional(),
   engravingRequest: engravingRequestPolicy.optional(),
   name: boundedText(240).min(1),
   slug,

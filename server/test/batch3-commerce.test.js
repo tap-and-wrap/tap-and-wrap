@@ -179,8 +179,14 @@ test('F14 deadline and cancellation stop claims without resetting durable record
 });
 test('F14 a hung non-idempotent SMTP mock is uncertain, does not replay, and clears its secret', async () => {
   await enqueueOrderEvent({ _id: new mongoose.Types.ObjectId(), customer, orderNumber: '123456', totals: { totalPiastres: 10000 } }, 'order_received');
-  setNotificationProviderForTests({ supportsIdempotency: false, send: () => new Promise(() => {}) });
-  const result = await runNotificationBatch({ budget: createWorkBudget({ maxDurationMs: 100 }) });
+  let dispatches = 0;
+  setNotificationProviderForTests({ supportsIdempotency: false, send: () => { dispatches += 1; return new Promise(() => {}); } });
+  // This case exercises the deadline *after* dispatch. Wall-clock database fixture
+  // contention must not consume the entire 100 ms before a send is even claimed.
+  // The provider's bounded operation still uses a real 100 ms timer and must
+  // classify the dispatched non-idempotent SMTP attempt as uncertain.
+  const result = await runNotificationBatch({ budget: createWorkBudget({ maxDurationMs: 100, clock: () => 0 }) });
+  assert.equal(dispatches, 1, 'The mocked SMTP send must actually have been dispatched.');
   assert.equal(result.uncertain, 1); const record = await NotificationEvent.findOne().select('+sealedActionToken'); assert.equal(record.state, 'uncertain'); assert.equal(record.sealedActionToken, undefined);
   let sends = 0; setNotificationProviderForTests({ supportsIdempotency: false, send: async () => { sends += 1; return { id: 'never' }; } });
   await runNotificationBatch(); assert.equal(sends, 0);

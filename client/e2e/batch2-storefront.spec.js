@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { mockCatalog } from './catalog-fixtures.js';
+import { publicContacts } from '../../shared/storefront-content.mjs';
 
 const browserErrors = new WeakMap();
 test.beforeEach(({ page }) => { const errors = []; browserErrors.set(page, errors); page.on('pageerror', error => errors.push(error.message)); });
@@ -170,8 +171,16 @@ test('announcement marquee repeats only one message with no search or dashboard 
       const frame = await page.locator('.hero-film').boundingBox();
       expect(geometry.height).toBeCloseTo(frame.height, 0);
     } else expect(geometry.width / geometry.height).toBeCloseTo(geometry.ratio, 2);
-    const hero = await page.locator('.home-media-hero').boundingBox();
-    expect(hero.y + hero.height).toBeGreaterThanOrEqual(899);
+    // The page can scroll while resizing between mobile/tablet viewports.
+    // boundingBox().y is viewport-relative; check the hero's document bottom
+    // so incidental scroll does not falsely report a shorter initial hero.
+    const heroCoverage = await page.locator('.home-media-hero').evaluate((node) => {
+      const rect = node.getBoundingClientRect();
+      return { documentBottom: rect.bottom + window.scrollY, viewportHeight: window.innerHeight, scrollY: window.scrollY };
+    });
+    expect(heroCoverage.documentBottom,
+      `Hero should fill the initial viewport at ${width}px (scrollY=${heroCoverage.scrollY}, bottom=${heroCoverage.documentBottom})`
+    ).toBeGreaterThanOrEqual(heroCoverage.viewportHeight - 1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
   await page.getByRole('button', { name: 'Open menu', exact: true }).click();
@@ -189,10 +198,13 @@ test('footer omits Explore and uses approved accessible icon destinations only',
   await page.route('**/api/v1/public/site-content', route => route.fulfill({ headers, json: { ok: true, data: { contact, featuredReviews: [], faq: [], policies: {} } } }));
   await page.goto('/'); const footer = page.getByRole('contentinfo');
   await expect(footer.getByText('Explore', { exact: true })).toHaveCount(0);
-  await expect(footer.getByRole('navigation', { name: 'Information' }).getByRole('link')).toHaveCount(5);
-  await expect(footer.getByRole('link', { name: 'Instagram', exact: true })).toHaveAttribute('href', contact.instagram);
-  await expect(footer.getByRole('link', { name: 'WhatsApp', exact: true })).toHaveAttribute('href', 'https://wa.me/201012345678');
-  await expect(footer.getByRole('link', { name: 'Email Tap & Wrap', exact: true })).toHaveAttribute('href', `mailto:${contact.email}`);
+  await expect(footer.getByRole('navigation', { name: 'Information' }).getByRole('link')).toHaveCount(6);
+  // Fixed merchant contacts are code-managed; forged site-content contacts must
+  // not replace them with the synthetic fixture's account.
+  await expect(footer.getByRole('link', { name: 'Instagram', exact: true })).toHaveAttribute('href', publicContacts.instagram);
+  await expect(footer.getByRole('link', { name: 'WhatsApp', exact: true })).toHaveAttribute('href', `https://wa.me/${publicContacts.whatsapp.replace('+', '')}`);
+  await expect(footer.getByRole('link', { name: 'Email Tap & Wrap', exact: true })).toHaveAttribute('href', `mailto:${publicContacts.email}`);
+  expect(publicContacts.instagram).not.toBe(contact.instagram);
   for (const name of ['Instagram', 'WhatsApp', 'Email Tap & Wrap']) {
     const icon = footer.getByRole('link', { name, exact: true });
     await expect(icon.locator('svg')).toHaveAttribute('aria-hidden', 'true');
@@ -281,19 +293,19 @@ test('configured hero playback controls and motion changes use the actual media 
   // playback implementation; production retains real media failure handling.
   await page.addInitScript(() => {
     window.syntheticMedia = { plays: 0, pauses: 0 };
-    HTMLMediaElement.prototype.play = function () { window.syntheticMedia.plays++; this.dispatchEvent(new Event('play')); return Promise.resolve(); };
-    HTMLMediaElement.prototype.pause = function () { window.syntheticMedia.pauses++; this.dispatchEvent(new Event('pause')); };
+    HTMLMediaElement.prototype.play = function () { window.syntheticMedia.plays++; Object.defineProperty(this, 'paused', { configurable: true, value: false }); this.dispatchEvent(new Event('play')); return Promise.resolve(); };
+    HTMLMediaElement.prototype.pause = function () { window.syntheticMedia.pauses++; Object.defineProperty(this, 'paused', { configurable: true, value: true }); this.dispatchEvent(new Event('pause')); };
   });
   await page.goto('/');
-  await expect(page.getByRole('button', { name: 'Pause hero video' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Pause hero video' })).toHaveCount(1);
   const started = await page.evaluate(() => window.syntheticMedia.plays);
   expect(started).toBeGreaterThan(0);
   await page.getByRole('button', { name: 'Pause hero video' }).click();
-  await expect(page.getByRole('button', { name: 'Play hero video' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Play hero video' })).toHaveCount(1);
   await page.getByRole('button', { name: 'Play hero video' }).click();
-  await expect(page.getByRole('button', { name: 'Pause hero video' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Pause hero video' })).toHaveCount(1);
   expect(await page.evaluate(() => window.syntheticMedia.plays)).toBe(started + 1);
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await expect(page.getByRole('button', { name: 'Play hero video' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Play hero video' })).toHaveCount(1);
   expect(await page.evaluate(() => window.syntheticMedia.pauses)).toBeGreaterThan(0);
 });

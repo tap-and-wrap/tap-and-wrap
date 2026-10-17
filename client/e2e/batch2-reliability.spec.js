@@ -401,20 +401,24 @@ test('a verified customer can retry an unavailable order list without being redi
   expect(attempts).toBe(2);
 });
 
-test('customization product loading offers a deliberate bounded retry', async ({ page }) => {
+test('customization request options failure offers a deliberate bounded availability recheck', async ({ page }) => {
   await mockCommerce(page);
+  // A guest request always checks its saved receipt first. Mock this independent
+  // endpoint so its 404 cannot mask the intended options-retry contract.
+  await page.route('**/api/v1/commerce/service-requests/submissions/*', route => route.fulfill({ headers, json: { ok: true, data: { request: null } } }));
   let attempts = 0;
-  await page.route('**/api/v1/commerce/customization/services/gift_box/products?*', async (route) => {
+  await page.route('**/api/v1/commerce/service-requests/options/gift_box?*', async route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
     attempts += 1;
-    if (attempts > 1) return route.fallback();
+    if (attempts > 1) return route.fulfill({ headers, json: { ok: true, data: { intakeEnabled: true, products: [], components: [], page: 1, hasNext: false } } });
     return route.fulfill({ status: 503, headers, json: { ok: false, error: { code: 'UNAVAILABLE', message: 'Isolated customization service unavailable.' } } });
   });
   await page.goto('/customize/gift-box');
+  await expect(page.getByRole('heading', { name: 'New requests are temporarily unavailable' })).toBeVisible();
   await expect(page.getByText('Isolated customization service unavailable.', { exact: true })).toBeVisible();
-  await page.getByRole('main').getByRole('button', { name: 'Try again', exact: true }).click();
-  await expect(page.getByLabel('Gift box type / size', { exact: true })).toBeVisible();
-  expect(attempts).toBe(2);
+  await page.getByRole('button', { name: 'Check availability and saved request', exact: true }).click();
+  await expect.poll(() => attempts).toBe(2);
+  await expect(page.getByRole('button', { name: 'Submit request · No payment now' })).toBeVisible();
 });
 
 test('adding during session checking announces the guard and requires an explicit retry after verification', async ({ page }) => {

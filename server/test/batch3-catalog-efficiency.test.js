@@ -3,7 +3,6 @@ import { before, after, beforeEach, test } from 'node:test';
 import mongoose from 'mongoose';
 import { Category } from '../src/models/Category.js';
 import { Product } from '../src/models/Product.js';
-import { env } from '../src/config/env.js';
 import { listProducts, listCategories } from '../src/catalog/service.js';
 import { categoryQuerySchema, parseInput } from '../src/catalog/validation.js';
 import { startTestDatabase } from './helpers/database.js';
@@ -21,9 +20,6 @@ const ready = (index, extra = {}) => ({ name: `Synthetic ${index}`, slug: `synth
   subcategoryId: child._id, mainImageKey: 'fixtures/catalog.webp', galleryKeys: ['fixtures/catalog.webp'], visibility: 'public', status: 'ready', pricePiastres: 1000 + index, priceApproved: true, inventory: { mode: 'tracked', quantity: 10, approved: true, available: true }, ...extra });
 
 test('one authoritative category graph read preserves approval/hierarchy gates and twenty-item pagination', async context => {
-  const originalBrowsePreview = env.catalogBrowsePreviewEnabled;
-  env.catalogBrowsePreviewEnabled = true;
-  try {
   await Product.insertMany(Array.from({ length: 23 }, (_, index) => ready(index)));
   await Product.create(ready(24, { priceApproved: false, status: 'draft' }));
   await Product.create(ready(25, { categoryId: inactive._id, subcategoryId: null }));
@@ -34,15 +30,16 @@ test('one authoritative category graph read preserves approval/hierarchy gates a
   assert.deepEqual(result.pagination, { page: 2, limit: 20, total: 24, pages: 2 });
   assert.equal(result.products.length, 4);
   assert.deepEqual(result.products.map(product => product.pricePiastres), [1020, 1021, 1022, null]);
-  assert.equal(result.products.at(-1).browseOnly, true, 'Inactive-category products cannot display prices or ordering.');
+  assert.equal(result.products.at(-1).browseOnly, true, 'Visible draft is enquiry-only without an approved price.');
+  assert.equal(result.products.some(product => product.slug === 'synthetic-25'), false, 'Inactive-category products must not appear in the public list.');
   const graphReads = observed.mock.calls.filter(call => Object.keys(call.arguments[0] ?? {}).length === 0).length;
   console.log(JSON.stringify({ measurement: 'catalog-category-graph', categoryFindCalls: observed.mock.callCount(), graphReads, pricedCount: result.pagination.total }));
   assert.equal(graphReads, 1, 'Category eligibility must use one fresh graph read, not a global stale cache.');
   const browse = await listProducts({ page: 1, limit: 20, includePriceRange: false });
-  assert.equal(browse.pagination.total, 25);
+  assert.equal(browse.pagination.total, 24, '23 active Ready products and one explicitly public Draft; inactive/orphan categories stay excluded.');
   assert.equal(browse.products.find(product => product.slug === 'synthetic-24')?.orderingAvailable, false, 'Visible draft must remain unorderable.');
-  assert.equal(browse.products.find(product => product.slug === 'synthetic-25')?.orderingAvailable, false, 'Inactive-category products must remain unorderable.');
-  } finally { env.catalogBrowsePreviewEnabled = originalBrowsePreview; }
+  assert.equal(browse.products.some(product => product.slug === 'synthetic-25'), false, 'Inactive-category products must remain hidden, not merely nonorderable.');
+  assert.equal(browse.products.some(product => product.slug === 'synthetic-26'), false, 'Orphan child-category products must remain hidden.');
 });
 
 test('explicit lightweight category choices omit unused product aggregates without inventing zero counts', async context => {

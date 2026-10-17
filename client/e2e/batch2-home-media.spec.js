@@ -38,26 +38,29 @@ test('desktop and mobile heroes show owner-consented named reviews without inven
   await expect(page.locator('.home-service-media video')).toHaveCount(2);
   await expect(page.getByRole('heading', { name: 'Make their heart flutter.' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'What Our Customers Say' })).toBeVisible();
-  await expect(page.locator('.home-named-review-carousel figure')).toHaveCount(12);
+  await expect(page.locator('.home-named-review-carousel .review-marquee-group').first().locator('figure')).toHaveCount(12);
+  await expect(page.locator('.home-named-review-carousel .review-marquee-group').nth(1)).toHaveAttribute('aria-hidden', 'true');
   await expect(page.locator('.home-named-review-carousel')).toContainText('Yasmin Khaled');
-  await expect(page.locator('.home-named-review-carousel .website-review-stars')).toHaveCount(0);
+  await expect(page.locator('.home-named-review-carousel .review-marquee-group').first().locator('figure')).toHaveCount(12);
   await expect(page.getByRole('heading', { name: 'Frequently Asked Questions' })).toBeVisible();
-  await expect(page.locator('.website-faq details')).toHaveCount(11);
+  await expect(page.locator('.home-faq-categories').getByRole('button')).toHaveCount(3);
+  await expect(page.locator('.home-faq-card')).toHaveCount(4);
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator('.hero-film video')).toHaveAttribute('src', '/media/tap-wrap-mobile-hero.mp4');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test('consented text-only customer feedback renders with no fabricated author or star rating', async ({ page }) => {
+test('unverified live feedback cannot replace the owner-confirmed review collection', async ({ page }) => {
   await mockCatalog(page);
   await page.route('**/api/v1/public/site-content', route => route.fulfill({ headers, json: { ok: true, data: {
     about: null, contact: null, policies: {}, faq: [],
     featuredReviews: [{ id: 'isolated-text-only', authorLabel: null, rating: null, text: 'Isolated permission-confirmed customer feedback.' }],
   } } }));
   await page.goto('/');
-  const testimonials = page.locator('.website-reviews');
-  await expect(testimonials).toContainText('Isolated permission-confirmed customer feedback.');
-  await expect(testimonials.locator('.website-review-stars')).toHaveCount(0);
-  await expect(testimonials.locator('figcaption')).toHaveCount(0);
+  const testimonials = page.locator('.home-named-review-carousel');
+  await expect(testimonials.locator('.review-marquee-group').first().locator('figure')).toHaveCount(12);
+  await expect(testimonials).toContainText('Yasmin Khaled');
+  await expect(testimonials).not.toContainText('Isolated permission-confirmed customer feedback.');
+  await expect(testimonials.locator('.review-marquee-group').nth(1)).toHaveAttribute('aria-hidden', 'true');
   await expect(page.getByRole('heading', { name: 'What Our Customers Say' })).toBeVisible();
 });

@@ -1,3 +1,4 @@
+import CustomizationTemplate from '../models/CustomizationTemplate.js';
 import { Router } from 'express';
 import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
@@ -28,12 +29,17 @@ serviceRequestRoutes.get('/service-requests/options/:service', async (req, res) 
   const service = z.enum(['gift_box', 'laser_engraving']).parse(req.params.service), input = query.parse(req.query);
   if (!env.customRequestsEnabled) return reply(res, { intakeEnabled: false, products: [], components: [], page: input.page, hasNext: false });
   const name = input.search ? { name: { $regex: escape(input.search), $options: 'i' } } : {};
-  const [products, components] = await Promise.all([
-    service === 'laser_engraving' ? Product.find({ ...name, visibility: 'public', status: { $in: ['draft', 'ready', 'hold'] }, reviewRequired: false, 'engravingRequest.enabled': true }).sort({ name: 1, _id: 1 }).skip((input.page - 1) * 20).limit(20).lean().maxTimeMS(3000) : [],
-    ComponentOption.find({ ...name, reviewRequired: false, 'requestPolicy.enabled': true, 'requestPolicy.services': service, 'requestPolicy.availability': 'available' }).sort({ name: 1, _id: 1 }).skip((input.page - 1) * 20).limit(20).lean().maxTimeMS(3000),
+  const [products, components, templates] = await Promise.all([
+    service === 'laser_engraving' ? Product.find({ ...name, visibility: 'public', status: { $in: ['draft', 'ready', 'hold'] }, 'engravingRequest.enabled': true }).sort({ name: 1, _id: 1 }).skip((input.page - 1) * 20).limit(20).lean().maxTimeMS(3000) : [],
+    ComponentOption.find({ ...name, $or: [{ reviewRequired: false }, { ownerManaged: true }], 'requestPolicy.enabled': true, 'requestPolicy.services': service, 'requestPolicy.availability': 'available' }).sort({ name: 1, _id: 1 }).skip((input.page - 1) * 20).limit(20).lean().maxTimeMS(3000),
+    CustomizationTemplate.aggregate([
+      { $sort: { key: 1, version: -1 } }, { $group: { _id: '$key', latest: { $first: '$$ROOT' } } }, { $replaceRoot: { newRoot: '$latest' } },
+      { $match: { kind: service, usage: 'enquiry', status: 'approved', active: true } }, { $sort: { updatedAt: -1, _id: -1 } },
+      { $limit: 20 }, { $project: { _id: 1, name: 1, version: 1, fields: 1 } },
+    ]).option({ maxTimeMS: 3000 }),
   ]);
   const eligible = async records => (await Promise.all(records.map(async record => { try { await activeRequestCategory(record); return record; } catch (error) { if (error.code === 'REQUEST_REVIEW_REQUIRED') return null; throw error; } }))).filter(Boolean);
-  reply(res, { intakeEnabled: true, products: (await eligible(products)).map(engravingProductPresentation), components: (await eligible(components)).map(componentEstimate), page: input.page, hasNext: products.length === 20 || components.length === 20 });
+  reply(res, { intakeEnabled: true, templates: templates.map(template => ({ id: String(template._id), name: template.name, version: template.version, fields: template.fields })), products: (await eligible(products)).map(engravingProductPresentation), components: (await eligible(components)).map(componentEstimate), page: input.page, hasNext: products.length === 20 || components.length === 20 });
 });
 serviceRequestRoutes.post('/service-requests', limiter, async (req, res) => reply(res, { request: receipt(await createServiceRequest(req.commerceOwner, serviceRequestInput.parse(req.body))) }, 201));
 serviceRequestRoutes.get('/service-requests/submissions/:key', async (req, res) => {
@@ -43,7 +49,7 @@ serviceRequestRoutes.get('/service-requests/submissions/:key', async (req, res) 
 async function detail(record) {
   const order = record.orderId ? await Order.findById(record.orderId).lean().maxTimeMS(3000) : null;
   const accounting = order ? await orderAccounting(order, { admin: true }) : null;
-  return { ...receipt(record), governorates: GOVERNORATES, customer: record.customer, details: record.details, productSnapshot: record.productSnapshot, components: record.components, estimate: record.estimate, quotations: record.quotations, history: record.history, revision: record.revision,
+  return { ...receipt(record), governorates: GOVERNORATES, customer: record.customer, details: record.details, templateSnapshot: record.templateSnapshot, productSnapshot: record.productSnapshot, components: record.components, estimate: record.estimate, quotations: record.quotations, history: record.history, revision: record.revision,
     status: requestStatus(record, order), whatsapp: requestWhatsapp({ ...record, linkedOrderNumber: order?.orderNumber, linkedPaymentState: order?.paymentState, linkedOutstandingPiastres: accounting?.outstandingPiastres }), order: order ? { id: String(order._id), orderNumber: order.orderNumber, fulfillmentState: order.fulfillmentState, paymentState: order.paymentState, accounting } : null,
     files: await Upload.find({ _id: { $in: record.uploadIds }, requestId: record._id, state: 'retained' }).select('_id mimeType sizeBytes').lean().maxTimeMS(3000) };
 }

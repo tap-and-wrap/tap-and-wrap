@@ -64,7 +64,7 @@ test('a new draft does not fabricate inventory or a confirmed price', () => {
   expect(draft.status).toBe('draft');
   expect(draft.price).toBe('');
   expect(draft.priceApproved).toBe(false);
-  expect(draft.inventory).toEqual({ mode: 'tracked', quantity: '', approved: false, available: true });
+  expect(draft.inventory).toEqual({ mode: 'tracked', quantity: '', originalQuantity: 0, approved: false, available: true });
 });
 
 test('Made by Request saves without a stock quantity', () => {

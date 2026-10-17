@@ -3,20 +3,12 @@ import test from 'node:test';
 import mongoose from 'mongoose';
 import { connectDatabase, isDatabaseReady } from '../src/config/db.js';
 import { env } from '../src/config/env.js';
-import { Product } from '../src/models/Product.js';
-import { Category } from '../src/models/Category.js';
-import { ComponentOption } from '../src/models/ComponentOption.js';
-import { User } from '../src/models/User.js';
-import { Session } from '../src/models/Session.js';
-import { commerceModels } from '../src/commerce/models.js';
-import { websiteModels } from '../src/website/service.js';
-import { AccountActionToken } from '../src/models/AccountActionToken.js';
-import { EmailRateWindow } from '../src/models/EmailRateWindow.js';
-import { TrackingConsent } from '../src/models/TrackingConsent.js';
-import { MetaEvent } from '../src/models/MetaEvent.js';
+import { databaseModels } from '../src/config/schema.js';
 
 const stagingUri = 'mongodb+srv://fixture-user:fixture-secret@fixture.mongodb.net/tapandwrap_staging?retryWrites=true&w=majority';
-const models = [Product, Category, ComponentOption, User, Session, ...commerceModels, ...websiteModels, AccountActionToken, EmailRateWindow, TrackingConsent, MetaEvent];
+// Mock the same complete model set that startup verifies, including OrderSettlement
+// and optional ProductAddress/CatalogMedia. Leaving one unmocked can buffer a real read.
+const models = databaseModels;
 
 function isolatedConnection(t, { connectedName = 'tapandwrap_staging', connectionError, changeAfterVerification = false } = {}) {
   const previousEnv = { ...env };

@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { inventorySchema, catalogIdentityFields, importMetadataFields, boundedArray, safeInteger } from '../catalog/fields.js';
 import { getPublicationIssues } from '../catalog/product-policy.js';
+import { productPersonalizationIssues } from '../../../shared/product-personalization.mjs';
 
 const attributeSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true, maxlength: 80 },
@@ -46,6 +47,7 @@ const customizationSchema = new mongoose.Schema({
 }, { _id: false, strict: 'throw' });
 
 const schema = new mongoose.Schema({
+  purchaseSetup: { type: new mongoose.Schema({ version: { type: Number, enum: [1], required: true }, options: { type: String, enum: ['single', 'variants', 'unresolved'], required: true } }, { _id: false, strict: 'throw' }), default: undefined },
   ...catalogIdentityFields,
   ...importMetadataFields,
   catalogRole: { type: String, enum: ['Product', 'Customizable Product', 'Variant Product'], default: 'Product' },
@@ -71,6 +73,7 @@ const schema = new mongoose.Schema({
 }, { timestamps: true, strict: 'throw', optimisticConcurrency: true });
 
 schema.pre('validate', function () {
+  if (this.purchaseSetup?.version === 1) for (const issue of productPersonalizationIssues(this.personalization)) this.invalidate('personalization.fields', issue);
   this.published = this.status === 'ready';
   if (this.galleryKeys.length && this.mainImageKey !== this.galleryKeys[0]) this.invalidate('mainImageKey', 'Main image must be the first gallery reference');
   if (this.mainImageKey && !this.galleryKeys.length) this.invalidate('galleryKeys', 'Main image must be present in the gallery');
@@ -79,7 +82,7 @@ schema.pre('validate', function () {
   if (new Set(this.variants.map(v => v.key)).size !== this.variants.length) this.invalidate('variants', 'Variant keys must be unique within a product');
   if (new Set(this.personalization.fields.map(f => f.key)).size !== this.personalization.fields.length) this.invalidate('personalization.fields', 'Personalization keys must be unique');
   if ((this.customization.enabled || this.customization.serviceEntryEligible) && (!this.customization.templateId || !this.customization.serviceKind)) this.invalidate('customization', 'Enabled customization requires an explicit service and template');
-  if (this.status === 'ready') for (const issue of getPublicationIssues(this)) this.invalidate(issue.field, issue.message);
+  if (this.status === 'ready' && this.purchaseSetup?.version !== 1) for (const issue of getPublicationIssues(this)) this.invalidate(issue.field, issue.message);
 });
 schema.index({ name: 'text' }, { name: 'product_name_search' });
 schema.index({ status: 1, featured: -1, featuredOrder: 1, createdAt: -1, _id: -1 });

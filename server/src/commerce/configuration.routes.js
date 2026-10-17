@@ -1,4 +1,5 @@
 import { mergeInventory } from '../catalog/inventory-input.js';
+import { ownerComponentInput, ownerTemplateInput } from './owner-configuration.js';
 import { productPersonalizationFields } from '../../../shared/product-personalization.mjs';
 import { componentRequestPolicy } from './request-validation.js';
 import { attachProductPaths, productIdentityFilter } from '../catalog/product-addresses.js';
@@ -19,7 +20,7 @@ import { env } from '../config/env.js';
 import { assertDatabaseWriteAllowed } from '../config/database-safety.js';
 import { publicProductFilter, orderableProductStockFilter } from '../catalog/product-policy.js';
 import { publicProductCard } from '../catalog/public-presentation.js';
-import { loadEligibleProduct } from './pricing.js';
+import { loadEligibleProduct, canonical } from './pricing.js';
 import { configurationError, loadCustomizationTemplate, publicTemplatePresentation, quoteCustomization } from './customization.js';
 import { GOVERNORATES, shippingForGovernorate } from './promotions.js';
 import { recordAdminAudit } from './audit.js';
@@ -37,6 +38,7 @@ const idParam = (req) => {
   return req.params.id;
 };
 const plainBody = (body, fields) => {
+  if (body && Object.hasOwn(body, 'ownerWorkflow') && body.ownerWorkflow !== true) throw configurationError('Invalid owner workflow.');
   if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some((field) => !fields.includes(field))) throw configurationError('Unsupported configuration fields.');
   return Object.fromEntries(Object.entries(body));
 };
@@ -51,8 +53,8 @@ const adminRecord = (record) => {
   return { ...fields, revision: __v ?? 0 };
 };
 const regex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const TEMPLATE_FIELDS = ['key', 'name', 'kind', 'status', 'active', 'pricingMode', 'baseAdjustmentPiastres', 'groups', 'fields', 'engraving'];
-const COMPONENT_FIELDS = ['requestPolicy', 'mainImageKey', 'galleryKeys', 'name', 'description', 'pricePiastres', 'compareAtPiastres', 'priceApproved', 'inventory', 'enabledForCustomization', 'configurationApproved', 'reviewRequired', 'merchantReviewNotes'];
+const TEMPLATE_FIELDS = ['ownerWorkflow', 'usage', 'key', 'name', 'kind', 'status', 'active', 'pricingMode', 'baseAdjustmentPiastres', 'groups', 'fields', 'engraving'];
+const COMPONENT_FIELDS = ['categoryId', 'subcategoryId', 'ownerWorkflow', 'requestPolicy', 'mainImageKey', 'galleryKeys', 'name', 'description', 'pricePiastres', 'compareAtPiastres', 'priceApproved', 'inventory', 'enabledForCustomization', 'configurationApproved', 'reviewRequired', 'merchantReviewNotes'];
 function validateRequestPolicy(values) {
   if (values.requestPolicy) {
     const policy = componentRequestPolicy.parse(values.requestPolicy);
@@ -113,7 +115,7 @@ publicConfigurationRoutes.get('/customization/services/:kind/products', wrap(asy
   const pipeline = [
     { $match: filter },
     { $lookup: { from: CustomizationTemplate.collection.name, localField: 'customization.templateId', foreignField: '_id', as: 'templateRecord' } },
-    { $match: { templateRecord: { $elemMatch: { kind: req.params.kind, status: 'approved', active: true } } } },
+    { $match: { templateRecord: { $elemMatch: { kind: req.params.kind, usage: { $ne: 'enquiry' }, status: 'approved', active: true } } } },
     { $lookup: { from: Category.collection.name, localField: 'categoryId', foreignField: '_id', as: 'mainCategory' } },
     { $lookup: { from: Category.collection.name, localField: 'subcategoryId', foreignField: '_id', as: 'subCategory' } },
     { $match: { mainCategory: { $elemMatch: { active: true, parentId: null } }, $or: [{ subcategoryId: null }, { subCategory: { $elemMatch: { active: true } } }] } },
@@ -188,24 +190,24 @@ adminConfigurationRoutes.get('/templates', wrap(async (req, res) => {
     if (!['draft', 'approved', 'retired'].includes(req.query.status)) throw configurationError('Invalid template status.');
     filters.status = req.query.status;
   }
-  const { records, pagination } = await listConfiguration(CustomizationTemplate, req, { filters, fields: 'key name kind version status active pricingMode baseAdjustmentPiastres supersedes createdAt updatedAt' });
+  const { records, pagination } = await listConfiguration(CustomizationTemplate, req, { filters, fields: 'usage key name kind version status active pricingMode baseAdjustmentPiastres supersedes createdAt updatedAt' });
   respond(res, { templates: records, pagination });
 }));
 adminConfigurationRoutes.get('/templates/:id', wrap(async (req, res) => respond(res, { template: adminRecord(await findRecord(CustomizationTemplate, idParam(req))) })));
 
 async function validateTemplateReferences(record, session) {
   const ids = [...new Set(record.groups.flatMap((group) => group.options.map((option) => option.componentId && String(option.componentId))).filter(Boolean))];
-  const components = await ComponentOption.find({ _id: { $in: ids } }).session(session).select('_id enabledForCustomization configurationApproved priceApproved pricePiastres inventory reviewRequired').lean().maxTimeMS(3000);
+  const components = await ComponentOption.find({ _id: { $in: ids } }).session(session).select('_id ownerManaged enabledForCustomization configurationApproved priceApproved pricePiastres inventory reviewRequired').lean().maxTimeMS(3000);
   if (components.length !== ids.length) throw configurationError('A referenced component does not exist.');
-  if (record.status === 'approved' && record.active) {
+  if (record.usage !== 'enquiry' && record.status === 'approved' && record.active) {
     for (const group of record.groups) {
-      const available = group.options.filter((option) => option.active && (!option.componentId || components.some((component) => String(component._id) === String(option.componentId) && !component.reviewRequired && component.enabledForCustomization && component.configurationApproved && component.priceApproved && component.inventory.approved)));
+      const available = group.options.filter((option) => option.active && (!option.componentId || components.some((component) => String(component._id) === String(option.componentId) && (!component.reviewRequired || component.ownerManaged) && component.enabledForCustomization && component.configurationApproved && component.priceApproved && component.inventory.approved)));
       if (available.length < group.minChoices) throw configurationError('Approve enough configured components to meet each group’s minimum choices.');
     }
   }
 }
 adminConfigurationRoutes.post('/templates', wrap(async (req, res) => {
-  const values = plainBody(req.body, TEMPLATE_FIELDS);
+  const values = ownerTemplateInput(plainBody(req.body, TEMPLATE_FIELDS));
   const template = await auditedMutation(req, 'customization.template.created', 'new', async (session) => {
     const record = new CustomizationTemplate({ ...values, version: 1, createdBy: req.user._id });
     await record.validate();
@@ -217,12 +219,16 @@ adminConfigurationRoutes.post('/templates', wrap(async (req, res) => {
 
 async function reviseTemplate(req, forceRevision) {
   const id = idParam(req);
-  const { values, expectedRevision } = revisionBody(req.body, TEMPLATE_FIELDS);
+  const { values: submitted, expectedRevision } = revisionBody(req.body, TEMPLATE_FIELDS);
+  const ownerSave = submitted.ownerWorkflow === true;
   let revisionCreated = false;
   const template = await auditedMutation(req, 'customization.template.updated', id, async (session) => {
     let record = await findRecord(CustomizationTemplate, id, session);
+    const values = ownerSave ? ownerTemplateInput(submitted, record.key) : submitted;
     await prepareAdminRevision(record, expectedRevision, { session });
-    const administrativeOnly = Object.keys(values).every((key) => ['active', 'status'].includes(key)) && values.status !== 'draft';
+    const stable = value => JSON.stringify(canonical(JSON.parse(JSON.stringify(value ?? null))));
+    const administrativeOnly = ownerSave ? Object.entries(values).every(([key, value]) => ['active', 'status'].includes(key) || stable(value) === stable(record.get(key)))
+      : Object.keys(values).every((key) => ['active', 'status'].includes(key)) && values.status !== 'draft';
     if (forceRevision || (record.status !== 'draft' && !administrativeOnly)) {
       // Fence the source version as well as the newly created revision. Two stale
       // editors must not independently create successive revisions from one form.
@@ -235,11 +241,12 @@ async function reviseTemplate(req, forceRevision) {
       delete original.createdAt;
       delete original.updatedAt;
       record = new CustomizationTemplate({ ...original, ...values, key: original.key, version: latest.version + 1, supersedes: id, createdBy: req.user._id, status: 'draft', active: false });
+      if (ownerSave) record.set(ownerTemplateInput({ ...values, ownerWorkflow: true }));
       revisionCreated = true;
     } else {
       if (record.status !== 'draft' && values.status === 'draft') throw configurationError('Create a new revision instead of changing an approved version.');
       if (values.key !== undefined && values.key !== record.key) throw configurationError('Template family keys cannot be renamed.');
-      record.set(values);
+      record.set(ownerSave && administrativeOnly ? { active: values.active, status: values.status } : values);
     }
     await record.validate();
     await validateTemplateReferences(record, session);
@@ -258,7 +265,7 @@ adminConfigurationRoutes.get('/components', wrap(async (req, res) => {
       filters[field] = req.query[queryKey] === 'true';
     }
   }
-  const { records, pagination } = await listConfiguration(ComponentOption, req, { filters, fields: 'requestPolicy externalCatalogId name slug catalogRole status pricePiastres compareAtPiastres priceApproved inventory enabledForCustomization configurationApproved reviewRequired merchantReviewNotes createdAt updatedAt' });
+  const { records, pagination } = await listConfiguration(ComponentOption, req, { filters, fields: 'ownerManaged requestPolicy externalCatalogId name slug catalogRole status pricePiastres compareAtPiastres priceApproved inventory enabledForCustomization configurationApproved reviewRequired merchantReviewNotes createdAt updatedAt' });
   respond(res, { components: records, pagination });
 }));
 adminConfigurationRoutes.get('/components/:id', wrap(async (req, res) => respond(res, { component: adminRecord(await findRecord(ComponentOption, idParam(req))) })));
@@ -266,9 +273,10 @@ adminConfigurationRoutes.post('/components', wrap(async (req, res) => {
   const values = validateRequestPolicy(plainBody(req.body, [...COMPONENT_FIELDS, 'slug', 'categoryId', 'subcategoryId', 'externalCatalogId', 'mainImageKey', 'galleryKeys', 'sku', 'catalogRole']));
   const component = await auditedMutation(req, 'customization.component.created', 'new', async (session) => {
     await validateMediaReferences([values.mainImageKey, ...(values.galleryKeys || [])], { session });
-    const record = new ComponentOption({ ...values, catalogRole: values.catalogRole || 'Customization Option', status: 'draft', commerceRevision: 0 });
-    if (values.inventory) record.inventory = mergeInventory(undefined, values.inventory);
-    if (record.configurationApproved && (record.reviewRequired || !record.enabledForCustomization || !record.priceApproved || !record.inventory.approved)) throw configurationError('Component approval requires resolved catalog review, enabled customization, approved prices and approved inventory.');
+    const normalized = ownerComponentInput(values);
+    const record = new ComponentOption({ ...normalized, catalogRole: values.catalogRole || 'Customization Option', status: 'draft', commerceRevision: 0 });
+    if (normalized.inventory) record.inventory = mergeInventory(undefined, normalized.inventory);
+    if (record.configurationApproved && ((!record.ownerManaged && record.reviewRequired) || !record.enabledForCustomization || !record.priceApproved || !record.inventory.approved)) throw configurationError('Component approval requires resolved catalog review, enabled customization, approved prices and approved inventory.');
     await record.validate();
     await validateCatalogCategoryReferences(record.categoryId, record.subcategoryId, { session, fence: true });
     return record.save({ session });
@@ -282,18 +290,19 @@ adminConfigurationRoutes.patch('/components/:id', wrap(async (req, res) => {
   const component = await auditedMutation(req, 'customization.component.updated', id, async (session) => {
     const record = await findRecord(ComponentOption, id, session);
     await prepareAdminRevision(record, expectedRevision, { session });
-    const patch = { ...values };
+    const patch = ownerComponentInput({ ...values }, record);
+    await validateCatalogCategoryReferences(patch.categoryId ?? record.categoryId, patch.subcategoryId !== undefined ? patch.subcategoryId : record.subcategoryId, { session, fence: patch.categoryId !== undefined || patch.subcategoryId !== undefined });
     const has = (key) => Object.hasOwn(values, key);
     const priceChanged = ['pricePiastres', 'compareAtPiastres'].some((key) => has(key) && values[key] !== record[key]);
     let inventoryChanged = false;
     if (has('inventory')) {
       const existing = record.inventory.toObject();
-      patch.inventory = mergeInventory(existing, values.inventory);
+      patch.inventory = values.ownerWorkflow ? patch.inventory : mergeInventory(existing, values.inventory);
       inventoryChanged = ['mode', 'quantity', 'available'].some((key) => patch.inventory[key] !== existing[key]);
     }
-    if (priceChanged && !has('priceApproved')) patch.priceApproved = false;
+    if (!values.ownerWorkflow && priceChanged && !has('priceApproved')) patch.priceApproved = false;
     const meaningfulChange = priceChanged || inventoryChanged || ['name', 'description', 'enabledForCustomization', 'reviewRequired', 'priceApproved'].some((key) => has(key) && values[key] !== record[key]) || (has('inventory') && patch.inventory.approved !== record.inventory.approved);
-    if (meaningfulChange && !has('configurationApproved')) patch.configurationApproved = false;
+    if (!values.ownerWorkflow && meaningfulChange && !has('configurationApproved')) patch.configurationApproved = false;
     await validateMediaReferences([patch.mainImageKey ?? record.mainImageKey, ...(patch.galleryKeys ?? record.galleryKeys)], { session });
     record.set(patch);
     record.commerceRevision += 1;

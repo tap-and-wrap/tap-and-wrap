@@ -7,9 +7,10 @@ import { Product } from '../models/Product.js';
 import { Category } from '../models/Category.js';
 import { ComponentOption } from '../models/ComponentOption.js';
 import { publicProductFilter, displayProductFilter, approvedProductPriceFilter, orderableProductStockFilter } from './product-policy.js';
-import { mediaUrlForKey, publicProductCard, publicProductDetail } from './public-presentation.js';
+import { mediaUrlForKey, publicProductCard, publicProductDetail, productCanOrder } from './public-presentation.js';
 import { adminProductPreviewPresentation, isAdminPreviewEnabled, stagingProductPresentation, isStagingPreviewEnabled } from './staging-preview.js';
 import { env } from '../config/env.js';
+import { ownerProductInput } from './owner-workflow.js';
 import { assertDatabaseWriteAllowed } from '../config/database-safety.js';
 import { adminRevision, prepareAdminRevision, revisionOf } from '../utils/admin-revision.js';
 import { recordAdminAudit } from '../commerce/audit.js';
@@ -17,11 +18,11 @@ import { validateCatalogCategoryReferences, fenceCategoryRelation } from './cate
 
 const QUERY_TIMEOUT_MS = 3000;
 const LIST_FIELDS = '_id name slug visibility categoryId subcategoryId mainImageKey pricePiastres compareAtPiastres priceApproved sku inventory.mode inventory.available inventory.quantity inventory.approved featured featuredOrder bestSeller bestSellerOrder createdAt';
-const PUBLIC_LIST_FIELDS = `${LIST_FIELDS} status published reviewRequired variants.inventory variants.pricePiastres variants.priceApproved personalization.fields personalization.requiredBeforePurchase customization.enabled`;
+const PUBLIC_LIST_FIELDS = `purchaseSetup ${LIST_FIELDS} status published reviewRequired variants.inventory variants.pricePiastres variants.priceApproved personalization.fields personalization.requiredBeforePurchase customization.enabled`;
 const ADMIN_LIST_FIELDS = `${LIST_FIELDS} __v externalCatalogId catalogRole status published priceApproved inventory.quantity inventory.approved reviewRequired updatedAt`;
 // Never mix a parent and its dotted child in a MongoDB projection (Path collision).
-const PUBLIC_DETAIL_FIELDS = `${LIST_FIELDS} status published reviewRequired description galleryKeys variants personalization customization updatedAt`;
-const ADMIN_DETAIL_FIELDS = `${ADMIN_LIST_FIELDS} description galleryKeys variants personalization customization engravingRequest merchantReviewNotes reviewReasons variantSourceNotes catalogConfidence`;
+const PUBLIC_DETAIL_FIELDS = `purchaseSetup ${LIST_FIELDS} status published reviewRequired description galleryKeys variants personalization customization updatedAt`;
+const ADMIN_DETAIL_FIELDS = `purchaseSetup ${ADMIN_LIST_FIELDS} description galleryKeys variants personalization customization engravingRequest merchantReviewNotes reviewReasons variantSourceNotes catalogConfidence`;
 const CATEGORY_FIELDS = '_id name slug parentId imageKey active featured order createdAt updatedAt __v';
 const SORTS = {
   featured: { featured: -1, featuredOrder: 1, createdAt: -1, _id: -1 },
@@ -160,7 +161,7 @@ export async function listProducts(query, { admin = false } = {}) {
     { $skip: pagination.skip }, { $limit: pagination.limit },
     { $project: Object.fromEntries(PUBLIC_LIST_FIELDS.split(' ').map(field => [field, 1])) },
   ]).option({ maxTimeMS: QUERY_TIMEOUT_MS }).then(products => Product.populate(products, [{ path: 'categoryId', select: 'name slug active' }, { path: 'subcategoryId', select: 'name slug active' }]))
-    : Product.find(filter).select(admin ? ADMIN_LIST_FIELDS : PUBLIC_LIST_FIELDS)
+    : Product.find(filter).select(admin ? `${ADMIN_LIST_FIELDS} purchaseSetup variants.inventory variants.priceApproved variants.pricePiastres personalization` : PUBLIC_LIST_FIELDS)
       .populate(admin ? [] : [{ path: 'categoryId', select: 'name slug active' }, { path: 'subcategoryId', select: 'name slug active' }])
       .sort(SORTS[query.sort ?? 'newest']).skip(pagination.skip).limit(pagination.limit).lean().maxTimeMS(QUERY_TIMEOUT_MS);
   const [products, total, priceRanges] = await Promise.all([
@@ -170,13 +171,13 @@ export async function listProducts(query, { admin = false } = {}) {
       .option({ maxTimeMS: QUERY_TIMEOUT_MS }),
   ]);
   const enquiryCategories = admin ? await activeCategories() : null;
-  const listedForEnquiry = product => enquiryCategories !== null && product.visibility === 'public' && ['draft', 'hold'].includes(product.status) && (
+  const categoryVisible = product => enquiryCategories !== null && (
     product.subcategoryId == null
       ? enquiryCategories.mainIds.some(id => sameId(id, product.categoryId))
       : enquiryCategories.childGroups.some(group => sameId(group.categoryId, product.categoryId) && group.subcategoryId.$in.some(id => sameId(id, product.subcategoryId)))
   );
   return {
-    products: admin ? products.map(product => ({ ...adminRevision(product), listedForEnquiry: listedForEnquiry(product) })) : await attachProductPaths(products.map(publicProductCard)),
+    products: admin ? products.map(product => { const { variants, personalization: _personalization, purchaseSetup: _purchaseSetup, ...summary } = product; const orderingAvailable = categoryVisible(product) && productCanOrder(product); return { ...adminRevision(summary), hasVariants: Boolean(variants?.length), orderingAvailable, listedForEnquiry: categoryVisible(product) && product.visibility === 'public' && !orderingAvailable }; }) : await attachProductPaths(products.map(publicProductCard)),
     pagination: paginationResult(pagination, total),
     ...(priceRanges === null ? {} : { priceRange: { min: priceRanges[0]?.min ?? null, max: priceRanges[0]?.max ?? null } }),
   };
@@ -263,6 +264,7 @@ async function catalogTransaction(work, attempt = 0) {
 }
 
 export async function createProduct(input, { actor } = {}) {
+  input = ownerProductInput(input);
   assertDatabaseWriteAllowed(Product.db, env);
   return catalogTransaction(async (session) => {
     await validateCatalogCategoryReferences(input.categoryId, input.subcategoryId, { session, fence: true });
@@ -285,6 +287,7 @@ export async function updateProduct(id, input, { actor } = {}) {
   if (!product) throw catalogError(404, 'PRODUCT_NOT_FOUND', 'Product not found');
   await prepareAdminRevision(product, input.expectedRevision, { session });
   const beforeRevision = revisionOf(product);
+  input = ownerProductInput(input, product);
   await validateCatalogCategoryReferences(input.categoryId ?? product.categoryId, input.subcategoryId !== undefined ? input.subcategoryId : product.subcategoryId,
     { session, fence: input.categoryId !== undefined || input.subcategoryId !== undefined });
   const { expectedRevision: _expectedRevision, ...patch } = input;

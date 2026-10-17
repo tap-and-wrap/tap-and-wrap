@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 const schema = new mongoose.Schema({
+  templateSnapshot: { type: mongoose.Schema.Types.Mixed, default: null, immutable: true },
   reference: { type: String, required: true, unique: true, immutable: true },
   owner: { type: String, required: true, immutable: true }, requestKey: { type: String, required: true, immutable: true }, requestHash: { type: String, required: true, immutable: true },
   service: { type: String, enum: ['gift_box', 'laser_engraving'], required: true, immutable: true },

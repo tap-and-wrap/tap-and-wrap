@@ -23,7 +23,7 @@ test('promotion timestamps reject malformed dates and reversed ranges without no
   expect(() => validatePromotionSchedule({ startsAt: null, endsAt: null })).not.toThrow();
 });
 const baseOrder = { fulfillmentState: 'received', paymentState: 'unpaid', paymentMethod: 'cod' };
-for (const [state, expected] of [['received', ['confirmed', 'cancelled']], ['confirmed', ['preparing', 'cancelled']], ['preparing', ['out_for_delivery']], ['out_for_delivery', ['delivered']], ['delivered', []], ['cancelled', []]]) {
+for (const [state, expected] of [['received', ['confirmed', 'cancelled']], ['confirmed', ['preparing', 'cancelled']], ['preparing', ['out_for_delivery']], ['out_for_delivery', ['delivered', 'delivery_failed']], ['delivered', ['returned']], ['delivery_failed', ['returned']], ['returned', []], ['cancelled', []]]) {
   test(`order editor offers only valid fulfillment steps from ${state}`, () => {
     expect(adminOrderActions({ ...baseOrder, fulfillmentState: state }).fulfillment).toEqual(expected);
   });

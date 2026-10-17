@@ -53,7 +53,7 @@ test('merchant explicitly selects component request eligibility and real stock w
   });
   await page.goto('/admin/commerce/components'); await page.getByRole('button', { name: /^Edit Configured Card/ }).click();
   await expect(page.getByLabel('Actual stock quantity')).toHaveValue('');
-  await page.getByLabel('Owner approved for quotation requests').check(); await page.getByLabel('Gift Box requests', { exact: true }).check();
+  await expect(page.getByLabel('Owner approved for quotation requests')).toHaveCount(0); await page.getByLabel('Gift Box requests', { exact: true }).check();
   await page.getByRole('combobox', { name: /^Request availability/ }).selectOption('available');
   await page.getByRole('combobox', { name: /^Request pricing/ }).selectOption('fixed');
   await page.getByLabel('Confirmed request unit price (EGP)').fill('25');

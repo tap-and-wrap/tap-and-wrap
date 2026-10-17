@@ -17,7 +17,7 @@ const sum = (a, b) => {
 };
 
 export function componentAvailable(component, quantity = 1) {
-  return Boolean(component && !component.reviewRequired && component.enabledForCustomization && component.configurationApproved && component.priceApproved && integer(component.pricePiastres, 0, 100000000) && component.inventory?.approved && component.inventory?.available && (component.inventory.mode === 'made_to_order' || (component.inventory.mode === 'tracked' && integer(component.inventory.quantity, quantity, Number.MAX_SAFE_INTEGER))));
+  return Boolean(component && (!component.reviewRequired || component.ownerManaged) && component.enabledForCustomization && component.configurationApproved && component.priceApproved && integer(component.pricePiastres, 0, 100000000) && component.inventory?.approved && component.inventory?.available && (component.inventory.mode === 'made_to_order' || (component.inventory.mode === 'tracked' && integer(component.inventory.quantity, quantity, Number.MAX_SAFE_INTEGER))));
 }
 
 export function customizationFields(template) {
@@ -70,7 +70,7 @@ function validateFields(definitions, input, requireFields) {
 
 export function evaluateCustomization(templateInput, componentsInput, input, { requireFields = true } = {}) {
   const template = plain(templateInput);
-  if (!template || template.status !== 'approved' || !template.active) throw configurationError('This customization template is not available.', 'CUSTOMIZATION_UNAVAILABLE', 409);
+  if (!template || template.usage === 'enquiry' || template.status !== 'approved' || !template.active) throw configurationError('This customization template is not available.', 'CUSTOMIZATION_UNAVAILABLE', 409);
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw configurationError('A customization configuration is required.');
   if (stringId(input.templateId) !== stringId(template._id) || input.version !== template.version) throw configurationError('This template has changed. Reload the available options.', 'CUSTOMIZATION_VERSION_CHANGED', 409);
   if (Object.keys(input).some((key) => !['templateId', 'version', 'selections', 'fields'].includes(key))) throw configurationError('Unsupported customization data.');
@@ -107,7 +107,7 @@ export function evaluateCustomization(templateInput, componentsInput, input, { r
       const baseline = template.pricingMode === 'delta' ? option.defaultQuantity : 0;
       if (!quantity && !baseline) continue;
       const component = option.componentId ? components.get(stringId(option.componentId)) : null;
-      if (option.componentId && (!component || component.reviewRequired || !component.enabledForCustomization || !component.configurationApproved || !component.priceApproved || !integer(component.pricePiastres, 0, 100000000))) throw configurationError('A configured component is awaiting approval.', 'COMPONENT_UNAVAILABLE', 409);
+      if (option.componentId && (!component || (component.reviewRequired && !component.ownerManaged) || !component.enabledForCustomization || !component.configurationApproved || !component.priceApproved || !integer(component.pricePiastres, 0, 100000000))) throw configurationError('A configured component is awaiting approval.', 'COMPONENT_UNAVAILABLE', 409);
       if (quantity && (!option.active || (component && !componentAvailable(component, quantity)))) throw configurationError(`${option.label} is currently unavailable.`, 'COMPONENT_UNAVAILABLE', 409);
       if (quantity && component && (!Number.isSafeInteger(component.pricePiastres) || component.pricePiastres <= 0)) throw configurationError('This component requires a separately accepted quotation.', 'COMPONENT_QUOTATION_REQUIRED', 409);
       const optionUnitPiastres = sum(option.priceAdjustmentPiastres || 0, component?.pricePiastres || 0);
@@ -162,9 +162,9 @@ export async function loadCustomizationTemplate(product, { session, context } = 
   let query = CustomizationTemplate.findById(product.customization.templateId).lean().maxTimeMS(3000);
   if (session) query = query.session(session);
   const template = context ? context.templates.get(String(product.customization.templateId)) : await query;
-  if (!template || template.kind !== product.customization.serviceKind || template.status !== 'approved' || !template.active) throw configurationError('This customization template is not available.', 'CUSTOMIZATION_UNAVAILABLE', 409);
+  if (!template || template.usage === 'enquiry' || template.kind !== product.customization.serviceKind || template.status !== 'approved' || !template.active) throw configurationError('This customization template is not available.', 'CUSTOMIZATION_UNAVAILABLE', 409);
   const ids = [...new Set(template.groups.flatMap((group) => group.options.map((option) => option.componentId ? String(option.componentId) : null)).filter(Boolean))];
-  let componentQuery = ComponentOption.find({ _id: { $in: ids } }).select('name pricePiastres priceApproved inventory enabledForCustomization configurationApproved reviewRequired updatedAt').lean().maxTimeMS(3000);
+  let componentQuery = ComponentOption.find({ _id: { $in: ids } }).select('ownerManaged name pricePiastres priceApproved inventory enabledForCustomization configurationApproved reviewRequired updatedAt').lean().maxTimeMS(3000);
   if (session) componentQuery = componentQuery.session(session);
   return { template, components: context ? ids.map(id => context.components.get(id)).filter(Boolean) : await componentQuery };
 }
@@ -190,7 +190,7 @@ export function publicTemplatePresentation(templateInput, componentsInput) {
     pricingMode: template.pricingMode, baseAdjustmentPiastres: template.baseAdjustmentPiastres,
     groups: template.groups.map((group) => ({ key: group.key, label: group.label, minChoices: group.minChoices, maxChoices: group.maxChoices, allowedActions: [...group.allowedActions], options: group.options.map((option) => {
       const component = option.componentId ? components.get(stringId(option.componentId)) : null;
-      const approved = !component?.reviewRequired && component?.enabledForCustomization && component?.configurationApproved && component?.priceApproved;
+      const approved = (!component?.reviewRequired || component?.ownerManaged) && component?.enabledForCustomization && component?.configurationApproved && component?.priceApproved;
       return { key: option.key, label: option.label, componentId: option.componentId ? stringId(option.componentId) : null, active: option.active, available: option.active && (!option.componentId || componentAvailable(component)), priceAdjustmentPiastres: option.priceAdjustmentPiastres, componentPricePiastres: option.componentId ? (approved ? component.pricePiastres : null) : 0, minQuantity: option.minQuantity, maxQuantity: option.maxQuantity, defaultQuantity: option.defaultQuantity };
     }) })),
     fields: customizationFields(template), engraving: template.engraving ? { ...template.engraving } : null

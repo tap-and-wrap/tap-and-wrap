@@ -18,12 +18,21 @@
 /* Full-width footage keeps its source proportions; only extra vertical space uses the poster fill. */
 .hero.home-media-hero {
   position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(0, 1fr);
-  width: 100%; min-height: calc(100svh - var(--site-header-height));
+/* Keep the hero at least one initial screen tall even while the JS-measured
+   header height is catching up with a responsive header change. The header's
+   CSS min-height is authoritative; the announcement bar is 34px tall. */
+  width: 100%; min-height: max(
+    calc(100svh - var(--site-header-height)),
+    calc(100svh - var(--site-header-min-height, 76px) - 34px)
+  );
   padding: 0; overflow: hidden; background: #514039; text-align: center;
 }
 .home-media-hero .hero-film {
   grid-area: 1 / 1; position: relative; display: grid; place-items: center;
-  width: 100%; max-width: none; min-width: 0; min-height: calc(100svh - var(--site-header-height));
+  width: 100%; max-width: none; min-width: 0; min-height: max(
+    calc(100svh - var(--site-header-height)),
+    calc(100svh - var(--site-header-min-height, 76px) - 34px)
+  );
   margin: 0; border: 0; border-radius: 0; background-size: cover; background-position: center;
 }
 .home-media-hero .hero-film::before {
@@ -63,3 +72,21 @@
 }
 @media(max-width:374px) { .home-media-hero .button-group { flex-direction: column; align-items: center; } .home-media-hero .button { min-width: 200px; } }
 @media (prefers-reduced-motion: reduce) { .home-service-media .home-service-video-toggle { transition: none; } }
+
+/* The film itself is the control. Only keyboard focus reveals a small cue. */
+.home-media-hero .hero-film { isolation: isolate; }
+.home-media-hero .home-hero-content { pointer-events: none; }
+.home-media-hero .home-hero-content a, .home-media-hero .home-hero-content button { pointer-events: auto; }
+.home-media-hero .hero-video-control.video-surface-control,
+.home-service-media .home-service-video-toggle.video-surface-control {
+  position: absolute; inset: 0; width: 100%; height: 100%; min-width: 0;
+  margin: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none;
+  background: transparent; color: white; cursor: pointer; z-index: 1;
+}
+.video-surface-control > span { opacity: 0; pointer-events: none; }
+.video-surface-control:focus-visible > span {
+  opacity: 1; position: absolute; bottom: 16px; right: 16px; padding: 8px 12px;
+  border-radius: 6px; background: #62483F; color: white;
+}
+.home-media-hero .video-surface-control:focus-visible,
+.home-service-media .video-surface-control:focus-visible { outline: 3px solid white; outline-offset: -6px; }

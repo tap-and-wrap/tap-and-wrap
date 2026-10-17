@@ -3,6 +3,8 @@ import mongoose from 'mongoose';
 import { ServiceRequest } from '../models/ServiceRequest.js';
 import { Order } from '../models/Order.js';
 import { Product } from '../models/Product.js';
+import CustomizationTemplate from '../models/CustomizationTemplate.js';
+import { Upload } from '../models/Upload.js';
 import { ComponentOption } from '../models/ComponentOption.js';
 import { env } from '../config/env.js';
 import { assertDatabaseWriteAllowed } from '../config/database-safety.js';
@@ -40,6 +42,31 @@ export async function createServiceRequest(owner, input) {
       const details = { ...input.details }, components = [];
       if (new Set(input.uploadIds).size !== input.uploadIds.length || new Set(input.components.map(item => item.componentId)).size !== input.components.length) throw requestError('Use distinct reference images and component selections.');
       let productSnapshot = null, basePrice = null;
+      let templateSnapshot = null;
+      if (input.template) {
+        const template = await CustomizationTemplate.findOne({ _id: input.template.id, version: input.template.version, kind: input.service, usage: 'enquiry', status: 'approved', active: true }).session(session).lean();
+        if (!template || Object.keys(input.template.fields).some(key => !template.fields.some(field => field.key === key))) throw requestError('The request questions changed. Reload the current configuration.');
+        const latest = await CustomizationTemplate.findOne({ key: template.key }).sort({ version: -1 }).select('_id').session(session).lean();
+        if (String(latest?._id) !== String(template._id)) throw requestError('The request questions changed. Reload the current configuration.');
+        const values = {};
+        for (const field of template.fields) {
+          const value = input.template.fields[field.key];
+          if (field.type === 'image') {
+            const ids = value ?? [];
+            if (!Array.isArray(ids) || ids.length < Math.max(field.minFiles || 0, field.required ? 1 : 0) || ids.length > field.maxFiles || new Set(ids).size !== ids.length || ids.some(id => !input.uploadIds.includes(id))) throw requestError(`Provide the requested images for ${field.label}.`);
+            const uploads = await Upload.find({ _id: { $in: ids }, owner, purpose: 'service_reference', requestKey: input.requestKey, state: 'complete', expiresAt: { $gt: new Date() } }).session(session).lean();
+            if (uploads.length !== ids.length || uploads.some(upload => upload.sizeBytes > field.maxBytes || !field.acceptedMimeTypes.includes(upload.mimeType))) throw requestError(`Review the image format and size for ${field.label}.`);
+            values[field.key] = ids;
+          } else {
+            if (value !== undefined && typeof value !== 'string') throw requestError(`${field.label} must be text.`);
+            const text = (value || '').trim();
+            if (field.required && !text || Array.from(text).length > field.maxChars) throw requestError(`Complete ${field.label} within its character limit.`);
+            values[field.key] = text;
+          }
+        }
+        if (!(await CustomizationTemplate.updateOne({ _id: template._id, __v: template.__v, active: true, status: 'approved' }, { $inc: { __v: 1 } }, { session })).matchedCount) throw requestError('The request questions changed.');
+        templateSnapshot = { id: String(template._id), name: template.name, version: template.version, fields: template.fields, values };
+      }
       if (input.service === 'gift_box') {
         if (!details.occasion || !details.contents || details.productId || details.engravingType) throw requestError('Describe the occasion and desired gift contents.');
       } else {
@@ -65,7 +92,7 @@ export async function createServiceRequest(owner, input) {
       }
       const estimate = { baseUnitPiastres: basePrice, knownSubtotalPiastres: total([basePrice === null ? 0 : basePrice * details.quantity, ...components.map(item => item.unitPricePiastres === null ? 0 : item.unitPricePiastres * item.quantity)]), pendingCount: components.filter(item => item.pricing === 'pending').length + 1, shippingPiastres: null };
       const [record] = await ServiceRequest.create([{ owner, requestKey: input.requestKey, requestHash: hash, reference: `TW-${randomBytes(6).toString('hex').toUpperCase()}`,
-        service: input.service, customer: normalized.customer, details, productSnapshot, components, estimate, uploadIds: input.uploadIds,
+        service: input.service, customer: normalized.customer, details, productSnapshot, templateSnapshot, components, estimate, uploadIds: input.uploadIds,
         followUpDueAt: new Date(Date.now() + 12 * 3600000), history: [{ event: 'submitted', at: new Date(), actor: 'customer' }] }], { session });
       await retainRequestUploads(input.uploadIds, owner, input.requestKey, record._id, { session });
       await enqueueRequestEvent(record, 'request_received', { session }); result = record.toObject();

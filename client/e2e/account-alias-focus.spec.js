@@ -119,7 +119,10 @@ test('legacy customization paths and service selections retain canonical URLs an
   await page.reload();
   await expect(page.getByRole('heading', { name: product.name, exact: true })).toBeVisible();
   await page.goto(`/customize/gift-box?product=${product.slug}&page=2`);
-  await expect(page).toHaveURL('/customize/gift-box?product=friendly-configured-gift&page=2');
-  await expect(page.getByRole('combobox', { name: 'Gift box type / size' })).toHaveValue('friendly-configured-gift');
+  // The service is request-first: it retains the supplied reference in the query,
+  // while permanent identity redirects apply to product-detail URLs only.
+  await expect(page).toHaveURL(`/customize/gift-box?product=${product.slug}&page=2`);
+  await expect(page.getByRole('heading', { name: 'Build Your Gift Box', exact: true })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Gift box type / size' })).toHaveCount(0);
   expect(fixture.calls.some(call => call.path === '/commerce/cart/items')).toBe(false);
 });

@@ -6,7 +6,7 @@ import { privateQueryKey } from '../auth/session.js';
 import { authGeneration } from '../services/api.js';
 import { useCart } from '../commerce/CartContext.jsx';
 import { commerceGet, commercePost, commerceError, money, uploadPrivateFile, discardUploads } from '../commerce/api.js';
-import { LocalFileField } from '../commerce/ConfiguredFields.jsx';
+import ConfiguredFields, { LocalFileField, validateConfiguredFields } from '../commerce/ConfiguredFields.jsx';
 import { parsePriceInput } from '../admin/catalog-form.js';
 import PageMetadata from '../seo/PageMetadata.jsx';
 import '../commerce/service-requests.css';
@@ -22,6 +22,7 @@ function RequestForm({ service, owner }) {
   const scope = `tw-service-request:${owner}:${service}`;
   const [submission] = useState(() => attempt(scope));
   const [values, setValues] = useState({ name: '', phone: '', email: '', occasion: '', style: '', colors: '', contents: '', budget: '', recipient: '', message: '', instructions: '', productReference: '', engravingType: 'text', engravingText: '', font: '', placement: '', material: '', variantKey: '', quantity: 1 });
+  const [template, setTemplate] = useState(null), [templateValues, setTemplateValues] = useState({});
   const [product, setProduct] = useState(null), [files, setFiles] = useState([]), [selections, setSelections] = useState([]), [page, setPage] = useState(1), [search, setSearch] = useState(''), [searchDraft, setSearchDraft] = useState('');
   const [progress, setProgress] = useState(''), [uncertain, setUncertain] = useState(submission.pending), [saved, setSaved] = useState(null);
   const uploads = useRef(new Map()), body = useRef(null);
@@ -35,11 +36,15 @@ function RequestForm({ service, owner }) {
       if (service === 'gift_box') details.budgetPiastres = parsePriceInput(values.budget, 'Budget');
       else if (product) { details.productId = product.id; if (product.variants?.length) details.variantKey = values.variantKey; for (const key of ['font', 'placement', 'material']) if (values[key]) details[key] = values[key]; }
       else details.productReference = values.productReference;
+      const errors = validateConfiguredFields(template?.fields || [], templateValues);
+      if (Object.keys(errors).length) throw new Error(Object.values(errors)[0]);
+      const allFiles = [...new Set([...files, ...(template?.fields || []).filter(field => field.type === 'image').flatMap(field => templateValues[field.key] || [])])];
+      if (allFiles.length > 5) throw new Error('Choose at most five private reference images across this request.');
       const ids = [], signed = [], generation = authGeneration();
       try {
-        for (const file of files) { let id = uploads.current.get(file); if (!id) { id = await uploadPrivateFile(file, { purpose: 'service_reference', requestKey: submission.key, onProgress: setProgress }, signed); uploads.current.set(file, id); } ids.push(id); }
+        for (const file of allFiles) { let id = uploads.current.get(file); if (!id) { id = await uploadPrivateFile(file, { purpose: 'service_reference', requestKey: submission.key, onProgress: setProgress }, signed); uploads.current.set(file, id); } ids.push(id); }
       } catch (error) { if (generation === authGeneration()) await discardUploads(signed.filter(id => ![...uploads.current.values()].includes(id))); throw error; }
-      body.current = { requestKey: submission.key, service, customer: { name: values.name, phone: values.phone, ...(values.email ? { email: values.email } : {}) }, details, components: selections.map(item => ({ componentId: item.componentId, quantity: Number(item.quantity) })), uploadIds: ids };
+      body.current = { ...(template ? { template: { id: template.id, version: template.version, fields: Object.fromEntries(template.fields.map(field => [field.key, field.type === 'image' ? (templateValues[field.key] || []).map(file => uploads.current.get(file)) : templateValues[field.key] || ''])) } } : {}), requestKey: submission.key, service, customer: { name: values.name, phone: values.phone, ...(values.email ? { email: values.email } : {}) }, details, components: selections.map(item => ({ componentId: item.componentId, quantity: Number(item.quantity) })), uploadIds: ids };
     }
     if (ownerGeneration !== authGeneration()) throw new Error('Your session changed. Start a fresh request in this session.');
     remember(scope, { key: submission.key, pending: true });
@@ -71,6 +76,8 @@ function RequestForm({ service, owner }) {
         </>}
         <label className="commerce-field">Quantity<input type="number" min={1} max={20} required value={values.quantity} onChange={event => set('quantity', event.target.value)} /></label>
         {input('instructions', 'Additional instructions', { area: true, required: service === 'laser_engraving' && values.engravingType === 'other', max: 2000 })}
+        {options.data?.templates?.length > 0 && <label className="commerce-field">Additional request questions<select value={template?.id || ''} onChange={event => { setTemplate(options.data.templates.find(item => item.id === event.target.value) || null); setTemplateValues({}); }}><option value="">No additional questions</option>{options.data.templates.map(item => <option key={item.id} value={item.id}>{item.name} - version {item.version}</option>)}</select></label>}
+        {template && <ConfiguredFields fields={template.fields} values={templateValues} onChange={setTemplateValues} disabled={mutation.isPending || uncertain} />}
         <LocalFileField field={photoField} value={files} onChange={setFiles} disabled={mutation.isPending || uncertain} />
       </section>
       <section className="service-request-card"><p className="eyebrow">02 · Optional additions</p><h2>Owner-approved components</h2><p>Only components explicitly offered for this service appear here. Component quantities are totals for this entire request, even when requesting multiple gifts. You can describe anything else in your request.</p>

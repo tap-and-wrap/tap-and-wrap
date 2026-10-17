@@ -95,7 +95,7 @@ test('failed verification keeps local selections for retry; unavailable and unap
 });
 
 test('admin checkbox and friendly fields save with the loaded revision and never need a template or technical key input', async ({ page }) => {
-  const fixture = await mockCatalog(page, { role: 'admin' });
+  const fixture = await mockCatalog(page, { role: 'admin', adminProduct: { ...adminProduct, personalization: { ...adminProduct.personalization, fields: adminProduct.personalization.fields.map(field => field.type === 'image' ? { ...field, minFiles: 1, maxFiles: 1, maxBytes: 8388608, acceptedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'] } : field) } } });
   await page.goto(`/admin/products/${adminProduct._id}/edit`);
   await page.getByLabel('Requires Customization Before Purchase').check(); await page.getByRole('button', { name: 'Add customer field' }).click();
   await page.getByLabel('Customer-facing label', { exact: true }).last().fill('Printed name');

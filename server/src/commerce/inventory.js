@@ -31,7 +31,7 @@ export async function consumeInventory(lines, applied, session) {
         if (!component) throw commerceError(409, 'COMPONENT_UNAVAILABLE', 'A selected component is unavailable.');
         claim.mode = component.inventory.mode;
       }
-      const filter = { _id: claim.id, enabledForCustomization: true, configurationApproved: true, priceApproved: true, reviewRequired: false,
+      const filter = { _id: claim.id, enabledForCustomization: true, configurationApproved: true, priceApproved: true, $or: [{ reviewRequired: false }, { ownerManaged: true }],
         'inventory.approved': true, 'inventory.available': true, 'inventory.mode': claim.mode };
       const increment = { commerceRevision: 1, __v: 1 };
       if (claim.mode === 'tracked') { filter['inventory.quantity'] = { $gte: claim.quantity }; increment['inventory.quantity'] = -claim.quantity; }

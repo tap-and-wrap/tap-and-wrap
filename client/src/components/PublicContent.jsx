@@ -1,4 +1,4 @@
-import useVideoPlayback, { useMediaPreference } from './useVideoPlayback.js';
+import useVideoPlayback, { useMediaPreference, videoSurfacePointerDown } from './useVideoPlayback.js';
 import { productHref } from '../../../shared/product-paths.mjs';
 import TestimonialCard from './TestimonialCard.jsx';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -24,7 +24,7 @@ export function DeveloperHeroMedia({ video = developerContent.heroVideo }) {
   const height = Number.isSafeInteger(mediaHeight) && mediaHeight > 0 ? mediaHeight : 1080;
   if (!source) return null;
   return <figure className="hero-film" style={{ aspectRatio: `${width} / ${height}`, backgroundImage: poster ? `url("${poster}")` : undefined }}>
-    {failed ? <>{poster && <img className="hero-film-poster" src={poster} width={width} height={height} alt="Owner-approved Tap & Wrap hero poster" fetchPriority="high"/>}<figcaption className="hero-film-error">The film is unavailable. You can still explore our gifts.</figcaption></> : <><video ref={videoRef} className="website-hero-video" src={source} muted playsInline loop={video?.loop === true} preload="none" poster={poster} width={width} height={height} aria-label="Tap & Wrap hero film" {...videoEvents}/><button className="hero-video-control" type="button" aria-label={playing ? 'Pause hero video' : 'Play hero video'} onClick={toggle}>{playing ? 'Pause film' : 'Play film'}</button>{blocked && <span className="storefront-sr-only" role="status">Autoplay is unavailable. Use Play to try again; the poster and gift links remain available.</span>}</>}
+    {failed ? <>{poster && <img className="hero-film-poster" src={poster} width={width} height={height} alt="Owner-approved Tap & Wrap hero poster" fetchPriority="high"/>}<figcaption className="hero-film-error">The film is unavailable. You can still explore our gifts.</figcaption></> : <><video ref={videoRef} className="website-hero-video" src={source} muted playsInline loop={video?.loop === true} preload="none" poster={poster} width={width} height={height} aria-label="Tap & Wrap hero film" {...videoEvents}/><button className="hero-video-control video-surface-control" type="button" aria-label={playing ? 'Pause hero video' : 'Play hero video'} onPointerDown={videoSurfacePointerDown} onClick={toggle}><span>{playing ? 'Pause film' : 'Play film'}</span></button>{blocked && <span className="storefront-sr-only" role="status">Autoplay is unavailable. Tap the film or focus it and press Enter to try again; the poster and gift links remain available.</span>}</>}
   </figure>;
 }
 export function TrustStatistics({ claims = developerContent.trustStatistics }) {

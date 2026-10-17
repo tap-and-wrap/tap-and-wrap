@@ -85,7 +85,7 @@ test('fixture-prerendered product information and links work without JavaScript 
   const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 320, height: 900 } });
   const page = await context.newPage();
   try {
-    const plan = buildSeoPlan({ siteOrigin: 'https://fixture.example', publish: true, catalog: { version: 1, source: 'approved-public-catalog', generatedAt: new Date().toISOString(), checkoutEnabled: false, mediaOrigins: [], categories: [category], products: [{ ...detail, mainImageUrl: null, subcategory: null, seoEligibility: { status: 'ready', published: true, inventoryApproved: true, reviewRequired: false, categoriesActive: true } }] } });
+    const plan = buildSeoPlan({ siteOrigin: 'https://fixture.example', publish: true, catalog: { version: 1, source: 'approved-public-catalog', generatedAt: new Date().toISOString(), checkoutEnabled: false, mediaOrigins: [], categories: [category], products: [{ ...detail, routingVersion: 'synthetic-reviewed-routing-v1', mainImageUrl: null, subcategory: null, seoEligibility: { status: 'ready', published: true, inventoryApproved: true, reviewRequired: false, categoriesActive: true } }] } });
     const template = '<!doctype html><html lang="en"><head><link rel="stylesheet" href="/src/styles.css"><link rel="stylesheet" href="/src/design-system.css"></head><body><div id="root"></div><script>window.UNEXPECTED_JS=true</script></body></html>';
     const html = renderRouteHtml(template, plan.routes.get(`/products/${detail.slug}`), plan.origin);
     await page.route('**/isolated-prerender', (route) => route.fulfill({ contentType: 'text/html', body: html }));

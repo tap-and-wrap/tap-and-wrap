@@ -110,7 +110,8 @@ test('product gallery, required options, stock and sticky controls preserve serv
   await page.getByRole('button', { name: 'View image 2' }).click();
   await expect(page.locator('.product-main-image img')).toHaveAttribute('src', detail.galleryUrls[1]);
   await expect(page.getByLabel('Gift name *')).toHaveAttribute('required', '');
-  await expect(page.locator('input[type=file]')).toHaveCount(1);
+  // The chooser has multiple native Gallery/Camera/Files inputs, all scoped to the configured requirement.
+  await expect(page.locator('input[type=file]')).toHaveCount(3);
   await expect(page.getByRole('link', { name: 'Customize This' })).toHaveCount(0);
   await page.getByLabel('Choose size / color').selectOption('small-rose');
   await expect(page.locator('.product-price')).toContainText('12.34');
@@ -119,7 +120,7 @@ test('product gallery, required options, stock and sticky controls preserve serv
   await page.getByLabel('Quantity', { exact: true }).fill('20');
   await expect(page.getByLabel('Quantity', { exact: true })).toHaveValue('3');
   await page.getByLabel('Choose size / color').selectOption('large-rose');
-  await expect(page.locator('.product-stock-status')).toHaveText('Price and availability on request');
+  await expect(page.locator('.product-stock-status')).toHaveText('Online purchase unavailable · Enquire on WhatsApp');
   await expect(page.locator('.product-purchase-section').getByRole('link', { name: 'Enquire on WhatsApp', exact: true })).toBeVisible();
   await page.getByLabel('Choose size / color').selectOption('small-rose');
   await expect(page.getByRole('button', { name: 'Add to Cart', exact: true })).toBeEnabled();
@@ -160,7 +161,7 @@ test('admin requires protected server verification and paginates its product tab
   await page.getByRole('button', { name: 'Next page', exact: true }).click();
   await expect(page.getByText('Page 2 of 3')).toBeVisible();
   expect(fixture.requests.filter((item) => item.path === '/admin/products').at(-1).params).toMatchObject({ page: '2', limit: '20' });
-  await page.getByRole('combobox', { name: 'Publication', exact: true }).selectOption('draft');
+  await page.getByRole('combobox', { name: 'Original catalog status', exact: true }).selectOption('draft');
   await page.getByRole('combobox', { name: 'Sort products', exact: true }).selectOption('name_desc');
   await expect(page).toHaveURL(/status=draft/);
   await expect.poll(() => fixture.requests.filter((item) => item.path === '/admin/products').at(-1).params.sort).toBe('name_desc');
@@ -265,8 +266,10 @@ test('browse-only products show no provisional prices or purchase action, and li
 test('approved prelaunch FAQ fallback answers are visible without fabricating testimonials', async ({ page }) => {
   await mockCatalog(page);
   await page.goto('/');
-  await expect(page.locator('.website-faq details')).toHaveCount(11);
-  await expect(page.locator('.home-named-review-carousel figure')).toHaveCount(12);
-  await page.getByText('Is shipping included in the product price?', { exact: true }).click();
-  await expect(page.locator('.website-faq')).toContainText('does not include delivery');
+  await expect(page.locator('.home-faq-categories').getByRole('button')).toHaveCount(3);
+  await expect(page.locator('.home-named-review-carousel .review-marquee-group').first().locator('figure')).toHaveCount(12);
+  await page.getByRole('button', { name: 'Shipping', exact: true }).click();
+  await expect(page.locator('.home-faq-card')).toHaveCount(4);
+  await page.getByRole('button', { name: 'Is shipping included in the product price?', exact: true }).click();
+  await expect(page.locator('.home-faq-card').first()).toContainText('Delivery is separate unless an');
 });

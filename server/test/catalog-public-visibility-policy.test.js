@@ -5,8 +5,10 @@ import { publicProductFilter, getPublicationIssues, getStockDeduction } from '..
 test('purchasable product filter requires strictly positive, confirmed price', () => {
   const filter = publicProductFilter();
   assert.deepEqual(filter.pricePiastres, { $gt: 0 });
-  assert.equal(filter.status, 'ready');
-  assert.equal(filter.published, true);
+  assert.deepEqual(filter.status, { $in: ['draft', 'hold', 'ready'] });
+  assert.equal(filter.$or[1].status, 'ready'); assert.equal(filter.$or[1].published, true); assert.equal(filter.$or[1].reviewRequired, false);
+  assert.equal(filter.$or[1].$nor.length, 3);
+  assert.equal(filter.$or[0]['purchaseSetup.version'], 1);
   assert.equal(filter.priceApproved, true);
 });
 

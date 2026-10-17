@@ -12,12 +12,13 @@ import '../admin.css';
 import AdminLayout from '../admin/AdminLayout.jsx';
 import { invalidateAdminDependencies } from '../admin/query-invalidation.js';
 
-function InventoryFields({ value, onChange, prefix = 'Product', name = 'inventory' }) {
+function InventoryFields({ value, onChange, prefix = 'Product', name = 'inventory', variantParent = false }) {
   function update(field, next) {
     onChange({ ...value, [field]: next,
       ...(field === 'quantity' ? { approved: /^\d+$/.test(next) && Number.isSafeInteger(Number(next)) } : {}),
     });
   }
+  if (variantParent) return <label>Product availability<select value={value.available ? 'available' : 'unavailable'} onChange={event => onChange({ ...value, available: event.target.value === 'available' })}><option value="available">Available when a configured variant has stock</option><option value="unavailable">Unavailable - enquiries only</option></select><span className="admin-help">Each variant owns its real stock below. The imported parent quantity is retained but never used for ordering.</span></label>;
   return <div className="admin-inventory-fields">
     <label>{prefix} availability<select name={`${name}.mode`} value={inventoryChoice(value)} onChange={event => onChange(selectInventoryAvailability(value, event.target.value))}><option value="unconfirmed">Stock not confirmed</option><option value="tracked">Tracked stock — enter actual quantity</option><option value="made_to_order">Made by Request — no stock tracking</option><option value="unavailable">Unavailable — enquiries only</option></select></label>
     {value.mode === 'tracked' ? <label>{prefix} quantity<input name={`${name}.quantity`} type="text" inputMode="numeric" value={value.quantity} onChange={(event) => update('quantity', event.target.value)} required={value.approved} pattern="[0-9]+" /></label> : <p className="admin-help">Made on Demand products do not deduct stock. Select this only for items you can create when ordered.</p>}
@@ -76,7 +77,7 @@ function ProductEditor({ product, initialSaved }) {
     finally { setSaving(false); }
   }
 
-  return <AdminLayout title={id ? 'Edit product' : 'Add product'} description="Approve public display independently. Online purchase also requires Ready status, confirmed price and inventory, and resolved catalog issues." actions={id && <Link className="admin-button admin-button-secondary" to={`/admin/products/${id}/preview`}>Preview saved product</Link>}>
+  return <AdminLayout title={id ? 'Edit product' : 'Add product'} description="Set the price, real availability and product options. Purchase eligibility is calculated automatically; imported notes remain available." actions={id && <Link className="admin-button admin-button-secondary" to={`/admin/products/${id}/preview`}>Preview saved product</Link>}>
     {id && <p><Link to={`/admin/products/${id}/configuration`}>Advanced template-based service configuration</Link></p>}
     <AdminForm error={error} onSubmit={save} className="admin-product-form">
       <fieldset disabled={saving} className="admin-form-fields">
@@ -92,14 +93,14 @@ function ProductEditor({ product, initialSaved }) {
         {mainCategory && (children.data?.pagination?.total || 0) > 20 && <div className="admin-inline admin-subcategory-pages"><span>Subcategory choices, page {categoryPage}</span><button type="button" className="admin-button admin-button-secondary" disabled={categoryPage <= 1} onClick={() => setCategoryPage((current) => current - 1)}>Previous subcategories</button><button type="button" className="admin-button admin-button-secondary" disabled={categoryPage * 20 >= children.data.pagination.total} onClick={() => setCategoryPage((current) => current + 1)}>Next subcategories</button></div>}
         </section>
 
-        <section className="admin-panel"><h2>Price and publication</h2><div className="admin-form-grid">
+        <section className="admin-panel"><h2>Price and display</h2><div className="admin-form-grid">
           <label>Price (EGP)<input name="pricePiastres" type="text" inputMode="decimal" value={draft.price} onChange={(event) => change('price', event.target.value)} placeholder="Not confirmed" /><span className="admin-help">Blank or 0 means Price not confirmed yet. Customers cannot purchase until you enter a positive price.</span></label>
           <label>Compare-at price (EGP)<input name="compareAtPiastres" type="text" inputMode="decimal" value={draft.compareAt} onChange={(event) => change('compareAt', event.target.value)} placeholder="Optional" /></label>
-          <label>Purchase readiness<select name="status" value={draft.status} onChange={(event) => change('status', event.target.value)}><option value="draft">Draft</option><option value="ready">Ready: approved for online purchase</option><option value="hold">Hold</option></select></label>
-        </div><label>Public display<select name="visibility" value={draft.visibility} onChange={event => change('visibility', event.target.value)}><option value="hidden">Hidden: not approved for display</option><option value="public">Approved for public display</option><option value="withdrawn">Withdrawn: keep unavailable</option></select></label><p className="admin-help">Approve display only after reviewing the product content and category. Displayed Draft/Hold products remain browsable when checkout opens. Entering a positive price confirms it immediately; only Ready products with confirmed inventory and resolved review issues can be ordered.</p>
+          <label>How is this product sold?<select name="optionStructure" value={draft.optionStructure} onChange={event => change('optionStructure', event.target.value)}><option value="single">One item - no variants</option><option value="variants">With the variants configured below</option><option value="unresolved">Options still need clarification - enquiries only</option></select></label>
+        </div><label>Public display<select name="visibility" value={draft.visibility} onChange={event => change('visibility', event.target.value)}><option value="hidden">Hidden: not approved for display</option><option value="public">Approved for public display</option><option value="withdrawn">Withdrawn: keep unavailable</option></select></label><p className="admin-help">Approve display only after reviewing the product content and category. Displayed Draft/Hold products remain browsable when checkout opens. Entering a positive price confirms it immediately; online purchase requires a saved positive price, real confirmed availability and complete options.</p>
         </section>
 
-        <section className="admin-panel"><h2>Inventory and availability</h2><InventoryFields value={draft.inventory} onChange={(inventory) => change('inventory', inventory)} /><p className="admin-help">Imported quantities are not confirmed stock and are not prefilled here. Enter the actual count, select Made by Request only when you can fulfil orders, or choose Unavailable for enquiries. Saving other fields never approves placeholder stock.</p></section>
+        <section className="admin-panel"><h2>Inventory and availability</h2><InventoryFields variantParent={draft.optionStructure === 'variants'} value={draft.inventory} onChange={(inventory) => change('inventory', inventory)} /><p className="admin-help">Imported quantities are not confirmed stock and are not prefilled here. Enter the actual count, select Made by Request only when you can fulfil orders, or choose Unavailable for enquiries. Saving other fields never approves placeholder stock.</p></section>
 
         <section className="admin-panel"><AdminImageGallery key={revision} keys={draft.galleryKeys} onChange={galleryKeys => change('galleryKeys', galleryKeys)} onBusyChange={setMediaPending} label="Product images" /></section>
         <EngravingRequestEditor value={draft.engravingRequest} onChange={engravingRequest => setDraft(current => ({ ...current, engravingRequest, engravingEdited: true }))} />
@@ -125,7 +126,7 @@ function ProductEditor({ product, initialSaved }) {
           <label className="admin-checkbox"><input name="bestSeller" type="checkbox" checked={draft.bestSeller} onChange={(event) => change('bestSeller', event.target.checked)} />Best Seller selection</label><label>Best Seller display order<input name="bestSellerOrder" inputMode="numeric" pattern="[0-9]+" value={draft.bestSellerOrder} onChange={(event) => change('bestSellerOrder', event.target.value)} /></label>
         </div></section>
 
-        <section className="admin-panel"><h2>Catalog review</h2>{product?.reviewReasons?.length > 0 && <ul className="admin-review-reasons">{product.reviewReasons.map((reason, index) => <li key={index}>{reason}</li>)}</ul>}{product?.merchantReviewNotes && <p>{product.merchantReviewNotes}</p>}{product?.variantSourceNotes && <p>{product.variantSourceNotes}</p>}<label className="admin-checkbox"><input name="reviewRequired" type="checkbox" checked={draft.reviewRequired} onChange={(event) => change('reviewRequired', event.target.checked)} />Catalog review required</label><p className="admin-help">Clear this flag only after the merchant has reviewed the original grouping and notes. This form does not reclassify or merge catalog entries.</p></section>
+        <section className="admin-panel"><h2>Catalog review</h2>{product?.reviewReasons?.length > 0 && <ul className="admin-review-reasons">{product.reviewReasons.map((reason, index) => <li key={index}>{reason}</li>)}</ul>}{product?.merchantReviewNotes && <p>{product.merchantReviewNotes}</p>}{product?.variantSourceNotes && <p>{product.variantSourceNotes}</p>}<p>Import notes are retained for reference. Clarify any ambiguous options using the product and variant fields before offering online purchase.</p><p className="admin-help">These original notes are retained. Configure the actual product options above; saving does not reclassify, merge or erase imported information.</p></section>
 
 
       </fieldset>

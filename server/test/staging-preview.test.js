@@ -129,24 +129,32 @@ describe('authenticated staging draft preview', { concurrency: false }, () => {
     assert.equal(preview.mainImageUrl, preview.gallerySlots[0].url);
     assert.equal(preview.gallerySlots[0].isMain, true);
   });
-  it('keeps preview private while allowing safe draft browsing in the public catalog', async () => {
+  it('keeps hidden drafts private and allows only explicitly public browse-only drafts', async () => {
     const originalBrowsePreview = env.catalogBrowsePreviewEnabled;
     env.catalogBrowsePreviewEnabled = true;
     try {
-    assert.equal((await request('/public/products/isolated-draft')).status, 200);
-    assert.equal((await request(`/public/products/${product._id}/preview`)).status, 404);
-    const publicList = await request('/public/products?limit=100');
-    assert.equal(publicList.body.data.products.length, 1);
-    assert.equal(publicList.body.data.products[0].orderingAvailable, false);
-    assert.equal(publicList.body.data.products[0].pricePiastres, null);
-    assert.equal(publicList.body.data.pagination.limit, 20);
-    const adminList = await request('/admin/products?status=draft&limit=100&category=preview-main&subcategory=preview-child', adminCookie);
-    assert.equal(adminList.body.data.pagination.limit, 20);
-    assert.equal(adminList.body.data.pagination.total, 1);
-    const categories = await request('/public/categories?parent=preview-main');
-    assert.equal(categories.body.data.categories[0].slug, 'preview-child');
-    assert.equal(categories.body.data.categories[0].productCount, 1);
-    assert.equal(mongoose.connection.name, 'tap_wrap_catalog_test');
+      // The retired preview flag must never override an absent/hidden visibility value.
+      assert.equal((await request('/public/products/isolated-draft')).status, 404);
+      assert.equal((await request(`/public/products/${product._id}/preview`)).status, 404);
+      assert.equal((await request('/public/products')).body.data.pagination.total, 0);
+      const adminList = await request('/admin/products?status=draft&limit=100&category=preview-main&subcategory=preview-child', adminCookie);
+      assert.equal(adminList.body.data.pagination.limit, 20);
+      assert.equal(adminList.body.data.pagination.total, 1);
+      // One intentional owner visibility change makes this draft browse-only, regardless of price.
+      await Product.updateOne({ _id: product._id }, { $set: { visibility: 'public' } });
+      env.catalogBrowsePreviewEnabled = false;
+      const publicDetail = await request('/public/products/isolated-draft');
+      assert.equal(publicDetail.status, 200);
+      assert.equal(publicDetail.body.data.product?.orderingAvailable, false);
+      const publicList = await request('/public/products?limit=100');
+      assert.equal(publicList.body.data.products.length, 1);
+      assert.equal(publicList.body.data.products[0].orderingAvailable, false);
+      assert.equal(publicList.body.data.products[0].pricePiastres, null);
+      assert.equal(publicList.body.data.pagination.limit, 20);
+      const categories = await request('/public/categories?parent=preview-main');
+      assert.equal(categories.body.data.categories[0].slug, 'preview-child');
+      assert.equal(categories.body.data.categories[0].productCount, 1);
+      assert.equal(mongoose.connection.name, 'tap_wrap_catalog_test');
     } finally { env.catalogBrowsePreviewEnabled = originalBrowsePreview; }
   });
 });

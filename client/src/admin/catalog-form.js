@@ -66,6 +66,7 @@ export function createProductDraft(product = {}) {
     personalizationEdited: false,
     engravingRequest: structuredClone(product.engravingRequest || { enabled: false, fonts: [], placements: [], materials: [], maxTextLength: 120 }),
     engravingEdited: false,
+    optionStructure: product.purchaseSetup?.options || (product.variants?.length ? 'variants' : product.variantSourceNotes?.trim() || product.catalogRole === 'Variant Product' ? 'unresolved' : 'single'),
     name: product.name || '',
     slug: product.slug || '',
     description: product.description || '',
@@ -106,7 +107,7 @@ function inventoryPayload(inventory, label) {
 
 export function createProductPayload(draft) {
   const issues = productPersonalizationIssues(draft.personalization);
-  if (draft.personalizationEdited && issues.length && draft.status === 'ready') {
+  if (draft.personalizationEdited && issues.length) {
     const error = new Error(issues[0]); error.details = [{ field: 'personalization.requiredBeforePurchase', message: issues[0] }]; throw error;
   }
   const galleryKeys = draft.galleryKeys.map((value) => value.trim()).filter(Boolean);
@@ -121,6 +122,8 @@ export function createProductPayload(draft) {
   return {
     ...(draft.personalizationEdited ? { personalization: draft.personalization } : {}),
     ...(draft.engravingEdited ? { engravingRequest: { ...draft.engravingRequest, ...Object.fromEntries(['fonts', 'placements', 'materials'].map(key => [key, (draft.engravingRequest[key] || []).map(value => value.trim()).filter(Boolean)])) } } : {}),
+    ownerWorkflow: true,
+    optionStructure: draft.optionStructure,
     name: draft.name.trim(),
     slug: draft.slug.trim(),
     description: draft.description,

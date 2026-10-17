@@ -76,7 +76,7 @@ test('actual PageMetadata stops indexing changed API media, prices and stock des
   page.on('requestfailed', (request) => { if (request.resourceType() === 'script') failedModules.push({ url: request.url(), error: request.failure()?.errorText }); });
   const fixtureOrigin = 'https://metadata.fixture.invalid';
   const now = new Date();
-  const product = { ...detail, subcategory: null, variants: [] };
+  const product = { ...detail, subcategory: null, variants: [], routingVersion: 'synthetic-reviewed-routing-v1' };
   const mediaVerification = { version: 1, source: 'authorized-media-object-verification', objects: [{ approved: true, url: product.mainImageUrl, sha256: 'a'.repeat(64), objectVersion: 'synthetic-v1', contentType: 'image/webp', sizeBytes: 15000, width: 900, height: 900, verifiedAt: new Date(now.valueOf() - 1000).toISOString(), validUntil: new Date(now.valueOf() + 7200000).toISOString() }] };
   const plan = buildSeoPlan({ catalog: { version: 1, source: 'approved-public-catalog', generatedAt: now.toISOString(), products: [{ ...product, seoEligibility: { status: 'ready', published: true, inventoryApproved: true, reviewRequired: false, categoriesActive: true } }], categories: [category], mediaOrigins: [new URL(product.mainImageUrl).origin], mediaVerification, checkoutEnabled: true }, publish: true, siteOrigin: fixtureOrigin, now });
   const publication = publicationFor(plan, { now });
@@ -89,7 +89,13 @@ test('actual PageMetadata stops indexing changed API media, prices and stock des
     const url = new URL(route.request().url());
     if (url.pathname === pathname) return route.fulfill({ contentType: 'text/html', body: html });
     if (url.pathname === '/isolated-metadata-harness.js') return route.fulfill({ contentType: 'text/javascript', body: `import React from '/node_modules/.vite/deps/react.js'; import ReactDOM from '/node_modules/.vite/deps/react-dom_client.js'; import { initializePrerender } from '/src/seo/boot.js'; import * as RefreshRuntime from '/@react-refresh'; RefreshRuntime.injectIntoGlobalHook(window); window.$RefreshReg$=()=>{}; window.$RefreshSig$=()=>type=>type; window.__vite_plugin_react_preamble_installed__=true; const {ProductMetadata}=await import('/src/seo/PageMetadata.jsx'); const element=document.getElementById('root'); initializePrerender(element); const root=ReactDOM.createRoot(element); window.originalPublicProduct=${JSON.stringify(product)}; window.renderPublicProduct=product=>root.render(React.createElement(React.Fragment,null,React.createElement(ProductMetadata,{product,checkoutEnabled:true}),React.createElement('main',null,React.createElement('h1',null,product.name)))); window.renderPublicProduct(window.originalPublicProduct);` });
-    if (!/^\/(?:src\/seo\/|node_modules\/\.vite\/deps\/|node_modules\/vite\/dist\/client\/env\.mjs$|@vite\/|@react-refresh$|seo-static\.css$|tap-wrap-logo\.webp$)/.test(url.pathname)) return route.abort();
+    // On Windows Vite emits absolute /@fs/C:/... imports for the shared
+    // routing/SEO modules outside client/. This is a synthetic-only proxy:
+    // permit exactly these three reviewed shared modules, never arbitrary /@fs.
+    const allowedSharedModule = url.pathname.startsWith('/@fs/')
+      && /\/shared\/(?:product-seo|product-paths|category-paths)\.mjs$/.test(url.pathname);
+    const allowedClientModule = /^\/(?:src\/seo\/|node_modules\/\.vite\/deps\/|node_modules\/vite\/dist\/client\/env\.mjs$|@vite\/|@react-refresh$|seo-static\.css$|tap-wrap-logo\.webp$)/.test(url.pathname);
+    if (!allowedSharedModule && !allowedClientModule) return route.abort();
     const local = new URL(url.pathname + url.search, 'http://127.0.0.1:5191');
     const response = await route.fetch({ url: local.href });
     if (url.pathname === '/src/seo/PageMetadata.jsx') {

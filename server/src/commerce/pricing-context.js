@@ -17,7 +17,7 @@ export async function createPricingContext(lines, owner, { session } = {}) {
   const read = async query => { context.queryCount += 1; return query.session(session || null).lean().maxTimeMS(3000); };
   const productIds = ids(lines.map(line => line.productId));
   if (!productIds.length) return context;
-  context.products = byId(await read(Product.find({ ...publicProductFilter(), _id: { $in: productIds } }).select('visibility name slug description sku categoryId subcategoryId mainImageKey status published reviewRequired pricePiastres priceApproved variants inventory personalization customization updatedAt')));
+  context.products = byId(await read(Product.find({ ...publicProductFilter(), _id: { $in: productIds } }).select('purchaseSetup visibility name slug description sku categoryId subcategoryId mainImageKey status published reviewRequired pricePiastres priceApproved variants inventory personalization customization updatedAt')));
   const products = [...context.products.values()];
   const categoryIds = ids(products.flatMap(product => [product.categoryId, product.subcategoryId]));
   if (categoryIds.length) context.categories = byId(await read(Category.find({ _id: { $in: categoryIds } }).select('_id parentId active')));
@@ -26,7 +26,7 @@ export async function createPricingContext(lines, owner, { session } = {}) {
   if (templateIds.length) {
     context.templates = byId(await read(CustomizationTemplate.find({ _id: { $in: templateIds } })));
     const componentIds = ids([...context.templates.values()].flatMap(template => (template.groups || []).flatMap(group => group.options.map(option => option.componentId))));
-    if (componentIds.length) context.components = byId(await read(ComponentOption.find({ _id: { $in: componentIds } }).select('name pricePiastres priceApproved inventory enabledForCustomization configurationApproved reviewRequired updatedAt')));
+    if (componentIds.length) context.components = byId(await read(ComponentOption.find({ _id: { $in: componentIds } }).select('ownerManaged name pricePiastres priceApproved inventory enabledForCustomization configurationApproved reviewRequired updatedAt')));
   }
   // Malformed/oversized individual lines are rejected by normal field validation;
   // they must not turn a lightweight cart read into an unbounded dependency query.

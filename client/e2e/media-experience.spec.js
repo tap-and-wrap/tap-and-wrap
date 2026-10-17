@@ -15,8 +15,11 @@ test.beforeEach(async ({ page }) => {
 test.afterEach(async ({ page }, info) => {
   if (info.status === info.expectedStatus) return;
   const failures = await page.evaluate(() => window.__mediaFailures).catch(() => []);
+  const state = await page.locator('video').evaluateAll(videos => videos.map(v => ({ label: v.getAttribute('aria-label'), source: v.getAttribute('src'), paused: v.paused, readyState: v.readyState, networkState: v.networkState, videoWidth: v.videoWidth, error: v.error && { code: v.error.code, message: v.error.message }, rect: { top: v.getBoundingClientRect().top, height: v.getBoundingClientRect().height } }))).catch(() => []);
+  await info.attach('local-media-state', { body: JSON.stringify(state), contentType: 'application/json' });
   await info.attach('local-media-failures', { body: JSON.stringify(failures), contentType: 'application/json' });
   console.log(JSON.stringify({ localMediaFailures: failures }));
+  console.log(JSON.stringify({ localMediaState: state }));
 });
 
 const product = { ...commerceProduct, requiresOptions: true, personalization: { requiredBeforePurchase: true, fields: [
@@ -101,7 +104,7 @@ test('actual hero decode and mouse/keyboard controls, orientation, dynamic motio
   await page.getByRole('button', { name: 'Play hero video' }).click(); await expect.poll(() => hero.evaluate(v => v.videoWidth)).toBe(480);
   await page.screenshot({ path: 'test-results/remediation-2/hero-390.png' });
   await page.setViewportSize({ width: 844, height: 390 }); await expect(hero).toHaveAttribute('src', '/media/tap-wrap-desktop-hero.mp4');
-  expect(errors).toEqual([]); console.log(JSON.stringify({ browser: browser.version(), device: 'Windows Edge, responsive viewports only', actualLocalMP4: true }));
+  expect(errors).toEqual([]); console.log(JSON.stringify({ browser: browser.version(), device: 'Windows desktop Chromium engine, responsive viewports only', actualLocalMP4: true }));
 });
 test('touch-emulated hero control accepts taps and reduced-motion initial load stays paused', async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, reducedMotion: 'reduce' });
@@ -187,4 +190,34 @@ test('history-restricted browsers still have accessible Cancel without a native 
   await page.getByRole('button', { name: 'Your photo: Upload Image' }).click();
   const dialog = page.getByRole('dialog', { name: 'Choose image source', exact: true }); await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(dialog).toHaveCount(0); await expect(page.getByLabel(/^Gift name/)).toHaveValue('Keep this name');
+});
+
+
+test('video surfaces hide labels normally, reveal keyboard focus, and preserve hero links at desktop and mobile sizes', async ({ page }) => {
+  await mockCatalog(page); await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const width of [1440, 768, 320]) {
+    await page.setViewportSize({ width, height: 900 }); await page.goto('/');
+    const control = page.locator('.hero-video-control'), video = page.locator('.hero-film video');
+    await expect(control.locator('span')).toHaveCSS('opacity', '0');
+    await expect(control).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await control.focus(); await page.keyboard.press('Shift+Tab'); await page.keyboard.press('Tab'); await expect(control).toBeFocused(); await expect(control.locator('span')).toHaveCSS('opacity', '1');
+    await page.keyboard.press('Enter'); await expect.poll(() => video.evaluate(v => v.paused)).toBe(false);
+    await page.keyboard.press('Space'); await expect.poll(() => video.evaluate(v => v.paused)).toBe(true);
+    await control.click();
+    await expect.poll(() => video.evaluate(v => v.paused)).toBe(false);
+    await expect(control.locator('span')).toHaveCSS('opacity', '0');
+    await page.getByRole('link', { name: 'Shop Gifts', exact: true }).click(); await expect(page).toHaveURL(/\/shop/);
+    await page.goBack();
+    for (const title of ['Build Your Gift Box', 'Laser Engraving']) {
+      const surface = page.locator('.home-service-media').filter({ has: page.getByLabel(title + ' film', { exact: true }) });
+      await surface.scrollIntoViewIfNeeded(); const toggle = surface.getByRole('button');
+      await expect(toggle.locator('span')).toHaveCSS('opacity', '0');
+      await toggle.focus(); await page.keyboard.press('Shift+Tab'); await page.keyboard.press('Tab'); await expect(toggle).toBeFocused(); await expect(toggle.locator('span')).toHaveCSS('opacity', '1');
+      await page.keyboard.press('Enter'); await expect.poll(() => surface.locator('video').evaluate(v => v.paused)).toBe(false);
+      await page.keyboard.press('Space'); await expect.poll(() => surface.locator('video').evaluate(v => v.paused)).toBe(true);
+      await toggle.click(); await expect(toggle.locator('span')).toHaveCSS('opacity', '0');
+      await expect.poll(() => surface.locator('video').evaluate(v => v.paused)).toBe(false);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
 });

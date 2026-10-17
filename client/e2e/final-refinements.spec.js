@@ -7,13 +7,14 @@ test('named testimonial marquee pauses and reduced motion exposes one complete c
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
     const control = page.getByRole('button', { name: /Pause hero video|Play hero video/ });
-    await page.getByRole('heading', { level: 1 }).click();
-    await expect(control).toHaveCSS('opacity', '0');
+    // Film is a full-surface pointer target; blur it via a separate keyboard-accessible CTA.
+    await page.getByRole('link', { name: 'Shop Gifts', exact: true }).focus();
+    await expect(control.locator('span')).toHaveCSS('opacity', '0');
     await page.keyboard.press('Tab');
     await control.focus();
-    await expect(control).toHaveCSS('opacity', '1');
+    await expect(control.locator('span')).toHaveCSS('opacity', '1');
     await page.keyboard.press('Tab');
-    await expect(control).toHaveCSS('opacity', '0');
+    await expect(control.locator('span')).toHaveCSS('opacity', '0');
   }
   await page.setViewportSize({ width: 1440, height: 900 });
   const groups = page.locator('.review-marquee-group');

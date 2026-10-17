@@ -17,7 +17,7 @@ test('display permission and purchase gates are separate and have no launch conf
   assert.deepEqual(displayProductFilter(), { visibility: 'public', status: { $in: ['draft', 'ready', 'hold'] } });
   assert.equal(publicProductFilter().visibility, 'public');
   assert.equal(publicProductFilter().priceApproved, true);
-  assert.equal(publicProductFilter()['inventory.approved'], true);
+  assert.deepEqual(publicProductFilter().$and[0].$or, [{ 'inventory.approved': true }, { 'purchaseSetup.version': 1, 'purchaseSetup.options': 'variants', 'variants.0': { $exists: true } }]);
   for (const patch of [{ visibility: 'hidden' }, { visibility: 'withdrawn' }, { visibility: undefined }, { status: 'draft' }, { status: 'hold' }, { reviewRequired: true }, { priceApproved: false }, { pricePiastres: 0 }, { inventory: { approved: false, available: true, mode: 'tracked', quantity: 10 } }]) {
     assert.equal(productCanOrder(product(patch)), false, JSON.stringify(patch));
   }

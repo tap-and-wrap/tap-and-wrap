@@ -30,8 +30,16 @@ test('hero typography and mobile film cover stay contained at requested widths',
       const box = await media.boundingBox();
       expect(box.width / box.height).toBeCloseTo(960 / 570, 2);
     }
-    const hero = await page.locator('.home-media-hero').boundingBox();
-    expect(hero.y + hero.height).toBeGreaterThanOrEqual(899);
+    // The page can scroll while resizing between mobile/tablet viewports.
+    // boundingBox().y is viewport-relative; check the hero's document bottom
+    // so incidental scroll does not falsely report a shorter initial hero.
+    const heroCoverage = await page.locator('.home-media-hero').evaluate((node) => {
+      const rect = node.getBoundingClientRect();
+      return { documentBottom: rect.bottom + window.scrollY, viewportHeight: window.innerHeight, scrollY: window.scrollY };
+    });
+    expect(heroCoverage.documentBottom,
+      `Hero should fill the initial viewport at ${width}px (scrollY=${heroCoverage.scrollY}, bottom=${heroCoverage.documentBottom})`
+    ).toBeGreaterThanOrEqual(heroCoverage.viewportHeight - 1);
     expect(await heading.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/hero-refinement-${width}.png` });

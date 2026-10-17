@@ -74,3 +74,50 @@ test('admin approves display without confirming imported placeholder stock or ch
   expect(payload.inventory.quantity).toBe(10); expect(payload.slug).toBe(adminProduct.slug);
   expect(payload.expectedRevision).toBe(0);
 });
+
+
+test('unpriced public draft and hold products retain names, canonical WhatsApp enquiries and image previews', async ({ page }) => {
+  for (const status of ['draft', 'hold']) {
+    const p = product({ name: 'Inherited ' + status + ' gift', status, reviewRequired: status === 'hold', published: false, priceApproved: false, pricePiastres: null,
+      inventory: { mode: 'tracked', quantity: 10, approved: false, available: true } });
+    p.mainImageUrl = 'https://fixture.invalid/inherited.svg'; p.galleryUrls = [p.mainImageUrl];
+    await mockCommerce(page, { checkoutEnabled: false, product: p });
+    await page.route('https://fixture.invalid/**', route => route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600"><rect width="600" height="600" fill="white"/></svg>' }));
+    await page.goto('/products/permanent-gift');
+    await expect(page.getByRole('heading', { name: p.name, exact: true })).toBeVisible();
+    await expect(page.locator('.product-price')).toHaveText('Price on request');
+    const enquiry = page.getByRole('link', { name: 'Enquire on WhatsApp', exact: true }).first();
+    const url = new URL(await enquiry.getAttribute('href'));
+    expect(url.searchParams.get('text')).toContain(p.name);
+    expect(url.searchParams.get('text')).toContain('https://tapandwrap.net/products/permanent-gift');
+    await expect(page.getByRole('button', { name: 'Add to Cart', exact: true })).toHaveCount(0);
+    await expect.poll(() => page.locator('.product-gallery img').first().evaluate(img => img.naturalWidth)).toBeGreaterThan(0);
+    await page.unroute('**/api/v1/**');
+  }
+});
+
+
+test('homepage fallback and Shop render unpriced public Draft and Hold cards without owner picks', async ({ page }) => {
+  await mockCatalog(page);
+  const products = ['draft', 'hold'].map((status, index) => ({ ...product({ name: 'Browse ' + status + ' gift', status, reviewRequired: status === 'hold', published: false, priceApproved: false }),
+    _id: String(index + 900).padStart(24, '0'), slug: 'browse-' + status, publicPath: '/products/browse-' + status, bestSeller: false,
+    mainImageUrl: 'https://fixture.invalid/browse.svg' }));
+  await page.route('**/api/v1/public/products?*', route => {
+    const url = new URL(route.request().url()), rows = url.searchParams.get('bestSeller') === 'true' ? [] : products;
+    return route.fulfill({ json: { ok: true, data: { products: rows, pagination: { page: 1, limit: 20, total: rows.length, pages: rows.length ? 1 : 0 }, priceRange: { min: null, max: null } } } });
+  });
+  for (const path of ['/', '/shop']) {
+    await page.goto(path);
+    const grid = page.locator(path === '/' ? '.home-product-grid' : '.catalog-grid').first();
+    await expect(grid.locator('.catalog-card')).toHaveCount(2);
+    for (const p of products) {
+      const card = grid.locator('.catalog-card').filter({ has: page.getByRole('heading', { name: p.name, exact: true }) });
+      await expect(card).toContainText('Price on request');
+      const enquiry = card.getByRole('link', { name: 'Enquire on WhatsApp about ' + p.name });
+      const url = new URL(await enquiry.getAttribute('href'));
+      expect(url.searchParams.get('text')).toContain(p.name); expect(url.searchParams.get('text')).toContain('https://tapandwrap.net' + p.publicPath);
+      await expect(card.getByRole('button', { name: /Add to Cart/ })).toHaveCount(0);
+      await card.scrollIntoViewIfNeeded(); await expect.poll(() => card.locator('img').evaluate(img => img.naturalWidth)).toBeGreaterThan(0);
+    }
+  }
+});

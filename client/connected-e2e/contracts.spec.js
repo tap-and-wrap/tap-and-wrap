@@ -41,40 +41,77 @@ test('real ordinary product personalization uploads once and preserves fixed-pri
  const rejected=await context.request.post(api+'/api/v1/commerce/checkout/quote',{headers:await csrfHeaders(context),data:{checkoutKey:crypto.randomUUID(),paymentMethod:'cod',governorate:'cairo'}});expect(rejected.status()).toBe(403);expect((await rejected.json()).error.code).toBe('CHECKOUT_DISABLED');expect((await fixtureState(request)).orderCount).toBe(before.orderCount);expect(errors).toEqual([]);
 });
 
-test('real admin configuration form creates supported options and persists exact piastres/revisions', async ({ page, context }) => {
+test('real owner Gift Box enquiry editor generates keys and preserves old template versions', async ({ page, context }) => {
   await login(page, 'admin', '/admin/commerce/templates');
   await page.getByRole('button', { name: 'Add template', exact: true }).click();
-  await page.getByLabel('Template name', { exact: true }).fill('Connected edited gift box');
-  await page.getByLabel('Stable key', { exact: true }).fill('connected-edited-box');
+  await page.getByLabel('Template name', { exact: true }).fill('Connected gift box questions');
   await page.getByLabel('Service / configuration type').selectOption('gift_box');
-  await page.getByRole('button', { name: 'Add component group', exact: true }).click();
-  await page.getByLabel('Group key', { exact: true }).fill('extras');
-  await page.getByLabel('Group label', { exact: true }).fill('Fixture extras');
-  await page.getByRole('button', { name: 'Add component option', exact: true }).click();
-  await page.getByLabel('Option key', { exact: true }).fill('card');
-  await page.getByLabel('Option label', { exact: true }).fill('Fixture card');
-  await page.getByLabel('Additional price adjustment (EGP)', { exact: true }).fill('0.03');
+  await expect(page.getByLabel('How is pricing agreed?')).toHaveValue('enquiry');
+  await expect(page.getByLabel('Stable key', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Add component group' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Add requirement field', exact: true }).click();
-  await page.getByLabel('Field key', { exact: true }).fill('gift-message');
   await page.getByLabel('Customer-facing label', { exact: true }).fill('Gift message');
   const creating = page.waitForResponse(response => response.url().endsWith('/admin/commerce/templates') && response.request().method() === 'POST');
   await page.getByRole('button', { name: 'Save configuration', exact: true }).click();
   const response = await creating;
   expect(response.status()).toBe(201);
   const saved = (await response.json()).data.template;
-  expect(saved.groups[0].options[0].priceAdjustmentPiastres).toBe(3);
-  expect(saved.groups[0].options[0].available).toBeUndefined();
-  expect(saved.fields[0].key).toBe('gift-message');
-  expect(saved.revision).toBe(0);
+  expect(saved.usage).toBe('enquiry');
+  expect(saved.status).toBe('approved');
+  expect(saved.active).toBe(true);
+  expect(saved.version).toBe(1);
+  expect(saved.key).toMatch(/^template_[a-f0-9]{32}$/);
+  expect(saved.fields).toHaveLength(1);
+  expect(saved.fields[0].key).toMatch(/^field_[a-f0-9]{32}$/);
+  expect(saved.fields[0].label).toBe('Gift message');
+  expect(saved.groups).toHaveLength(0);
   await expect(page.getByText('Configuration saved.')).toBeVisible();
-  await page.getByLabel('Template name', { exact: true }).fill('Connected edited gift box revised');
+
+  await page.getByLabel('Template name', { exact: true }).fill('Connected gift box questions revised');
   const updating = page.waitForResponse(response => response.url().endsWith(`/admin/commerce/templates/${saved._id}`) && response.request().method() === 'PATCH');
   await page.getByRole('button', { name: 'Save configuration', exact: true }).click();
-  const edited = await updating;
-  expect(edited.status()).toBe(200);
-  expect((await edited.json()).data.template.revision).toBe(1);
-  const invalid = await context.request.patch(`${api}/api/v1/admin/commerce/templates/${saved._id}`, { headers: await csrfHeaders(context), data: { expectedRevision: 1, groups: [{ ...saved.groups[0], options: [{ ...saved.groups[0].options[0], available: true }] }] } });
-  expect(invalid.status()).toBe(400);
+  const updateResponse = await updating;
+  expect(updateResponse.status()).toBe(200);
+  const updated = (await updateResponse.json()).data;
+  expect(updated.revisionCreated).toBe(true);
+  expect(updated.template._id).not.toBe(saved._id);
+  expect(updated.template.version).toBe(2);
+  expect(updated.template.supersedes).toBe(saved._id);
+  expect(updated.template.key).toBe(saved.key);
+  expect(updated.template.fields[0].key).toBe(saved.fields[0].key);
+  await expect(page.getByText(/Saved as a new version/)).toBeVisible();
+
+  // New edits must never mutate accepted requests' source configuration.
+  const original = await context.request.get(`${api}/api/v1/admin/commerce/templates/${saved._id}`);
+  expect(original.status()).toBe(200);
+  const originalTemplate = (await original.json()).data.template;
+  expect(originalTemplate.name).toBe('Connected gift box questions');
+  expect(originalTemplate.version).toBe(1);
+});
+
+test('real priced configuration retains exact piastre adjustments without enquiry approval controls', async ({ page }) => {
+  await login(page, 'admin', '/admin/commerce/templates');
+  await page.getByRole('button', { name: 'Add template', exact: true }).click();
+  await page.getByLabel('Template name', { exact: true }).fill('Connected priced configuration');
+  await page.getByLabel('Service / configuration type').selectOption('gift_box');
+  await page.getByLabel('How is pricing agreed?').selectOption('priced');
+  await page.getByRole('button', { name: 'Add component group', exact: true }).click();
+  await page.getByLabel('Group label', { exact: true }).fill('Fixture extras');
+  await page.getByRole('button', { name: 'Add component option', exact: true }).click();
+  await page.getByLabel('Option label', { exact: true }).fill('Fixture card');
+  await page.getByLabel('Additional price adjustment (EGP)', { exact: true }).fill('0.03');
+  const creating = page.waitForResponse(response => response.url().endsWith('/admin/commerce/templates') && response.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Save configuration', exact: true }).click();
+  const response = await creating;
+  expect(response.status()).toBe(201);
+  const saved = (await response.json()).data.template;
+  expect(saved.usage).toBe('priced');
+  expect(saved.status).toBe('approved');
+  expect(saved.groups).toHaveLength(1);
+  expect(saved.groups[0].options).toHaveLength(1);
+  expect(saved.groups[0].options[0].priceAdjustmentPiastres).toBe(3);
+  expect(saved.groups[0].key).toMatch(/^group_[a-f0-9]{32}$/);
+  expect(saved.groups[0].options[0].key).toMatch(/^option_[a-f0-9]{32}$/);
 });
 
 test('real customer/order pages never render admin notes and reject another customer order', async ({ page, context }) => {
@@ -144,7 +181,9 @@ test('real component form searches paginated main/subcategories and preserves th
   expect(component.priceApproved).toBe(false);
   expect(component.configurationApproved).toBe(false);
   expect(component.inventory.approved).toBe(false);
-  expect(component.inventory.quantity).toBe(10); // Existing provisional default, explicitly NOT approved stock.
+  expect(component.inventory.quantity).toBe(0); // New components must not inherit the legacy imported placeholder 10.
+  expect(component.ownerManaged).toBe(true);
+  expect(component.requestPolicy?.enabled).toBe(false);
   expect(component.galleryKeys).toHaveLength(1);
   expect(component.galleryKeys[0]).toMatch(/^catalog-media\/v1\/[a-f0-9]{64}\.png$/);
   const options = await page.request.get(`${api}/api/v1/commerce/service-requests/options/gift_box`);

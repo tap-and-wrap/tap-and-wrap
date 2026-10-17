@@ -11,22 +11,29 @@ export function approvedProductPriceFilter() {
 export function publicProductFilter() {
   return {
     visibility: 'public',
-    status: 'ready', published: true, priceApproved: true, pricePiastres: { $gt: 0 },
-    'inventory.approved': true, reviewRequired: false,
-    $nor: [
+    status: { $in: ['draft', 'hold', 'ready'] }, priceApproved: true, pricePiastres: { $gt: 0 },
+    $and: [{ $or: [{ 'inventory.approved': true }, { 'purchaseSetup.version': 1, 'purchaseSetup.options': 'variants', 'variants.0': { $exists: true } }] }],
+    $or: [{ 'purchaseSetup.version': 1, 'purchaseSetup.options': { $in: ['single', 'variants'] } },
+      { purchaseSetup: { $exists: false }, status: 'ready', published: true, reviewRequired: false, $nor: [
       { variants: { $elemMatch: { pricePiastres: { $ne: null }, priceApproved: { $ne: true } } } },
       { variants: { $elemMatch: { pricePiastres: 0 } } },
       { variants: { $elemMatch: { 'inventory.approved': { $ne: true } } } },
-    ],
+    ] }],
   };
 }
+export function purchaseSetupAllows(product) {
+  if (!product.purchaseSetup) return product.status === 'ready' && product.published === true && product.reviewRequired !== true;
+  return product.purchaseSetup.version === 1 && (product.purchaseSetup.options === 'single' && !product.variants?.length
+    || product.purchaseSetup.options === 'variants' && product.variants?.length > 0);
+}
+export const ownerVariantStock = product => product.purchaseSetup?.version === 1 && product.purchaseSetup.options === 'variants' && product.variants?.length > 0;
 // A configured variant owns its stock counter; the parent availability switch
 // still disables the entire product, but its unused quantity cannot block variants.
 // Visibility and purchase eligibility are separate. A draft can be browsed, but not ordered.
 export function orderableProductStockFilter() {
   const stock = { $or: [{ 'inventory.mode': 'made_to_order' }, { 'inventory.mode': 'tracked', 'inventory.quantity': { $gt: 0 } }] };
   return { $and: [
-    { 'inventory.approved': true, 'inventory.available': true },
+    { 'inventory.available': true, $or: [{ 'inventory.approved': true }, { 'purchaseSetup.version': 1, 'purchaseSetup.options': 'variants', 'variants.0': { $exists: true } }] },
     { $or: [
       { variants: { $elemMatch: { 'inventory.approved': true, 'inventory.available': true, ...stock } } },
       { $and: [{ $or: [{ variants: { $size: 0 } }, { variants: { $exists: false } }] }, stock] },

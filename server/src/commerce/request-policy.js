@@ -17,12 +17,12 @@ export async function activeRequestCategory(record, session, fence = false) {
   if (fence) for (const category of [main, child].filter(Boolean)) { if (!(await Category.updateOne({ _id: category._id, __v: category.__v }, { $inc: { __v: 1 } }, { session })).matchedCount) throw requestError('The category changed. Review the request again.'); }
 }
 export async function requestProduct(id, { session, fence = false } = {}) {
-  const product = await Product.findOne({ _id: id, visibility: 'public', status: { $in: ['draft', 'ready', 'hold'] }, reviewRequired: false, 'engravingRequest.enabled': true }).session(session || null).lean().maxTimeMS(3000);
+  const product = await Product.findOne({ _id: id, visibility: 'public', status: { $in: ['draft', 'ready', 'hold'] }, 'engravingRequest.enabled': true }).session(session || null).lean().maxTimeMS(3000);
   if (!product) throw requestError('Choose an owner-approved engraving product or describe a manual reference instead.');
   await activeRequestCategory(product, session, fence); return product;
 }
 export async function requestComponent(id, service, { session, fence = false } = {}) {
-  const component = await ComponentOption.findOne({ _id: id, reviewRequired: false, 'requestPolicy.enabled': true, 'requestPolicy.services': service, 'requestPolicy.availability': 'available' }).session(session || null).lean().maxTimeMS(3000);
+  const component = await ComponentOption.findOne({ _id: id, $or: [{ reviewRequired: false }, { ownerManaged: true }], 'requestPolicy.enabled': true, 'requestPolicy.services': service, 'requestPolicy.availability': 'available' }).session(session || null).lean().maxTimeMS(3000);
   if (!component) throw requestError('A requested component is no longer available. Review the selection.');
   await activeRequestCategory(component, session, fence); return component;
 }
