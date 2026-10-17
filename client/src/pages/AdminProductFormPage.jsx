@@ -1,10 +1,13 @@
+import { EngravingRequestEditor } from '../admin/RequestEligibilityEditors.jsx';
+import AdminImageGallery from '../admin/AdminImageGallery.jsx';
+import ProductPersonalizationEditor from '../admin/ProductPersonalizationEditor.jsx';
 import AdminForm from '../admin/AdminForm.jsx';
 import { useState } from 'react';
 import EditConflict from '../admin/EditConflict';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { getAdminProduct, listAdminCategories, saveAdminProduct } from '../services/catalog';
-import { adminErrorMessage, catalogId, createProductDraft, createProductPayload, slugFromName } from '../admin/catalog-form';
+import { adminErrorMessage, catalogId, createProductDraft, createProductPayload, inventoryChoice, selectInventoryAvailability, slugFromName } from '../admin/catalog-form';
 import '../admin.css';
 import AdminLayout from '../admin/AdminLayout.jsx';
 import { invalidateAdminDependencies } from '../admin/query-invalidation.js';
@@ -16,9 +19,8 @@ function InventoryFields({ value, onChange, prefix = 'Product', name = 'inventor
     });
   }
   return <div className="admin-inventory-fields">
-    <label className="admin-checkbox"><input name={`${name}.mode`} type="checkbox" checked={value.mode === 'made_to_order'} onChange={(event) => onChange({ ...value, mode: event.target.checked ? 'made_to_order' : 'tracked', quantity: event.target.checked ? '' : '', approved: event.target.checked })} />Made on Demand — no stock tracking{prefix !== 'Product' && <span className="admin-visually-hidden"> for {prefix}</span>}</label>
-    {value.mode === 'tracked' ? <label>{prefix} quantity<input name={`${name}.quantity`} type="text" inputMode="numeric" value={value.quantity} onChange={(event) => update('quantity', event.target.value)} required pattern="[0-9]+" /></label> : <p className="admin-help">Made on Demand products do not deduct stock. Select this only for items you can create when ordered.</p>}
-    <label className="admin-checkbox"><input name={`${name}.available`} type="checkbox" checked={value.available} onChange={(event) => update('available', event.target.checked)} />{prefix} available for ordering</label>
+    <label>{prefix} availability<select name={`${name}.mode`} value={inventoryChoice(value)} onChange={event => onChange(selectInventoryAvailability(value, event.target.value))}><option value="unconfirmed">Stock not confirmed</option><option value="tracked">Tracked stock — enter actual quantity</option><option value="made_to_order">Made by Request — no stock tracking</option><option value="unavailable">Unavailable — enquiries only</option></select></label>
+    {value.mode === 'tracked' ? <label>{prefix} quantity<input name={`${name}.quantity`} type="text" inputMode="numeric" value={value.quantity} onChange={(event) => update('quantity', event.target.value)} required={value.approved} pattern="[0-9]+" /></label> : <p className="admin-help">Made on Demand products do not deduct stock. Select this only for items you can create when ordered.</p>}
     {!value.approved && <p className="admin-help">Stock is not confirmed. Select Made on Demand, or enter the actual quantity to confirm it.</p>}
   </div>;
 }
@@ -28,7 +30,7 @@ function ProductEditor({ product, initialSaved }) {
   const [revision, setRevision] = useState(product?.revision ?? 0);
   const [slugEdited, setSlugEdited] = useState(Boolean(product));
   const [categoryPage, setCategoryPage] = useState(1);
-  const [imageToAdd, setImageToAdd] = useState('');
+  const [mediaPending, setMediaPending] = useState(false);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState(initialSaved ? 'Product created.' : '');
   const [error, setError] = useState(null);
@@ -54,25 +56,9 @@ function ProductEditor({ product, initialSaved }) {
   function changeVariant(index, update) {
     setDraft((current) => ({ ...current, variants: current.variants.map((variant, position) => position === index ? { ...variant, ...update } : variant) }));
   }
-  function reorderImage(index, nextIndex) {
-    setDraft((current) => {
-      const galleryKeys = [...current.galleryKeys];
-      const [image] = galleryKeys.splice(index, 1);
-      galleryKeys.splice(nextIndex, 0, image);
-      return { ...current, galleryKeys };
-    });
-  }
-  function addImage() {
-    const key = imageToAdd.trim();
-    if (!key) return;
-    if (draft.galleryKeys.includes(key)) { setError(new Error('This image reference is already in the gallery.')); return; }
-    if (draft.galleryKeys.length >= 23) { setError(new Error('A product can have at most 23 image references.')); return; }
-    change('galleryKeys', [...draft.galleryKeys, key]);
-    setImageToAdd('');
-  }
   async function save(event) {
     event.preventDefault();
-    if (saving) return;
+    if (saving || mediaPending) return;
     setError(null);
     setFeedback('');
     let payload;
@@ -90,8 +76,8 @@ function ProductEditor({ product, initialSaved }) {
     finally { setSaving(false); }
   }
 
-  return <AdminLayout title={id ? 'Edit product' : 'Add product'} description="All products are browsable. Only confirmed prices and real stock or Made on Demand products can be sold." actions={id && <Link className="admin-button admin-button-secondary" to={`/admin/products/${id}/preview`}>Preview saved product</Link>}>
-    {id && <p><Link to={`/admin/products/${id}/configuration`}>Edit personalization and customization configuration</Link></p>}
+  return <AdminLayout title={id ? 'Edit product' : 'Add product'} description="Approve public display independently. Online purchase also requires Ready status, confirmed price and inventory, and resolved catalog issues." actions={id && <Link className="admin-button admin-button-secondary" to={`/admin/products/${id}/preview`}>Preview saved product</Link>}>
+    {id && <p><Link to={`/admin/products/${id}/configuration`}>Advanced template-based service configuration</Link></p>}
     <AdminForm error={error} onSubmit={save} className="admin-product-form">
       <fieldset disabled={saving} className="admin-form-fields">
         <section className="admin-panel"><h2>Product information</h2><div className="admin-form-grid">
@@ -109,16 +95,15 @@ function ProductEditor({ product, initialSaved }) {
         <section className="admin-panel"><h2>Price and publication</h2><div className="admin-form-grid">
           <label>Price (EGP)<input name="pricePiastres" type="text" inputMode="decimal" value={draft.price} onChange={(event) => change('price', event.target.value)} placeholder="Not confirmed" /><span className="admin-help">Blank or 0 means Price not confirmed yet. Customers cannot purchase until you enter a positive price.</span></label>
           <label>Compare-at price (EGP)<input name="compareAtPiastres" type="text" inputMode="decimal" value={draft.compareAt} onChange={(event) => change('compareAt', event.target.value)} placeholder="Optional" /></label>
-          <label>Publication status<select name="status" value={draft.status} onChange={(event) => change('status', event.target.value)}><option value="draft">Draft</option><option value="ready">Ready</option><option value="hold">Hold</option></select></label>
-        </div><p className="admin-help">Products stay browsable in Draft/Hold. Choose Ready to enable purchases only after confirming the price, actual stock or Made on Demand, and resolving catalog issues. No extra approval checkboxes are needed.</p>
+          <label>Purchase readiness<select name="status" value={draft.status} onChange={(event) => change('status', event.target.value)}><option value="draft">Draft</option><option value="ready">Ready: approved for online purchase</option><option value="hold">Hold</option></select></label>
+        </div><label>Public display<select name="visibility" value={draft.visibility} onChange={event => change('visibility', event.target.value)}><option value="hidden">Hidden: not approved for display</option><option value="public">Approved for public display</option><option value="withdrawn">Withdrawn: keep unavailable</option></select></label><p className="admin-help">Approve display only after reviewing the product content and category. Displayed Draft/Hold products remain browsable when checkout opens. Entering a positive price confirms it immediately; only Ready products with confirmed inventory and resolved review issues can be ordered.</p>
         </section>
 
-        <section className="admin-panel"><h2>Inventory and availability</h2><InventoryFields value={draft.inventory} onChange={(inventory) => change('inventory', inventory)} /><p className="admin-help">Imported quantities of 10 are placeholders until you type and confirm the real amount. New products require an actual quantity or Made on Demand.</p></section>
+        <section className="admin-panel"><h2>Inventory and availability</h2><InventoryFields value={draft.inventory} onChange={(inventory) => change('inventory', inventory)} /><p className="admin-help">Imported quantities are not confirmed stock and are not prefilled here. Enter the actual count, select Made by Request only when you can fulfil orders, or choose Unavailable for enquiries. Saving other fields never approves placeholder stock.</p></section>
 
-        <section className="admin-panel"><h2>Image gallery</h2><p className="admin-help">Manage existing image references. The first image is the selected main photo. Uploads are not available yet.</p>
-          <ol className="admin-image-list">{draft.galleryKeys.map((key, index) => <li key={index}><label>Image {index + 1}{index === 0 ? ' (main)' : ''}<input name={`galleryKeys.${index}`} maxLength={500} value={key} onChange={(event) => change('galleryKeys', draft.galleryKeys.map((value, position) => position === index ? event.target.value : value))} /></label><div className="admin-image-actions"><button type="button" className="admin-button admin-button-secondary" disabled={index === 0} onClick={() => reorderImage(index, 0)} aria-label={`Set image ${index + 1} as main`}>Set main</button><button type="button" className="admin-button admin-button-secondary" disabled={index === 0} onClick={() => reorderImage(index, index - 1)} aria-label={`Move image ${index + 1} up`}>↑</button><button type="button" className="admin-button admin-button-secondary" disabled={index === draft.galleryKeys.length - 1} onClick={() => reorderImage(index, index + 1)} aria-label={`Move image ${index + 1} down`}>↓</button><button type="button" className="admin-text-button" onClick={() => change('galleryKeys', draft.galleryKeys.filter((_, position) => position !== index))} aria-label={`Remove image ${index + 1} reference`}>Remove reference</button></div></li>)}</ol>
-          <div className="admin-inline"><label className="admin-grow">Add existing image reference<input maxLength={500} value={imageToAdd} onChange={(event) => setImageToAdd(event.target.value)} placeholder="Category/Subcategory/product.webp" /></label><button type="button" className="admin-button admin-button-secondary" disabled={!imageToAdd.trim() || draft.galleryKeys.length >= 23} onClick={addImage}>Add reference</button></div>
-        </section>
+        <section className="admin-panel"><AdminImageGallery key={revision} keys={draft.galleryKeys} onChange={galleryKeys => change('galleryKeys', galleryKeys)} onBusyChange={setMediaPending} label="Product images" /></section>
+        <EngravingRequestEditor value={draft.engravingRequest} onChange={engravingRequest => setDraft(current => ({ ...current, engravingRequest, engravingEdited: true }))} />
+        <ProductPersonalizationEditor value={draft.personalization} onChange={personalization => setDraft(current => ({ ...current, personalization, personalizationEdited: true }))} />
 
         <section className="admin-panel"><h2>Configured variants</h2><p className="admin-help">Use explicit variant attributes such as Size or Color. No variants are inferred from the original catalog notes.</p>
           {draft.variants.length === 0 && <p>No variants configured.</p>}
@@ -142,7 +127,7 @@ function ProductEditor({ product, initialSaved }) {
 
         <section className="admin-panel"><h2>Catalog review</h2>{product?.reviewReasons?.length > 0 && <ul className="admin-review-reasons">{product.reviewReasons.map((reason, index) => <li key={index}>{reason}</li>)}</ul>}{product?.merchantReviewNotes && <p>{product.merchantReviewNotes}</p>}{product?.variantSourceNotes && <p>{product.variantSourceNotes}</p>}<label className="admin-checkbox"><input name="reviewRequired" type="checkbox" checked={draft.reviewRequired} onChange={(event) => change('reviewRequired', event.target.checked)} />Catalog review required</label><p className="admin-help">Clear this flag only after the merchant has reviewed the original grouping and notes. This form does not reclassify or merge catalog entries.</p></section>
 
-        <section className="admin-panel"><h2>Personalization and customization</h2><p className="admin-help">Existing configuration is preserved when saving. Personalization and Customize This are independent.</p><h3>Personalization fields</h3>{product?.personalization?.fields?.length ? <ul>{product.personalization.fields.map((field) => <li key={field.key}>{field.label} · {field.type}{field.required ? ' · Required' : ' · Optional'}</li>)}</ul> : <p>No personalization fields configured.</p>}<h3>Customize This</h3><p>{product?.customization?.enabled ? 'Enabled with an existing customization template.' : 'Not enabled.'}</p>{product?.customization?.serviceKind && <p>Service: {product.customization.serviceKind.replaceAll('_', ' ')}</p>}</section>
+
       </fieldset>
       {error && fieldErrors.length === 0 && <div role="alert" className="admin-feedback admin-feedback-error"><p>{adminErrorMessage(error)}</p></div>}
       <EditConflict error={error} onReload={async () => {
@@ -151,7 +136,7 @@ function ProductEditor({ product, initialSaved }) {
         queryClient.setQueryData(['admin', 'product', id], result); setError(null); setFeedback('Latest saved record loaded.');
       }} />
       {feedback && <p className="admin-feedback" role="status">{feedback}</p>}
-      <div className="admin-save-row"><button type="submit" disabled={saving || roots.isPending || roots.isError} className="admin-button">{saving ? 'Saving…' : id ? 'Save changes' : 'Save product'}</button><Link to="/admin/products">Back to products</Link></div>
+      <div className="admin-save-row"><button type="submit" disabled={saving || mediaPending || roots.isPending || roots.isError} className="admin-button">{saving ? 'Saving…' : id ? 'Save changes' : 'Save product'}</button><Link to="/admin/products">Back to products</Link></div>
     </AdminForm>
   </AdminLayout>;
 }

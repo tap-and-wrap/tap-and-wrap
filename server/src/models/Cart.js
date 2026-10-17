@@ -7,6 +7,7 @@ const line = new mongoose.Schema({
   personalization: { type: mongoose.Schema.Types.Mixed, default: {} }, customization: { type: mongoose.Schema.Types.Mixed, default: null },
 }, { _id: false, strict: 'throw' });
 const schema = new mongoose.Schema({
+  addOperations: { type: [{ _id: false, key: { type: String, required: true }, requestHash: { type: String, required: true } }], default: [], validate: value => value.length <= 60 },
   owner: { type: String, required: true, unique: true }, items: { type: [line], default: [], validate: value => value.length <= 30 },
   expiresAt: { type: Date, required: true },
 }, { timestamps: true, strict: 'throw', optimisticConcurrency: true });

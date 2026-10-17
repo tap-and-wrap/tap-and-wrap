@@ -88,21 +88,11 @@ test('mobile admin navigation is compact by default and keyboard operable withou
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test('site-content server errors identify the nested field without replacing unsaved owner text', async ({ page }) => {
-  await adminFixture(page);
-  await page.route('**/api/v1/admin/website/content', route => route.request().method() !== 'PATCH' ? route.fallback() : route.fulfill({ status: 400, json: { ok: false, error: { code: 'VALIDATION_ERROR', message: 'Please check the content.', details: [{ field: 'about.body', message: 'Review the owner-approved page wording.' }] } }, headers: { 'access-control-allow-origin': 'http://127.0.0.1:5191', 'access-control-allow-credentials': 'true' } }));
+test('legacy content editor route remains a read-only owner guide', async ({ page }) => {
+  await mockCatalog(page, { role: 'admin' });
   await page.goto('/admin/website/content');
-  await page.getByLabel('Page title', { exact: true }).fill('Unsaved About title');
-  const body = page.getByRole('textbox', { name: 'Owner-approved page text', exact: true });
-  await body.fill('Unsaved synthetic owner wording for a validation fixture.');
-  await page.getByRole('button', { name: 'Save section', exact: true }).click();
-  await expect(body).toHaveAttribute('name', 'about.body');
-  await expect(body).toHaveAttribute('aria-invalid', 'true');
-  await expect(body).toBeFocused();
-  await expect(body).toHaveValue('Unsaved synthetic owner wording for a validation fixture.');
-  await expect(page.getByRole('alert')).toHaveCount(1);
-  const description = await body.getAttribute('aria-describedby');
-  await expect(page.locator(`[id="${description}"]`)).toContainText('owner-approved page wording');
+  await expect(page.getByRole('heading', { name: 'Pages, policies & owner guide' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save section' })).toHaveCount(0);
 });
 
 test('secondary anchor and button variants retain readable computed contrast, including hover and disabled states', async ({ page }) => {

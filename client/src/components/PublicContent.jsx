@@ -1,3 +1,4 @@
+import useVideoPlayback, { useMediaPreference } from './useVideoPlayback.js';
 import { productHref } from '../../../shared/product-paths.mjs';
 import TestimonialCard from './TestimonialCard.jsx';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -10,45 +11,20 @@ import { formatCatalogPrice } from '../utils/catalog.js';
 export function useSiteContent() {
   return useQuery({ queryKey: ['website', 'content'], queryFn: ({ signal }) => getSiteContent(signal), staleTime: 60_000, retry: false, refetchOnWindowFocus: false });
 }
-function useMediaPreference(query) {
-  const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
-  useEffect(() => {
-    const media = window.matchMedia(query);
-    const update = () => setMatches(media.matches);
-    update(); media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
-  }, [query]);
-  return matches;
-}
-
 export function DeveloperHeroMedia({ video = developerContent.heroVideo }) {
   const mobile = useMediaPreference('(max-width: 767px)');
-  const reducedMotion = useMediaPreference('(prefers-reduced-motion: reduce)');
-  const videoRef = useRef(null);
-  const [playing, setPlaying] = useState(false);
-  const [failedSource, setFailedSource] = useState(null);
   const localVideo = (value) => typeof value === 'string' && /^\/media\/[a-zA-Z0-9/_-]+\.(mp4|webm)$/.test(value);
   const localPoster = value => typeof value === 'string' && /^\/media\/[a-zA-Z0-9/_-]+\.(webp|avif|jpg|jpeg|png)$/.test(value);
   const source = video?.approved === true && localVideo(video.src) ? mobile && localVideo(video.mobileSrc) ? video.mobileSrc : video.src : null;
   const poster = mobile && localPoster(video?.mobilePoster) ? video.mobilePoster : localPoster(video?.poster) ? video.poster : undefined;
-  const failed = failedSource === source;
+  const { videoRef, playing, failed, blocked, toggle, videoEvents } = useVideoPlayback({ source, autoplay: video?.autoplay === true });
   const mediaWidth = mobile && Number.isSafeInteger(video?.mobileWidth) ? video.mobileWidth : video?.width;
   const mediaHeight = mobile && Number.isSafeInteger(video?.mobileHeight) ? video.mobileHeight : video?.height;
   const width = Number.isSafeInteger(mediaWidth) && mediaWidth > 0 ? mediaWidth : 1920;
   const height = Number.isSafeInteger(mediaHeight) && mediaHeight > 0 ? mediaHeight : 1080;
-  useEffect(() => {
-    const element = videoRef.current;
-    if (!element) return;
-    if (reducedMotion || video?.autoplay !== true) element.pause();
-    else void element.play().catch(() => { /* Autoplay policy: explicit Play remains available. */ });
-  }, [source, reducedMotion, video?.autoplay, failed]);
   if (!source) return null;
-  function togglePlayback() {
-    if (playing) videoRef.current?.pause();
-    else void videoRef.current?.play().catch(() => setFailedSource(source));
-  }
   return <figure className="hero-film" style={{ aspectRatio: `${width} / ${height}`, backgroundImage: poster ? `url("${poster}")` : undefined }}>
-    {failed ? <>{poster && <img className="hero-film-poster" src={poster} width={width} height={height} alt="Owner-approved Tap & Wrap hero poster" fetchPriority="high"/>}<figcaption className="hero-film-error">The film is unavailable. You can still explore our gifts.</figcaption></> : <><video ref={videoRef} className="website-hero-video" src={source} muted playsInline loop={video?.loop === true} preload="none" poster={poster} width={width} height={height} aria-label="Tap & Wrap hero film" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)} onError={() => setFailedSource(source)}/><button className="hero-video-control" type="button" aria-label={playing ? 'Pause hero video' : 'Play hero video'} onClick={togglePlayback}>{playing ? 'Pause film' : 'Play film'}</button></>}
+    {failed ? <>{poster && <img className="hero-film-poster" src={poster} width={width} height={height} alt="Owner-approved Tap & Wrap hero poster" fetchPriority="high"/>}<figcaption className="hero-film-error">The film is unavailable. You can still explore our gifts.</figcaption></> : <><video ref={videoRef} className="website-hero-video" src={source} muted playsInline loop={video?.loop === true} preload="none" poster={poster} width={width} height={height} aria-label="Tap & Wrap hero film" {...videoEvents}/><button className="hero-video-control" type="button" aria-label={playing ? 'Pause hero video' : 'Play hero video'} onClick={toggle}>{playing ? 'Pause film' : 'Play film'}</button>{blocked && <span className="storefront-sr-only" role="status">Autoplay is unavailable. Use Play to try again; the poster and gift links remain available.</span>}</>}
   </figure>;
 }
 export function TrustStatistics({ claims = developerContent.trustStatistics }) {
@@ -145,7 +121,7 @@ export function ApprovedFaq({ entries = [], categorized = false }) {
   const [category, setCategory] = useState(0);
   if (categorized && entries.length) return <div className="home-categorized-faq">
     <div className="home-faq-categories" aria-label="FAQ categories">{faqCategories.map((label, index) => <button type="button" key={label} aria-pressed={category === index} onClick={() => setCategory(index)}>{label}</button>)}</div>
-    <div className="website-faq">{entries.filter(entry => (faqCategoryByQuestion[entry.question] ?? 0) === category).map(entry => <FaqCard key={entry.question} entry={entry}/>)}</div>
+    <div className="website-faq">{entries.filter(entry => (entry.category ?? faqCategoryByQuestion[entry.question] ?? 0) === category).map(entry => <FaqCard key={entry.question} entry={entry}/>)}</div>
   </div>;
-  return entries.length ? <div className="website-faq">{entries.map(entry => <details key={entry.question}><summary>{entry.question}</summary><p>{entry.answer}</p></details>)}</div> : <p className="placeholder-strip">Development preview · FAQ answers are awaiting owner approval.</p>;
+  return entries.length ? <div className="website-faq">{entries.map(entry => <details key={entry.question}><summary>{entry.question}</summary><p>{entry.answer}</p></details>)}</div> : <p className="placeholder-strip">Have another question? Get in touch with Tap & Wrap.</p>;
 }

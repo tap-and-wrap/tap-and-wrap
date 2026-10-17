@@ -1,3 +1,4 @@
+import { chooseImageFiles } from './media-helpers.js';
 import { expect, test } from '@playwright/test';
 import { cartWithProduct, commerceOrder, commerceProduct, commerceTemplate, fillCheckout, isolatedImageFile, mockCommerce } from './commerce-fixtures';
 
@@ -30,18 +31,18 @@ test('required photos stay local until Add to Cart and distinct photo sets produ
   const product = { ...commerceProduct, requiresOptions: true, personalization: { fields: [{ key: 'photos', label: 'Your photos', type: 'image', required: true, minFiles: 2, maxFiles: 2, maxBytes: 8 * 1024 * 1024, acceptedMimeTypes: ['image/png'] }, { key: 'message', label: 'Gift message', type: 'short_text', required: true, maxLength: 40 }] } };
   const fixture = await mockCommerce(page, { product });
   await page.goto(`/products/${product.slug}`);
-  await page.getByLabel('Your photos', { exact: false }).setInputFiles([isolatedImageFile('first.png')]);
+  await chooseImageFiles(page, page, 'Your photos', [isolatedImageFile('first.png')]);
   await page.getByLabel('Gift message', { exact: false }).fill('First gift');
   expect(fixture.uploads).toHaveLength(0);
   expect(fixture.calls.filter((call) => call.path === '/direct-upload')).toHaveLength(0);
   await page.getByRole('button', { name: 'Add to Cart', exact: true }).first().click();
   await expect(page.getByText('Choose exactly 2 files.', { exact: true })).toBeVisible();
   expect(fixture.calls.filter((call) => call.path === '/commerce/cart/items')).toHaveLength(0);
-  await page.getByLabel('Your photos', { exact: false }).setInputFiles([isolatedImageFile('first.png'), isolatedImageFile('second.png')]);
+  await chooseImageFiles(page, page, 'Your photos', [isolatedImageFile('first.png'), isolatedImageFile('second.png')]);
   await page.getByRole('button', { name: 'Add to Cart', exact: true }).first().click();
   await expect.poll(() => fixture.uploads.length).toBe(2);
   await expect.poll(() => fixture.state.cart.items.length).toBe(1);
-  await page.getByLabel('Your photos', { exact: false }).setInputFiles([isolatedImageFile('third.png'), isolatedImageFile('fourth.png')]);
+  await chooseImageFiles(page, page, 'Your photos', [isolatedImageFile('third.png'), isolatedImageFile('fourth.png')]);
   await page.getByLabel('Gift message', { exact: false }).fill('Another gift');
   await page.getByRole('button', { name: 'Add to Cart', exact: true }).first().click();
   await expect.poll(() => fixture.state.cart.items.length).toBe(2);
@@ -52,7 +53,7 @@ test('unavailable storage prevents personalized cart adds and never reports a fa
   const product = { ...commerceProduct, requiresOptions: true, personalization: { fields: [{ key: 'photo', label: 'Customer photo', type: 'image', required: true, minFiles: 1, maxFiles: 1, acceptedMimeTypes: ['image/png'] }] } };
   const fixture = await mockCommerce(page, { product, storageUnavailable: true });
   await page.goto(`/products/${product.slug}`);
-  await page.getByLabel('Customer photo').setInputFiles(isolatedImageFile());
+  await chooseImageFiles(page, page, 'Customer photo', isolatedImageFile());
   expect(fixture.uploads).toHaveLength(0);
   await page.getByRole('button', { name: 'Add to Cart', exact: true }).first().click();
   await expect(page.getByText('Private storage is not configured. No file was uploaded.', { exact: true }).first()).toBeVisible();
@@ -65,7 +66,7 @@ test('failed direct uploads are discarded without adding a cart item', async ({ 
   const product = { ...commerceProduct, requiresOptions: true, personalization: { fields: [{ key: 'photo', label: 'Customer photo', type: 'image', required: true, minFiles: 1, maxFiles: 1 }] } };
   const fixture = await mockCommerce(page, { product, failDirectUpload: true });
   await page.goto(`/products/${product.slug}`);
-  await page.getByLabel('Customer photo').setInputFiles(isolatedImageFile());
+  await chooseImageFiles(page, page, 'Customer photo', isolatedImageFile());
   await page.getByRole('button', { name: 'Add to Cart', exact: true }).first().click();
   await expect.poll(() => fixture.calls.some((call) => call.method === 'DELETE' && call.path.startsWith('/commerce/uploads/'))).toBe(true);
   expect(fixture.state.cart.items).toHaveLength(0);
@@ -115,7 +116,7 @@ test('normalized engraving DTO renders one control and uploads each artwork file
   await page.getByLabel('Name or text to engrave').fill('A thoughtful gift');
   await page.getByRole('combobox', { name: /^Material/ }).selectOption('metal');
   await page.getByRole('combobox', { name: /^Font/ }).selectOption('style');
-  await page.getByLabel('Engraving artwork', { exact: false }).setInputFiles([isolatedImageFile('first.png'), isolatedImageFile('second.png')]);
+  await chooseImageFiles(page, page, 'Engraving artwork', [isolatedImageFile('first.png'), isolatedImageFile('second.png')]);
   expect(fixture.uploads).toHaveLength(0);
   await expect(page.getByRole('button', { name: 'Add to Cart', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Add to Cart', exact: true }).click();
@@ -168,7 +169,7 @@ test('laser engraving Design requires an approved artwork upload', async ({ page
   await page.getByRole('combobox', { name: /^Font/ }).selectOption('simple');
   await page.getByRole('button', { name: 'Add to Cart', exact: true }).click();
   await expect(page.getByText('Upload your design.')).toBeVisible();
-  await page.getByLabel('Upload your design').setInputFiles(isolatedImageFile('design.png'));
+  await chooseImageFiles(page, page, 'Upload your design', isolatedImageFile('design.png'));
   await page.getByRole('button', { name: 'Add to Cart', exact: true }).click();
   await expect.poll(() => fixture.state.cart.items.length).toBe(1);
   expect(fixture.uploads).toHaveLength(1);
@@ -350,7 +351,7 @@ test('InstaPay proof stays local until Place Order and remains awaiting manual v
   await page.goto('/checkout');
   await fillCheckout(page);
   await page.getByLabel('InstaPay — full payment', { exact: true }).check();
-  await page.getByLabel('InstaPay payment proof', { exact: false }).setInputFiles(isolatedImageFile('isolated-proof.png'));
+  await chooseImageFiles(page, page, 'InstaPay payment proof', isolatedImageFile('isolated-proof.png'));
   expect(fixture.uploads).toHaveLength(0);
   await expect(page.getByText('01060673073', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Place Order', exact: true })).toBeEnabled();
@@ -367,7 +368,7 @@ test('failed order responses retry with the same checkout key and private proof 
   await page.goto('/checkout');
   await fillCheckout(page);
   await page.getByLabel('InstaPay — full payment', { exact: true }).check();
-  await page.getByLabel('InstaPay payment proof', { exact: false }).setInputFiles(isolatedImageFile('isolated-proof-retry.png'));
+  await chooseImageFiles(page, page, 'InstaPay payment proof', isolatedImageFile('isolated-proof-retry.png'));
   await expect(page.getByRole('button', { name: 'Place Order', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Place Order', exact: true }).click();
   await expect(page.getByText('Order submission could not be completed. Your cart remains saved.', { exact: true })).toBeVisible();

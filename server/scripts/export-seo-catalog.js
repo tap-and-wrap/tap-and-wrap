@@ -1,3 +1,5 @@
+import { productRoutingVersion } from '../../shared/product-seo.mjs';
+import { fixedPages, contentPublicationApproved } from '../../shared/storefront-content.mjs';
 import { categoryPublicPaths } from '../../shared/category-paths.mjs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -12,9 +14,8 @@ export const SEO_PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.m
 export const SEO_PAGE_SIZE = 20;
 export const SEO_MAX_PAGES = 200;
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const PRODUCT_FIELDS = { _id: 1, name: 1, slug: 1, description: 1, categoryId: 1, subcategoryId: 1, mainImageKey: 1, pricePiastres: 1, compareAtPiastres: 1, priceApproved: 1, status: 1, published: 1, reviewRequired: 1, inventory: 1, variants: 1, updatedAt: 1 };
-const CATEGORY_FIELDS = { _id: 1, name: 1, slug: 1, parentId: 1, imageKey: 1, active: 1, updatedAt: 1 };
-const CONTENT_FIELDS = { about: 1, contact: 1, privacyPolicy: 1, refundPolicy: 1, shippingPolicy: 1, termsOfService: 1 };
+const PRODUCT_FIELDS = { __v: 1, visibility: 1, _id: 1, name: 1, slug: 1, description: 1, categoryId: 1, subcategoryId: 1, mainImageKey: 1, pricePiastres: 1, compareAtPiastres: 1, priceApproved: 1, status: 1, published: 1, reviewRequired: 1, inventory: 1, variants: 1, updatedAt: 1 };
+const CATEGORY_FIELDS = { __v: 1, _id: 1, name: 1, slug: 1, parentId: 1, imageKey: 1, active: 1, updatedAt: 1 };
 
 export function parseSeoExportArguments(argv) {
   const options = { confirmRead: false, dryRun: false, target: null, output: null, contentOutput: null };
@@ -92,11 +93,11 @@ export function approvedMediaOrigin(baseUrl) {
 
 export function exportCategoryDto(category, mediaBaseUrl = '') {
   if (category?.active !== true || !category._id || !SLUG.test(category.slug || '') || !plain(category.name, 160)) return null;
-  return { _id: String(category._id), name: plain(category.name, 160), slug: category.slug, parentId: category.parentId ? String(category.parentId) : null, active: true, imageUrl: mediaUrlForKey(category.imageKey, mediaBaseUrl), productCount: 0, updatedAt: dateString(category.updatedAt) };
+  return { routingRevision: Number.isSafeInteger(category.__v) ? category.__v : 0, _id: String(category._id), name: plain(category.name, 160), slug: category.slug, parentId: category.parentId ? String(category.parentId) : null, active: true, imageUrl: mediaUrlForKey(category.imageKey, mediaBaseUrl), productCount: 0, updatedAt: dateString(category.updatedAt) };
 }
 
 export function exportProductDto(product, categories, mediaBaseUrl = '') {
-  if (!product?._id || product.status !== 'ready' || product.published !== true || product.priceApproved !== true || product.inventory?.approved !== true || product.reviewRequired !== false || !Number.isSafeInteger(product.pricePiastres) || product.pricePiastres <= 0 || !SLUG.test(product.slug || '') || !plain(product.name, 240)) return null;
+  if (!product?._id || product.visibility !== 'public' || product.status !== 'ready' || product.published !== true || product.priceApproved !== true || product.inventory?.approved !== true || product.reviewRequired !== false || !Number.isSafeInteger(product.pricePiastres) || product.pricePiastres <= 0 || !SLUG.test(product.slug || '') || !plain(product.name, 240)) return null;
   const variants = product.variants || [];
   if (!Array.isArray(variants) || variants.some((variant) => variant.inventory?.approved !== true || variant.pricePiastres != null && (variant.priceApproved !== true || !Number.isSafeInteger(variant.pricePiastres) || variant.pricePiastres <= 0))) return null;
   const main = categories.get(String(product.categoryId));
@@ -104,6 +105,7 @@ export function exportProductDto(product, categories, mediaBaseUrl = '') {
   if (!main?.active || main.parentId || product.subcategoryId && (!child?.active || child.parentId !== main._id)) return null;
   const presentation = (category) => category ? { _id: category._id, name: category.name, slug: category.slug } : null;
   return {
+    routingVersion: productRoutingVersion({ ...product, categoryId: { _id: main._id, __v: main.routingRevision }, subcategoryId: child ? { _id: child._id, __v: child.routingRevision } : null }),
     _id: String(product._id), name: plain(product.name, 240), slug: product.slug, description: plain(product.description, 10_000), category: presentation(main), subcategory: presentation(child),
     mainImageUrl: mediaUrlForKey(product.mainImageKey, mediaBaseUrl), pricePiastres: product.pricePiastres, compareAtPiastres: Number.isSafeInteger(product.compareAtPiastres) && product.compareAtPiastres > product.pricePiastres ? product.compareAtPiastres : null,
     priceApproved: true, orderingAvailable: productCanOrder(product), inventoryMode: product.inventory.mode,
@@ -112,23 +114,9 @@ export function exportProductDto(product, categories, mediaBaseUrl = '') {
   };
 }
 
-export function exportApprovedContent(record) {
-  const routes = {};
-  const sections = { about: '/about', privacyPolicy: '/privacy-policy', refundPolicy: '/refund-policy', shippingPolicy: '/shipping-policy', termsOfService: '/terms-of-service' };
-  for (const [key, pathname] of Object.entries(sections)) {
-    const section = record?.[key];
-    if (section?.approved !== true || !plain(section.title, 160) || !plain(section.body, 15000)) continue;
-    const body = plain(section.body, 15000);
-    const blocks = body.split(/\r?\n\s*\r?\n/).map((value) => value.trim()).filter(Boolean);
-    const paragraphs = blocks.length <= 100 ? blocks : [body];
-    routes[pathname] = { approved: true, title: plain(section.title, 160), description: plain(paragraphs[0], 160), heading: plain(section.title, 160), paragraphs, updatedAt: dateString(section.updatedAt) };
-  }
-  const contact = record?.contact;
-  if (contact?.approved === true) {
-    const paragraphs = [plain(contact.body, 3000), ...[['Email', 'email'], ['Phone', 'phone'], ['WhatsApp', 'whatsapp'], ['Instagram', 'instagram'], ['Address', 'address']].filter(([, key]) => plain(contact[key], 1000)).map(([label, key]) => `${label}: ${plain(contact[key], 1000)}`)].filter(Boolean);
-    if (paragraphs.length && ['email', 'phone', 'whatsapp', 'instagram'].some((key) => plain(contact[key], 1000))) routes['/contact'] = { approved: true, title: 'Contact', heading: 'Contact', description: plain(paragraphs[0], 160), paragraphs, updatedAt: dateString(contact.updatedAt) };
-  }
-  return { routes };
+export function exportApprovedContent() {
+  // Legacy SiteContent approvals cannot authorize publication of fixed code-managed pages.
+  return { routes: contentPublicationApproved ? Object.fromEntries(Object.entries(fixedPages).map(([slug, page]) => [`/${slug}`, { approved: true, title: page.title, description: page.description, heading: page.title, paragraphs: [page.intro, ...page.sections.flatMap(section => [section.heading, ...section.paragraphs])] }])) : {} };
 }
 
 async function pages(readPage, onBatch, maximumPages = SEO_MAX_PAGES) {
@@ -203,7 +191,7 @@ export async function buildApprovedSeoExport(source, configuration = {}, { maxim
   const verified = verifiedMediaEntries(mediaVerification, mediaOrigins, now);
   const objects = [...new Set(products.map((item) => item.mainImageUrl))].map((url) => verified.get(url)).filter(Boolean);
   const catalog = { version: 1, source: 'approved-public-catalog', generatedAt: dateString(now), checkoutEnabled: configuration.CHECKOUT_ENABLED === 'true' && configuration.COMMERCE_LAUNCH_AUTHORIZED === 'true', mediaOrigins, mediaVerification: { version: 1, source: MEDIA_VERIFICATION_SOURCE, objects }, products, categories: [...categoryMap.values()] };
-  const content = source.readSiteContent ? exportApprovedContent(await source.readSiteContent()) : { routes: {} };
+  const content = exportApprovedContent();
   return { catalog, content, report: { ...report, exportedProducts: products.length, exportedCategories: categoryMap.size, verifiedProductImages: products.filter((item) => verified.get(item.mainImageUrl)).length, unverifiedProductImages: products.filter((item) => !verified.get(item.mainImageUrl)).length, approvedContentPages: Object.keys(content.routes).length } };
 }
 
@@ -230,7 +218,6 @@ export async function openReadOnlySeoSource(uri, settings) {
       const childIds = [...params.categories.values()].filter((category) => category.parentId).map((category) => categoryIds.get(category._id)).filter(Boolean);
       return page('products', { $and: [publicProductFilter(), { categoryId: { $in: mainIds } }, { $or: [{ subcategoryId: null }, { subcategoryId: { $in: childIds } }] }] }, PRODUCT_FIELDS, params);
     },
-    readSiteContent: async () => { validate(); return connection.db.collection('sitecontents').findOne({ key: 'website-v1' }, { projection: CONTENT_FIELDS, maxTimeMS: 3000 }); },
     readProductAddressPage: params => page('productaddresses', { productId: { $in: params.productIds.map(id => new mongoose.Types.ObjectId(id)) } }, { slug: 1, productId: 1, canonical: 1 }, params),
     close: () => connection.close(),
   };

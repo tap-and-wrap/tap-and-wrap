@@ -1,0 +1,9 @@
+export const notificationTitle = event => ({ owner_new: 'New submission: initial customer contact', owner_contact_reminder: 'Initial contact: three hours remaining', owner_action: 'Owner action needed', order_received: 'Order received / payment instructions', proof_submitted: 'Payment evidence awaiting review', payment_confirmed: 'Reconciled funds recorded', payment_rejected: 'Payment needs attention', charge_quoted: 'Delivery or add-on quotation', charge_accepted: 'Additional charge accepted', request_received: 'Custom request received', request_quotation: 'Custom quotation copy', request_accepted: 'Custom quotation accepted', request_closed: 'Custom request closed', refund_recorded: 'Refund recorded', password_reset: 'Password reset', password_changed: 'Password security update', email_verification: 'Email verification' })[event] || 'Order or account status update';
+export const deliveryStateLabel = state => ({ queued: 'Queued', processing: 'Sending', sent: 'Accepted by provider', failed: 'Retry scheduled', dead: 'Stopped; review needed', uncertain: 'Delivery uncertain; verify provider records', suppressed: 'Suppressed or reviewed' })[state] || 'Review needed';
+export function deliveryGuidance(event) {
+  if (event.state === 'uncertain') return 'Check the provider before any recovery. Automatic resend is blocked because the message may already have been accepted.';
+  if (event.state === 'dead' && event.lastErrorCode === 'ACCOUNT_ACTION_EXPIRED') return 'This account link expired or was replaced. Request a fresh link; do not resend the old one.';
+  if (event.state === 'dead') return 'Ask the operator to check sender authorization, recipient scope and provider records. Closing a reviewed event never resends it.';
+  if (event.state === 'failed') return 'The worker will retry within its bounded limit. Do not create a duplicate message.';
+  return 'Provider acceptance does not prove inbox delivery, customer contact or payment verification.';
+}

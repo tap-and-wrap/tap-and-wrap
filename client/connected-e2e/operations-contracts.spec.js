@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const api = 'http://127.0.0.1:4092';
+const api = 'http://127.0.0.1:' + (process.env.TAP_WRAP_CONTRACT_API_PORT || 4092);
 test.beforeEach(async ({ context }) => {
   await context.route('**/*', route => {
     const address = new URL(route.request().url());
@@ -16,7 +16,7 @@ async function login(page, name, destination) {
 }
 async function csrfHeaders(context) {
   const response = await context.request.get(`${api}/api/v1/auth/csrf`); expect(response.ok()).toBeTruthy();
-  return { Origin: 'http://127.0.0.1:5192', 'x-csrf-token': (await response.json()).data.csrfToken };
+  return { Origin: 'http://127.0.0.1:' + (process.env.TAP_WRAP_CONTRACT_WEB_PORT || 5192), 'x-csrf-token': (await response.json()).data.csrfToken };
 }
 async function fixtureState(request) {
   const response = await request.get(`${api}/__fixture/state`, { headers: { 'x-fixture-key': 'connected-fixture-only' } });
@@ -42,15 +42,15 @@ test('real public query contract caps pages, counts filtered approvals and drive
   const base = `${api}/api/v1/public/products?q=ConnectedCatalogBatch3&sort=price_asc&includePriceRange=false`;
   const first = (await (await context.request.get(`${base}&limit=99`)).json()).data;
   const second = (await (await context.request.get(`${base}&page=2&limit=20`)).json()).data;
-  // Twenty-five orderable/stock-tracked fixtures plus two newly browsable Draft/Hold fixtures.
+  // Explicitly public fixtures include two enquiry-only records; hidden drafts stay excluded.
   expect(first.pagination).toMatchObject({ page: 1, limit: 20, total: 27, pages: 2 });
   expect(second.pagination).toMatchObject({ page: 2, limit: 20, total: 27, pages: 2 });
   expect(first.products).toHaveLength(20); expect(second.products).toHaveLength(7);
   const allProducts = [...first.products, ...second.products];
   const confirmed = allProducts.filter(product => product.priceApproved);
   expect(confirmed.map(product => product.pricePiastres)).toEqual(Array.from({ length: 25 }, (_, index) => 1100 + index * 100));
-  const unconfirmed = allProducts.filter(product => product.slug.startsWith('connected-private-'));
-  expect(unconfirmed.map(product => product.slug).sort()).toEqual(['connected-private-draft', 'connected-private-hold']);
+  const unconfirmed = allProducts.filter(product => product.slug.startsWith('connected-visible-'));
+  expect(unconfirmed.map(product => product.slug).sort()).toEqual(['connected-visible-draft', 'connected-visible-hold']);
   for (const product of unconfirmed) {
     expect(product.priceApproved).toBe(false);
     expect(product.pricePiastres).toBeNull();
@@ -58,7 +58,8 @@ test('real public query contract caps pages, counts filtered approvals and drive
   }
   for (const product of allProducts) {
     expect(product.galleryKeys).toBeUndefined(); expect(product.galleryUrls).toBeUndefined(); expect(product.customization).toBeUndefined();
-    expect(product.mainImageKey).toBeUndefined(); expect(product.mainImageUrl).toBeNull();
+    expect(product.mainImageKey).toBeUndefined();
+    expect(product.mainImageUrl).toBe(product.priceApproved ? 'https://catalog.connected.example.test/fixtures/catalog.webp' : null);
   }
   const available = (await (await context.request.get(`${base}&availability=available`)).json()).data;
   const soldOut = (await (await context.request.get(`${base}&availability=sold_out`)).json()).data;
@@ -71,6 +72,7 @@ test('real public query contract caps pages, counts filtered approvals and drive
   await page.getByRole('button', { name: 'Next page', exact: true }).click();
   await expect(page.locator('.catalog-card')).toHaveCount(7); await expect(page).toHaveURL(/page=2/);
   await page.goBack(); await expect(page.locator('.catalog-card')).toHaveCount(20);
+  await page.locator('details').filter({has:page.locator('summary').filter({hasText:/^Price$/})}).locator('summary').click();
   await page.getByLabel('Minimum price (EGP)', { exact: true }).fill('12.');
   await expect(page.getByLabel('Minimum price (EGP)', { exact: true })).toHaveValue('12.');
   await page.getByLabel('Maximum price (EGP)', { exact: true }).fill('14');
@@ -106,8 +108,10 @@ test('real admin product edit rejects stale React drafts and unapproved publicat
   const forbidden = await context.request.patch(`${api}/api/v1/admin/products/${product._id}/publication`, { headers, data: { expectedRevision: current.revision, status: 'ready' } });
   expect(forbidden.status()).toBe(400);
   const browsableDraft = await context.request.get(`${api}/api/v1/public/products/contract-stale-draft`);
-  expect(browsableDraft.status()).toBe(200);
-  const publicDraft = (await browsableDraft.json()).data.product;
+  expect(browsableDraft.status()).toBe(404);
+  const displayed = await context.request.patch(api + '/api/v1/admin/products/' + product._id, { headers, data: { expectedRevision: current.revision, visibility: 'public' } });
+  expect(displayed.status()).toBe(200);
+  const publicDraft = (await (await context.request.get(api + '/api/v1/public/products/contract-stale-draft')).json()).data.product;
   expect(publicDraft.name).toBe('Contract stale draft');
   expect(publicDraft.priceApproved).toBe(false);
   expect(publicDraft.pricePiastres).toBeNull();

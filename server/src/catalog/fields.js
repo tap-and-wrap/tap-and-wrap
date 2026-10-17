@@ -17,6 +17,7 @@ export const inventorySchema = new mongoose.Schema({
   available: { type: Boolean, default: true },
 }, { _id: false, strict: 'throw' });
 inventorySchema.pre('validate', function () {
+  if (this.isNew && this.mode === 'tracked' && this.approved && this.$isDefault('quantity')) this.invalidate('quantity', 'Approval requires an explicitly supplied actual stock quantity');
   if (this.mode === 'made_to_order') this.quantity = null;
   else if (!Number.isSafeInteger(this.quantity) || this.quantity < 0) this.invalidate('quantity', 'Tracked inventory requires a nonnegative integer quantity');
 });

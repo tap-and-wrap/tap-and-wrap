@@ -173,7 +173,7 @@ test('admin edits invalidate approval and preserve untouched configuration and m
   await expect(page.getByLabel('Product name', { exact: true })).toHaveValue(adminProduct.name);
   await page.getByRole('textbox', { name: /^Price \(EGP\)/ }).fill('12.34');
   await expect(page.getByLabel('Approve product price', { exact: true })).toHaveCount(0);
-  await page.getByLabel('Made on Demand — no stock tracking', { exact: true }).check();
+  await page.getByRole('combobox', { name: 'Product availability', exact: true }).selectOption('made_to_order');
   await expect(page.getByLabel('Approve product inventory', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Set image 2 as main' }).click();
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();

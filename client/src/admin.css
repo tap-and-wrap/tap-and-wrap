@@ -184,3 +184,6 @@
   .admin-search .admin-inline { flex-wrap: nowrap; }
   .admin-variant { padding: 14px; }
 }
+
+/* Code-managed owner handoff */
+.owner-guide{max-width:72ch;padding-left:24px;line-height:1.8}.owner-guide li{padding:8px 0}

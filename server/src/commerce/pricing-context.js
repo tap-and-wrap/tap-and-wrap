@@ -17,7 +17,7 @@ export async function createPricingContext(lines, owner, { session } = {}) {
   const read = async query => { context.queryCount += 1; return query.session(session || null).lean().maxTimeMS(3000); };
   const productIds = ids(lines.map(line => line.productId));
   if (!productIds.length) return context;
-  context.products = byId(await read(Product.find({ ...publicProductFilter(), _id: { $in: productIds } }).select('name slug description sku categoryId subcategoryId mainImageKey status published reviewRequired pricePiastres priceApproved variants inventory personalization customization updatedAt')));
+  context.products = byId(await read(Product.find({ ...publicProductFilter(), _id: { $in: productIds } }).select('visibility name slug description sku categoryId subcategoryId mainImageKey status published reviewRequired pricePiastres priceApproved variants inventory personalization customization updatedAt')));
   const products = [...context.products.values()];
   const categoryIds = ids(products.flatMap(product => [product.categoryId, product.subcategoryId]));
   if (categoryIds.length) context.categories = byId(await read(Category.find({ _id: { $in: categoryIds } }).select('_id parentId active')));

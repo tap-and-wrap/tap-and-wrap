@@ -34,22 +34,31 @@ test('homepage orders actual sections and displays only approved fixture content
   expect(headings).toEqual(['Gift Bundles', 'Shop by Category', 'Featured Gifts', 'A gift as unique as them', 'What Our Customers Say', 'Frequently Asked Questions']);
   await expect(page.locator('.review-marquee-group').first().locator('figure')).toHaveCount(12);
   await expect(page.getByText('Approved review fixture only.')).toHaveCount(0);
-  await page.getByText('Is this a real merchant claim?').click();
-  await expect(page.getByText('No. This is an isolated browser test.')).toBeVisible();
+  await expect(page.getByText('Is this a real merchant claim?')).toHaveCount(0);
+  await page.getByRole('button', { name: 'How do I place an order?' }).click();
+  await expect(page.getByText(/Gift Box and Engraving start with a request/)).toBeVisible();
   await expect(page.locator('.home-service-media video')).toHaveCount(2);
   await expect(page.locator('.hero-film video, .hero-film img.hero-film-poster')).toHaveCount(1);
   if (await page.locator('.hero-film video').count()) await expect(page.getByRole('button', { name: /Play hero video|Pause hero video/ })).toBeVisible();
   else await expect(page.locator('.hero-film')).toContainText('The film is unavailable.');
 });
 
-test('missing public information is explicitly pending and never fabricates policies', async ({ page }) => {
+test('all fixed pages render without backend content, with unique metadata and noindex', async ({ page }) => {
   await mockCatalog(page);
+  await page.route('**/api/v1/public/site-content', route => route.fulfill({ status: 503, json: { ok: false } }));
+  const titles = new Set();
   for (const path of ['/about', '/contact', '/privacy-policy', '/refund-policy', '/shipping-policy', '/terms-of-service']) {
     await page.goto(path);
-    await expect(page.getByText(/Owner-approved .* information is awaiting publication/)).toBeVisible();
+    await expect(page.locator('main h1')).toHaveCount(1);
+    await expect(page.locator('main')).not.toContainText(/Development Preview|Under Development|Coming Soon/i);
+    await expect(page.locator('main h2')).not.toHaveCount(0);
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /Tap & Wrap|delivery|gift|customer|order/i);
+    titles.add(await page.title());
     await expect(page.locator('main form')).toHaveCount(0);
+    await expect(page.getByRole('contentinfo').getByRole('link', { name: 'About Us', exact: true })).toHaveAttribute('href', '/about');
   }
+  expect(titles.size).toBe(6);
 });
 
 test('homepage fills unselected featured slots with real browsable catalog products', async ({ page }) => {
@@ -64,27 +73,26 @@ test('homepage fills unselected featured slots with real browsable catalog produ
   await expect(page.getByRole('heading', { level: 2, name: 'Featured Gifts' })).toBeVisible();
 });
 
-test('approved about and legal copy is escaped and has page-specific metadata', async ({ page }) => {
+test('legacy approved text cannot replace fixed copy or execute HTML', async ({ page }) => {
   await mockCatalog(page);
   await respond(page, '/public/site-content', content);
   await page.goto('/about');
-  await expect(page.getByRole('heading', { level: 1, name: 'An Isolated About Page' })).toBeVisible();
-  await expect(page).toHaveTitle('An Isolated About Page | Tap & Wrap');
+  await expect(page.getByRole('heading', { level: 1, name: 'About Us' })).toBeVisible();
+  await expect(page).toHaveTitle('About Us | Tap & Wrap');
   await page.goto('/privacy-policy');
-  await expect(page.getByText(/Never execute this fixture/)).toBeVisible();
+  await expect(page.getByText(/Never execute this fixture/)).toHaveCount(0);
   await expect(page.locator('main script')).toHaveCount(0);
-  await expect(page).toHaveTitle('Isolated Privacy Policy | Tap & Wrap');
+  await expect(page).toHaveTitle('Privacy Policy | Tap & Wrap');
 });
 
-test('contact uses approved working contact links without a fake submission', async ({ page }) => {
+test('contact and footer use fixed support channels, separate from InstaPay', async ({ page }) => {
   const fixture = await mockCatalog(page);
   await respond(page, '/public/site-content', content);
   await page.goto('/contact');
-  await expect(page.getByRole('main').getByRole('link', { name: 'Email Tap & Wrap', exact: true })).toHaveAttribute('href', 'mailto:isolated@example.test');
-  await expect(page.getByRole('link', { name: 'Call Tap & Wrap' })).toHaveAttribute('href', 'tel:01012345678');
-  await expect(page.getByRole('main').getByRole('link', { name: 'WhatsApp', exact: true })).toHaveAttribute('rel', /noreferrer/);
-  await expect(page.getByRole('main').getByRole('link', { name: 'WhatsApp', exact: true })).toHaveAttribute('href', 'https://wa.me/201012345678');
-  await expect(page.getByRole('contentinfo').getByRole('link', { name: 'WhatsApp', exact: true })).toHaveAttribute('href', 'https://wa.me/201012345678');
+  await expect(page.getByRole('main').getByRole('link', { name: 'tap.wrap22@gmail.com', exact: true })).toHaveAttribute('href', 'mailto:tap.wrap22@gmail.com');
+  await expect(page.getByRole('link', { name: 'Chat on WhatsApp' })).toHaveAttribute('href', 'https://wa.me/201508216472');
+  await expect(page.getByRole('contentinfo').getByRole('link', { name: 'WhatsApp', exact: true })).toHaveAttribute('href', 'https://wa.me/201508216472');
+  await expect(page.getByRole('link', { name: 'Find us on Instagram' })).toHaveAttribute('href', 'https://www.instagram.com/tapandwrap/');
   await expect(page.locator('main form')).toHaveCount(0);
   expect(fixture.requests.some(request => request.method === 'POST')).toBe(false);
 });
@@ -182,7 +190,7 @@ for (const width of [320, 768, 1440]) {
       expect(box.x).toBeLessThan(width / 2);
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    for (const name of ['Contact', 'Privacy Policy']) {
+    for (const name of ['Contact Us', 'Privacy Policy']) {
       await page.getByRole('contentinfo').getByRole('link', { name, exact: true }).click();
       await expect(page.locator('main h1')).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

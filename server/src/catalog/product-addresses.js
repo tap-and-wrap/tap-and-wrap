@@ -16,7 +16,7 @@ function addressOwner(address) {
 }
 
 export async function productIdentityFilter(slug, { session } = {}) {
-  if (!productAliasesEnabled()) return { slug };
+  // The rollout flag controls new registrations, never existing ownership.
   const address = await ProductAddress.findOne({ slug }).session(session || null).lean().maxTimeMS(3000);
   if (!address) return { slug }; // Safe rollout/rollback and unregistered legacy links.
   const owner = addressOwner(address);
@@ -27,7 +27,7 @@ export async function productIdentityFilter(slug, { session } = {}) {
 }
 
 export async function attachProductPaths(products, { session } = {}) {
-  if (!productAliasesEnabled() || !products.length) return products;
+  if (!products.length) return products;
   if (products.length > 100) throw new Error('Product address batch exceeds limit');
   const addresses = await ProductAddress.find({ productId: { $in: products.map(product => product._id) }, canonical: true })
     .select('productId slug').session(session || null).lean().maxTimeMS(3000);
@@ -38,13 +38,13 @@ export async function attachProductPaths(products, { session } = {}) {
 // Must run in the same transaction as product creation/update/import. Address
 // rows are never deleted or moved to another owner, including after deletion.
 export async function reserveProductAddresses(product, { session, enabled = productAliasesEnabled() } = {}) {
-  if (!enabled) return;
   if (!session?.inTransaction()) throw new Error('Product addresses require a transaction');
   assertDatabaseWriteAllowed(ProductAddress.db, env);
   const existingLegacy = await ProductAddress.findOne({ slug: product.slug }).session(session).lean().maxTimeMS(3000);
   if (existingLegacy && String(existingLegacy.productId) !== String(product._id)) throw conflict();
-  if (!existingLegacy) await ProductAddress.create([{ slug: product.slug, productId: product._id, canonical: false }], { session });
   const existingCanonical = await ProductAddress.findOne({ productId: product._id, canonical: true }).session(session).lean().maxTimeMS(3000);
+  if (!enabled && !existingCanonical) return; // No implicit backfill or new canonical allocation.
+  if (!existingLegacy) await ProductAddress.create([{ slug: product.slug, productId: product._id, canonical: false }], { session });
   if (existingCanonical) return existingCanonical.slug; // Renames retain the permanent URL.
   for (const slug of productAddressCandidates(product)) {
     const address = await ProductAddress.findOne({ slug }).session(session).lean().maxTimeMS(3000);

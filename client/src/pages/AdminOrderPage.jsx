@@ -1,3 +1,4 @@
+import { AdminOrderAccounting } from '../commerce/OrderFinancials.jsx';
 import AdminForm, { hasAdminFieldErrors } from '../admin/AdminForm.jsx';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -10,7 +11,7 @@ import { invalidateAdminDependencies } from '../admin/query-invalidation.js';
 import useModalDialog from '../components/useModalDialog.js';
 import { sessionSnapshot } from '../auth/session.js';
 
-function PrivateFileDialog({ file, onClose }) {
+export function PrivateFileDialog({ file, onClose }) {
   const { dialogRef, dialogProps } = useModalDialog({ onClose, returnFocus: file.returnFocus });
   const [url, setUrl] = useState('');
   useEffect(() => {
@@ -63,14 +64,15 @@ export default function AdminOrderPage() {
   return <AdminLayout title="Order details" busy={query.isPending} actions={<Link className="admin-button admin-button-secondary" to="/admin/commerce/orders">Back to orders</Link>}>
     {query.isPending ? <p className="admin-state" role="status">Loading order…</p> : query.error ? <div className="admin-state"><p role="alert">{commerceError(query.error)}</p><button className="admin-button admin-button-secondary" onClick={() => query.refetch()}>Try again</button></div> : order && <>
       <OrderRecord order={order} headingLevel={2} />
-      <ContactDetails customer={order.customer} />
+      {order.serviceRequestId && <Link className="admin-button admin-button-secondary" to={`/admin/requests/${order.serviceRequestId}`}>Review source request and accepted quotation</Link>}
+      <ContactDetails customer={order.customer} /><AdminOrderAccounting key={id} order={order} refresh={() => invalidateAdminDependencies(queryClient, 'orders')} />
       <section className="commerce-editor"><h2>Manage Order</h2><p className="commerce-muted">Only valid next steps are offered. The server independently authorizes and records each update.</p>
         {order.paymentMethod === 'instapay' && order.paymentState !== 'paid' && order.fulfillmentState !== 'cancelled' && <p className="commerce-notice">Verify the full InstaPay payment before confirming or preparing this order.</p>}
         {order.paymentState === 'paid' && ['received', 'confirmed'].includes(order.fulfillmentState) && <p>Paid orders require a separate refund review before cancellation.</p>}
         <AdminForm error={mutation.error} onSubmit={(event) => { event.preventDefault(); if (validSelection) mutation.mutate(); }}><fieldset className="admin-form-fields" disabled={mutation.isPending}><div className="commerce-editor-grid">
           <label className="commerce-field">Fulfillment update<select name="fulfillmentState" value={fulfillmentState} disabled={!choices.fulfillment.length} onChange={(event) => { setFulfillmentState(event.target.value); if (!adminOrderActions(order, { fulfillmentState: event.target.value, paymentState }).payment.includes(paymentState)) setPaymentState(''); }}><option value="">Keep {order.fulfillmentState.replaceAll('_', ' ')}</option>{choices.fulfillment.map(state => <option value={state} key={state}>{state.replaceAll('_', ' ')}</option>)}</select></label>
           <label className="commerce-field">Payment update<select name="paymentState" value={paymentState} disabled={!choices.payment.length} onChange={(event) => { setPaymentState(event.target.value); if (!adminOrderActions(order, { fulfillmentState, paymentState: event.target.value }).fulfillment.includes(fulfillmentState)) setFulfillmentState(''); }}><option value="">Keep {order.paymentState.replaceAll('_', ' ')}</option>{choices.payment.includes('paid') && <option value="paid">{order.paymentMethod === 'instapay' ? 'Verify full InstaPay payment' : 'Confirm COD collected'}</option>}{choices.payment.includes('rejected') && <option value="rejected">Reject payment proof</option>}</select></label>
-        </div><label className="commerce-field">Customer-visible explanation<textarea name="publicReason" value={publicReason} maxLength={500} rows={3} onChange={(event) => setPublicReason(event.target.value)} required={paymentState === 'rejected' || fulfillmentState === 'cancelled'} /></label><label className="commerce-field">Private operational note<textarea name="internalNote" value={internalNote} maxLength={500} rows={3} onChange={(event) => setInternalNote(event.target.value)} /></label>
+        </div><label className="commerce-field">Customer-visible explanation<textarea name="publicReason" value={publicReason} maxLength={500} rows={3} onChange={(event) => setPublicReason(event.target.value)} required={paymentState === 'rejected' || ['cancelled', 'returned', 'delivery_failed'].includes(fulfillmentState)} /></label><label className="commerce-field">Private operational note<textarea name="internalNote" value={internalNote} maxLength={500} rows={3} onChange={(event) => setInternalNote(event.target.value)} /></label>
         {!choices.fulfillment.length && !choices.payment.length && <p>No status changes are available for this order.</p>}
         <button className="button button-primary" disabled={mutation.isPending || !validSelection}>{mutation.isPending ? 'Saving…' : 'Save order update'}</button>{mutation.isSuccess && <p role="status">Order updated.</p>}{mutation.error && !hasAdminFieldErrors(mutation.error) && <p className="form-error" role="alert">{commerceError(mutation.error)}</p>}
         {mutation.error?.response?.data?.error?.code === 'ORDER_CHANGED' && <p className="admin-feedback" role="alert">This order changed while you were editing. Your explanations are retained. Review the latest state before saving again. <button type="button" className="admin-text-button" onClick={async () => { await query.refetch(); setFulfillmentState(''); setPaymentState(''); mutation.reset(); }}>Reload latest order status</button></p>}

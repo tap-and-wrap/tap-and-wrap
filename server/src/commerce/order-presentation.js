@@ -23,33 +23,43 @@ function customization(value) {
   return result;
 }
 function state(value) { return pick(value, ['fulfillmentState', 'paymentState']); }
+function personalizationDefinitions(value) {
+  return (Array.isArray(value) ? value : []).slice(0, 20).filter(field => field && typeof field.key === 'string' && /^[a-z][a-z0-9_-]{0,49}$/.test(field.key)
+    && typeof field.label === 'string' && field.label.length <= 160 && ['image', 'short_text', 'long_text', 'select'].includes(field.type)).map(field => pick(field, ['key', 'label', 'type']));
+}
 export function presentOrderHistory(history = [], { admin = false } = {}) {
   return history.map(entry => ({ ...pick(entry, ['at', 'event']),
     actor: admin ? entry.actor : String(entry.actor || '').startsWith('admin:') ? 'admin' : ['customer', 'guest'].includes(entry.actor) ? entry.actor : undefined,
     ...(entry.from ? { from: state(entry.from) } : {}), ...(entry.to ? { to: state(entry.to) } : {}),
     // Legacy reason was ambiguously labelled "audit note". Never infer it is public.
     ...(typeof entry.publicReason === 'string' && entry.publicReason ? { reason: entry.publicReason, publicReason: entry.publicReason } : {}),
+    ...(admin && entry.actionDetails ? { actionDetails: pick(entry.actionDetails, ['action', 'chargeId', 'amountPiastres', 'quantities', 'quotationVersion', 'collectionMethod', 'allowedPaymentMethods', 'pricing', 'accepted', 'acceptanceChannel', 'codAuthorized', 'reducePayable', 'exceptionConfirmed']) } : {}),
     ...(admin && (entry.internalNote || entry.reason) ? { internalNote: entry.internalNote || entry.reason } : {}),
   }));
 }
 export function presentOrder(order, { admin = false } = {}) {
   const rejected = order.paymentMethod === 'instapay' && order.paymentState === 'rejected';
-  const publicRejection = rejected ? [...(order.history || [])].reverse().find(entry => entry.to?.paymentState === 'rejected' && typeof entry.publicReason === 'string' && entry.publicReason.trim())?.publicReason : null;
+  const publicRejection = rejected ? [...(order.history || [])].reverse().find(entry => (entry.to?.paymentState === 'rejected' || entry.event === 'payment_rejected') && typeof entry.publicReason === 'string' && entry.publicReason.trim())?.publicReason : null;
   const totals = { ...pick(order.totals, ['subtotalPiastres', 'discountPiastres', 'shippingPiastres', 'totalPiastres']),
     applied: (order.totals?.applied || []).map(value => pick(value, ['kind', 'id', 'name', 'code', 'applications', 'discountPiastres'])) };
   return { id: String(order._id), _id: String(order._id), orderNumber: order.orderNumber,
     customer: pick(order.customer, ['name', 'email', 'phone', 'governorate', 'address', 'notes']),
     lines: (order.lines || []).map(line => ({ ...pick(line, ['productId', 'name', 'slug', 'variantKey', 'variantLabel', 'sku', 'description', 'categoryId', 'subcategoryId', 'mainImageUrl', 'quantity', 'unitPricePiastres', 'lineTotalPiastres']),
-      personalization: configuredValues(line.personalization), customization: customization(line.customization) })),
+      personalization: configuredValues(line.personalization), personalizationDefinitions: personalizationDefinitions(line.personalizationDefinitions), customization: customization(line.customization) })),
+    proofStatus: order.proofHistory?.at(-1)?.state || null,
+    orderChannel: order.orderChannel || 'website', ...(admin && order.serviceRequestId ? { serviceRequestId: String(order.serviceRequestId) } : {}), allowedPaymentMethods: order.allowedPaymentMethods || [], accountingVersion: order.accountingVersion || 0, followUpDueAt: order.followUpDueAt, cancellationRequestedAt: order.cancellationRequestedAt,
+    shipping: order.accountingVersion === 1 ? (order.charges || []).filter(charge => charge.kind === 'shipping').map(charge => pick(charge, ['id', 'state', 'amountPiastres', 'collectionMethod', 'acceptedAt']))[0] : null,
+    paymentInstructions: order.accountingVersion === 1 && order.orderChannel !== 'owner_quotation' && order.paymentMethod === 'instapay' ? { destination: '01060673073', amountPiastres: order.totals.totalPiastres, orderReference: order.orderNumber } : null,
     totals, paymentMethod: order.paymentMethod, paymentState: order.paymentState, fulfillmentState: order.fulfillmentState,
     history: presentOrderHistory(order.history, { admin }), createdAt: order.createdAt, updatedAt: order.updatedAt, revision: order.revision,
-    canCancel: ['received', 'confirmed'].includes(order.fulfillmentState) && order.paymentState !== 'paid',
-    ...(rejected ? { paymentAttention: { code: 'PAYMENT_PROOF_REJECTED', message: 'Payment proof requires attention. Contact the store with your order reference before making another transfer.', publicReason: publicRejection || null, receiptReplacementEnabled: false } } : {}),
+    canCancel: ['received', 'confirmed'].includes(order.fulfillmentState) && (order.accountingVersion === 1 || order.paymentState !== 'paid'),
+    ...(rejected ? { paymentAttention: { code: 'PAYMENT_PROOF_REJECTED', message: 'Payment proof requires attention. Contact the store with your order reference before making another transfer.', publicReason: publicRejection || null, receiptReplacementEnabled: order.accountingVersion === 1 } } : {}),
     ...(admin ? { proofAvailable: Boolean(order.paymentProofId), uploadIds: (order.uploadIds || []).map(String) } : {}),
   };
 }
 export function presentOrderSummary(order, { admin = false } = {}) {
   return { ...pick(order, ['orderNumber', 'paymentMethod', 'paymentState', 'fulfillmentState', 'createdAt', 'updatedAt', 'revision']),
+    accountingVersion: order.accountingVersion || 0, financialSummary: pick(order.financialSummary, ['collectedPiastres', 'refundedPiastres', 'outstandingPiastres', 'unresolvedCharges', 'refundReviewRequired']), followUpDueAt: order.followUpDueAt,
     id: String(order._id), _id: String(order._id), totals: pick(order.totals, ['subtotalPiastres', 'discountPiastres', 'shippingPiastres', 'totalPiastres']),
     ...(admin ? { customer: pick(order.customer, ['name', 'governorate']) } : {}) };
 }

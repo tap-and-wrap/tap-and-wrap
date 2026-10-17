@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import { FieldError, fieldErrorProps } from '../components/FormFeedback.jsx';
+import ImageSourceChooser, { IMAGE_FORMAT_HELP } from '../components/ImageSourceChooser.jsx';
 
 const defaultTypes = ['image/jpeg', 'image/png', 'image/webp'];
 export function validateConfiguredFields(fields, values, { skipFiles = false } = {}) {
@@ -36,21 +37,21 @@ export function LocalFileField({ field, value = [], onChange, error, disabled = 
     setPreviews(entries);
     return () => entries.forEach((entry) => URL.revokeObjectURL(entry.url));
   }, [value]);
-  function select(event) {
-    const files = Array.from(event.target.files || []);
-    event.target.value = '';
+  function select(selected, replace = null, append = false) {
+    const files = replace === null ? append ? [...value, ...selected] : selected : value.map((file, index) => index === replace ? selected[0] : file);
     if (!files.length) return;
     if (files.length > maximum) { setSelectionError(`Select no more than ${maximum} file${maximum === 1 ? '' : 's'}.`); return; }
-    if (files.some((file) => !types.includes(file.type))) { setSelectionError('Choose an accepted file format.'); return; }
+    if (files.some((file) => !types.includes(file.type) || !file.size)) { setSelectionError(`${IMAGE_FORMAT_HELP} This field accepts ${types.map(type => type.replace('image/', '').toUpperCase()).join(', ')}.`); return; }
     if (files.some((file) => file.size > maxBytes)) { setSelectionError(`Each file must be ${Math.round(maxBytes / 1024 / 1024)} MB or smaller.`); return; }
     setSelectionError('');
     onChange(files);
   }
   return <div className="commerce-field">
-    <label htmlFor={id}>{field.label}{field.required ? ' *' : ''}</label>
-    <input id={id} type="file" accept={types.join(',')} multiple={maximum > 1} onChange={select} disabled={disabled} {...fieldErrorProps(id, error || selectionError, `${id}-help`)} />
+    <span id={id}>{field.label}{field.required ? ' *' : ''}</span>
+    <ImageSourceChooser label={value.length ? maximum === 1 ? 'Replace image' : 'Replace images' : 'Upload Image'} context={field.label} multiple={maximum > 1} onSelect={files => select(files)} disabled={disabled} invalid={Boolean(error || selectionError)} describedBy={`${id}-help${error || selectionError ? ` ${id}-error` : ''}`} />
+    {maximum > 1 && value.length > 0 && value.length < maximum && <ImageSourceChooser label="Add images" context={`Add to ${field.label}`} multiple onSelect={files => select(files, null, true)} disabled={disabled} />}
     <small id={`${id}-help`}>Up to {maximum} file{maximum === 1 ? '' : 's'}, {Math.round(maxBytes / 1024 / 1024)} MB each. Files stay on this device until you submit.</small>
-    {previews.length > 0 && <ul className="commerce-file-previews">{previews.map((entry, index) => <li key={`${entry.name}-${index}`}>{entry.image && <img src={entry.url} alt={`Selected ${field.label.toLowerCase()} ${index + 1}`} />}<span>{entry.name}</span><button type="button" className="commerce-link-button" aria-label={`Remove ${entry.name}`} disabled={disabled} onClick={() => { setSelectionError(''); onChange(value.filter((_, position) => position !== index)); }}>Remove</button></li>)}</ul>}
+    {previews.length > 0 && <ul className="commerce-file-previews">{previews.map((entry, index) => <li key={entry.url}>{entry.image && <img src={entry.url} alt={`Selected ${field.label.toLowerCase()} ${index + 1}`} width="80" height="80" loading="lazy" decoding="async" onError={event => { event.currentTarget.hidden = true; setSelectionError('This image could not be previewed. Replace it with a compatible JPEG, PNG or WebP. The server must verify files before they can be attached.'); }} />}<span>{entry.name}</span>{maximum > 1 && <ImageSourceChooser label="Replace image" context={`Replace ${entry.name}`} disabled={disabled} onSelect={files => select(files, index)} />}<button type="button" className="commerce-link-button" aria-label={`Remove ${entry.name}`} disabled={disabled} onClick={() => { setSelectionError(''); onChange(value.filter((_, position) => position !== index)); }}>Remove</button></li>)}</ul>}
     <FieldError id={id}>{selectionError || error}</FieldError>
   </div>;
 }

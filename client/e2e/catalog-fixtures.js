@@ -41,7 +41,7 @@ export async function mockCatalog(page, options = {}) {
   const requests = [];
   const saves = [];
   let sessionRole = options.role;
-  let savedProduct = structuredClone(adminProduct);
+  let savedProduct = structuredClone(options.adminProduct || adminProduct);
   const adminCategories = new Map([category, subcategory].map((entry) => [entry._id, { ...entry, revision: 0 }]));
   const headers = { 'Access-Control-Allow-Origin': 'http://127.0.0.1:5191', 'Access-Control-Allow-Credentials': 'true', 'Access-Control-Allow-Headers': 'content-type,x-csrf-token,x-tracking-consent,x-search-event-id', 'Access-Control-Allow-Methods': 'GET,POST,PATCH,OPTIONS' };
   await page.route('https://fixture.invalid/**', (route) => route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="900" height="900"><rect width="900" height="900" fill="#eadad5"/></svg>' }));

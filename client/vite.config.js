@@ -23,6 +23,8 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), protectedCatalogHeaders(), { name: 'isolated-no-network-hints', transformIndexHtml(html) {
     return process.env.TAP_WRAP_ISOLATED_TEST === 'true' ? html.replace(/<link\b[^>]*\brel="(?:preconnect|dns-prefetch)"[^>]*>/gi, '') : html;
   } }],
-  server: { port: 5173 },
+  // Playwright writes HTML trace resources while pages are still running.
+  // Watching these artifacts triggers full reloads and aborts media/requests.
+  server: { port: 5173, watch: { ignored: ['**/test-results*/**'] } },
   build: { outDir: 'dist' },
 });

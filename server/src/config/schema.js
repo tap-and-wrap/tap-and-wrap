@@ -1,4 +1,6 @@
+import { OrderSettlement } from '../models/OrderSettlement.js';
 import { isDeepStrictEqual } from 'node:util';
+import { CatalogMedia } from '../models/CatalogMedia.js';
 import { Product } from '../models/Product.js';
 import { ProductAddress } from '../models/ProductAddress.js';
 import { env } from './env.js';
@@ -14,7 +16,8 @@ import { TrackingConsent } from '../models/TrackingConsent.js';
 import { MetaEvent } from '../models/MetaEvent.js';
 import { assertDatabaseWriteAllowed, DatabaseSafetyError } from './database-safety.js';
 
-export const databaseModels = [...new Set([Product, Category, ComponentOption, User, Session, ...commerceModels,
+export const databaseModels = [...new Set([OrderSettlement, Product, Category, ComponentOption, User, Session, ...commerceModels,
+  ...(process.env.CATALOG_MEDIA_UPLOADS_ENABLED === 'true' ? [CatalogMedia] : []),
   ...websiteModels, AccountActionToken, EmailRateWindow, TrackingConsent, MetaEvent, ...(env.productAliasesEnabled ? [ProductAddress] : [])])];
 
 function sameKeys(required, actual) {

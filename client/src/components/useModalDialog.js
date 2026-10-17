@@ -40,7 +40,7 @@ export default function useModalDialog({ onClose, restoreFocus = true, returnFoc
     };
   }, [restoreFocus, returnFocus]);
   const dialogProps = {
-    onCancel: (event) => { event.preventDefault(); closeRef.current(); },
+    onCancel: (event) => { event.preventDefault(); event.stopPropagation(); closeRef.current(); },
     onKeyDown: (event) => {
       if (event.key !== 'Tab') return;
       const controls = [...event.currentTarget.querySelectorAll('a[href], button, input, select, textarea, iframe, [tabindex]')].filter((node) => !node.matches(':disabled') && node.tabIndex >= 0 && node.getClientRects().length && getComputedStyle(node).visibility !== 'hidden');

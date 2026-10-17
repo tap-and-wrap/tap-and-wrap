@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { inventorySchema, catalogIdentityFields, importMetadataFields, safeInteger } from '../catalog/fields.js';
 // Source-classified components and packaging candidates never enter public product queries.
 const schema = new mongoose.Schema({
+  requestPolicy: { enabled: { type: Boolean, default: false }, services: { type: [String], enum: ['gift_box', 'laser_engraving'], default: [] }, availability: { type: String, enum: ['unconfirmed', 'available', 'unavailable'], default: 'unconfirmed' }, pricing: { type: String, enum: ['pending', 'fixed', 'free'], default: 'pending' }, unitPricePiastres: { type: Number, default: null, validate: safeInteger } },
   enabledForCustomization: { type: Boolean, default: false },
   configurationApproved: { type: Boolean, default: false },
   commerceRevision: { type: Number, default: 0, validate: safeInteger },

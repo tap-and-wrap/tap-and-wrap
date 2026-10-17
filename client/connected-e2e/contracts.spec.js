@@ -1,7 +1,8 @@
+import { chooseImageFiles } from '../e2e/media-helpers.js';
 import { test, expect } from '@playwright/test';
 
-const api = 'http://127.0.0.1:4092';
-const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X8kQAAAAASUVORK5CYII=', 'base64');
+const api = 'http://127.0.0.1:' + (process.env.TAP_WRAP_CONTRACT_API_PORT || 4092);
+const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWO4NbsXAARVAgOYIL6CAAAAAElFTkSuQmCC', 'base64');
 test.beforeEach(async ({ context }) => {
   // API responses are never intercepted. Prevent any third-party font/asset call.
   await context.route('**/*', route => {
@@ -24,55 +25,20 @@ async function csrfHeaders(context) {
   const response = await context.request.get(`${api}/api/v1/auth/csrf`);
   expect(response.ok()).toBeTruthy();
   const value = await response.json();
-  return { Origin: 'http://127.0.0.1:5192', 'x-csrf-token': value.data.csrfToken };
+  return { Origin: 'http://127.0.0.1:' + (process.env.TAP_WRAP_CONTRACT_WEB_PORT || 5192), 'x-csrf-token': value.data.csrfToken };
 }
 
-test('real serialized engraving DTO uploads once, preserves snapshots and quotes/cart operations while checkout stays disabled', async ({ page, request, context }) => {
-  const failures = [];
-  page.on('pageerror', error => failures.push(error.message));
-  const signed = [];
-  page.on('request', request => { if (request.method() === 'POST' && request.url().endsWith('/commerce/uploads/sign')) signed.push(request.postDataJSON()); });
-  await page.goto('/products/connected-laser-product/customize');
-  await expect(page.getByRole('heading', { name: 'Connected approved engraving' })).toBeVisible();
-  for (const label of ['Engraving text', 'Material', 'Font', 'Placement', 'Engraving artwork']) await expect(page.getByLabel(new RegExp(`^${label} \\*$`))).toHaveCount(1);
-  await page.getByLabel('Engraving text *', { exact: true }).fill('For the fixture');
-  await page.getByLabel('Gift message', { exact: true }).fill('Hyphenated field works');
-  await page.getByLabel('Material *', { exact: true }).selectOption('wood');
-  await page.getByLabel('Font *', { exact: true }).selectOption('plain');
-  await page.getByLabel('Placement *', { exact: true }).selectOption('front');
-  await page.getByLabel('Engraving artwork *', { exact: true }).setInputFiles({ name: 'fixture.png', mimeType: 'image/png', buffer: image });
-  expect(signed).toHaveLength(0);
-  const before = await fixtureState(request);
-  await expect(page.getByRole('button', { name: 'Add to Cart', exact: true })).toBeEnabled();
-  await expect(page.getByText(/108[,.]50.*each/)).toBeVisible();
-  await page.getByRole('button', { name: 'Add to Cart', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Added to your cart.' })).toBeVisible();
-  expect(signed).toHaveLength(1);
-  expect(signed[0].fieldKey).toBe('engraving_artwork');
-  const after = await fixtureState(request);
-  expect(after.puts - before.puts).toBe(1);
-  expect(after.uploads.length - before.uploads.length).toBe(1);
-  const cartResponse = await context.request.get(`${api}/api/v1/commerce/cart`);
-  expect(cartResponse.ok()).toBeTruthy();
-  const cart = (await cartResponse.json()).data.cart;
-  expect(cart.items).toHaveLength(1);
-  const line = cart.items[0];
-  expect(line.unitPricePiastres).toBe(10850);
-  expect(line.customization.fields['gift-message']).toBe('Hyphenated field works');
-  expect(line.customization.fields.engraving_artwork).toHaveLength(1);
-  expect(line.customization.engraving.text).toBe('For the fixture');
-  expect(after.uploads.find(upload => upload._id === line.customization.fields.engraving_artwork[0]).cartId).toBeTruthy();
-  await page.goto('/cart');
-  await page.getByRole('combobox', { name: 'Quantity', exact: true }).selectOption('2');
-  await expect.poll(async () => (await (await context.request.get(`${api}/api/v1/commerce/cart`)).json()).data.cart.subtotalPiastres).toBe(21700);
-  await page.goto('/checkout');
-  await expect(page.getByRole('heading', { name: 'Ordering is not enabled yet' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Place Order' })).toHaveCount(0);
-  const rejected = await context.request.post(`${api}/api/v1/commerce/checkout/quote`, { headers: await csrfHeaders(context), data: { checkoutKey: crypto.randomUUID(), paymentMethod: 'cod', governorate: 'cairo' } });
-  expect(rejected.status()).toBe(403);
-  expect((await rejected.json()).error.code).toBe('CHECKOUT_DISABLED');
-  expect((await fixtureState(request)).orderCount).toBe(before.orderCount);
-  expect(failures).toEqual([]);
+test('real ordinary product personalization uploads once and preserves fixed-price cart snapshots while checkout stays disabled', async ({page,request,context})=>{
+ const errors=[],signed=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.method()==='POST'&&r.url().endsWith('/commerce/uploads/sign'))signed.push(r.postDataJSON());});
+ await page.goto('/products/connected-personalized-product');await page.getByRole('button',{name:'Customize This',exact:true}).click();
+ await chooseImageFiles(page,page,'Audit photo',{name:'fixture.png',mimeType:'image/png',buffer:image});expect(signed).toHaveLength(0);
+ await page.getByRole('button',{name:'Save personalization',exact:true}).click();const before=await fixtureState(request);
+ await page.getByRole('button',{name:'Add to Cart',exact:true}).click();await expect(page.getByRole('status').filter({hasText:'Added to your cart.'})).toBeVisible();
+ expect(signed).toHaveLength(1);expect(signed[0].fieldKey).toBe('photo');const after=await fixtureState(request);expect(after.puts-before.puts).toBe(1);expect(after.uploads.length-before.uploads.length).toBe(1);
+ const cart=(await(await context.request.get(api+'/api/v1/commerce/cart')).json()).data.cart;expect(cart.items).toHaveLength(1);const line=cart.items[0];expect(line.unitPricePiastres).toBe(10000);expect(line.personalization.photo).toHaveLength(1);expect(after.uploads.find(u=>u._id===line.personalization.photo[0]).cartId).toBeTruthy();
+ await page.goto('/cart');await page.getByRole('combobox',{name:'Quantity',exact:true}).selectOption('2');await expect.poll(async()=>(await(await context.request.get(api+'/api/v1/commerce/cart')).json()).data.cart.subtotalPiastres).toBe(20000);
+ await page.goto('/checkout');await expect(page.getByRole('heading',{name:'Ordering is not enabled yet'})).toBeVisible();await expect(page.getByRole('button',{name:'Place Order'})).toHaveCount(0);
+ const rejected=await context.request.post(api+'/api/v1/commerce/checkout/quote',{headers:await csrfHeaders(context),data:{checkoutKey:crypto.randomUUID(),paymentMethod:'cod',governorate:'cairo'}});expect(rejected.status()).toBe(403);expect((await rejected.json()).error.code).toBe('CHECKOUT_DISABLED');expect((await fixtureState(request)).orderCount).toBe(before.orderCount);expect(errors).toEqual([]);
 });
 
 test('real admin configuration form creates supported options and persists exact piastres/revisions', async ({ page, context }) => {
@@ -163,7 +129,10 @@ test('real component form searches paginated main/subcategories and preserves th
   expect(childData.categories).toHaveLength(1);
   expect(childData.categories[0].parentId).toBe(mainData.categories[0]._id);
   await page.getByRole('combobox', { name: 'Subcategory (optional)', exact: true }).selectOption(childData.categories[0]._id);
-  await page.getByLabel('Existing image references (one per line)', { exact: true }).fill('fixtures/component.webp');
+  await expect(page.getByRole('region', { name: 'Component images', exact: true }).getByRole('button', { name: 'Add images', exact: true })).toBeVisible();
+  await chooseImageFiles(page, page.getByRole('region', { name: 'Component images', exact: true }), 'Add images', { name: 'synthetic-component.png', mimeType: 'image/png', buffer: image });
+  await page.getByRole('button', { name: 'Upload selected images', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Save configuration', exact: true })).toBeEnabled();
   const creating = page.waitForResponse(response => response.url().endsWith('/admin/commerce/components') && response.request().method() === 'POST');
   await page.getByRole('button', { name: 'Save configuration', exact: true }).click();
   const created = await creating;
@@ -175,6 +144,10 @@ test('real component form searches paginated main/subcategories and preserves th
   expect(component.priceApproved).toBe(false);
   expect(component.configurationApproved).toBe(false);
   expect(component.inventory.approved).toBe(false);
-  expect(component.inventory.quantity).toBe(10);
+  expect(component.inventory.quantity).toBe(10); // Existing provisional default, explicitly NOT approved stock.
+  expect(component.galleryKeys).toHaveLength(1);
+  expect(component.galleryKeys[0]).toMatch(/^catalog-media\/v1\/[a-f0-9]{64}\.png$/);
+  const options = await page.request.get(`${api}/api/v1/commerce/service-requests/options/gift_box`);
+  expect((await options.json()).data.components.some(option => option.componentId === component._id)).toBe(false);
   await expect(page.getByText('Configuration saved.')).toBeVisible();
 });

@@ -134,3 +134,20 @@
   .commerce-inline-form .commerce-field { flex-basis: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { .commerce-page *, .commerce-announcement { scroll-behavior: auto; transition: none; } }
+.product-customization-form{padding:22px;display:grid;gap:18px;min-width:0}
+.product-personalization-dialog .catalog-dialog-heading{padding:18px;gap:8px}
+.product-personalization-dialog .catalog-dialog-heading h2{font-size:1.6rem}
+.product-personalization-dialog .catalog-dialog-heading button{flex-shrink:0}
+.commerce-summary-item:has(>.commerce-personalization-summary){flex-wrap:wrap}
+.commerce-summary-item>.commerce-personalization-summary{flex-basis:100%}
+.product-customization-form h3,.product-customization-form p{margin:0;overflow-wrap:anywhere}
+.product-customization-form h3{font-family:var(--tw-font-display,'Cormorant Garamond',serif);font-size:1.8rem}
+.product-customization-form .commerce-fields{display:grid;gap:18px}
+.product-customization-form :is(input,select,textarea){max-width:100%;min-width:0}
+.product-customization-form input[type=file]{width:100%;font-size:.85rem}
+.product-customization-actions{display:flex;gap:12px;flex-wrap:wrap;position:sticky;bottom:0;padding:12px 0;background:#fff}
+.product-customization-actions .button{flex:1;min-width:0;white-space:normal}
+.commerce-personalization-summary{margin:10px 0;font-size:.9rem;min-width:0;grid-column:1/-1}
+.commerce-personalization-summary>div{display:block;padding:4px 0;overflow-wrap:anywhere}
+.commerce-personalization-summary dt{font-weight:600}
+.commerce-personalization-summary dd{margin:2px 0;white-space:pre-wrap;overflow-wrap:anywhere}

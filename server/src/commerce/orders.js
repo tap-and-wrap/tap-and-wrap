@@ -1,3 +1,4 @@
+import { pendingShipping, orderAccounting, accountingSummary } from './order-accounting.js';
 import { randomInt } from 'node:crypto';
 import mongoose from 'mongoose';
 import { Order } from '../models/Order.js';
@@ -9,9 +10,9 @@ import { env } from '../config/env.js';
 import { assertDatabaseWriteAllowed } from '../config/database-safety.js';
 import { quoteCart } from './cart.js';
 import { fingerprint } from './pricing.js';
-import { calculatePromotions, getShippingQuote, lockShippingQuote, claimDiscountRedemption } from './promotions.js';
+import { calculatePromotions, GOVERNORATES, claimDiscountRedemption } from './promotions.js';
 import { consumeInventory, restockInventory } from './inventory.js';
-import { retainUploads, validateUploadReferences } from './uploads.js';
+import { retainUploads } from './uploads.js';
 import { enqueueOrderEvent } from './notifications.js';
 import { recordAdminAudit } from './audit.js';
 import { commerceError, checkedMoney } from './errors.js';
@@ -33,9 +34,10 @@ export async function checkoutQuote(owner, input, { session, userId } = {}) {
   const cart = await quoteCart(owner, { session, strict: true });
   if (!cart.items.length) throw commerceError(400, 'CART_EMPTY', 'Add an eligible product before checking out.');
   const promotions = await calculatePromotions(cart.items, { code: input.discountCode, session, userId });
-  const shipping = await getShippingQuote(input.governorate, { session });
+  if (!GOVERNORATES.some(area => area.id === input.governorate)) throw commerceError(400, 'INVALID_GOVERNORATE', 'Choose a supported governorate.');
+  const shipping = pendingShipping();
   const totals = { subtotalPiastres: promotions.subtotalPiastres, discountPiastres: promotions.discountPiastres,
-    shippingPiastres: shipping.shippingPiastres, totalPiastres: checkedMoney(promotions.totalPiastres + shipping.shippingPiastres), applied: promotions.applied };
+    shippingPiastres: null, totalPiastres: checkedMoney(promotions.totalPiastres), applied: promotions.applied };
   const digest = fingerprint({ lines: cart.items.map(line => ({ identity: line.identity, quantity: line.quantity, unitPrice: line.unitPricePiastres, customization: line.customizationSnapshot })), totals,
     governorate: input.governorate, paymentMethod: input.paymentMethod, discountCode: input.discountCode?.trim().toUpperCase() || null });
   return { cart, totals, fingerprint: digest, shipping };
@@ -76,27 +78,25 @@ export async function placeOrder(owner, input, userId, { trackingConsentId = nul
         if (!intent) throw commerceError(409, 'CHECKOUT_QUOTE_REQUIRED', 'Review current checkout totals before placing your order.');
         const quote = await checkoutQuote(owner, normalized.customer.governorate ? { ...normalized, governorate: normalized.customer.governorate } : normalized, { session, userId });
         if (intent.fingerprint !== quote.fingerprint || intent.paymentMethod !== input.paymentMethod) throw commerceError(409, 'CHECKOUT_CHANGED', 'Prices or cart contents changed. Review the updated total before submitting again.');
-        let proofId = null;
-        if (input.paymentMethod === 'instapay') {
-          if (!input.paymentProofId) throw commerceError(400, 'PAYMENT_PROOF_REQUIRED', 'Payment proof is required for InstaPay.');
-          await validateUploadReferences([input.paymentProofId], owner, { purpose: 'payment_proof', checkoutKey: input.checkoutKey, session }); proofId = input.paymentProofId;
-        } else if (input.paymentProofId) throw commerceError(400, 'UNEXPECTED_PROOF', 'Cash on Delivery does not require a payment receipt.');
-        const uploadIds = [...new Set([...quote.cart.items.flatMap(line => line.uploadIds), ...(proofId ? [proofId] : [])])];
-        await lockShippingQuote(quote.shipping, { session });
+        if (input.paymentProofId) throw commerceError(400, 'ORDER_FIRST_REQUIRED', 'Create the order before transferring or submitting proof.');
+        const uploadIds = [...new Set(quote.cart.items.flatMap(line => line.uploadIds))];
+        const personalized = quote.cart.items.some(line => line.requiresPersonalization || Object.keys(line.personalization || {}).length > 0 || line.customizationSnapshot);
+        if (personalized && input.paymentMethod === 'cod') throw commerceError(409, 'QUOTATION_REQUIRED', 'Personalized COD requires an owner-authorized quotation before acceptance. Choose InstaPay or contact the store.');
         const inventoryClaims = await consumeInventory(quote.cart.items, quote.totals.applied, session);
         const order = new Order({ owner, userId: userId || null, trackingConsentId, checkoutKey: input.checkoutKey, requestHash, orderNumber: generateOrderNumber(), customer: normalized.customer,
           lines: quote.cart.items.map(line => ({ productId: line.productId, name: line.name, slug: line.slug, variantKey: line.variantKey, variantLabel: line.variantLabel,
             sku: line.sku, description: line.description, categoryId: line.categoryId, subcategoryId: line.subcategoryId, mainImageUrl: line.mainImageUrl,
-            quantity: line.quantity, unitPricePiastres: line.unitPricePiastres, lineTotalPiastres: line.lineTotalPiastres, personalization: line.personalization,
-            customization: line.customizationSnapshot, uploadIds: line.uploadIds })), totals: quote.totals, inventoryClaims, uploadIds, paymentProofId: proofId,
-          paymentMethod: input.paymentMethod, paymentState: input.paymentMethod === 'instapay' ? 'awaiting_verification' : 'unpaid',
+            quantity: line.quantity, unitPricePiastres: line.unitPricePiastres, lineTotalPiastres: line.lineTotalPiastres, personalization: line.personalization, personalizationDefinitions: line.personalizationDefinitions,
+            customization: line.customizationSnapshot, uploadIds: line.uploadIds })), totals: quote.totals, inventoryClaims, uploadIds, accountingVersion: 1, personalized, allowedPaymentMethods: personalized ? ['instapay'] : ['cod', 'instapay'], charges: [pendingShipping()], followUpDueAt: new Date(Date.now() + 12 * 3600000),
+          paymentMethod: input.paymentMethod, paymentState: quote.totals.totalPiastres === 0 ? 'paid' : input.paymentMethod === 'instapay' ? 'awaiting_transfer' : 'unpaid',
           history: [{ at: new Date(), event: 'order_received', actor: userId ? 'customer' : 'guest' }] });
         for (const discount of quote.totals.applied.filter(value => value.kind === 'discount')) {
-          const count = userId ? await DiscountRedemption.countDocuments({ userId, discountId: discount.id }).session(session) : 0;
+          const count = userId ? await DiscountRedemption.countDocuments({ userId, discountId: discount.id, reversedAt: null }).session(session) : 0;
           await claimDiscountRedemption(discount.id, { session, userId, redemptionCount: count });
           assertDatabaseWriteAllowed(DiscountRedemption.db, env);
           await DiscountRedemption.create([{ orderId: order._id, discountId: discount.id, userId: userId || null, amountPiastres: discount.discountPiastres }], { session });
         }
+        order.financialSummary = accountingSummary(order, []);
         assertDatabaseWriteAllowed(Order.db, env); await order.save({ session });
         await retainUploads(uploadIds, owner, order._id, { session });
         assertDatabaseWriteAllowed(CheckoutIntent.db, env);
@@ -119,7 +119,7 @@ export async function placeOrder(owner, input, userId, { trackingConsentId = nul
   }
   throw commerceError(503, 'ORDER_NUMBER_UNAVAILABLE', 'Unable to allocate an order reference. No order was placed.');
 }
-const fulfillmentNext = { received: ['confirmed', 'cancelled'], confirmed: ['preparing', 'cancelled'], preparing: ['out_for_delivery'], out_for_delivery: ['delivered'], delivered: [], cancelled: [] };
+const fulfillmentNext = { received: ['confirmed', 'cancelled'], confirmed: ['preparing', 'cancelled'], preparing: ['out_for_delivery'], out_for_delivery: ['delivered', 'delivery_failed'], delivered: ['returned'], delivery_failed: ['returned'], returned: [], cancelled: [] };
 export function validateOrderTransition(order, input, { admin = false } = {}) {
   if (input.revision !== order.revision) throw commerceError(409, 'ORDER_CHANGED', 'Reload the order before changing its state.');
   const nextFulfillment = input.fulfillmentState || order.fulfillmentState, nextPayment = input.paymentState || order.paymentState;
@@ -132,7 +132,7 @@ export function validateOrderTransition(order, input, { admin = false } = {}) {
     if (nextPayment === 'rejected' && !(input.publicReason || input.internalNote || input.reason)?.trim()) throw commerceError(400, 'REASON_REQUIRED', 'Provide a reason for rejecting payment.');
   }
   if (nextFulfillment === 'cancelled' && nextPayment === 'paid') throw commerceError(409, 'REFUND_REVIEW_REQUIRED', 'Paid orders require a separate refund review before cancellation.');
-  if (nextFulfillment !== 'received' && nextFulfillment !== 'cancelled' && order.paymentMethod === 'instapay' && nextPayment !== 'paid') throw commerceError(409, 'PAYMENT_VERIFICATION_REQUIRED', 'Verify the full InstaPay payment before fulfillment.');
+  if (!['received', 'cancelled', 'returned', 'delivery_failed'].includes(nextFulfillment) && order.paymentMethod === 'instapay' && nextPayment !== 'paid') throw commerceError(409, 'PAYMENT_VERIFICATION_REQUIRED', 'Verify the full InstaPay payment before fulfillment.');
   return { fulfillmentState: nextFulfillment, paymentState: nextPayment, changed: nextFulfillment !== order.fulfillmentState || nextPayment !== order.paymentState };
 }
 export async function changeOrderState(id, owner, input, actor) {
@@ -141,6 +141,12 @@ export async function changeOrderState(id, owner, input, actor) {
   await mongoose.connection.transaction(async session => {
     const order = await Order.findOne({ _id: id, ...(actor?.role === 'admin' ? {} : { owner }) }).session(session);
     if (!order) throw commerceError(404, 'ORDER_NOT_FOUND', 'Order not found.');
+    if (['returned', 'delivery_failed'].includes(input.fulfillmentState) && !(input.publicReason || input.internalNote || input.reason)?.trim()) throw commerceError(400, 'REASON_REQUIRED', 'Record the delivery/return circumstances before changing status.');
+    if (order.accountingVersion !== 1 && input.paymentState) throw commerceError(409, 'LEGACY_ACCOUNTING_REVIEW_REQUIRED', 'Reconcile this historical payment into the reviewed ledger procedure before changing its financial state.');
+    if (order.accountingVersion === 1) {
+      if (input.paymentState || input.fulfillmentState === 'cancelled') throw commerceError(409, 'ACCOUNTING_ACTION_REQUIRED', 'Use the reconciled payment or cancellation operation.');
+      if (['out_for_delivery', 'delivered'].includes(input.fulfillmentState)) { const financial = await orderAccounting(order, { session }); if (financial.unresolvedCharges) throw commerceError(409, 'CHARGE_ACCEPTANCE_REQUIRED', 'Resolve delivery and add-on quotations before dispatch.'); }
+    }
     const next = validateOrderTransition(order, input, { admin: actor?.role === 'admin' });
     if (!next.changed) { result = presentOrder(order.toObject(), { admin: actor?.role === 'admin' }); return; }
     const from = { fulfillmentState: order.fulfillmentState, paymentState: order.paymentState };
@@ -157,7 +163,7 @@ export async function changeOrderState(id, owner, input, actor) {
     // immutable snapshots, including Mixed arrays, during a state transition.
     assertDatabaseWriteAllowed(Order.db, env);
     const updated = await Order.updateOne({ _id: order._id, revision: input.revision }, {
-      $set: { fulfillmentState: order.fulfillmentState, paymentState: order.paymentState, restockedAt: order.restockedAt },
+      $set: { fulfillmentState: order.fulfillmentState, paymentState: order.paymentState, restockedAt: order.restockedAt, ...(order.accountingVersion === 1 ? { financialSummary: await orderAccounting(order, { session }) } : {}) },
       $inc: { revision: 1 }, $push: { history: entry },
     }, { session, runValidators: true });
     if (!updated.matchedCount) throw commerceError(409, 'ORDER_CHANGED', 'Reload the order before changing its state.');
@@ -180,5 +186,5 @@ export async function findOwnedCheckoutSubmission(checkoutKey, owner) {
   return Order.findOne({ owner, checkoutKey }).lean().maxTimeMS(3000);
 }
 export async function orderFiles(order) {
-  return Upload.find({ _id: { $in: order.uploadIds }, orderId: order._id, state: 'retained' }).select('_id purpose mimeType sizeBytes productId fieldKey').lean().maxTimeMS(3000);
+  return Upload.find({ _id: { $in: order.uploadIds }, ...(order.serviceRequestId ? { $or: [{ orderId: order._id }, { requestId: order.serviceRequestId }] } : { orderId: order._id }), state: 'retained' }).select('_id purpose mimeType sizeBytes productId fieldKey').lean().maxTimeMS(3000);
 }

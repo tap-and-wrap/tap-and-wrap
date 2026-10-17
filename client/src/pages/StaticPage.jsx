@@ -1,17 +1,24 @@
 import { Link } from 'react-router-dom';
 import PageShell from '../components/PageShell.jsx';
-import { useSiteContent } from '../components/PublicContent.jsx';
 import PageMetadata from '../seo/PageMetadata.jsx';
 import { contactTracking } from '../tracking/client.js';
 import { whatsappUrl } from '../utils/contact.js';
+import { fixedPages, publicContacts, contentPublicationApproved, legalReviewNotice } from '../../../shared/storefront-content.mjs';
+import '../information-pages.css';
 
-const pages = { about: ['About Us', 'about'], contact: ['Contact', 'contact'], 'privacy-policy': ['Privacy Policy', 'privacyPolicy'], 'refund-policy': ['Refund Policy', 'refundPolicy'], 'shipping-policy': ['Shipping Policy', 'shippingPolicy'], 'terms-of-service': ['Terms of Service', 'termsOfService'] };
 export default function StaticPage({ page }) {
-  const content = useSiteContent();
-  const entry = pages[page];
-  if (!entry) return <PageShell eyebrow="TAP & WRAP" title="Page not found"><PageMetadata title="Page not found | Tap & Wrap" description="This page could not be found." pathname={window.location.pathname} indexable={false}/><p>The address may have changed or this page does not exist.</p><Link className="button button-dark" to="/shop">Explore the Shop</Link></PageShell>;
-  const [title, key] = entry;
-  const record = page === 'about' || page === 'contact' ? content.data?.[key] : content.data?.policies?.[key];
-  const whatsapp = whatsappUrl(record?.whatsapp);
-  return <PageShell eyebrow="TAP & WRAP" title={record?.title || title}><PageMetadata title={`${record?.title || title} | Tap & Wrap`} description={record?.body || `${title} information from Tap & Wrap.`} pathname={`/${page}`} indexable={Boolean(record)}/>{content.isPending ? <p role="status">Loading {title.toLowerCase()}…</p> : content.isError ? <div role="alert"><p>This information could not be loaded.</p><button className="button button-outline" onClick={() => content.refetch()}>Try again</button></div> : !record ? <div className="website-pending"><p>Development preview · Owner-approved {title.toLowerCase()} information is awaiting publication.</p><p>Checkout remains disabled until launch approval.</p><Link to="/shop">Browse the collection</Link></div> : <><div className="website-owner-copy">{record.body}</div>{page === 'contact' && <div className="website-contact-links">{record.email && <a href={`mailto:${record.email}`} onClick={contactTracking}>Email Tap & Wrap</a>}{record.phone && <a href={`tel:${record.phone}`} onClick={contactTracking}>Call Tap & Wrap</a>}{whatsapp && <a href={whatsapp} onClick={contactTracking} target="_blank" rel="noopener noreferrer">WhatsApp</a>}{record.instagram && <a href={record.instagram} onClick={contactTracking} target="_blank" rel="noopener noreferrer">Instagram</a>}{record.address && <p>{record.address}</p>}</div>}{record.updatedAt && <p className="editorial-note">Updated <time dateTime={record.updatedAt}>{new Date(record.updatedAt).toLocaleDateString('en-GB')}</time></p>}</>}</PageShell>;
+  const record = fixedPages[page];
+  if (!record) return <PageShell eyebrow="TAP & WRAP" title="Page not found"><PageMetadata title="Page not found | Tap & Wrap" pathname={window.location.pathname} indexable={false}/><p>This page could not be found.</p><Link to="/shop">Explore the Shop</Link></PageShell>;
+  return <main className={`information-page information-${page}`}>
+    <PageMetadata title={`${record.title} | Tap & Wrap`} description={record.description} pathname={`/${page}`} indexable={contentPublicationApproved}/>
+    <header className="information-heading"><p className="eyebrow">{record.eyebrow}</p><h1>{record.title}</h1><p className="information-intro">{record.intro}</p></header>
+    <div className="information-layout"><nav className="information-contents" aria-label="On this page"><p className="eyebrow">ON THIS PAGE</p>{record.sections.map((s, i) => <a key={s.heading} href={`#information-${i}`}>{s.heading}</a>)}</nav>
+      <article className="information-copy">{record.sections.map((s, i) => <section key={s.heading} id={`information-${i}`} aria-labelledby={`heading-${i}`}><h2 id={`heading-${i}`}>{s.heading}</h2>{s.paragraphs.map(text => <p key={text}>{text}</p>)}</section>)}
+        {record.legal && !contentPublicationApproved && <aside className="information-review" aria-label="Publication review">{legalReviewNotice}</aside>}
+        {page === 'refund-policy' && <p className="information-references">Reference: <a href="https://cpa.gov.eg/ar-eg/%D8%A8%D9%8A%D8%A7%D9%86%D8%A7%D8%AA-%D8%A7%D8%B9%D9%84%D8%A7%D9%85%D9%8A%D8%A9/ArtMID/654/ArticleID/6790" target="_blank" rel="noopener noreferrer">Consumer Protection Agency returns guidance</a> and <a href="https://cpa.gov.eg/en-us/Legislations" target="_blank" rel="noopener noreferrer">Law No. 181 of 2018</a>.</p>}
+      </article>
+    </div>
+    <section className="information-support" aria-labelledby="support-heading"><div><p className="eyebrow">HERE FOR THE DETAILS</p><h2 id="support-heading">A thoughtful gift starts with a conversation.</h2><p>For order support, include your order or request reference.</p></div><div className="information-actions"><a className="button button-dark" href={whatsappUrl(publicContacts.whatsapp)} target="_blank" rel="noopener noreferrer" onClick={contactTracking}>Chat on WhatsApp</a><a href={`mailto:${publicContacts.email}`} onClick={contactTracking}>{publicContacts.email}</a><a href={publicContacts.instagram} target="_blank" rel="noopener noreferrer" onClick={contactTracking}>Find us on Instagram</a></div></section>
+    <nav className="information-related" aria-label="Related information">{Object.entries(fixedPages).filter(([slug]) => slug !== page).map(([slug, value]) => <Link key={slug} to={`/${slug}`}>{value.title}</Link>)}<Link to="/shop">Explore the Shop</Link></nav>
+  </main>;
 }

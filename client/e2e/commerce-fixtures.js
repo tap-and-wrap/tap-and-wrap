@@ -26,7 +26,7 @@ export const commerceOrder = {
 };
 const blankCart = () => ({ items: [], subtotalPiastres: 0, quantity: 0 });
 const pagination = (total, page = 1) => ({ page, limit: 20, total, pages: Math.max(1, Math.ceil(total / 20)), totalPages: Math.max(1, Math.ceil(total / 20)) });
-const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jPh0AAAAASUVORK5CYII=', 'base64');
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWO4NbsXAARVAgOYIL6CAAAAAElFTkSuQmCC', 'base64');
 const fixtureComponents = [{ _id: '710000000000000000000030', name: 'Configured Card', enabledForCustomization: true, configurationApproved: true, priceApproved: true, pricePiastres: 5000, reviewRequired: false, inventory: { mode: 'tracked', quantity: 10, approved: true, available: true } }];
 
 export async function mockCommerce(page, options = {}) {

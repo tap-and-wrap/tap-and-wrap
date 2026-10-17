@@ -63,7 +63,7 @@ describe('catalog API with an isolated MongoDB database', { concurrency: false }
 
   function readyInput(slugValue, overrides = {}) {
     return productInput(slugValue, {
-      status: 'ready', priceApproved: true,
+      visibility: 'public', status: 'ready', priceApproved: true,
       inventory: { mode: 'tracked', quantity: 10, approved: true, available: true },
       ...overrides,
     });
@@ -116,42 +116,24 @@ describe('catalog API with an isolated MongoDB database', { concurrency: false }
     assert.equal(valid.status, 201);
   });
 
-  it('read-only browse preview includes draft/held catalog and inactive categories without publishing or enabling checkout', async () => {
-    const draft = await Product.create(productInput('preview-draft', { pricePiastres: 777777, priceApproved: false }));
-    const held = await Product.create(productInput('preview-held', { status: 'hold', pricePiastres: 123456, priceApproved: false }));
-    await Category.findByIdAndUpdate(child._id, { active: false });
-    const ordinary = await request('/public/products?limit=20');
-    assert.equal(ordinary.body.products.length, 0);
-    env.catalogBrowsePreviewEnabled = true;
+  it('explicit display approval survives checkout activation while inactive categories stay restricted', async () => {
+    const draft = await Product.create(productInput('display-draft', { visibility: 'public' }));
+    await Product.create(productInput('hidden-draft'));
+    const original = { checkout: env.checkoutEnabled, preview: env.catalogBrowsePreviewEnabled };
     try {
-      const visible = await request('/public/products?limit=20');
-      assert.equal(visible.status, 200);
-      assert.equal(visible.body.pagination.total, 2);
-      for (const card of visible.body.products) {
-        assert.equal(card.browseOnly, true);
-        assert.equal(card.pricePiastres, null);
-        assert.equal(card.priceApproved, false);
-        assert.equal(card.orderingAvailable, false);
+      for (const checkout of [false, true]) for (const preview of [false, true]) {
+        env.checkoutEnabled = checkout; env.catalogBrowsePreviewEnabled = preview;
+        const visible = await request('/public/products?limit=20');
+        assert.deepEqual(visible.body.products.map(product => product.slug), [draft.slug]);
+        assert.equal(visible.body.products[0].pricePiastres, null);
+        assert.equal(visible.body.products[0].orderingAvailable, false);
+        assert.equal((await request('/public/products/hidden-draft')).status, 404);
       }
-      const detail = await request('/public/products/preview-draft');
-      assert.equal(detail.status, 200);
-      assert.equal(detail.body.product.browseOnly, true);
-      assert.equal(detail.body.product.inventory.quantity, null);
-      assert.equal(detail.body.product.orderingAvailable, false);
-      assert.equal((await request('/public/products?availability=available')).body.pagination.total, 0);
-      const inactive = await request('/public/categories/child-fixture');
-      assert.equal(inactive.status, 200);
-      assert.equal(inactive.body.category.browseOnly, true);
-      const children = await request('/public/categories?parent=main-fixture');
-      assert.equal(children.body.pagination.total, 1);
-      assert.equal((await Product.findById(draft._id)).status, 'draft');
-      assert.equal((await Product.findById(held._id)).status, 'hold');
-      assert.equal((await Category.findById(child._id)).active, false);
-      const originalCheckout = env.checkoutEnabled;
-      env.checkoutEnabled = true;
-      try { assert.equal((await request('/public/products?limit=20')).body.pagination.total, 0); }
-      finally { env.checkoutEnabled = originalCheckout; }
-    } finally { env.catalogBrowsePreviewEnabled = false; }
+      await Category.findByIdAndUpdate(child._id, { active: false });
+      assert.equal((await request('/public/products/display-draft')).status, 404);
+      assert.equal((await request('/public/categories/child-fixture')).status, 404);
+      assert.equal((await request('/public/products')).body.pagination.total, 0);
+    } finally { env.checkoutEnabled = original.checkout; env.catalogBrowsePreviewEnabled = original.preview; }
   });
 
   it('caps product pages at twenty and keeps list projections lightweight', async () => {
@@ -183,7 +165,7 @@ describe('catalog API with an isolated MongoDB database', { concurrency: false }
     assert.equal((await request('/public/products?q%5B%24ne%5D=x')).status, 400);
   });
 
-  it('hides unapproved and unpublished items while showing approved sold-out products', async () => {
+  it('hides records without display approval while showing approved unavailable products', async () => {
     const ready = await Product.create(readyInput('visible-fixture'));
     await Product.create(productInput('draft-fixture'));
     await Product.create(productInput('hold-fixture', { status: 'hold' }));
@@ -197,7 +179,7 @@ describe('catalog API with an isolated MongoDB database', { concurrency: false }
       ['unapproved-variant-price', { variants: [{ key: 'size-small', attributes: [{ name: 'Size', value: 'Small' }], pricePiastres: 12000, priceApproved: false, inventory: { mode: 'tracked', quantity: 10, approved: true, available: true } }] }],
       ['unapproved-variant-inventory', { variants: [{ key: 'size-small', attributes: [{ name: 'Size', value: 'Small' }], pricePiastres: null, priceApproved: false, inventory: { mode: 'tracked', quantity: 10, approved: false, available: true } }] }],
     ]) {
-      await Product.collection.insertOne({ ...readyInput(slugValue, overrides), published: true, reviewRequired: false, ...overrides });
+      await Product.collection.insertOne({ ...readyInput(slugValue, overrides), published: true, reviewRequired: false, ...overrides, visibility: slugValue === 'unavailable-fixture' ? 'public' : 'hidden' });
     }
     const response = await request('/public/products');
     assert.equal(response.status, 200);
@@ -246,7 +228,7 @@ describe('catalog API with an isolated MongoDB database', { concurrency: false }
     const path = `/admin/products/${product._id}`;
     assert.equal((await request(`${path}/publication`, { method: 'PATCH', headers: adminHeaders, body: { status: 'ready' } })).status, 400);
     assert.equal((await Product.findById(product._id)).status, 'draft');
-    const approved = await request(path, { method: 'PATCH', headers: adminHeaders, body: { priceApproved: true, inventory: { approved: true }, status: 'ready' } });
+    const approved = await request(path, { method: 'PATCH', headers: adminHeaders, body: { priceApproved: true, inventory: { approved: true, quantity: 10 }, visibility: 'public', status: 'ready' } });
     assert.equal(approved.status, 200);
     assert.equal((await request('/public/products/approval-fixture')).status, 200);
     assert.equal((await request(path, { method: 'PATCH', headers: adminHeaders, body: { pricePiastres: 13000 } })).status, 400);
@@ -254,7 +236,10 @@ describe('catalog API with an isolated MongoDB database', { concurrency: false }
     const edited = await request(path, { method: 'PATCH', headers: adminHeaders, body: { pricePiastres: 13000, status: 'draft' } });
     assert.equal(edited.status, 200);
     assert.equal(edited.body.product.priceApproved, false);
-    assert.equal((await request('/public/products/approval-fixture')).status, 404);
+    const browseOnly = await request('/public/products/approval-fixture');
+    assert.equal(browseOnly.status, 200);
+    assert.equal(browseOnly.body.product.pricePiastres, null);
+    assert.equal(browseOnly.body.product.orderingAvailable, false);
   });
 
   it('resets stock approval on changes and keeps Made by Request quantity null', async () => {
@@ -270,7 +255,7 @@ describe('catalog API with an isolated MongoDB database', { concurrency: false }
     assert.equal((await request(path, { method: 'PATCH', headers: adminHeaders, body: { quantity: 4 } })).status, 400);
     response = await request(path, { method: 'PATCH', headers: adminHeaders, body: { mode: 'tracked' } });
     assert.equal(response.status, 200);
-    assert.equal(response.body.product.inventory.quantity, 10);
+    assert.equal(response.body.product.inventory.quantity, 0);
     assert.equal(response.body.product.inventory.approved, false);
   });
 

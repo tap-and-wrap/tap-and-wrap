@@ -1,3 +1,4 @@
+import { chooseImageFiles } from './media-helpers.js';
 import { test, expect } from '@playwright/test';
 import { mockCommerce, cartWithProduct, commerceOrder, commerceProduct, fillCheckout, isolatedImageFile } from './commerce-fixtures.js';
 
@@ -15,7 +16,7 @@ test('lost accepted InstaPay response survives refresh and resolves by owned key
   const fixture = await mockCommerce(page, { checkoutEnabled: true, cart: cartWithProduct(), loseFirstOrderResponse: true });
   await page.goto('/checkout'); await fillCheckout(page);
   await page.getByLabel('InstaPay — full payment', { exact: true }).check();
-  await page.getByLabel('InstaPay payment proof', { exact: false }).setInputFiles(isolatedImageFile('synthetic-proof.png'));
+  await chooseImageFiles(page, page, 'InstaPay payment proof', isolatedImageFile('synthetic-proof.png'));
   await page.getByRole('button', { name: 'Place Order', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Check your order submission' })).toBeVisible();
   expect(fixture.orders).toHaveLength(1); expect(fixture.uploads).toHaveLength(1);
@@ -53,7 +54,7 @@ test('direct private upload has a bounded deadline, is discarded, and never adds
   });
   await page.goto(`/products/${product.slug}`);
   await page.clock.install();
-  await page.getByLabel('Private photo', { exact: false }).setInputFiles(isolatedImageFile());
+  await chooseImageFiles(page, page, 'Private photo', isolatedImageFile());
   await page.getByRole('button', { name: 'Add to Cart', exact: true }).first().click();
   await expect.poll(() => Boolean(pending)).toBe(true);
   await page.clock.runFor(60_100);

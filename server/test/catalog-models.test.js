@@ -29,7 +29,7 @@ function approvedData(overrides = {}) {
     pricePiastres: 12500,
     priceApproved: true,
     inventory: { mode: defaults.inventory.mode, quantity: 10, approved: true, available: true },
-    status: 'ready',
+    visibility: 'public', status: 'ready',
     ...overrides,
   });
 }
@@ -114,7 +114,7 @@ describe('catalog model validation', () => {
   });
 
   it('requires price and stock approval before Ready publication', async () => {
-    await rejectsValidation({ status: 'ready' });
+    await rejectsValidation({ visibility: 'public', status: 'ready' });
     const withoutPrice = new Product(approvedData({ priceApproved: false }));
     await assert.rejects(withoutPrice.validate());
     const withoutStock = new Product(approvedData({ inventory: { mode: new Product(productData()).inventory.mode, quantity: 10, available: true, approved: false } }));
@@ -245,7 +245,7 @@ describe('catalog uniqueness and visibility in an isolated local database', () =
     const ready = await Product.create(approvedData());
     // Simulate older data bypassing Mongoose's publication validator.
     const unapproved = await Product.create(productData());
-    await Product.collection.updateOne({ _id: unapproved._id }, { $set: { status: 'ready', published: true, pricePiastres: 2500, priceApproved: false, 'inventory.approved': false } });
+    await Product.collection.updateOne({ _id: unapproved._id }, { $set: { visibility: 'public', status: 'ready', published: true, pricePiastres: 2500, priceApproved: false, 'inventory.approved': false } });
     assert.equal(await Product.countDocuments(publicProductFilter()), 1);
     assert.equal(String((await Product.findOne(publicProductFilter()))._id), String(ready._id));
   });

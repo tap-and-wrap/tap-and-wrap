@@ -73,7 +73,7 @@ beforeEach(async () => {
 });
 async function makeProduct(overrides = {}) {
   return Product.create({ name: 'Synthetic approved product', slug: `fixture-${randomUUID()}`, categoryId: main._id, subcategoryId: child._id,
-    mainImageKey: 'fixtures/synthetic.webp', galleryKeys: ['fixtures/synthetic.webp'], status: 'ready', reviewRequired: false, pricePiastres: 12345, priceApproved: true,
+    mainImageKey: 'fixtures/synthetic.webp', galleryKeys: ['fixtures/synthetic.webp'], visibility: 'public', status: 'ready', reviewRequired: false, pricePiastres: 12345, priceApproved: true,
     inventory: { mode: 'tracked', quantity: 30, approved: true, available: true }, ...overrides });
 }
 async function auth(role = 'customer') {
@@ -330,13 +330,13 @@ test('F29 isolated shared checkout-fence contention is measured without removing
     const started = performance.now();
     await mongoose.connection.transaction(async session => {
       callbacks += 1; const line = await quoteCartLine({ productId: String(item._id), quantity: 1 }, owner, { session });
-      const shipping = await getShippingQuote('cairo', { session }); await lockShippingQuote(shipping, { session }); await consumeInventory([line], [], session);
+      const shipping = await getShippingQuote('cairo', { session }); assert.equal(shipping.shippingPiastres, null); await assert.rejects(lockShippingQuote(shipping, { session }), { code: 'SHIPPING_POLICY_CHANGED' }); await consumeInventory([line], [], session);
     }); elapsed.push(Math.round(performance.now() - started));
   };
   await Promise.all(products.map(perform));
   assert.equal((await Product.find().lean()).reduce((sum, value) => sum + value.inventory.quantity, 0), 174);
-  assert.equal((await ShippingConfig.findOne()).__v, 6); assert.equal((await Category.findById(main._id)).__v, 6); assert.ok(callbacks >= 6);
-  elapsed.sort((a, b) => a - b); t.diagnostic(`Synthetic local replica-set contention: orders=6; transaction callbacks=${callbacks}; retries=${callbacks - 6}; median=${elapsed[3]}ms; max=${elapsed[5]}ms. Existing shipping/category fences retained.`);
+  assert.equal((await ShippingConfig.findOne()).__v, 0); assert.equal((await Category.findById(main._id)).__v, 6); assert.ok(callbacks >= 6);
+  elapsed.sort((a, b) => a - b); t.diagnostic(`Synthetic local replica-set contention: orders=6; transaction callbacks=${callbacks}; retries=${callbacks - 6}; median=${elapsed[3]}ms; max=${elapsed[5]}ms. Active category/inventory fences retained; obsolete global shipping lock remains prohibited.`);
 });
 test('F49 owned submission recovery confirms an immutable accepted order after a simulated lost response without creating another', async () => {
   const account = await auth(); const accountOwner = `user:${account.user._id}`;

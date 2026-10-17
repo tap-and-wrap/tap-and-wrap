@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const api = 'http://127.0.0.1:4092';
+const api = 'http://127.0.0.1:' + (process.env.TAP_WRAP_CONTRACT_API_PORT || 4092);
 test.beforeEach(async ({ context }) => {
   // Real API validation/serializers are used; only external network is denied.
   await context.route('**/*', route => {
@@ -14,63 +14,58 @@ async function state(request) {
 }
 async function csrf(context) {
   const response = await context.request.get(`${api}/api/v1/auth/csrf`); expect(response.ok()).toBeTruthy();
-  return { Origin: 'http://127.0.0.1:5192', 'x-csrf-token': (await response.json()).data.csrfToken };
+  return { Origin: 'http://127.0.0.1:' + (process.env.TAP_WRAP_CONTRACT_WEB_PORT || 5192), 'x-csrf-token': (await response.json()).data.csrfToken };
 }
 
-test('real Gift Box React selection, normalized component availability, quantities and required message preserve quote/cart contracts with checkout disabled', async ({ page, context, request }) => {
-  const errors = [], cartPosts = [];
-  page.on('pageerror', error => errors.push(error.message));
-  page.on('request', request => { if (request.method() === 'POST' && request.url().endsWith('/commerce/cart/items')) cartPosts.push(request.postDataJSON()); });
-  const before = await state(request);
-  await page.goto('/customize/gift-box');
-  await expect(page.getByRole('heading', { name: 'Build Your Gift Box', exact: true })).toBeVisible();
-  const selected = page.waitForResponse(response => response.url().endsWith('/customization/products/connected-gift-box-product'));
-  await page.getByLabel('Gift box type / size', { exact: true }).selectOption('connected-gift-box-product');
-  const response = await selected; expect(response.status()).toBe(200);
-  const normalized = (await response.json()).data;
-  expect(normalized.template.kind).toBe('gift_box'); expect(normalized.template.fields).toHaveLength(1);
-  expect(normalized.template.fields[0]).toMatchObject({ key: 'gift-message', required: true, maxChars: 80 });
-  expect(normalized.template.groups[0].options.find(option => option.key === 'chocolates')).toMatchObject({ available: true, componentPricePiastres: 1550, priceAdjustmentPiastres: 50, maxQuantity: 3 });
-  expect(normalized.template.groups[0].options.find(option => option.key === 'flowers').available).toBe(false);
-  await expect(page.getByRole('checkbox', { name: /Unavailable flowers/ })).toBeDisabled();
-  await page.getByRole('checkbox', { name: 'Configured chocolates', exact: true }).check();
-  await page.locator('.commerce-option-quantity input').fill('2');
-  await expect(page.getByText(/112[,.]00.*each/)).toBeVisible();
-  const add = page.getByRole('button', { name: 'Add to Cart', exact: true });
-  await expect(add).toBeEnabled(); await add.click();
-  const message = page.getByLabel('Gift box message *', { exact: true });
-  await expect(message).toHaveAttribute('aria-invalid', 'true');
-  await expect(page.getByText('This field is required.', { exact: true })).toBeVisible();
-  expect(cartPosts).toHaveLength(0);
-  await message.fill('A thoughtful synthetic gift');
-  await page.locator('.commerce-configurator .commerce-field input[type="number"]').fill('2');
-  await expect(add).toBeEnabled();
-  const accepted = page.waitForResponse(response => response.url().endsWith('/commerce/cart/items') && response.request().method() === 'POST');
-  await add.click(); const saved = await accepted; expect(saved.status()).toBe(201);
-  await expect(page.getByRole('status').filter({ hasText: 'Added to your cart.' })).toBeVisible();
-  expect(cartPosts).toHaveLength(1);
-  const cartResponse = await context.request.get(`${api}/api/v1/commerce/cart`); expect(cartResponse.ok()).toBeTruthy();
-  const cart = (await cartResponse.json()).data.cart;
-  expect(cart.items).toHaveLength(1); expect(cart.subtotalPiastres).toBe(22400);
-  expect(cart.items[0]).toMatchObject({ productId: before.giftBox.productId, quantity: 2, unitPricePiastres: 11200, lineTotalPiastres: 22400,
-    customization: { templateId: before.giftBox.templateId, kind: 'gift_box', fields: { 'gift-message': 'A thoughtful synthetic gift' } } });
-  expect(cart.items[0].customization.selections[0]).toMatchObject({ groupKey: 'contents', optionKey: 'chocolates', quantity: 2, unitAdjustmentPiastres: 1600, componentId: before.giftBox.componentId });
-  const headers = await csrf(context);
-  const quote = selections => context.request.post(`${api}/api/v1/commerce/customization/quote`, { headers, data: { productId: before.giftBox.productId,
-    customization: { templateId: before.giftBox.templateId, version: 1, selections, fields: { 'gift-message': 'Synthetic validation' } } } });
-  expect((await quote([{ groupKey: 'contents', optionKey: 'chocolates', quantity: 4 }])).status()).toBe(400);
-  expect((await quote([{ groupKey: 'contents', optionKey: 'unconfigured', quantity: 1 }])).status()).toBe(400);
-  const unavailable = await quote([{ groupKey: 'contents', optionKey: 'flowers', quantity: 1 }]); expect(unavailable.status()).toBe(409);
-  expect((await unavailable.json()).error.code).toBe('COMPONENT_UNAVAILABLE');
-  const missing = await context.request.post(`${api}/api/v1/commerce/cart/items`, { headers, data: { productId: before.giftBox.productId, quantity: 1,
-    customization: { templateId: before.giftBox.templateId, version: 1, selections: [{ groupKey: 'contents', optionKey: 'chocolates', quantity: 1 }], fields: {} } } });
-  expect(missing.status()).toBe(400);
-  await page.goto('/cart'); await expect(page.getByRole('heading', { name: 'Your Cart', exact: true })).toBeVisible();
-  await expect(page.getByText(/224[,.]00/).first()).toBeVisible();
-  await page.goto('/checkout'); await expect(page.getByRole('heading', { name: 'Ordering is not enabled yet' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Place Order' })).toHaveCount(0);
-  const blocked = await context.request.post(`${api}/api/v1/commerce/checkout/quote`, { headers, data: { checkoutKey: crypto.randomUUID(), paymentMethod: 'cod', governorate: 'cairo' } });
-  expect(blocked.status()).toBe(403); expect((await blocked.json()).error.code).toBe('CHECKOUT_DISABLED');
-  const after = await state(request); expect(after.orderCount).toBe(before.orderCount); expect(after.puts).toBe(before.puts);
-  expect(after.giftBox.componentQuantity).toBe(20); expect(errors).toEqual([]);
+test('real Gift Box and Engraving are guest request-first services; retries retain requests without stock or cart claims', async ({ page, context, request, browser }) => {
+  const before = await state(request), errors=[], signed=[]; page.on('pageerror',e=>errors.push(e.message));
+  page.on('request', request => { if (request.method() === 'POST' && request.url().endsWith('/commerce/uploads/sign')) signed.push(request.postDataJSON()); });
+  await page.setViewportSize({width:390,height:844});
+  for (const service of ['gift-box','laser-engraving']) {
+    await page.goto('/customize/' + service);
+    await expect(page.getByRole('heading',{name:service==='gift-box'?'Build Your Gift Box':'Laser Engraving',exact:true})).toBeVisible();
+    await expect(page.getByLabel('Gift box type / size',{exact:true})).toHaveCount(0);
+    if (service === 'gift-box') {
+      await page.getByLabel('Occasion',{exact:true}).fill('Synthetic birthday');
+      await page.getByLabel('Desired contents',{exact:true}).fill('Synthetic bespoke contents');
+      await page.getByRole('checkbox',{name:'Connected synthetic chocolates',exact:true}).check();
+      await page.getByLabel('Connected synthetic chocolates quantity',{exact:true}).fill('2');
+      await expect(page.getByText(/Known subtotal estimate:/)).toContainText('31.00');
+      await expect(page.getByRole('checkbox',{name:/Connected unavailable flowers/})).toHaveCount(0);
+    } else { await page.getByLabel('Item description or product reference',{exact:true}).fill('Manual item needing suitability review'); await page.getByLabel('Engraving text',{exact:true}).fill('Synthetic name'); }
+    await page.getByLabel('Your name',{exact:true}).fill('Synthetic guest'); await page.getByLabel('Egyptian WhatsApp number',{exact:true}).fill('01012345678');
+    const submittedAt=Date.now(), submitted=page.waitForResponse(r=>r.url().endsWith('/commerce/service-requests')&&r.request().method()==='POST');
+    await page.getByRole('button',{name:/Submit request/}).click(); const response=await submitted; expect(response.status()).toBe(201);
+    const receipt=(await response.json()).data.request; expect(receipt.reference).toMatch(/^TW-/); expect(receipt.state).toBe('submitted');
+    // A network observation bounds submission time; controlled-clock exact
+    // 0/9/12-hour checks remain in operational-readiness.test.js.
+    expect(Date.parse(receipt.followUpDueAt)).toBeGreaterThanOrEqual(submittedAt+12*3600000);
+    expect(Date.parse(receipt.followUpDueAt)).toBeLessThanOrEqual(Date.now()+12*3600000);
+    const body=response.request().postDataJSON();
+    const retried=await context.request.post(api+'/api/v1/commerce/service-requests',{headers:await csrf(context),data:body});
+    expect(retried.status()).toBe(201); expect((await retried.json()).data.request.id).toBe(receipt.id);
+    const outsider=await browser.newContext(); try {
+      const lookup=await outsider.request.get(api+'/api/v1/commerce/service-requests/submissions/'+body.requestKey);
+      expect((await lookup.json()).data.request).toBeNull();
+    } finally { await outsider.close(); }
+    await expect(page.getByRole('button',{name:'Add to Cart',exact:true})).toHaveCount(0);
+  }
+  const after=await state(request); expect(after.requests).toHaveLength(before.requests.length+2);
+  expect(after.orderCount).toBe(before.orderCount); expect(after.giftBox.componentQuantity).toBe(20); expect(signed).toHaveLength(0);
+  expect(errors).toEqual([]);
+});
+
+test('retained approved template API still validates component quantities, unavailable selections and required fields', async ({ context,request }) => {
+  const before=await state(request), headers=await csrf(context);
+  const response=await context.request.get(api+'/api/v1/commerce/customization/products/connected-gift-box-product');
+  expect(response.status()).toBe(409); expect((await response.json()).error.code).toBe('QUOTATION_REQUIRED');
+  const generic=await context.request.get(api+'/api/v1/commerce/customization/products/connected-generic-product'); expect(generic.status()).toBe(200); const normalized=(await generic.json()).data;
+  expect(normalized.template.kind).toBe('generic'); expect(normalized.template.groups[0].options.find(o=>o.key==='chocolates')).toMatchObject({available:true,componentPricePiastres:1550,maxQuantity:3});
+  expect(normalized.template.groups[0].options.find(o=>o.key==='flowers').available).toBe(false);
+  const quote=selections=>context.request.post(api+'/api/v1/commerce/customization/quote',{headers,data:{productId:before.giftBox.genericProductId,customization:{templateId:before.giftBox.genericTemplateId,version:1,selections,fields:{'gift-message':'Synthetic template validation'}}}});
+  expect((await quote([{groupKey:'contents',optionKey:'chocolates',quantity:4}])).status()).toBe(400);
+  expect((await quote([{groupKey:'contents',optionKey:'unconfigured',quantity:1}])).status()).toBe(400);
+  const unavailable=await quote([{groupKey:'contents',optionKey:'flowers',quantity:1}]); expect(unavailable.status()).toBe(409); expect((await unavailable.json()).error.code).toBe('COMPONENT_UNAVAILABLE');
+  const missing=await context.request.post(api+'/api/v1/commerce/cart/items',{headers,data:{productId:before.giftBox.genericProductId,quantity:1,customization:{templateId:before.giftBox.genericTemplateId,version:1,selections:[{groupKey:'contents',optionKey:'chocolates',quantity:1}],fields:{}}}});
+  expect(missing.status()).toBe(400); expect((await state(request)).orderCount).toBe(before.orderCount);
 });

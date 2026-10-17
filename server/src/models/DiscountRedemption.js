@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 const schema = new mongoose.Schema({
+  reversedAt: Date,
   orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', required: true },
   discountId: { type: mongoose.Schema.Types.ObjectId, ref: 'DiscountCode', required: true },
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }, amountPiastres: { type: Number, required: true },

@@ -39,7 +39,7 @@ async function request(path, { method = 'GET', body, headers = admin?.headers ||
   return { status: response.status, data: payload.data, error: payload.error, headers: response.headers };
 }
 async function product(slug, overrides = {}) {
-  return Product.create({ name: `Isolated ${slug}`, slug, categoryId: main._id, subcategoryId: child._id, mainImageKey: `fixtures/${slug}.webp`, galleryKeys: [`fixtures/${slug}.webp`], pricePiastres: 10000, priceApproved: true, inventory: { mode: 'tracked', quantity: 10, approved: true, available: true }, status: 'ready', reviewRequired: false, ...overrides });
+  return Product.create({ name: `Isolated ${slug}`, slug, categoryId: main._id, subcategoryId: child._id, mainImageKey: `fixtures/${slug}.webp`, galleryKeys: [`fixtures/${slug}.webp`], pricePiastres: 10000, priceApproved: true, inventory: { mode: 'tracked', quantity: 10, approved: true, available: true }, visibility: 'public', status: 'ready', reviewRequired: false, ...overrides });
 }
 const reviewInput = (overrides = {}) => ({ authorLabel: 'Isolated quoted reviewer', rating: 4, text: 'This is an isolated review fixture, never merchant content.', sourceNote: 'Isolated provenance fixture.', approved: true, consentConfirmed: true, status: 'published', ...overrides });
 async function review(overrides = {}) { return Review.create({ ...reviewInput(overrides), createdBy: admin.user._id, updatedBy: admin.user._id }); }
@@ -73,41 +73,31 @@ test('website administration rejects anonymous/customer access and invalid CSRF 
   assert.equal(await AdminAudit.countDocuments(), 0);
 });
 
-test('empty public content contains no policies, testimonials or invented contact information', async () => {
+test('fixed public information is available without a SiteContent document', async () => {
   const result = await request('/public/site-content', { headers: {} });
   assert.equal(result.status, 200);
-  assert.equal(result.data.about, null);
-  assert.equal(result.data.contact, null);
-  assert.deepEqual(result.data.faq, []);
+  assert.equal(result.data.about.title, 'About Us');
+  assert.equal(result.data.contact.email, 'tap.wrap22@gmail.com');
+  assert.ok(result.data.faq.length > 0);
   assert.deepEqual(result.data.featuredReviews, []);
-  assert.ok(Object.values(result.data.policies).every((policy) => policy === null));
-  assert.match(result.headers.get('cache-control'), /public/);
+  assert.match(result.data.policies.shippingPolicy.body, /Pending Confirmation/);
+  assert.equal(await SiteContent.countDocuments(), 0);
 });
 
-test('owner-approved content becomes public and editing text requires renewed approval', async () => {
-  const saved = await request('/admin/website/content', { method: 'PATCH', body: { about: { title: 'Isolated About', body: 'Reviewed isolated about text.', approved: true }, privacyPolicy: { title: 'Isolated Privacy', body: 'Owner-provided test policy.', approved: false }, faq: [{ question: 'Isolated question?', answer: 'Isolated answer.' }], faqApproved: true } });
-  assert.equal(saved.status, 200, JSON.stringify(saved.error));
-  assert.match(saved.headers.get('cache-control'), /no-store/);
-  assert.match(saved.headers.get('x-robots-tag'), /noindex/);
+test('fixed pages and FAQs reject all legacy writes and ignore historical approvals', async () => {
+  const historic = await SiteContent.create({ key: 'website-v1', about: { title: 'Legacy override', body: 'Not source content', approved: true }, faq: [{ question: 'Free shipping?', answer: 'Always free' }], faqApproved: true });
+  const before = JSON.parse(JSON.stringify(historic.toObject()));
+  for (const method of ['PATCH', 'PUT', 'POST', 'DELETE']) {
+    const result = await request('/admin/website/content', { method, body: { expectedRevision: 0, about: { title: 'Changed', body: 'Wrong' }, faqApproved: true } });
+    assert.equal(result.status, 403);
+    assert.equal(result.error.code, 'FIXED_CONTENT_READ_ONLY');
+    assert.match(result.headers.get('cache-control'), /no-store/);
+  }
   const visible = (await request('/public/site-content')).data;
-  assert.equal(visible.about.title, 'Isolated About');
-  assert.equal(visible.policies.privacyPolicy, null);
-  assert.equal(visible.faq.length, 1);
-  assert.equal(visible.about.approved, undefined);
-  const changed = await request('/admin/website/content', { method: 'PATCH', body: { about: { title: 'Isolated About', body: 'Unreviewed change.' } } });
-  assert.equal(changed.status, 200);
-  assert.equal(changed.data.content.about.approved, false);
-  assert.equal((await request('/public/site-content')).data.about, null);
-  assert.equal(await AdminAudit.countDocuments({ action: 'website.content.edit' }), 2);
-});
-
-test('contact values are validated and cannot expose unsafe links or publish empty information', async () => {
-  assert.equal((await request('/admin/website/content', { method: 'PATCH', body: { contact: { instagram: 'javascript:alert(1)', approved: true } } })).status, 400);
-  assert.equal((await request('/admin/website/content', { method: 'PATCH', body: { contact: { approved: true } } })).status, 400);
-  const saved = await request('/admin/website/content', { method: 'PATCH', body: { contact: { email: 'owner@example.test', phone: '01012345678', instagram: 'https://www.instagram.com/isolatedfixture/', approved: true } } });
-  assert.equal(saved.status, 200, JSON.stringify(saved.error));
-  assert.equal((await request('/public/site-content')).data.contact.email, 'owner@example.test');
-  assert.equal(await SiteContent.countDocuments(), 1);
+  assert.equal(visible.about.title, 'About Us');
+  assert.equal(visible.faq.some(item => item.answer === 'Always free'), false);
+  assert.deepEqual(JSON.parse(JSON.stringify((await SiteContent.findById(historic._id)).toObject())), before);
+  assert.equal(await AdminAudit.countDocuments(), 0);
 });
 
 test('review publication requires explicit approval, quote permission and private provenance', async () => {
@@ -332,20 +322,12 @@ test('public bundle lookup refuses to scan past the configured one-hundred-activ
   assert.deepEqual((await request('/public/bundles')).data.bundles, []);
 });
 
-test('site-content revisions protect the first write and retain newer content after stale saves', async () => {
-  const path = '/admin/website/content';
-  const loaded = (await request(path)).data.content;
-  assert.equal(loaded.revision, 0);
-  assert.equal(loaded.__v, undefined);
-  assert.equal((await request(path, { method: 'PATCH', body: { about: { title: 'Missing revision', body: 'Not saved' } }, autoRevision: false })).status, 400);
-  const saved = await request(path, { method: 'PATCH', body: { expectedRevision: loaded.revision, about: { title: 'Newest content', body: 'Newest saved fixture' } } });
-  assert.equal(saved.status, 200, JSON.stringify(saved.error));
-  assert.equal(saved.data.content.revision, 1);
-  const stale = await request(path, { method: 'PATCH', body: { expectedRevision: loaded.revision, about: { title: 'Stale content', body: 'Must not overwrite' } } });
-  assert.equal(stale.status, 409);
-  assert.equal(stale.error.code, 'EDIT_CONFLICT');
-  assert.equal((await request(path)).data.content.about.title, 'Newest content');
-  assert.equal(await AdminAudit.countDocuments({ action: 'website.content.edit' }), 1);
+test('admin content directory is read-only and contains no legacy document details', async () => {
+  const loaded = (await request('/admin/website/content')).data.content;
+  assert.equal(loaded.editable, false);
+  assert.equal(loaded.managedBy, 'source');
+  assert.equal(loaded.about.title, 'About Us');
+  assert.equal(loaded._id, undefined);
 });
 
 test('review revisions reject stale forms and preserve source notes and publication decisions', async () => {
@@ -366,14 +348,14 @@ test('review revisions reject stale forms and preserve source notes and publicat
   assert.equal(await AdminAudit.countDocuments({ action: 'website.review.edit' }), 1);
 });
 
-test('concurrent first content writes and review edits each produce one winner without partial audits', async () => {
+test('concurrent fixed-content writes are denied while review revision protection remains', async () => {
   const contentResults = await Promise.all(['Content A', 'Content B'].map((title) => request('/admin/website/content', { method: 'PATCH', body: { expectedRevision: 0, about: { title, body: 'Concurrent synthetic content' } } })));
-  assert.deepEqual(contentResults.map((result) => result.status).sort(), [200, 409]);
-  assert.equal(contentResults.find((result) => result.status === 409).error.code, 'EDIT_CONFLICT');
+  assert.deepEqual(contentResults.map((result) => result.status), [403, 403]);
+  assert.ok(contentResults.every(result => result.error.code === 'FIXED_CONTENT_READ_ONLY'));
   const record = await review({ status: 'draft', approved: false });
   const reviewResults = await Promise.all(['Quotation A', 'Quotation B'].map((text) => request(`/admin/website/reviews/${record._id}`, { method: 'PATCH', body: { expectedRevision: 0, text } })));
   assert.deepEqual(reviewResults.map((result) => result.status).sort(), [200, 409]);
   assert.equal(reviewResults.find((result) => result.status === 409).error.code, 'EDIT_CONFLICT');
   assert.equal((await Review.findById(record._id)).__v, 1);
-  assert.equal(await AdminAudit.countDocuments(), 2);
+  assert.equal(await AdminAudit.countDocuments(), 1);
 });

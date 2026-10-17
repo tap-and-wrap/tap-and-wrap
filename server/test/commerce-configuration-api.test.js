@@ -1,3 +1,4 @@
+import { publicTemplatePresentation } from '../src/commerce/customization.js';
 import test, { before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
@@ -54,7 +55,7 @@ async function request(path, { method = 'GET', body, headers = admin?.headers ||
   return { status: response.status, data: payload.data, error: payload.error, headers: response.headers, payload };
 }
 async function product(slug, overrides = {}) {
-  return Product.create({ name: `Isolated ${slug}`, slug, description: 'Isolated fixture', categoryId: main._id, subcategoryId: child._id, mainImageKey: `products/${slug}.webp`, galleryKeys: [`products/${slug}.webp`], pricePiastres: 12000, priceApproved: true, inventory: { mode: 'tracked', quantity: 10, approved: true, available: true }, status: 'ready', reviewRequired: false, ...overrides });
+  return Product.create({ name: `Isolated ${slug}`, slug, description: 'Isolated fixture', categoryId: main._id, subcategoryId: child._id, mainImageKey: `products/${slug}.webp`, galleryKeys: [`products/${slug}.webp`], pricePiastres: 12000, priceApproved: true, inventory: { mode: 'tracked', quantity: 10, approved: true, available: true }, visibility: 'public', status: 'ready', reviewRequired: false, ...overrides });
 }
 async function template(key, overrides = {}) {
   return CustomizationTemplate.create({ key, name: `Isolated ${key}`, kind: 'generic', status: 'approved', active: true, groups: [], fields: [], ...overrides });
@@ -126,7 +127,7 @@ test('creating a revision fences its source so stale approved-template editors c
   assert.equal((await CustomizationTemplate.findById(approved._id)).name, approved.name);
 });
 
-test('product configuration and first shipping edits cannot reuse a stale form revision', async () => {
+test('product configuration retains revision checks while obsolete global shipping edits are refused', async () => {
   const ready = await product('configured-revision');
   const path = `/api/v1/admin/commerce/products/${ready._id}/configuration`;
   const fields = [{ key: 'gift-message', label: 'Gift message', type: 'short_text', maxLength: 5000, required: false }];
@@ -139,10 +140,8 @@ test('product configuration and first shipping edits cannot reuse a stale form r
   const initial = (await request(shippingPath)).data.configuration;
   assert.equal(initial.revision, 0);
   const shipping = await request(shippingPath, { method: 'PATCH', body: { expectedRevision: 0, cairoGizaPiastres: 9500 } });
-  assert.equal(shipping.status, 200, JSON.stringify(shipping.error));
-  assert.equal(shipping.data.configuration.revision, 1);
-  assert.equal((await request(shippingPath, { method: 'PATCH', body: { expectedRevision: 0, cairoGizaPiastres: 1 } })).status, 409);
-  assert.equal((await ShippingConfig.findOne()).cairoGizaPiastres, 9500);
+  assert.equal(shipping.status, 409); assert.equal(shipping.error.code, 'SHIPPING_POLICY_CHANGED');
+  assert.equal(await ShippingConfig.countDocuments(), 0);
 });
 
 test('real template CRUD rejects unsupported option availability and enforces configured limits', async () => {
@@ -160,23 +159,15 @@ test('real template CRUD rejects unsupported option availability and enforces co
   assert.equal(saved.data.template.groups[0].options[0].available, undefined);
 });
 
-test('actual engraving DTO has unique fields and hyphenated fields flow through quote and cart validation', async () => {
+test('engraving definitions remain normalized behind the quotation-only service guard', async () => {
   const laser = await template('serialized-laser', { kind: 'laser_engraving', fields: [{ key: 'gift-message', label: 'Message', type: 'text', maxChars: 2000 }], engraving: { materials: [{ key: 'steel', label: 'Approved steel' }], fonts: [{ key: 'script', label: 'Approved script' }], placements: [{ key: 'front', label: 'Front' }], maxChars: 500, maxCharsPerLine: 500, artworkAllowed: true, artworkMaxFiles: 5 } });
   const ready = await product('serialized-engraving', { customization: { enabled: true, serviceKind: 'laser_engraving', templateId: laser._id, serviceEntryEligible: true } });
-  const response = await request(`/api/v1/commerce/customization/products/${ready.slug}`);
-  assert.equal(response.status, 200, JSON.stringify(response.error));
-  const definitions = response.data.template.fields;
-  assert.equal(new Set(definitions.map((field) => field.key)).size, definitions.length);
-  for (const key of ['engraving_text', 'engraving_material', 'engraving_font', 'engraving_placement', 'engraving_artwork']) assert.equal(definitions.filter((field) => field.key === key).length, 1);
-  assert.deepEqual(definitions.find((field) => field.key === 'engraving_material').options, [{ key: 'steel', label: 'Approved steel' }]);
-  const customization = { templateId: String(laser._id), version: 1, selections: [], fields: { 'gift-message': 'A real-contract fixture', engraving_text: 'Approved message', engraving_material: 'steel', engraving_font: 'script', engraving_placement: 'front' } };
-  const quote = await request('/api/v1/commerce/customization/quote', { method: 'POST', body: { productId: String(ready._id), customization } });
-  assert.equal(quote.status, 200, JSON.stringify(quote.error));
-  const cart = await request('/api/v1/commerce/cart/items', { method: 'POST', body: { productId: String(ready._id), quantity: 1, customization } });
-  assert.equal(cart.status, 201, JSON.stringify(cart.error));
-  assert.equal(cart.data.cart.items[0].customization.fields['gift-message'], 'A real-contract fixture');
-  const invalid = structuredClone(customization); invalid.fields['gift-message'] = 'x'.repeat(2001);
-  assert.equal((await request('/api/v1/commerce/customization/quote', { method: 'POST', body: { productId: String(ready._id), customization: invalid } })).status, 400);
+  const blocked = await request(`/api/v1/commerce/customization/products/${ready.slug}`);
+  assert.equal(blocked.status, 409); assert.equal(blocked.error.code, 'QUOTATION_REQUIRED');
+  const serialized = publicTemplatePresentation(laser.toObject(), []);
+  const definitions = serialized.fields;
+  assert.equal(new Set(definitions.map(field => field.key)).size, definitions.length);
+  assert.equal(definitions.filter(field => field.key === 'engraving_artwork').length, 1);
 });
 
 test('configured personalization character limits count Unicode characters consistently with the commerce request contract', async () => {
@@ -316,8 +307,8 @@ test('customization service listing includes only approved eligible products wit
 });
 
 test('public customization quote is authoritative and rejects stale configurations or private field injection', async () => {
-  const box = await template('box-quote', { kind: 'gift_box', groups: [{ key: 'extra', label: 'Extra', minChoices: 1, maxChoices: 1, options: [{ key: 'card', label: 'Card', priceAdjustmentPiastres: 500 }] }] });
-  const ready = await product('quote-box', { customization: { enabled: true, serviceEntryEligible: true, serviceKind: 'gift_box', templateId: box._id } });
+  const box = await template('box-quote', { kind: 'generic', groups: [{ key: 'extra', label: 'Extra', minChoices: 1, maxChoices: 1, options: [{ key: 'card', label: 'Card', priceAdjustmentPiastres: 500 }] }] });
+  const ready = await product('quote-box', { customization: { enabled: true, serviceEntryEligible: true, serviceKind: 'generic', templateId: box._id } });
   const selection = { templateId: String(box._id), version: box.version, selections: [{ groupKey: 'extra', optionKey: 'card', quantity: 1 }], fields: {} };
   const quote = await request('/api/v1/commerce/customization/quote', { method: 'POST', body: { productId: String(ready._id), customization: selection } });
   assert.equal(quote.status, 200);
@@ -344,16 +335,12 @@ test('admin product configuration preserves price and images while requiring an 
   assert.deepEqual(stored.galleryKeys, [...ready.galleryKeys]);
 });
 
-test('shipping configuration is explicitly approved and public rates use all governorates', async () => {
+test('global shipping approval is retired and public delivery amounts remain null for every governorate', async () => {
   const initial = await request('/api/v1/commerce/shipping');
-  assert.equal(initial.status, 200);
-  assert.equal(initial.data.governorates.length, 27);
-  assert.deepEqual(initial.data.rates, { cairoGizaPiastres: 9000, otherGovernoratesPiastres: 12000 });
-  const changed = await request('/api/v1/admin/commerce/shipping', { method: 'PATCH', body: { cairoGizaPiastres: 10000, otherGovernoratesPiastres: 14000, approved: false } });
-  assert.equal(changed.status, 200);
-  assert.equal((await request('/api/v1/commerce/shipping')).status, 409);
-  assert.equal((await request('/api/v1/admin/commerce/shipping', { method: 'PATCH', body: { approved: true } })).status, 200);
-  assert.equal((await request('/api/v1/commerce/shipping')).data.rates.cairoGizaPiastres, 10000);
+  assert.equal(initial.status, 200); assert.equal(initial.data.governorates.length, 27);
+  assert.deepEqual(initial.data.rates, { cairoGizaPiastres: null, otherGovernoratesPiastres: null });
+  const rejected = await request('/api/v1/admin/commerce/shipping', { method: 'PATCH', body: { cairoGizaPiastres: 9000, otherGovernoratesPiastres: 12000, approved: true } });
+  assert.equal(rejected.status, 409); assert.equal(await ShippingConfig.countDocuments(), 0);
 });
 
 test('admin promotion mutations validate configured references and cannot reset redemption counts', async () => {
@@ -392,53 +379,22 @@ test('simultaneous discount claims cannot exceed a configured global usage limit
   assert.equal((await DiscountCode.findById(code._id)).usedCount, 1);
 });
 
-test('shipping quotes lock an approved configuration version and reject merchant changes', async () => {
-  const configuration = await ShippingConfig.create({ key: 'egypt-v1', cairoGizaPiastres: 9000, otherGovernoratesPiastres: 12000, approved: true });
-  const quote = await getShippingQuote('cairo');
-  assert.equal(quote.configurationId, String(configuration._id));
-  assert.equal(quote.configurationVersion, 0);
-  const session = await ShippingConfig.startSession();
-  try {
-    await session.withTransaction(async () => {
-      const locked = await lockShippingQuote(quote, { session });
-      assert.equal(locked.configurationVersion, 1);
-    });
-    const edited = await ShippingConfig.findById(configuration._id);
-    edited.cairoGizaPiastres = 10000;
-    await edited.save();
-    await assert.rejects(session.withTransaction(() => lockShippingQuote(quote, { session })), (error) => error.code === 'SHIPPING_CHANGED');
-    assert.equal((await ShippingConfig.findById(configuration._id)).cairoGizaPiastres, 10000);
-  } finally {
-    await session.endSession();
-  }
+test('legacy shipping rates cannot change merchandise-only pending delivery quotes', async () => {
+  await ShippingConfig.create({ key: 'egypt-v1', cairoGizaPiastres: 9000, otherGovernoratesPiastres: 12000, approved: true });
+  const quote = await getShippingQuote('cairo'); assert.equal(quote.shippingPiastres, null);
+  await assert.rejects(lockShippingQuote(quote), { code: 'SHIPPING_POLICY_CHANGED' });
 });
 
-test('first shipping-default initialization requires enabled checkout and never approves an existing draft', async () => {
-  const originalCheckout = env.checkoutEnabled;
-  const session = await ShippingConfig.startSession();
-  try {
-    const quote = await getShippingQuote('giza');
-    assert.equal(quote.configurationId, null);
-    env.checkoutEnabled = false;
-    await assert.rejects(session.withTransaction(() => lockShippingQuote(quote, { session })), (error) => error.code === 'CHECKOUT_DISABLED');
-    assert.equal(await ShippingConfig.countDocuments(), 0);
-    env.checkoutEnabled = true;
-    await session.withTransaction(() => lockShippingQuote(quote, { session }));
-    const initialized = await ShippingConfig.findOne({ key: 'egypt-v1' });
-    assert.equal(initialized.approved, true);
-    assert.equal(initialized.cairoGizaPiastres, 9000);
-    assert.equal(initialized.otherGovernoratesPiastres, 12000);
-    await ShippingConfig.deleteMany({});
-    const draft = await ShippingConfig.create({ key: 'egypt-v1', approved: false });
-    await assert.rejects(session.withTransaction(() => lockShippingQuote(quote, { session })), (error) => error.code === 'SHIPPING_CHANGED');
-    assert.equal((await ShippingConfig.findById(draft._id)).approved, false);
-  } finally {
-    env.checkoutEnabled = originalCheckout;
-    await session.endSession();
-  }
+test('shipping defaults are never automatically initialized or approved', async () => {
+  const quote = await getShippingQuote('giza');
+  await assert.rejects(lockShippingQuote(quote), { code: 'SHIPPING_POLICY_CHANGED' });
+  assert.equal(await ShippingConfig.countDocuments(), 0);
+  const draft = await ShippingConfig.create({ key: 'egypt-v1', approved: false });
+  await assert.rejects(lockShippingQuote(quote), { code: 'SHIPPING_POLICY_CHANGED' });
+  assert.equal((await ShippingConfig.findById(draft._id)).approved, false);
 });
 
-test('gift-box cart and checkout atomically price and consume configured component quantities with immutable order snapshots', async () => {
+test('gift-box service cannot bypass owner quotation through the ordinary cart', async () => {
   const originalCheckout = env.checkoutEnabled;
   env.checkoutEnabled = true;
   try {
@@ -446,81 +402,21 @@ test('gift-box cart and checkout atomically price and consume configured compone
     const boxTemplate = await template('composed-box', { kind: 'gift_box', groups: [{ key: 'extras', label: 'Gift extras', minChoices: 1, maxChoices: 1, options: [{ key: 'chocolate', label: 'Chocolate selection', componentId: chocolate._id, minQuantity: 1, maxQuantity: 3, priceAdjustmentPiastres: 100 }] }] });
     const baseProduct = await product('composed-gift-box', { customization: { enabled: true, serviceEntryEligible: true, serviceKind: 'gift_box', templateId: boxTemplate._id } });
     const owner = `user:${customer.user._id}`;
-    const configuration = { templateId: String(boxTemplate._id), version: boxTemplate.version, selections: [{ groupKey: 'extras', optionKey: 'chocolate', quantity: 2 }], fields: {} };
-    const cartInput = { productId: String(baseProduct._id), quantity: 2, personalization: {}, customization: configuration };
-    const cartBefore = await mongoose.models.Cart.countDocuments();
-    await assert.rejects(addCartItem(owner, { ...cartInput, customization: { ...configuration, selections: [{ groupKey: 'extras', optionKey: 'unconfigured', quantity: 1 }] } }), /option/i);
-    assert.equal(await mongoose.models.Cart.countDocuments(), cartBefore);
-    await addCartItem(owner, cartInput);
-    assert.equal((await Product.findById(baseProduct._id)).inventory.quantity, 10);
-    assert.equal((await ComponentOption.findById(chocolate._id)).inventory.quantity, 10);
-    const checkoutKey = randomUUID();
-    await prepareCheckout(owner, { checkoutKey, paymentMethod: 'cod', governorate: 'cairo' }, customer.user._id);
-    const order = await placeOrder(owner, { checkoutKey, paymentMethod: 'cod', customer: { name: 'Isolated Customer', email: 'customer@example.test', phone: '01012345678', governorate: 'cairo', address: '10 isolated example street Cairo' } }, customer.user._id);
-    assert.equal(order.paymentState, 'unpaid');
-    assert.equal(order.lines.length, 1);
-    assert.equal(order.lines[0].quantity, 2);
-    assert.equal(order.lines[0].unitPricePiastres, 15200);
-    assert.equal(order.lines[0].lineTotalPiastres, 30400);
-    assert.equal(order.totals.subtotalPiastres, 30400);
-    assert.equal(order.totals.shippingPiastres, 9000);
-    assert.equal(order.totals.totalPiastres, 39400);
-    assert.equal((await Product.findById(baseProduct._id)).inventory.quantity, 8);
-    assert.equal((await ComponentOption.findById(chocolate._id)).inventory.quantity, 6);
-    const snapshot = order.lines[0].customization;
-    assert.equal(snapshot.version, 1);
-    assert.equal(snapshot.selections[0].quantity, 2);
-    assert.equal(snapshot.selections[0].unitAdjustmentPiastres, 1600);
-    assert.equal(snapshot.selections[0].componentName, chocolate.name);
-    const storedBefore = await Order.findById(order.id).lean();
-    const componentEdit = await request(`/api/v1/admin/commerce/components/${chocolate._id}`, { method: 'PATCH', body: { pricePiastres: 4000, priceApproved: true } });
-    assert.equal(componentEdit.status, 200, JSON.stringify(componentEdit.payload));
-    const templateEdit = await request(`/api/v1/admin/commerce/templates/${boxTemplate._id}`, { method: 'PATCH', body: { name: 'Revised future gift box', baseAdjustmentPiastres: 500 } });
-    assert.equal(templateEdit.status, 200, JSON.stringify(templateEdit.payload));
-    assert.equal(templateEdit.data.revisionCreated, true);
-    assert.equal(templateEdit.data.template.version, 2);
-    const storedAfter = await Order.findById(order.id).lean();
-    assert.equal(JSON.stringify(storedAfter.lines), JSON.stringify(storedBefore.lines));
-    assert.deepEqual(storedAfter.totals, storedBefore.totals);
-  } finally {
-    env.checkoutEnabled = originalCheckout;
-  }
+    await assert.rejects(addCartItem(owner, { productId: String(baseProduct._id), quantity: 1 }), { code: 'QUOTATION_REQUIRED' });
+    assert.equal(await Order.countDocuments(), 0);
+  } finally { env.checkoutEnabled = originalCheckout; }
 });
 
-test('laser cart and checkout use configured flat option prices and retain engraving choices while rejecting stale or unapproved templates', async () => {
+test('laser service cannot bypass owner quotation through the ordinary cart', async () => {
   const originalCheckout = env.checkoutEnabled;
   env.checkoutEnabled = true;
   try {
     const engravingTemplate = await template('composed-laser', { kind: 'laser_engraving', engraving: { materials: [{ key: 'wood', label: 'Approved wood', adjustmentPiastres: 300 }], fonts: [{ key: 'classic', label: 'Classic engraving', adjustmentPiastres: 100 }], placements: [{ key: 'front', label: 'Front face', adjustmentPiastres: 200 }], baseAdjustmentPiastres: 1000, maxChars: 40, allowedTextLines: 1, maxCharsPerLine: 40, textRequired: true, artworkAllowed: false } });
     const baseProduct = await product('composed-laser-product', { customization: { enabled: true, serviceEntryEligible: true, serviceKind: 'laser_engraving', templateId: engravingTemplate._id } });
     const owner = `user:${customer.user._id}`;
-    const configuration = { templateId: String(engravingTemplate._id), version: engravingTemplate.version, selections: [], fields: { engraving_text: 'For you ❤️', engraving_material: 'wood', engraving_font: 'classic', engraving_placement: 'front' } };
-    const cartInput = { productId: String(baseProduct._id), quantity: 1, personalization: {}, customization: configuration };
-    await assert.rejects(addCartItem(owner, { ...cartInput, customization: { ...configuration, version: engravingTemplate.version + 1 } }), (error) => error.code === 'CUSTOMIZATION_VERSION_CHANGED');
-    const unavailableTemplate = await template('unapproved-laser', { kind: 'laser_engraving', status: 'draft', active: false, engraving: { materials: [{ key: 'wood', label: 'Wood' }], fonts: [{ key: 'classic', label: 'Classic' }] } });
-    const unavailableProduct = await product('unapproved-laser-product', { customization: { enabled: true, serviceEntryEligible: true, serviceKind: 'laser_engraving', templateId: unavailableTemplate._id } });
-    await assert.rejects(addCartItem(owner, { ...cartInput, productId: String(unavailableProduct._id), customization: { ...configuration, templateId: String(unavailableTemplate._id), version: unavailableTemplate.version } }), (error) => error.code === 'CUSTOMIZATION_UNAVAILABLE');
-    assert.equal(await mongoose.models.Cart.countDocuments(), 0);
-    await addCartItem(owner, cartInput);
-    const checkoutKey = randomUUID();
-    await prepareCheckout(owner, { checkoutKey, paymentMethod: 'cod', governorate: 'cairo' }, customer.user._id);
-    const order = await placeOrder(owner, { checkoutKey, paymentMethod: 'cod', customer: { name: 'Isolated Customer', email: 'customer@example.test', phone: '01012345678', governorate: 'cairo', address: '10 isolated example street Cairo' } }, customer.user._id);
-    assert.equal(order.lines[0].unitPricePiastres, 13600);
-    assert.equal(order.totals.subtotalPiastres, 13600);
-    assert.equal(order.totals.totalPiastres, 22600);
-    const customization = order.lines[0].customization;
-    assert.equal(customization.adjustmentPiastres, 1600);
-    assert.equal(customization.fields.engraving_text, 'For you ❤️');
-    assert.equal(customization.engraving.text, 'For you ❤️');
-    assert.equal(customization.engraving.engraving_material.label, 'Approved wood');
-    assert.equal(customization.engraving.engraving_font.label, 'Classic engraving');
-    assert.equal(customization.engraving.engraving_placement.label, 'Front face');
-    assert.equal(customization.engraving.adjustmentPiastres, 1600);
-    assert.equal((await Product.findById(baseProduct._id)).inventory.quantity, 9);
-    assert.equal(order.paymentState, 'unpaid');
-  } finally {
-    env.checkoutEnabled = originalCheckout;
-  }
+    await assert.rejects(addCartItem(owner, { productId: String(baseProduct._id), quantity: 1 }), { code: 'QUOTATION_REQUIRED' });
+    assert.equal(await Order.countDocuments(), 0);
+  } finally { env.checkoutEnabled = originalCheckout; }
 });
 
 test('partial component price and stock edits require renewed approvals while retaining catalog classification and merged inventory', async () => {
@@ -545,7 +441,7 @@ test('partial component price and stock edits require renewed approvals while re
   assert.equal(changedStock.data.component.inventory.approved, false);
   assert.equal(changedStock.data.component.configurationApproved, false);
   assert.equal(changedStock.data.component.priceApproved, true);
-  const stockApproval = await request(path, { method: 'PATCH', body: { inventory: { approved: true }, configurationApproved: true } });
+  const stockApproval = await request(path, { method: 'PATCH', body: { inventory: { approved: true, quantity: 7 }, configurationApproved: true } });
   assert.equal(stockApproval.status, 200, JSON.stringify(stockApproval.payload));
   assert.equal(stockApproval.data.component.inventory.quantity, 7);
   const made = await request(path, { method: 'PATCH', body: { inventory: { mode: 'made_to_order' } } });
@@ -564,15 +460,9 @@ test('partial component price and stock edits require renewed approvals while re
   assert.equal((await request(path, { method: 'PATCH', body: { inventory: [] } })).status, 400);
 });
 
-test('partial shipping-rate changes clear approval unless approval is explicitly renewed', async () => {
-  await ShippingConfig.create({ key: 'egypt-v1', cairoGizaPiastres: 9000, otherGovernoratesPiastres: 12000, approved: true });
-  const changed = await request('/api/v1/admin/commerce/shipping', { method: 'PATCH', body: { cairoGizaPiastres: 9500 } });
-  assert.equal(changed.status, 200, JSON.stringify(changed.payload));
-  assert.equal(changed.data.configuration.approved, false);
-  assert.equal(changed.data.configuration.otherGovernoratesPiastres, 12000);
-  assert.equal((await request('/api/v1/commerce/shipping')).status, 409);
-  const approved = await request('/api/v1/admin/commerce/shipping', { method: 'PATCH', body: { otherGovernoratesPiastres: 13000, approved: true } });
-  assert.equal(approved.status, 200, JSON.stringify(approved.payload));
-  assert.equal(approved.data.configuration.approved, true);
-  assert.deepEqual((await request('/api/v1/commerce/shipping')).data.rates, { cairoGizaPiastres: 9500, otherGovernoratesPiastres: 13000 });
+test('obsolete shipping edits leave historical rate records unchanged', async () => {
+  const legacy = await ShippingConfig.create({ key: 'egypt-v1', cairoGizaPiastres: 9000, otherGovernoratesPiastres: 12000, approved: true });
+  const result = await request('/api/v1/admin/commerce/shipping', { method: 'PATCH', body: { cairoGizaPiastres: 9500 } });
+  assert.equal(result.status, 409); assert.equal((await ShippingConfig.findById(legacy._id)).cairoGizaPiastres, 9000);
+  assert.equal((await request('/api/v1/commerce/shipping')).data.rates.cairoGizaPiastres, null);
 });

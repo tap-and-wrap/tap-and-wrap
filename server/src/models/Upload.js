@@ -2,11 +2,13 @@ import mongoose from 'mongoose';
 
 const uploadSchema = new mongoose.Schema({
   owner: { type: String, required: true, maxlength: 100, index: true },
-  purpose: { type: String, enum: ['personalization', 'artwork', 'payment_proof'], required: true },
+  purpose: { type: String, enum: ['personalization', 'artwork', 'payment_proof', 'service_reference'], required: true },
+  requestKey: { type: String, select: false }, requestId: { type: mongoose.Schema.Types.ObjectId, ref: 'ServiceRequest' },
   state: { type: String, enum: ['pending', 'verifying', 'complete', 'retained', 'deleting', 'failed'], default: 'pending', required: true },
   productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
   fieldKey: { type: String, maxlength: 80 },
   checkoutKey: { type: String, maxlength: 128, select: false },
+  proofOrderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', select: false },
   mimeType: { type: String, enum: ['image/jpeg', 'image/png', 'image/webp'], required: true },
   sizeBytes: { type: Number, min: 1, max: 10485760, required: true, validate: Number.isSafeInteger },
   temporaryKey: { type: String, required() { return this.state !== 'retained'; }, select: false },

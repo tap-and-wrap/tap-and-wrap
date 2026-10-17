@@ -45,8 +45,12 @@ test('authorized draft preview preserves numbered image positions without publis
   await expect(page.locator('.product-price')).toHaveText('Price awaiting approval');
   await expect(page.getByRole('button', { name: 'Ordering disabled', exact: true })).toBeDisabled();
   await expect(page.getByRole('link', { name: 'Customize This' })).toHaveCount(0);
-  await expect(page.locator('input[type="file"]')).toHaveCount(1);
-  await expect(page.locator('input[type="file"]')).toBeDisabled();
+  await expect(page.getByRole('button', { name: /Upload Image$/ })).toBeDisabled();
+  await expect(page.locator('input[type="file"]')).toHaveCount(3);
+  for (const input of await page.locator('input[type="file"]').all()) {
+    await expect(input).toBeHidden();
+    await expect(input).toBeDisabled();
+  }
   await expect(page.getByLabel('Quantity', { exact: true })).toBeDisabled();
   expect(requests.some((request) => request.path.startsWith('/public/products'))).toBe(false);
   expect(saves).toHaveLength(0);

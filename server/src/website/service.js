@@ -1,3 +1,4 @@
+import { fixedContentDto } from '../../../shared/storefront-content.mjs';
 import { attachProductPaths, productIdentityFilter } from '../catalog/product-addresses.js';
 import mongoose from 'mongoose';
 import { z } from 'zod';
@@ -22,21 +23,6 @@ import { prepareAdminRevision, adminRevision } from '../utils/admin-revision.js'
 const TIMEOUT = 3000;
 const objectId = z.string().regex(/^[a-f\d]{24}$/i);
 const text = (maximum) => z.string().trim().max(maximum);
-const optionalEmail = text(254).refine((value) => value === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value), 'Provide a valid email address.');
-const optionalPhone = text(40).refine((value) => value === '' || /^(?:\+20|0)1[0125]\d{8}$/.test(value), 'Provide an Egyptian mobile number.');
-const section = z.object({ title: text(160), body: text(15000), approved: z.boolean().optional() }).strict();
-const contact = z.object({
-  email: optionalEmail.optional(), phone: optionalPhone.optional(), whatsapp: optionalPhone.optional(), address: text(1000).optional(), body: text(3000).optional(),
-  instagram: text(300).refine((value) => {
-    if (!value) return true;
-    try { const url = new URL(value); return url.protocol === 'https:' && ['instagram.com', 'www.instagram.com'].includes(url.hostname) && !url.username && !url.password && !url.search && !url.hash; } catch { return false; }
-  }, 'Provide an HTTPS Instagram profile URL.').optional(), approved: z.boolean().optional(),
-}).strict();
-export const siteContentSchema = z.object({
-  expectedRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  about: section.optional(), contact: contact.optional(), privacyPolicy: section.optional(), refundPolicy: section.optional(), shippingPolicy: section.optional(), termsOfService: section.optional(),
-  faq: z.array(z.object({ question: text(250).min(1), answer: text(3000).min(1) }).strict()).max(20).optional(), faqApproved: z.boolean().optional(),
-}).strict().refine((value) => Object.keys(value).some((key) => key !== 'expectedRevision'), 'Provide at least one section.');
 const reviewFields = {
   productId: objectId.nullable().optional(), authorLabel: text(100).min(1).nullable().optional(), rating: z.number().int().min(1).max(5).nullable().optional(), text: text(3000).min(1),
   status: z.enum(['draft', 'published', 'hidden']).optional(), approved: z.boolean().optional(), consentConfirmed: z.boolean().optional(), sourceNote: text(2000).optional(), featured: z.boolean().optional(), displayOrder: z.number().int().min(0).max(100000).optional(),
@@ -50,7 +36,7 @@ export const websiteQuerySchema = z.object({
 }).strict();
 export const customerQuerySchema = websiteQuerySchema.pick({ page: true, limit: true, q: true });
 export const publicReviewQuerySchema = websiteQuerySchema.pick({ page: true, limit: true });
-export const notificationQuerySchema = websiteQuerySchema.pick({ page: true, limit: true }).extend({ state: z.enum(['queued', 'processing', 'failed', 'sent', 'dead', 'uncertain']).optional() }).strict();
+export const notificationQuerySchema = websiteQuerySchema.pick({ page: true, limit: true }).extend({ state: z.enum(['queued', 'processing', 'failed', 'sent', 'dead', 'uncertain', 'suppressed']).optional() }).strict();
 export const websiteModels = [Review, SiteContent];
 const pageFor = (query) => ({ page: query.page ?? 1, limit: query.limit ?? 20, skip: ((query.page ?? 1) - 1) * (query.limit ?? 20) });
 const paginationFor = (page, total) => ({ page: page.page, limit: page.limit, total, pages: Math.ceil(total / page.limit) });
@@ -95,23 +81,18 @@ export async function listPublicReviews(slug, query) {
 }
 
 export async function getPublicSiteContent() {
-  const record = await SiteContent.findOne({ key: 'website-v1' }).select('-updatedBy -__v').lean().maxTimeMS(TIMEOUT);
   // The bounded overscan permits hiding reviews whose related product was withdrawn.
   const candidates = await Review.find({ status: 'published', approved: true, consentConfirmed: true, featured: true })
     .select('productId authorLabel rating text createdAt').sort({ displayOrder: 1, _id: 1 }).limit(40).lean().maxTimeMS(TIMEOUT);
   const eligibleIds = await eligibleReviewProductIds(candidates.filter((review) => review.productId).map((review) => review.productId));
-  const contentSection = (name) => record?.[name]?.approved ? { title: record[name].title, body: record[name].body, updatedAt: record[name].updatedAt } : null;
-  const { approved: _approved, updatedAt: _updatedAt, ...contactFields } = record?.contact || {};
   return {
-    about: contentSection('about'), contact: record?.contact?.approved ? contactFields : null,
-    policies: Object.fromEntries(['privacyPolicy', 'refundPolicy', 'shippingPolicy', 'termsOfService'].map((name) => [name, contentSection(name)])),
-    faq: record?.faqApproved ? record.faq.map(({ question, answer }) => ({ question, answer })) : [],
+    ...fixedContentDto(),
     featuredReviews: candidates.filter((review) => !review.productId || eligibleIds.has(String(review.productId))).slice(0, 8).map(reviewPresentation),
   };
 }
 
 export async function getAdminSiteContent() {
-  return adminRevision((await SiteContent.findOne({ key: 'website-v1' }).select('-updatedBy').lean().maxTimeMS(TIMEOUT)) || new SiteContent().toObject());
+  return { ...fixedContentDto(), editable: false, managedBy: 'source', revision: 0 };
 }
 
 export async function auditedWebsiteMutation(actor, action, resourceType, resourceId, callback) {
@@ -131,32 +112,8 @@ export async function auditedWebsiteMutation(actor, action, resourceType, resour
   return result;
 }
 
-export async function updateSiteContent(actor, input) {
-  return auditedWebsiteMutation(actor, 'website.content.edit', 'site_content', 'website-v1', async (session) => {
-    const record = await SiteContent.findOne({ key: 'website-v1' }).session(session) || new SiteContent();
-    await prepareAdminRevision(record, input.expectedRevision, { session });
-    const creating = record.isNew;
-    for (const name of ['about', 'contact', 'privacyPolicy', 'refundPolicy', 'shippingPolicy', 'termsOfService']) {
-      if (!input[name]) continue;
-      const previous = record[name]?.toObject() || {};
-      const patch = input[name];
-      const changed = Object.entries(patch).some(([key, value]) => key !== 'approved' && value !== previous[key]);
-      record[name] = { ...previous, ...patch, approved: patch.approved ?? (changed ? false : previous.approved), updatedAt: new Date() };
-    }
-    if (input.faq !== undefined) {
-      const changed = JSON.stringify(input.faq) !== JSON.stringify(record.faq.map(({ question, answer }) => ({ question, answer })));
-      record.faq = input.faq;
-      if (changed && input.faqApproved === undefined) record.faqApproved = false;
-    }
-    if (input.faqApproved !== undefined) record.faqApproved = input.faqApproved;
-    record.updatedBy = actor._id;
-    await record.save({ session });
-    if (creating) {
-      await SiteContent.updateOne({ _id: record._id, __v: 0 }, { $set: { __v: 1 } }, { session, timestamps: false });
-      record.__v = 1;
-    }
-    return record;
-  });
+export async function updateSiteContent() {
+  throw commerceError(403, 'FIXED_CONTENT_READ_ONLY', 'Pages, public contacts and policy FAQs are managed in source code and cannot be edited here.');
 }
 
 export async function listAdminReviews(query) {
@@ -234,8 +191,8 @@ export async function websiteAnalytics(now = new Date()) {
   const since = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const [result] = await Order.aggregate([
     { $match: { createdAt: { $gte: since, $lte: now } } },
-    { $project: { paymentState: 1, fulfillmentState: 1, total: '$totals.totalPiastres' } },
-    { $group: { _id: null, orders: { $sum: 1 }, paidOrders: { $sum: { $cond: [{ $eq: ['$paymentState', 'paid'] }, 1, 0] } }, deliveredOrders: { $sum: { $cond: [{ $eq: ['$fulfillmentState', 'delivered'] }, 1, 0] } }, cancelledOrders: { $sum: { $cond: [{ $eq: ['$fulfillmentState', 'cancelled'] }, 1, 0] } }, collectedPiastres: { $sum: { $cond: [{ $eq: ['$paymentState', 'paid'] }, '$total', 0] } }, awaitingVerificationPiastres: { $sum: { $cond: [{ $eq: ['$paymentState', 'awaiting_verification'] }, '$total', 0] } } } },
+    { $project: { paymentState: 1, fulfillmentState: 1, total: '$totals.totalPiastres', ledgerCollected: { $cond: [{ $eq: ['$accountingVersion', 1] }, { $subtract: [{ $ifNull: ['$financialSummary.collectedPiastres', 0] }, { $ifNull: ['$financialSummary.refundedPiastres', 0] }] }, null] } } },
+    { $group: { _id: null, orders: { $sum: 1 }, paidOrders: { $sum: { $cond: [{ $eq: ['$paymentState', 'paid'] }, 1, 0] } }, deliveredOrders: { $sum: { $cond: [{ $eq: ['$fulfillmentState', 'delivered'] }, 1, 0] } }, cancelledOrders: { $sum: { $cond: [{ $eq: ['$fulfillmentState', 'cancelled'] }, 1, 0] } }, collectedPiastres: { $sum: { $ifNull: ['$ledgerCollected', { $cond: [{ $eq: ['$paymentState', 'paid'] }, '$total', 0] }] } }, awaitingVerificationPiastres: { $sum: { $cond: [{ $eq: ['$paymentState', 'awaiting_verification'] }, '$total', 0] } } } },
   ]).option({ maxTimeMS: TIMEOUT });
   const { _id: _id, ...summary } = result || { orders: 0, paidOrders: 0, deliveredOrders: 0, cancelledOrders: 0, collectedPiastres: 0, awaitingVerificationPiastres: 0 };
   checkedMoney(summary.collectedPiastres);
@@ -263,7 +220,7 @@ export async function listPublicBundles(now = new Date()) {
     // At most twenty rules × twenty configured item references are read per batch.
     const ids = [...new Set(candidates.flatMap((bundle) => bundle.items.map((item) => String(item.productId))))];
     const products = await Product.find({ $and: [publicProductFilter(), orderableProductStockFilter(), { _id: { $in: ids } }] })
-      .select('name slug categoryId subcategoryId mainImageKey pricePiastres compareAtPiastres priceApproved inventory variants personalization.fields.required customization.enabled featured bestSeller').lean().maxTimeMS(TIMEOUT);
+      .select('visibility status published reviewRequired name slug categoryId subcategoryId mainImageKey pricePiastres compareAtPiastres priceApproved inventory variants personalization customization.enabled featured bestSeller').lean().maxTimeMS(TIMEOUT);
     const byId = new Map((await attachEligibleCategories(products)).map((product) => [String(product._id), product]));
     for (const bundle of candidates) {
       const cards = [];

@@ -25,6 +25,9 @@ const TrackOrderPage = lazy(() => import('./pages/TrackOrderPage.jsx'));
 const CustomizationPage = lazy(() => import('./pages/CustomizationPage.jsx'));
 const AdminCommercePage = lazy(() => import('./pages/AdminCommercePage.jsx'));
 const AdminOrderPage = lazy(() => import('./pages/AdminOrderPage.jsx'));
+const ServiceRequestPage = lazy(() => import('./pages/ServiceRequestPage.jsx'));
+const AdminAttentionPage = lazy(() => import('./pages/AdminAttentionPage.jsx'));
+const AdminRequestsPage = lazy(() => import('./pages/AdminRequestsPage.jsx'));
 const AdminProductConfigurationPage = lazy(() => import('./pages/AdminProductConfigurationPage.jsx'));
 const ProductPage = lazy(() => import('./pages/ProductPage.jsx'));
 const AdminProductsPage = lazy(() => import('./pages/AdminProductsPage.jsx'));
@@ -43,8 +46,11 @@ export default function App() {
   <Route path="/products/:slug" element={<ProductPage/>}/>
   <Route path="/products/:slug/customize" element={<CustomizationPage/>}/>
   <Route path="/customize" element={<CustomizePage/>}/>
-  <Route path="/customize/gift-box" element={<CustomizationPage kind="gift_box"/>}/>
-  <Route path="/customize/laser-engraving" element={<CustomizationPage kind="laser_engraving"/>}/>
+  <Route path="/customize/gift-box" element={<ServiceRequestPage service="gift_box"/>}/>
+  <Route path="/customize/laser-engraving" element={<ServiceRequestPage service="laser_engraving"/>}/>
+  <Route path="/admin/attention" element={<RequireAdmin><AdminAttentionPage/></RequireAdmin>}/>
+  <Route path="/admin/requests" element={<RequireAdmin><AdminRequestsPage/></RequireAdmin>}/>
+  <Route path="/admin/requests/:id" element={<RequireAdmin><AdminRequestsPage/></RequireAdmin>}/>
   <Route path="/login" element={<AuthPage/>}/>
   <Route path="/signup" element={<AuthPage signup/>}/>
   <Route path="/forgot-password" element={<AccountRecoveryPage/>}/>

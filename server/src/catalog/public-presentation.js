@@ -1,4 +1,5 @@
 import { isSafeImageReference } from './fields.js';
+import { productPersonalizationFields, productPersonalizationIssues } from '../../../shared/product-personalization.mjs';
 
 // Storage references become public only through an explicitly configured HTTPS origin.
 export function mediaUrlForKey(key, baseUrl = process.env.CATALOG_MEDIA_BASE_URL || '') {
@@ -20,7 +21,8 @@ export function inventoryCanOrder(inventory) {
 }
 
 export function productCanOrder(product) {
-  if (product.status !== 'ready' || product.published !== true || product.reviewRequired === true ||
+  if (productPersonalizationIssues(product.personalization).length) return false;
+  if (product.visibility !== 'public' || product.status !== 'ready' || product.published !== true || product.reviewRequired === true ||
       product.priceApproved !== true || !Number.isSafeInteger(product.pricePiastres) || product.pricePiastres <= 0 ||
       !product.mainImageKey || !product.categoryId || !product.inventory?.approved || !product.inventory.available) return false;
   if (product.variants?.some(variant => (variant.pricePiastres != null &&
@@ -34,8 +36,8 @@ export function categoryPresentation(category) {
 }
 
 export function publicProductCard(product) {
-  const browseOnly = product.status !== 'ready' || product.published !== true || product.reviewRequired === true || product.priceApproved !== true || !Number.isSafeInteger(product.pricePiastres) || product.pricePiastres <= 0 || product.inventory?.approved !== true || product.variants?.some(variant => (variant.pricePiastres != null && (variant.priceApproved !== true || variant.pricePiastres <= 0)) || variant.inventory?.approved !== true) || product.categoryId?.active === false || product.subcategoryId?.active === false;
-  const priceApproved = !browseOnly && product.priceApproved === true && Number.isSafeInteger(product.pricePiastres);
+  const browseOnly = product.visibility !== 'public' || product.status !== 'ready' || product.published !== true || product.reviewRequired === true || product.priceApproved !== true || !Number.isSafeInteger(product.pricePiastres) || product.pricePiastres <= 0 || product.inventory?.approved !== true || product.variants?.some(variant => (variant.pricePiastres != null && (variant.priceApproved !== true || variant.pricePiastres <= 0)) || variant.inventory?.approved !== true) || product.categoryId?.active === false || product.subcategoryId?.active === false;
+  const priceApproved = product.priceApproved === true && Number.isSafeInteger(product.pricePiastres) && product.pricePiastres > 0;
   return {
     _id: String(product._id),
     name: product.name,
@@ -48,10 +50,11 @@ export function publicProductCard(product) {
     compareAtPiastres: priceApproved ? product.compareAtPiastres ?? null : null,
     priceApproved,
     browseOnly,
+    visibility: product.visibility,
     featured: Boolean(product.featured),
     bestSeller: Boolean(product.bestSeller),
     orderingAvailable: !browseOnly && priceApproved && productCanOrder(product),
-    requiresOptions: Boolean(product.variants?.length || product.personalization?.fields?.some((field) => field.required) || product.customization?.enabled),
+    requiresOptions: Boolean(product.variants?.length || product.personalization?.requiredBeforePurchase || productPersonalizationFields(product.personalization).some(field => field.required) || product.customization?.enabled),
   };
 }
 
@@ -68,12 +71,13 @@ export function publicProductDetail(product) {
     inventory: card.browseOnly ? { mode: product.inventory?.mode, quantity: null, available: false } : publicInventory(product.inventory),
     variants: (product.variants || []).map((variant) => ({
       key: variant.key,
+      priceApproved: variant.pricePiastres == null ? card.priceApproved : variant.priceApproved === true && Number.isSafeInteger(variant.pricePiastres) && variant.pricePiastres > 0,
       attributes: variant.attributes,
-      pricePiastres: card.browseOnly ? null : variant.pricePiastres == null ? (card.priceApproved ? product.pricePiastres : null) : variant.priceApproved ? variant.pricePiastres : null,
+      pricePiastres: variant.pricePiastres == null ? (card.priceApproved ? product.pricePiastres : null) : variant.priceApproved === true && Number.isSafeInteger(variant.pricePiastres) && variant.pricePiastres > 0 ? variant.pricePiastres : null,
       inventory: card.browseOnly ? { mode: variant.inventory?.mode, quantity: null, available: false } : publicInventory(variant.inventory),
-      orderingAvailable: !card.browseOnly && card.priceApproved && inventoryCanOrder(variant.inventory),
+      orderingAvailable: card.orderingAvailable && inventoryCanOrder(variant.inventory),
     })),
-    personalization: { fields: product.personalization?.fields || [] },
+    personalization: { requiredBeforePurchase: product.personalization?.requiredBeforePurchase === true, fields: productPersonalizationFields(product.personalization) },
     customization: {
       enabled: Boolean(product.customization?.enabled),
       templateId: product.customization?.templateId ? String(product.customization.templateId) : null,

@@ -6,13 +6,17 @@ if (process.argv.length !== 3 || process.argv[2] !== '--isolated-contract-tests'
   || process.env.MONGODB_URI || process.env.CATALOG_IMPORT_STAGING_URI || process.env.NODE_OPTIONS) {
   throw new Error('Connected tests require the guarded isolated launcher and no inherited database/runtime options.');
 }
-const clientOrigin = 'http://127.0.0.1:5192';
-const apiOrigin = 'http://127.0.0.1:4092';
+const port = Number(process.env.TAP_WRAP_CONTRACT_API_PORT || 4092), webPort = Number(process.env.TAP_WRAP_CONTRACT_WEB_PORT || 5192);
+if (![port, webPort].every(p => Number.isInteger(p) && p >= 1024 && p <= 65535)) throw new Error('Invalid isolated test ports');
+const clientOrigin = 'http://127.0.0.1:' + webPort;
+const apiOrigin = 'http://127.0.0.1:' + port;
+const enabledCheckout = process.env.TAP_WRAP_CONTRACT_CHECKOUT === 'true';
 Object.assign(process.env, {
   DATABASE_TARGET: 'local', MONGODB_URI: '', CATALOG_IMPORT_STAGING_URI: '', STAGING_PREVIEW_ENABLED: 'false',
   DOTENV_CONFIG_PATH: fileURLToPath(new URL('../.no-env-file', import.meta.url)),
   CLIENT_ORIGIN: clientOrigin, SESSION_SECRET: 'tap-wrap-connected-isolated-fixture-secret-never-production',
-  CHECKOUT_ENABLED: 'false', COMMERCE_LAUNCH_AUTHORIZED: 'false', STORAGE_ENABLED: 'false',
+  CHECKOUT_ENABLED: String(enabledCheckout), COMMERCE_LAUNCH_AUTHORIZED: String(enabledCheckout), STORAGE_ENABLED: 'false',
+  CUSTOM_REQUESTS_ENABLED: 'true', CUSTOM_REQUESTS_LAUNCH_AUTHORIZED: 'true',
   EMAIL_ENABLED: 'false', EMAIL_USER: '', EMAIL_APP_PASSWORD: '', EMAIL_SMOKE_TEST_ENABLED: 'false',
   NOTIFICATIONS_ENABLED: 'false', NOTIFICATION_LIVE_DELIVERY_ENABLED: 'false', NOTIFICATION_SAFE_RECIPIENTS: '', RESEND_API_KEY: '',
   META_ENABLED: 'false', META_POLICY_APPROVED: 'false', META_CAPI_ENABLED: 'false', META_PIXEL_ID: '', META_ACCESS_TOKEN: '',
@@ -24,13 +28,21 @@ Object.assign(process.env, {
 const [{ default: express }, { default: mongoose }, { default: bcrypt }, { app }, { startTestDatabase }, storageModule] = await Promise.all([
   import('express'), import('mongoose'), import('bcryptjs'), import('../../src/app.js'), import('./database.js'), import('../../src/commerce/storage.js'),
 ]);
-const { Category, Product, User, Order, Upload, Cart, CustomizationTemplate, ComponentOption } = mongoose.models;
+const { Category, Product, User, Order, Upload, Cart, CustomizationTemplate, ComponentOption, ServiceRequest } = mongoose.models;
 let database;
-let server;
-async function stop() {
-  if (server) await new Promise(resolve => server.close(resolve));
-  await database?.stop();
+let server, stopping;
+function stop() {
+  return stopping ||= (async () => {
+    if (server) { const closed = new Promise(resolve => server.close(resolve)); server.closeAllConnections(); await closed; }
+    await database?.stop();
+  })();
 }
+process.on('message', async message => {
+  if (message !== 'stop') return;
+  try { await stop(); process.send?.({ stopped: true }); } catch { process.exitCode = 1; }
+  finally { process.disconnect?.(); }
+});
+process.once('disconnect', () => { void stop(); });
 try {
   database = await startTestDatabase({ models: Object.values(mongoose.models), transactions: true });
   const category = await Category.create({ name: 'Connected Fixture Category', slug: 'connected-fixture-category', active: true });
@@ -43,8 +55,9 @@ try {
       placements: [{ key: 'front', label: 'Approved front', adjustmentPiastres: 50 }] } });
   const product = await Product.create({ name: 'Connected approved laser product', slug: 'connected-laser-product', description: 'Isolated synthetic fixture.', categoryId: category._id,
     mainImageKey: 'fixtures/laser.webp', galleryKeys: ['fixtures/laser.webp'], pricePiastres: 10000, priceApproved: true,
-    inventory: { mode: 'tracked', quantity: 10, approved: true, available: true }, status: 'ready',
+    inventory: { mode: 'tracked', quantity: 10, approved: true, available: true }, visibility: 'public', status: 'ready',
     customization: { enabled: true, templateId: template._id, serviceKind: 'laser_engraving', serviceEntryEligible: true } });
+  await Product.create({ name:'Connected personalized product', slug:'connected-personalized-product', categoryId:category._id, visibility:'public',status:'ready',mainImageKey:'fixtures/personalized.webp',galleryKeys:['fixtures/personalized.webp'],pricePiastres:10000,priceApproved:true,inventory:{mode:'tracked',quantity:10,approved:true,available:true},personalization:{requiredBeforePurchase:true,fields:[{key:'photo',label:'Audit photo',type:'image',required:true,minFiles:1,maxFiles:1,maxBytes:5242880,acceptedMimeTypes:['image/png']}]}});
   const giftComponents = await ComponentOption.create([
     { name: 'Connected synthetic chocolates', slug: 'connected-gift-chocolates', catalogRole: 'Customization Option', categoryId: category._id,
       mainImageKey: 'fixtures/chocolates.webp', galleryKeys: ['fixtures/chocolates.webp'], pricePiastres: 1550, priceApproved: true,
@@ -53,6 +66,7 @@ try {
       mainImageKey: 'fixtures/flowers.webp', galleryKeys: ['fixtures/flowers.webp'], pricePiastres: 1000, priceApproved: true,
       inventory: { mode: 'tracked', quantity: 0, approved: true, available: false }, enabledForCustomization: true, configurationApproved: true, reviewRequired: false },
   ]);
+  giftComponents[0].requestPolicy = { enabled:true, services:['gift_box'], availability:'available', pricing:'fixed', unitPricePiastres:1550 }; await giftComponents[0].save();
   const giftTemplate = await CustomizationTemplate.create({ key: 'connected-gift-box', name: 'Connected approved gift configuration', kind: 'gift_box', status: 'approved', active: true,
     fields: [{ key: 'gift-message', label: 'Gift box message', type: 'textarea', required: true, maxChars: 80 }],
     groups: [{ key: 'contents', label: 'Gift box contents', minChoices: 1, maxChoices: 2, allowedActions: ['add', 'remove'], options: [
@@ -61,16 +75,19 @@ try {
     ] }] });
   const giftProduct = await Product.create({ name: 'Connected approved gift box', slug: 'connected-gift-box-product', description: 'Isolated synthetic gift-box fixture.', categoryId: category._id,
     mainImageKey: 'fixtures/gift-box.webp', galleryKeys: ['fixtures/gift-box.webp'], pricePiastres: 8000, priceApproved: true,
-    inventory: { mode: 'made_to_order', quantity: null, approved: true, available: true }, status: 'ready',
+    inventory: { mode: 'made_to_order', quantity: null, approved: true, available: true }, visibility: 'public', status: 'ready',
     customization: { enabled: true, templateId: giftTemplate._id, serviceKind: 'gift_box', serviceEntryEligible: true } });
+  const genericTemplate = await CustomizationTemplate.create({ key:'connected-generic', name:'Connected generic options', kind:'generic', status:'approved', active:true, fields:giftTemplate.fields.toObject(), groups:giftTemplate.groups.toObject() });
+  const genericProduct = await Product.create({ name:'Connected generic product', slug:'connected-generic-product', categoryId:category._id, visibility:'public', status:'ready', mainImageKey:'fixtures/generic.webp', galleryKeys:['fixtures/generic.webp'], pricePiastres:8000,priceApproved:true,inventory:{mode:'made_to_order',quantity:null,approved:true,available:true}, customization:{enabled:true,templateId:genericTemplate._id,serviceKind:'generic'} });
   // Synthetic approved records solely for connected paging/filtering assertions.
   await Product.create(Array.from({ length: 25 }, (_, index) => ({ name: `ConnectedCatalogBatch3 product ${String(index + 1).padStart(2, '0')}`,
     slug: `connected-catalog-batch3-${index + 1}`, description: 'Disposable contract fixture, not merchant data.', categoryId: category._id, subcategoryId: child._id,
     mainImageKey: 'fixtures/catalog.webp', galleryKeys: ['fixtures/catalog.webp'], pricePiastres: 1100 + index * 100, priceApproved: true,
-    inventory: { mode: 'tracked', quantity: index === 24 ? 0 : 10, approved: true, available: true }, status: 'ready' })));
+    inventory: { mode: 'tracked', quantity: index === 24 ? 0 : 10, approved: true, available: true }, visibility: 'public', status: 'ready' })));
   for (const status of ['draft', 'hold']) await Product.create({ name: `ConnectedCatalogBatch3 private ${status}`, slug: `connected-private-${status}`,
     categoryId: category._id, mainImageKey: 'fixtures/private.webp', galleryKeys: ['fixtures/private.webp'], pricePiastres: null, priceApproved: false,
     inventory: { mode: 'tracked', quantity: 10, approved: false, available: true }, status });
+  for (const status of ['draft','hold']) await Product.create({ name: 'ConnectedCatalogBatch3 visible ' + status, slug:'connected-visible-' + status, categoryId:category._id, visibility:'public', status, priceApproved:false, pricePiastres:null });
   const passwordHash = await bcrypt.hash('isolated-fixture-password', 4);
   const accounts = {};
   for (const [name, role] of [['admin', 'admin'], ['alice', 'customer'], ['bob', 'customer']]) accounts[name] = await User.create({ name: `Connected ${name}`, email: `${name}@connected.example.test`, role, passwordHash, active: true });
@@ -88,6 +105,14 @@ try {
     return { url: `${apiOrigin}/__fixture/storage/${token}`, headers: { 'Content-Type': metadata.mimeType }, expiresInSeconds: 300 };
   };
   storageModule.setStorageForTests(storage);
+  const publicObjects = new Map();
+  // Separate in-memory public catalog provider; never share private evidence.
+  process.env.CATALOG_MEDIA_BASE_URL = 'https://catalog.connected.example.test/';
+  const { setCatalogStorageForTests } = await import('../../src/catalog/media-storage.js');
+  setCatalogStorageForTests({
+    async put(key, bytes, mimeType) { publicObjects.set(key, { bytes: Buffer.from(bytes), mimeType }); },
+    async read(key) { return publicObjects.get(key); },
+  });
   const fixtureApp = express();
   fixtureApp.use('/__fixture', (req, res, next) => {
     res.set('Cache-Control', 'no-store');
@@ -103,19 +128,20 @@ try {
     if (!grant || grant.expiresAt < Date.now() || req.headers['content-type'] !== grant.mimeType || !Buffer.isBuffer(req.body) || req.body.length !== grant.sizeBytes) return res.sendStatus(400);
     storage.put(grant.key, req.body, grant.mimeType); grants.delete(req.params.token); puts += 1; res.sendStatus(200);
   });
-  fixtureApp.get('/__fixture/ready', (req, res) => res.json({ isolated: true, checkoutEnabled: false, providersEnabled: false }));
+  fixtureApp.get('/__fixture/ready', (req, res) => res.json({ isolated: true, checkoutEnabled: enabledCheckout, providersEnabled: false }));
   fixtureApp.get('/__fixture/state', async (req, res) => {
     if (req.headers['x-fixture-key'] !== 'connected-fixture-only') return res.sendStatus(403);
     const uploads = await Upload.find().select('_id state cartId fieldKey').lean();
     res.json({ productId: String(product._id), templateId: String(template._id), puts, uploads,
-      giftBox: { productId: String(giftProduct._id), templateId: String(giftTemplate._id), componentId: String(giftComponents[0]._id),
+      giftBox: { genericProductId:String(genericProduct._id), genericTemplateId:String(genericTemplate._id), productId: String(giftProduct._id), templateId: String(giftTemplate._id), componentId: String(giftComponents[0]._id),
         componentQuantity: (await ComponentOption.findById(giftComponents[0]._id).select('inventory.quantity').lean()).inventory.quantity },
       categoryId: String(category._id), childCategoryId: String(child._id),
+      requests: await ServiceRequest.find().select('_id requestKey reference owner components').lean(),
       orders: await Order.find().select('_id orderNumber checkoutKey').lean(),
       carts: await Cart.find().select('items').lean(), orderCount: await Order.countDocuments({}) });
   });
   fixtureApp.use(app);
-  server = fixtureApp.listen(4092, '127.0.0.1');
+  server = fixtureApp.listen(port, '127.0.0.1', () => process.send?.({ ready: true }));
   server.on('error', async () => { await stop(); process.exit(1); });
-  for (const signal of ['SIGTERM', 'SIGINT']) process.once(signal, async () => { await stop(); process.exit(0); });
+  for (const signal of ['SIGTERM', 'SIGINT']) process.once(signal, async () => { await stop(); if (process.connected) process.disconnect(); });
 } catch (error) { await stop(); throw error; }

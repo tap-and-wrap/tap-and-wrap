@@ -1,0 +1,1503 @@
+{
+  "purpose": "Proposed explicit accumulated delta for future review; not staged, committed, approved or deployment authorization. All unchanged tracked dependencies must remain in the complete repository artifact. Excluded files are preserved locally, not deleted.",
+  "records": [
+    {
+      "path": "BATCH2_CATALOG_PREVIEW_FAQ_README.txt",
+      "group": "review historical handoff",
+      "candidate": false,
+      "reviewRequired": true,
+      "sha256": "3cb4d25ca631a41e239a65d2f1c2a10d19302525ecb649aad023dac7062b647f"
+    },
+    {
+      "path": "BATCH2_CONTENT_STAGE_README.txt",
+      "group": "review historical handoff",
+      "candidate": false,
+      "reviewRequired": true,
+      "sha256": "52f80700f71cf1c926e15e985973fed18c6ddd1a453f9a35c946303d715ec34f"
+    },
+    {
+      "path": "BATCH2_ENGRAVING_README.txt",
+      "group": "review historical handoff",
+      "candidate": false,
+      "reviewRequired": true,
+      "sha256": "95feb5c703dc03419a16030a16bc618736d5e8760d628c22e41bcd5d1148ecc1"
+    },
+    {
+      "path": "BATCH2_REFINEMENTS_README.txt",
+      "group": "review historical handoff",
+      "candidate": false,
+      "reviewRequired": true,
+      "sha256": "96b7625c46bf87a071a003b171b4ae79f573aba408f061b413304507d1f5ff7e"
+    },
+    {
+      "path": "BATCH2_TEST_BLOCKER_FIX_README.txt",
+      "group": "review historical handoff",
+      "candidate": false,
+      "reviewRequired": true,
+      "sha256": "c9e05a26e5b774ca55adee96f8ce6477fa803d0ec647ca52b71bc346650e9112"
+    },
+    {
+      "path": "PATCH_README.md",
+      "group": "review historical handoff",
+      "candidate": false,
+      "reviewRequired": true,
+      "sha256": "2381a1fbbf9f77428c29b4300cf63714d2680a79c965c6991469fc2254c5df0b"
+    },
+    {
+      "path": "README_READ_FIRST.txt",
+      "group": "review historical handoff",
+      "candidate": false,
+      "reviewRequired": true,
+      "sha256": "28483e232db2aa13362ad4323adf462db0d447cbd5770faa6b6d95e18847097d"
+    },
+    {
+      "path": "REVIEW_CATALOG_DIAGNOSTIC_README.txt",
+      "group": "review historical handoff",
+      "candidate": false,
+      "reviewRequired": true,
+      "sha256": "b56e1536efffcfbcc3a3997fe92b2a897fc32e66eb15771bd27f44bb939e0a5c"
+    },
+    {
+      "path": "client/connected-e2e/commerce-edge-contracts.spec.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "2291fb0a0ca7570680e851c9714df3ec14990532aae7ab750fb5bf6fed761431"
+    },
+    {
+      "path": "client/connected-e2e/contracts.spec.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "270ba67d91f745145ba25052d1c14eef4807fedeef235df6b6428253f1fff289"
+    },
+    {
+      "path": "client/connected-e2e/enabled-checkout.spec.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "7616007eddebd833993bcd64fbd540c5ad058113953fa9449e0f1928c3cd8dfd"
+    },
+    {
+      "path": "client/connected-e2e/operations-contracts.spec.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "1642a7a72ccb58cc96befc40202f2468a6882e54558ec466d3eb9bf5e5fa7949"
+    },
+    {
+      "path": "client/e2e/admin-media.spec.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "71318c50aa6fb703feb0c150f64881d771db9f90ad866d6205daa31511228436"
+    },
+    {
+      "path": "client/e2e/batch1-auth.spec.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "479336d65dc43bdc444fb5faf36f0ffc5b1e76b1d4b4e83119b34a47e3460a4c"
+    },
+    {
+      "path": "client/e2e/batch2-admin.spec.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "2135cf30202107244b03b7738404a48403f70bb545b330ac5678cb9b7632bc2c"
+    },
+    {
+      "path": "client/e2e/batch2-reliability.spec.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "384a80630ab67806068e56fdef8765adf95863cead136e2c1adfebc5ff0a7e02"
+    },
+    {
+      "path": "client/e2e/batch3-commerce.spec.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "5ad5252a9eaf5bbc18563eebb3aff749660f7edc8679e497e9e5d084aa4e667e"
+    },
+    {
+      "path": "client/e2e/catalog-browser.spec.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "60a21a87dd08ae74977f3d8507def3334b28c3dcae0598b2a6fc651b55f2c8f2"
+    },
+    {
+      "path": "client/e2e/catalog-fixtures.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "0adba65151fb4ae8abe00b52c0c38f914a0aa903ff5e6e56aae54e9470eea206"
+    },
+    {
+      "path": "client/e2e/catalog-preview.spec.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "d791525ad27eb8d03a136385f2aa57defc615987fbaa1fe0335d35daea3f0483"
+    },
+    {
+      "path": "client/e2e/checkout-foundation.spec.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "173ee0335d1f3462999fcdfbcd35647574cd31ada9c316e9d94d00a8b3d09b70"
+    },
+    {
+      "path": "client/e2e/commerce-fixtures.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "db94b190483708b06ca634dca0dcdcd851e77fd1e2a36ff25fbad3001ff985c1"
+    },
+    {
+      "path": "client/e2e/commerce.spec.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "5952f5687d128ce9a67af79346365f302bb96c205e5e313551827325d09fc2c0"
+    },
+    {
+      "path": "client/e2e/information-pages.spec.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "201fc9f695a476e4129bda3785dff0c02e3e036625326c7515b65b2e7f65e3e7"
+    },
+    {
+      "path": "client/e2e/media-experience.spec.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "dc367ecca347391eabbd49390c30a6205a92e6508f7a3fe231243b2dbb717eb4"
+    },
+    {
+      "path": "client/e2e/media-helpers.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "583b25a41e803956f224caeac705ee2c7535764ee76a7725e5a356b2382523d4"
+    },
+    {
+      "path": "client/e2e/operational-readiness.spec.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "da9f578df9cc777237144486cde278a9132c4c5f167f021ff438e25017d76829"
+    },
+    {
+      "path": "client/e2e/permanent-visibility.spec.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "55c71e6a9b74c88348a1e580775c1048beaa1c1179c63df3c2ea925cfe0cea16"
+    },
+    {
+      "path": "client/e2e/product-personalization.spec.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "7185ea2c971dedbaf726f1857d17a8aefc35483f231dcbae538a456f60f4b60f"
+    },
+    {
+      "path": "client/e2e/service-requests.spec.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "02c5e2cd1572017f587bc93834402358372216fab7c768658f46654175394b18"
+    },
+    {
+      "path": "client/e2e/service-video-reliability.spec.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "dd23059eb54bff4efb959d82e5355e92864d5897a98228184745cdc6979800e0"
+    },
+    {
+      "path": "client/e2e/website-admin.spec.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "31d0779347b5849fe9b0a7e29e139b4e83aad446200b60cf4f0853197186fba5"
+    },
+    {
+      "path": "client/e2e/website-public.spec.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "bd2a03244c348b0a20b39e0bed3176d7aaa8cd4673b556a98bbf6d8bc08d3809"
+    },
+    {
+      "path": "client/playwright.contract.config.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "204c91eed3d37b568e928f5da367033b684e3a1a842d630dd9fed8c04c6bf53c"
+    },
+    {
+      "path": "client/scripts/catalog-form.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "1c0d9a4174b45a4cc1c8b9d90951c2caa1373f39ee06f75a3fe8f32c4f0fc21d"
+    },
+    {
+      "path": "client/scripts/contract-vite-server.js",
+      "group": "build routing and guarded operations",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "b633f6d68abc5e399c799526aeb17fc22e19317dedd4837e8a1633a39536817c"
+    },
+    {
+      "path": "client/scripts/generate-seo.js",
+      "group": "build routing and guarded operations",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "f8a018b93c5afad0c78f8bcfb56ae4bbba65d75daa9ee344e1cc36ef47c15bd4"
+    },
+    {
+      "path": "client/scripts/run-contract-tests.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "eeec64d30ad5fb08d08d28aee83d1140f06190119e9efd756349220f3240b4be"
+    },
+    {
+      "path": "client/scripts/seo/generator.js",
+      "group": "build routing and guarded operations",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "7f0dc8d5d2caa55794afd4376269edf56243c64e8054564bda2f8905833e0a5e"
+    },
+    {
+      "path": "client/scripts/seo/generator.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "26de740722decf3c13eb12dbc91d72e6aeff11bd5ceef65973227becb6dab0e2"
+    },
+    {
+      "path": "client/scripts/seo/publication.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "01edcf077181735d033b9362e7a2d61e2a2c8f296da2e72efbbc8a2024770b3a"
+    },
+    {
+      "path": "client/scripts/seo/worker.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "5a0a27a84635e1ad4069d1e7203969a12207b38bc9c8345d43ee5e0ec5ac75f6"
+    },
+    {
+      "path": "client/src/App.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "1252ba411ec3b01adca0c77ca5ad5fd856a08412ab19d6d4e4dad47a3517befc"
+    },
+    {
+      "path": "client/src/admin.css",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "5586e069d82a5fabbf2d995551493264c62fbcbed8fbe53eae31611b5027aa19"
+    },
+    {
+      "path": "client/src/admin/AdminImageGallery.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "d8c544ff6b2cb2a52e6dac777035e73daaa75db8f3549a0ac44c76335413f1d2"
+    },
+    {
+      "path": "client/src/admin/AdminLayout.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "e5b9e3b8ca51bb464eafa58e188d18c002dbe1d159ddab36ab409dd30c2235f7"
+    },
+    {
+      "path": "client/src/admin/ProductPersonalizationEditor.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "d547502ae28cf4c7bf21da24bfdd308d65c1235f9a47d546f07603f871a08189"
+    },
+    {
+      "path": "client/src/admin/RequestEligibilityEditors.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "4d334f198a52ffa36b8850f6e894ee0e8ab4ca13006457d479aa6e924d18c5a0"
+    },
+    {
+      "path": "client/src/admin/catalog-form.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "1f592d680a010d8ae4fd35289c86b398ffe446aa268927da0c4505fa582835bd"
+    },
+    {
+      "path": "client/src/admin/media.css",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "49c41682ace4839f88aed354ab419ed161570f96a0b19c07bb88c65cd4d5371b"
+    },
+    {
+      "path": "client/src/admin/notification-labels.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "9d080468769808004c9e305b05558a9973c3a5e4350fcafa6a0b14bad3fe038d"
+    },
+    {
+      "path": "client/src/admin/order-actions.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "0d1abff29ad579041bb10c43d5064e981ed50bb7424e96b262bb28d01722f9d4"
+    },
+    {
+      "path": "client/src/commerce/AdminEditors.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "531efc72486e4dae937cbe87f210331588e8e5dc1ae05d6f901b4571248d2c75"
+    },
+    {
+      "path": "client/src/commerce/ConfiguredFields.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "6bdd477b52a8eeb827ebaf0c4c5c80802326cf199a2f9a5d44e0ac0c8294b9c6"
+    },
+    {
+      "path": "client/src/commerce/OrderFinancials.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "60ae680147bf93fd01ffaad593361a04a3b4230bdb942db7b8113cb4fc3966c9"
+    },
+    {
+      "path": "client/src/commerce/PersonalizationSummary.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "a0701b67accc6a3fd39c4aea42b28475b4105e406f1a042ed3ad3d6d17a4e55a"
+    },
+    {
+      "path": "client/src/commerce/ProductPersonalizationDialog.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "0217d4c479d8db4b5ab328f4da0c3bb9a05f7a879c54f764615e08e867e4dfc4"
+    },
+    {
+      "path": "client/src/commerce/api.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "58ac4084e448067592e369459bf2cf685c2c6cba48cc13319b0f464a0ba95d72"
+    },
+    {
+      "path": "client/src/commerce/commerce.css",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "8252fa6c739abfcfef4b0ac58a2c97d701e30b9a3684a02fef35845b4e18846a"
+    },
+    {
+      "path": "client/src/commerce/operations.css",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "9c270c63c4f0b13c4b1031ee1b01e30a655aa74ec940074ebf61a9578161e2c1"
+    },
+    {
+      "path": "client/src/commerce/product-personalization-drafts.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "ac115796bda123b92248d75326fc8f8a6456b3ed94c762e0120b29144200568e"
+    },
+    {
+      "path": "client/src/commerce/service-requests.css",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "33c09a55e7557a48b8f210d4f235739a818b705acc33897f631da2cc38a182bb"
+    },
+    {
+      "path": "client/src/components/CatalogDialog.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "ff1ee6c5f6e5bc0334c6dc8813f42ce6eacbff00b7126da54cdb94e7523b79fe"
+    },
+    {
+      "path": "client/src/components/Footer.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "704e5641bfab8411c42a6cd5227be51d71268e3f1dab4d8edfef327a0918c434"
+    },
+    {
+      "path": "client/src/components/FormFeedback.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "46138294ab714ec1270ffa583cdc0d42202857ad340f8d09fdcc2d3c14cd35cb"
+    },
+    {
+      "path": "client/src/components/HomeCatalog.jsx.before-admin-media.bak",
+      "group": "exclude backup from release",
+      "candidate": false,
+      "reviewRequired": true,
+      "sha256": "fb35247bcb0241ae5aab3c7668f06436009c5c153aee83ca1ce82843c5f1e33b"
+    },
+    {
+      "path": "client/src/components/ImageSourceChooser.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "ebc3d34669e7dd881d11e30b90432abc211aacbc428b9d6d5a4ee232a9c0f9ce"
+    },
+    {
+      "path": "client/src/components/ProductCard.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "bf70deaa2d460f3b8088b6d1a9e431763476b26b55236424ee17a22a851d7db5"
+    },
+    {
+      "path": "client/src/components/ProductCard.jsx.before-admin-media.bak",
+      "group": "exclude backup from release",
+      "candidate": false,
+      "reviewRequired": true,
+      "sha256": "85dbd98788083feedb96bd6583020e5f51e3f20fc6086173c2fa801ce4beb51d"
+    },
+    {
+      "path": "client/src/components/PublicContent.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "2bdfb41a329fc1cf7d598bf15dd9ebd44510067d619c35df161cef1ce4c54516"
+    },
+    {
+      "path": "client/src/components/ServiceFilm.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "f823ca0feadbff327aa1f6598d9887dcda6f9aa3565083c59066ec8149a02777"
+    },
+    {
+      "path": "client/src/components/image-source.css",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "600a0e86db30b931b7148e0d0f798ed1e770671f75f19f51b8548650f69b6b1d"
+    },
+    {
+      "path": "client/src/components/useModalDialog.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "bb41b66676b7c6c19b94ec730fa9cffcfc1da949c81207cd5fc2c108f72168c0"
+    },
+    {
+      "path": "client/src/components/useVideoPlayback.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "0ed405aaa00309b18ff1643ad8b0f379a4e5fec58246d5b4852421bb3fe52253"
+    },
+    {
+      "path": "client/src/content/final-faq.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "11bc938ae28f7d94c78b0fda2b1eaf03d7351741e379c6ee15bb4a48605b1976"
+    },
+    {
+      "path": "client/src/home-media.css",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "50496fb45b2d5294c333b83b9391dbb72b3856a40c2672c8282dd9e263d6ab18"
+    },
+    {
+      "path": "client/src/information-pages.css",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "9bd6cdb650070fd5e7516184e027f47f2c1ae9c85f9313cc76f0d6d90ec591a3"
+    },
+    {
+      "path": "client/src/pages/AdminAttentionPage.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "117c72af21c2918f7faff3b5f4e8bee364738dfaef3caa51a2ea849650a49950"
+    },
+    {
+      "path": "client/src/pages/AdminCommercePage.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "38678f9c758a60dceaed6d3ba08fb70b544f97d9d0b3b86239a2dc60b21a8337"
+    },
+    {
+      "path": "client/src/pages/AdminOrderPage.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "99b682dfd7b760860a6f9b7f3c380a68a847f2df8a111bed2922a4fb1656afef"
+    },
+    {
+      "path": "client/src/pages/AdminProductConfigurationPage.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "0873a440109720e9ef7128786954dcd7acc0e00e9a12578e91a176e2afd0037f"
+    },
+    {
+      "path": "client/src/pages/AdminProductFormPage.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "edce0b14bb99a21afcc8bd4e6f920ba07c25f83b2a78220ee961d5afd0d1e36a"
+    },
+    {
+      "path": "client/src/pages/AdminProductFormPage.jsx.before-admin-media.bak",
+      "group": "exclude backup from release",
+      "candidate": false,
+      "reviewRequired": true,
+      "sha256": "c6234d1df5a1096e127a0389476644e2439838718c2015cda98734ff3377f86a"
+    },
+    {
+      "path": "client/src/pages/AdminProductsPage.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "2ce820882c7d4c5ac00c5056c23c02ca8c756b2ab79e310c0d258d609edffb3a"
+    },
+    {
+      "path": "client/src/pages/AdminRequestsPage.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "0162e849b8c0561a34c1f825ee5089fa4a84766d204c26e78a5ae0b97452b238"
+    },
+    {
+      "path": "client/src/pages/AdminWebsitePage.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "24e318597cd44c88f27f95c992aae0c61049b8a0c095808dd348d2f2aa51f463"
+    },
+    {
+      "path": "client/src/pages/AdminWebsitePage.jsx.before-admin-media.bak",
+      "group": "exclude backup from release",
+      "candidate": false,
+      "reviewRequired": true,
+      "sha256": "cdfcb987aeab3012e6e1ab03cc1e98ada0d25d7f340d0b1cc581ec8f4cec1c41"
+    },
+    {
+      "path": "client/src/pages/CartPage.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "a4e20fc844250f5e31d65d54e503770085c8daa2db1860ce269cb6d431931349"
+    },
+    {
+      "path": "client/src/pages/CheckoutPage.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "78e2812f9df72db1c64d63bd4106c84e9c20ed18f159deaa3101bdb9a983d712"
+    },
+    {
+      "path": "client/src/pages/HomePage.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "9f8589c059449da31cef187eaa64ddabe4bf8e00c86504267851b76c2c74cfa8"
+    },
+    {
+      "path": "client/src/pages/OrdersPage.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "2d5e1ff6520ef466d52340f1f4ae060eca5b6550fa05103ade61c5e8b6cda413"
+    },
+    {
+      "path": "client/src/pages/ProductPage.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "a4f9ab38dd4228362ff35568fb07aef831c341326cc51b5a346ecc74e2110743"
+    },
+    {
+      "path": "client/src/pages/ProductPage.jsx.before-admin-media.bak",
+      "group": "exclude backup from release",
+      "candidate": false,
+      "reviewRequired": true,
+      "sha256": "fb12681070703b619f99034f9df48687f7806fcb8348b7c3408412ea72988331"
+    },
+    {
+      "path": "client/src/pages/ServiceRequestPage.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "4819840935e87a0fefc970fbd53ce3fa30b01635009cf1f5311edfa15155f80a"
+    },
+    {
+      "path": "client/src/pages/StaticPage.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "5d167b8c542c0144ab27cf112ab708edaa238ccc0c17cbccb8eb481251860fea"
+    },
+    {
+      "path": "client/src/pages/TrackOrderPage.jsx",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "7afbdbe3cb8e0edb63ca91a04b33c0adadd1118fe7ccc8ca0772861437d40bec"
+    },
+    {
+      "path": "client/src/seo/metadata.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "d32733bd68e91b1165ea3ee897aa3d8ea3a3328dc6eacec847e2ef88aa483653"
+    },
+    {
+      "path": "client/src/services/website.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "c56172c7fd1b80b3e5769f63fcbffc9607ba440bfb7f5185662f3f1ee5d3df12"
+    },
+    {
+      "path": "client/vite.config.js",
+      "group": "build routing and guarded operations",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "b35d53b8a9d76019354952595733033cae7860e5f7cb492fab623c8325414b51"
+    },
+    {
+      "path": "client/worker/seo-worker.js",
+      "group": "build routing and guarded operations",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "91bdd1d67013924ab5396bd672afb3b232e76abb9a333f63aa3feea9dc67a876"
+    },
+    {
+      "path": "docs/BATCH_1_PERMANENT_VISIBILITY.md",
+      "group": "documentation and release evidence",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "d6328e0d1908bed021633ba6cc95aa8b21a84063a2ee067309e198cf96d37ed7"
+    },
+    {
+      "path": "docs/BATCH_2_ADMIN_MEDIA.md",
+      "group": "documentation and release evidence",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "f43087769bfe725a58811a3e80e39b463ac3e69e2b71a059f235c00df714893c"
+    },
+    {
+      "path": "docs/BATCH_3_CHECKOUT_PAYMENTS.md",
+      "group": "documentation and release evidence",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "0b280b484208581ba26e2beac5603048b0c5b571dc0e12bc0e02df344222aa32"
+    },
+    {
+      "path": "docs/BATCH_4A_PRODUCT_PERSONALIZATION.md",
+      "group": "documentation and release evidence",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "60fc48f719925d413b776fa06269692eaad30bfc4dc9085d5cf2115e72bc2b1e"
+    },
+    {
+      "path": "docs/BATCH_4B_CUSTOM_REQUESTS.md",
+      "group": "documentation and release evidence",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "45260d9399a01370f8336dd3a7518851f0a3687363bfdd8238fe28783c75e655"
+    },
+    {
+      "path": "docs/BATCH_5_OPERATIONS.md",
+      "group": "documentation and release evidence",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "645d20cff6a27ccb1e2412485f12c464ba47dd1f242fb7c5d792fd7958ff61aa"
+    },
+    {
+      "path": "docs/BATCH_6_PAGES_AND_HANDOFF.md",
+      "group": "documentation and release evidence",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "5c86f8554edcd809e17c741acca946adfc2a660cb3a132db9396533683c7a164"
+    },
+    {
+      "path": "docs/FINAL_RELEASE_READINESS_AUDIT.md",
+      "group": "documentation and release evidence",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "38f649f2b6e97b47ddfbdc218467fb7f1e4ea7a5c0ff890daa3df2e8366427c4"
+    },
+    {
+      "path": "docs/POST_REMEDIATION_RELEASE_GATE.md",
+      "group": "documentation and release evidence",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "a29d8ccfd1491f9357ee477f5a2b2d124a7ff2cc39c3a6c3718af06fec92fbc9"
+    },
+    {
+      "path": "docs/PRODUCT_ALIAS_ACTIVATION.md",
+      "group": "documentation and release evidence",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "e9748efe2c3aac33b9ff5d52a28691a44b72eab0e2b3c99a51feef3f6140680c"
+    },
+    {
+      "path": "docs/RELEASE_REMEDIATION_1.md",
+      "group": "documentation and release evidence",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "6e31de93922ecc92d1e53aa0c7202a382bfe51f568d05dd70e9d2631a4e250ca"
+    },
+    {
+      "path": "docs/RELEASE_REMEDIATION_2.md",
+      "group": "documentation and release evidence",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "25e153c3444760222ac3274a95a0aaaab0a97ff4abd490e5bee88190cab230ea"
+    },
+    {
+      "path": "docs/RELEASE_REMEDIATION_3.md",
+      "group": "documentation and release evidence",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "9a09220e0bb2e43a0bbdf28561e5c165d62d4b3e9de5b0fc705ddc279339af51"
+    },
+    {
+      "path": "docs/SHOP_CATEGORY_COMPLETION.md",
+      "group": "documentation and release evidence",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "8f91be25e0bb22cce10ebb02dc914c5430613d344144bdde3615bcc2217dbedf"
+    },
+    {
+      "path": "server/.env.example",
+      "group": "build routing and guarded operations",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "b212b0a09c37f1ed86f582c874e0d3aaf253ae98f7a9054f4adbd6a53f60cef4"
+    },
+    {
+      "path": "server/package-lock.json",
+      "group": "dependencies and lockfile",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "322032fbec4dedb3be4c90c5b42be4f812441c7d45a521d050f547a350788fd2"
+    },
+    {
+      "path": "server/package.json",
+      "group": "dependencies and lockfile",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "567940f97a77921183fd22ba947e9ccf5d53cbe57a8ca3f48bf570f71409ec6c"
+    },
+    {
+      "path": "server/scripts/audit-catalog-r2-readonly.mjs",
+      "group": "separate operational script review",
+      "candidate": false,
+      "reviewRequired": true,
+      "sha256": "0738c3980908834971686901f629693399264591ae5f122a5d407bd51c9b8c41"
+    },
+    {
+      "path": "server/scripts/audit-production-catalog-transfer-readonly.mjs",
+      "group": "separate operational script review",
+      "candidate": false,
+      "reviewRequired": true,
+      "sha256": "998f5ad9d1125e04bd17978048ec70ba9695506d75fece506b06f40d4ce43680"
+    },
+    {
+      "path": "server/scripts/check-email.js",
+      "group": "build routing and guarded operations",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "a50f3fb02396f3b15899db5da131c348fb2bf2589acf2ddde5d7e08b5520509e"
+    },
+    {
+      "path": "server/scripts/email-smoke-test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "20cb1a2a4097680cb2e45b6ab3ba781c75f498778066c38d530f0beddf23f677"
+    },
+    {
+      "path": "server/scripts/export-seo-catalog.js",
+      "group": "build routing and guarded operations",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "d5cf1db0b74abbc1ced95859e3ffe1ef90fa230155d6a3167fc1beddf088375f"
+    },
+    {
+      "path": "server/scripts/run-commerce-jobs.js",
+      "group": "build routing and guarded operations",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "2df9625ada2beb17c50fda9699e3783bb0e269291ba01563c155cd325f8362aa"
+    },
+    {
+      "path": "server/scripts/staging-schema-migration-only.mjs",
+      "group": "separate operational script review",
+      "candidate": false,
+      "reviewRequired": true,
+      "sha256": "8af4cfa69db27223e997536055b1f0c4cf2d8d5cf4d84c56b9f8c4fca6957fa5"
+    },
+    {
+      "path": "server/scripts/transfer-catalog-safe.mjs",
+      "group": "separate operational script review",
+      "candidate": false,
+      "reviewRequired": true,
+      "sha256": "cce59eaeeca697d8061f2c55cfcc6be212ea60344cac34d598e277e4e2668e89"
+    },
+    {
+      "path": "server/scripts/upload-catalog-r2.mjs",
+      "group": "separate operational script review",
+      "candidate": false,
+      "reviewRequired": true,
+      "sha256": "08b6553d916768580fd136c02f9d3804fe390bbf6b77ef3aacde642ef00dcb0b"
+    },
+    {
+      "path": "server/src/catalog/display-transition.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "093ab692d4636e669293df4f157c7fb5ec9a14532eeccbc9ff5023b574637582"
+    },
+    {
+      "path": "server/src/catalog/fields.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "15ad741607e1c61be8b41ffbc56e7fc6c72568f959738f153f87f800f3375c05"
+    },
+    {
+      "path": "server/src/catalog/inventory-input.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "a84aa3b917591a16648436bb4b5059ed1d49251e6899c9f085a15be94eadd647"
+    },
+    {
+      "path": "server/src/catalog/media-storage.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "29e785f063c2c0a5ac8a5179dac264d98b3048709fc6fa48a4b1c393d077565f"
+    },
+    {
+      "path": "server/src/catalog/media.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "cffc90caa14928bb3f6a57854f34ce8f5c6f33d9ff8dedc5f758b99f70330406"
+    },
+    {
+      "path": "server/src/catalog/product-addresses.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "8cdb29f13b6aa7350f3a43bb1a1047399eafac20d7cd3106bd24f2cceec41d3d"
+    },
+    {
+      "path": "server/src/catalog/product-policy.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "a0dd58d9177846d624f3b214287497926372770a47e314802247fd4354defa46"
+    },
+    {
+      "path": "server/src/catalog/public-presentation.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "c263a865b5b13faac6f6100028a71b072a3b090e126724cbcd6c80bf908a1708"
+    },
+    {
+      "path": "server/src/catalog/service.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "29eeda0a3e6de1538a4e7a800bc4086423a7f2ff4a2fcfc575c367bb5789e6fc"
+    },
+    {
+      "path": "server/src/catalog/validation.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "c70843b3a3c9c7c00dc932147185457bb256fedea07facacf09a6778b34c7090"
+    },
+    {
+      "path": "server/src/commerce/accounting-validation.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "9af7fc7f5f9841f78e950c2688ea1017ca08948322bad83644f1acb7a591698d"
+    },
+    {
+      "path": "server/src/commerce/cart.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "2dae96738475bc2589c10712b913d290240f62f1ac8a4c517c1067f7a9244a39"
+    },
+    {
+      "path": "server/src/commerce/configuration.routes.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "38e91f609e8589cda23cd2743e7ef9f10053cd05247642baa5cc7b91f5b30a44"
+    },
+    {
+      "path": "server/src/commerce/customization.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "6568b7250f9878ed5a89b721770f5543862dae2105e6af45578762bc42373e24"
+    },
+    {
+      "path": "server/src/commerce/models.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "0eb20090db3c2e40df42e2696de79951767d8ce6259f42fefc59629817073144"
+    },
+    {
+      "path": "server/src/commerce/notifications.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "b9fb81c042486864073278f9e5ec1b44a16beb936bd8b4c1c5eed00ec76a2d9d"
+    },
+    {
+      "path": "server/src/commerce/operations.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "4dae1798aee5e961f528a98a67040d5802b5e9e5ddb3f7c424aa18330b239ca6"
+    },
+    {
+      "path": "server/src/commerce/order-accounting.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "e2822646d394d89307530a40735f4967b2a5015812df624a8496ccea6eafe6b1"
+    },
+    {
+      "path": "server/src/commerce/order-presentation.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "62b20e0ac18b6ce39cd4d23825dd112461e413219c46945dee251968d01a6833"
+    },
+    {
+      "path": "server/src/commerce/orders.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "555762bbc7ad6c104018336d029a5d7e4b0083c5364078cba77c41624c33dc19"
+    },
+    {
+      "path": "server/src/commerce/owner-notifications.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "3d7d5f0031758157f4b1e821b3f3932c7a4021aa92804da69034b565bf88e570"
+    },
+    {
+      "path": "server/src/commerce/owner-settings.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "4c2eee26515d4bf865222337e92ee0e3db4dd6d52d7c995d96c7e76a76cacc18"
+    },
+    {
+      "path": "server/src/commerce/pricing-context.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "819a3a53ececae99d09ba8e916634a2c20cf8df0acc58b39eb16a08b2030470a"
+    },
+    {
+      "path": "server/src/commerce/pricing.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "dd233e924da3e8b3ce5e5fe87fb0c43493c1dc023bcfdbe71b08f9927b845265"
+    },
+    {
+      "path": "server/src/commerce/promotions.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "3c1cb5510dee70879bbaa5532a0c0afc76130d3ff125acb1e98f18f076e87d78"
+    },
+    {
+      "path": "server/src/commerce/request-intake.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "b8cfb07ecec672a54d0c68cd7a8b20620138798ddb9fa5525c6b810e6a25cf85"
+    },
+    {
+      "path": "server/src/commerce/request-policy.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "e31178d1cbc8d07d5146e6972e489ec0597507f8179aeba3a9942e3e07ea2846"
+    },
+    {
+      "path": "server/src/commerce/request-validation.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "a2922198fe415f642620c55802b0ad94e09e6636acf53cc4a35f0239efd7ef43"
+    },
+    {
+      "path": "server/src/commerce/routes.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "e4f874d08e96197181e0e8d13ee37c49ce99a6a46a11d0382b14a57a49f769de"
+    },
+    {
+      "path": "server/src/commerce/service-request.routes.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "7e0d643b378e731d1b4352c2494e9ae76f7cbd3ff72d47e0623cd714a72fb374"
+    },
+    {
+      "path": "server/src/commerce/service-requests.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "8b2150bec18ca93cd188f408725f726cbbe485a7fbed6f0d6a41ac1a67338832"
+    },
+    {
+      "path": "server/src/commerce/storage.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "466db5d4b30b957253348eba7dbcb2f77242fdeb446e2f388e0cc8f7f9e99152"
+    },
+    {
+      "path": "server/src/commerce/uploads.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "9a5e3210b8397c70b324119a5101b99a4d52173810e5bb1b9c09f4d6e2a20e1b"
+    },
+    {
+      "path": "server/src/commerce/uploads.routes.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "d280d95f5160896a227a29a681cb05e584663e2592dbd62b146c6b05fd8b6db9"
+    },
+    {
+      "path": "server/src/commerce/whatsapp-quotation.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "9e856ac2090619ffb2d63c6b4f5eed1b12e8126a79c10992874c51b8dae1f4ef"
+    },
+    {
+      "path": "server/src/config/env.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "a03b8f83f893a336c4b0277054cac1face5ae9526a9e446e9e9cdb9580193929"
+    },
+    {
+      "path": "server/src/config/schema.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "9c4fbbdc5a9ea60908a57f908bd91d3cb28c2d7ee4555f00ef523bdcb5967a9d"
+    },
+    {
+      "path": "server/src/email/resend.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "230ce15862b852609ac8698de0d78238d5e09549fda22dd1ae4b3b51f4b1173f"
+    },
+    {
+      "path": "server/src/email/settings.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "e06e2bd5fe102787aa4f68c7df9a159ded3f93d68d81956c62459c81705e6ffb"
+    },
+    {
+      "path": "server/src/email/templates.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "0f839134a20bc65be059f6853d96266fa7ad9eca10b30c2a0b164e56121f36b3"
+    },
+    {
+      "path": "server/src/media/image-decoder-process.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "90d6cd718773713bce076963e2a76f3967e461564456cb390bac9bea039e7c36"
+    },
+    {
+      "path": "server/src/media/image-integrity.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "4b2632d0f86e1c13b29f3aea77af227dddccec90b1d920e22f608f71461b2b2b"
+    },
+    {
+      "path": "server/src/models/Cart.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "70bf2811fe5bd00fd30afc01c8ce31d51f824ce40daa2179abac8321120f090c"
+    },
+    {
+      "path": "server/src/models/CatalogMedia.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "f68a9fb175c7c36987c5cfbaf86da9686e89fe426af2e2cfe79586ebef8e4482"
+    },
+    {
+      "path": "server/src/models/ComponentOption.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "2739c1064797ab453c3ad590dc571046965b476f5d2fdb707e1efbfc5803b8c0"
+    },
+    {
+      "path": "server/src/models/DiscountRedemption.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "3bb580717545610ed9b10f374862ed294e22e897908b31cc747f1730ee8ccc69"
+    },
+    {
+      "path": "server/src/models/NotificationEvent.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "62566acbc2202caefcbaa91385bee43b0d1c52b3b9ba4d940a61bd2fc7ad3feb"
+    },
+    {
+      "path": "server/src/models/Order.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "839ef162c62ec638c0e92dfdca60de7f71130820a931d921d7a1ad2069848753"
+    },
+    {
+      "path": "server/src/models/OrderSettlement.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "cd301e1fcb4ae2aac49204da6d8b7096fd8dd110bfe9e12f6f0d305c7995a11e"
+    },
+    {
+      "path": "server/src/models/Product.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "b21d78eacaaef9025b28a974d332393d4a6674a99cc8116c4833611b34a4306d"
+    },
+    {
+      "path": "server/src/models/ServiceRequest.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "89819828bb88559b4c35525496cf5e908474fe04912b65169232c9b9b32a3277"
+    },
+    {
+      "path": "server/src/models/Upload.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "80922cb54122d332231ce8f45afe68aed69d7dce90ae3c3cffcaf13f800a5aff"
+    },
+    {
+      "path": "server/src/routes/admin-media.routes.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "3819fb64240ede40c5c0edc5596b873c1223b0a702b897a99c0221be07e63ea3"
+    },
+    {
+      "path": "server/src/routes/admin.routes.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "9fb638f0817503341d898c60da56b3a80dbb1ac233cb081cdd60e1381a745580"
+    },
+    {
+      "path": "server/src/routes/admin.routes.js.before-admin-media.bak",
+      "group": "exclude backup from release",
+      "candidate": false,
+      "reviewRequired": true,
+      "sha256": "6c9528c505d3607b96c39aec2e46bb946025900a00ce36ef8aa64ee129722fba"
+    },
+    {
+      "path": "server/src/routes/catalog.routes.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "0bf4fe7c0abe035de6f417d6935d2c8e23f4bf38e1fd8248bdf4df4c4bdf5e77"
+    },
+    {
+      "path": "server/src/website/routes.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "512869ce658b992667035423046974c237f9fa6025b6abb83003253131bc3c38"
+    },
+    {
+      "path": "server/src/website/service.js",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "12729d2590f6924f8249b513be4bed9784cf9fc27d32c452883d450857cf13eb"
+    },
+    {
+      "path": "server/test/batch1-inventory-revision.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "999bf4c8f4dce8ed6c9df4a1d3452bd28b850539f40adcb7e06ba8b289475cf2"
+    },
+    {
+      "path": "server/test/batch3-catalog-efficiency.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "99b84d390fdbbc13119402b63c4e5ecef7d211d268d976a18674d1a9ff3e4ca5"
+    },
+    {
+      "path": "server/test/batch3-commerce.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "56e64e4b91254c7d953476bc6d9db4716dd6df861e5cd05265241627203d3bb9"
+    },
+    {
+      "path": "server/test/catalog-api.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "0efe0e9c42e05feb24001113e903a4bac54932995d79237b517186f85ef4dd88"
+    },
+    {
+      "path": "server/test/catalog-media.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "76700e525c073a482bc2bd8d1baba20d711597f742eaba14894944e0a2950c8e"
+    },
+    {
+      "path": "server/test/catalog-models.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "edb45cde6c701b066332a2b259c112b2e02dd6cec8a45eec1a5bcc91cb8dfa20"
+    },
+    {
+      "path": "server/test/catalog-phase1b.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "af9e883f709e5c8058e4b94b420955520ddae60e37c942663935fbd71c5f49fc"
+    },
+    {
+      "path": "server/test/checkout-foundation.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "4738876c58df693918428abb44684ea5ae2f5ed59c98b1dcdc976f04ac8f93ea"
+    },
+    {
+      "path": "server/test/commerce-configuration-api.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "9e29e0f1427cc186494a6f5841d3700cdf4bbcce7f54f78386957077c9f246b7"
+    },
+    {
+      "path": "server/test/commerce-configuration.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "0fc506b3510aef2672c11d4ab63b5baf221dc55d72b2a41d4d78bfe69ce35349"
+    },
+    {
+      "path": "server/test/commerce-orders.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "fffb3f843ad9101581c8692f3b454e22c6cdd3a43c863ce651c20cc66aacaac1"
+    },
+    {
+      "path": "server/test/commerce-storage.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "7bb4fe3c3d3227a6711b18de8a120de6e4adcbff1cee87de9cbdb3cc83ff3d3b"
+    },
+    {
+      "path": "server/test/helpers/connected-api-server.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "f91732c6df03f3fdcbe7068ee861e18aefc716477c0ab30844f8fdd06cc53589"
+    },
+    {
+      "path": "server/test/image-integrity.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "55a12e1f3211d06ff326116b02b1c58d7928dfef2ea91b0598dff887d59a6d78"
+    },
+    {
+      "path": "server/test/operational-readiness.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "070d9fbf185061fce1f51159e932f985180aa3818b902981376d6ee0f7085f1a"
+    },
+    {
+      "path": "server/test/permanent-visibility-service.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "dc59ada8fb79078d030b99b69bb908fa3a5e62757639f38f9976762833600d47"
+    },
+    {
+      "path": "server/test/permanent-visibility.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "52201eccc0be1892a691d638ff28c447c20959a743854cc89cb7e4585d262b57"
+    },
+    {
+      "path": "server/test/phase3-account.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "aac9f1eff733bf1f94d82f6f31ad4f0ba0c8b60771a6414ad664655b5c8aeff5"
+    },
+    {
+      "path": "server/test/phase3-tracking.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "a44c5492dea5bbe5c138b190b9a13c3e0cede2a615a8f9eb5497581ba10eb648"
+    },
+    {
+      "path": "server/test/product-addresses.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "1772030a3e8cc7c990c8aa496253202fb43e0c2afd5279b9c79819f76cfdbc44"
+    },
+    {
+      "path": "server/test/product-personalization.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "decf56614676708db502bb4655b718585dd9fc482fdd5e51aed7d02b6d1fddd1"
+    },
+    {
+      "path": "server/test/product-routing.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "14054322ac9418d001792632ff1a64a275a8ceb3c571d56cb9a416c12e221414"
+    },
+    {
+      "path": "server/test/release-remediation-1.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "456dd8811547d0b95069dc9119a76f5151c9f03097b90330b257a5eaea0c180f"
+    },
+    {
+      "path": "server/test/seo-export.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "1dbbb194c8bdb410c2fc62fbfc6bb2d5f88e05c9c7eb496e9a7490dae705c3c3"
+    },
+    {
+      "path": "server/test/service-requests.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "89957a9c489bcc146431ff42e72c1840ffc50ec72afb54b7cf9e297b03d4194e"
+    },
+    {
+      "path": "server/test/website-admin.test.js",
+      "group": "tests and isolated harnesses",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "2ec1d75084860e7bd66f59091893642cb1a741d7981fd36cf00e2324665bb0a5"
+    },
+    {
+      "path": "shared/product-personalization.mjs",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "5c071e5b5200695a50a07944aadad4813b81fe15674d7c9225a4498695778a21"
+    },
+    {
+      "path": "shared/product-seo.mjs",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "c1674c83f29db6772c1bb1f2967bf1f514632b8c7f11bcd0be73c16624de82f8"
+    },
+    {
+      "path": "shared/product-url-compatibility.mjs",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "7597246ea530cb84c747a6a3b3e78f6f3bd8061f86c87474ea505d11b1349749"
+    },
+    {
+      "path": "shared/storefront-content.mjs",
+      "group": "application runtime",
+      "candidate": true,
+      "reviewRequired": true,
+      "sha256": "2ba7f69da637546ef17034067ad17d8c6a9bead2eac616d03d166e383a6813f5"
+    }
+  ]
+}

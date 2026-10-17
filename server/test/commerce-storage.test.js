@@ -1,3 +1,4 @@
+import { Order } from '../src/models/Order.js';
 import test, { before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import mongoose from 'mongoose';
@@ -25,7 +26,7 @@ import {
 import { recordAdminAudit } from '../src/commerce/audit.js';
 import { parseJobArguments, runCommerceJobs } from '../scripts/run-commerce-jobs.js';
 
-const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X8kQAAAAASUVORK5CYII=', 'base64');
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWO4NbsXAARVAgOYIL6CAAAAAElFTkSuQmCC', 'base64');
 const guest = `guest:${'a'.repeat(64)}`;
 const otherGuest = `guest:${'b'.repeat(64)}`;
 const account = `user:${new mongoose.Types.ObjectId()}`;
@@ -43,6 +44,7 @@ after(async () => {
   await fixture?.stop();
 });
 beforeEach(async () => {
+  await Order.deleteMany({});
   for (const model of [Upload, UploadQuota, AdminAudit, NotificationEvent, CheckoutIntent]) await model.deleteMany({});
   storage = createMemoryStorage();
   setStorageForTests(storage);
@@ -60,6 +62,18 @@ async function pendingUpload(owner = guest, overrides = {}) {
   storage.put(upload.temporaryKey, PNG);
   return upload;
 }
+
+test('full-image rejection never verifies a private header-only upload; a fresh valid attempt retains original bytes', async () => {
+  const header = PNG.subarray(0, 33), invalid = await pendingUpload(guest, { sizeBytes: header.length });
+  storage.put(invalid.temporaryKey, header);
+  await assert.rejects(completeUpload(invalid._id, guest), { code: 'INVALID_IMAGE' });
+  const failed = await Upload.findById(invalid._id).select('+objectKey');
+  assert.equal(failed.state, 'failed'); assert.ok(failed.orderId == null); assert.equal(storage.objects.has(failed.objectKey), false);
+  await assert.rejects(completeUpload(invalid._id, guest), { code: 'UPLOAD_NOT_READY' });
+  const valid = await pendingUpload(); await completeUpload(valid._id, guest);
+  const verified = await Upload.findById(valid._id).select('+objectKey');
+  assert.equal(verified.state, 'complete'); assert.deepEqual(storage.objects.get(verified.objectKey).bytes, PNG);
+});
 
 test('R2 stays unavailable without explicit complete configuration', () => {
   assert.throws(() => createR2Storage({ STORAGE_ENABLED: 'false' }), { code: 'STORAGE_UNAVAILABLE' });
@@ -194,40 +208,26 @@ test('concurrent cart attachment and cleanup never accept and delete the same im
   }
 });
 
-test('payment proof cannot sign while checkout is disabled or without an owned active InstaPay intent', async () => {
-  const checkoutKey = 'ec1a5c50-9a99-4b1b-8aa5-1f5e45a57c81';
-  const request = { purpose: 'payment_proof', mimeType: 'image/png', sizeBytes: PNG.length, checkoutKey };
-  await assert.rejects(signUpload(guest, request), { code: 'CHECKOUT_DISABLED' });
-  env.checkoutEnabled = true;
-  await assert.rejects(signUpload(guest, request), { code: 'CHECKOUT_REVIEW_REQUIRED' });
+async function proofOrder() { return Order.create({ owner: guest, orderNumber: '681243', checkoutKey: 'isolated', requestHash: 'isolated', customer: { email: 'fixture@example.test' }, lines: [], totals: { totalPiastres: 9000 }, accountingVersion: 1, paymentMethod: 'instapay', paymentState: 'awaiting_transfer' }); }
+test('payment proof requires an existing owned order, including when checkout is subsequently disabled', async () => {
+  await assert.rejects(signUpload(guest, { purpose: 'payment_proof', mimeType: 'image/png', sizeBytes: PNG.length }), { code: 'ORDER_REQUIRED' });
+  const order = await proofOrder();
+  const request = { purpose: 'payment_proof', mimeType: 'image/png', sizeBytes: PNG.length, orderId: String(order._id) };
+  await assert.rejects(signUpload(otherGuest, request), { code: 'ORDER_NOT_FOUND' });
+  assert.ok((await signUpload(guest, request)).upload.id);
 });
-
-test('payment-proof signing enforces atomic quotas and leaves the payment intent unpaid', async () => {
-  env.checkoutEnabled = true;
-  const checkoutKey = 'dc1a5c50-9a99-4b1b-8aa5-1f5e45a57c81';
-  await CheckoutIntent.create({ owner: guest, checkoutKey, paymentMethod: 'instapay', state: 'open',
-    expiresAt: new Date(Date.now() + 600000), fingerprint: 'a'.repeat(64), quote: { totalPiastres: 9000 } });
-  const request = { purpose: 'payment_proof', mimeType: 'image/png', sizeBytes: PNG.length, checkoutKey };
-  for (let index = 0; index < 20; index += 1) {
-    const signed = await signUpload(guest, request);
-    assert.ok(signed.uploadUrl.startsWith('https://storage.invalid/'));
-    assert.equal(signed.upload.state, 'pending');
-  }
+test('order-bound payment-proof signing enforces atomic quotas and leaves the order unpaid', async () => {
+  const order = await proofOrder();
+  const request = { purpose: 'payment_proof', mimeType: 'image/png', sizeBytes: PNG.length, orderId: String(order._id) };
+  for (let index = 0; index < 20; index++) assert.equal((await signUpload(guest, request)).upload.state, 'pending');
   await assert.rejects(signUpload(guest, request), { code: 'UPLOAD_QUOTA_EXCEEDED' });
   assert.equal((await UploadQuota.findOne({ owner: guest })).activeCount, 20);
-  assert.equal((await CheckoutIntent.findOne()).state, 'open');
-  await assert.rejects(signUpload(otherGuest, request), { code: 'CHECKOUT_REVIEW_REQUIRED' });
+  assert.equal((await Order.findById(order._id)).paymentState, 'awaiting_transfer');
 });
-
-test('presigning failures release their quota and never create a successful upload', async () => {
-  env.checkoutEnabled = true;
-  const checkoutKey = 'bc1a5c50-9a99-4b1b-8aa5-1f5e45a57c81';
-  await CheckoutIntent.create({ owner: guest, checkoutKey, paymentMethod: 'instapay', state: 'open',
-    expiresAt: new Date(Date.now() + 600000), fingerprint: 'a'.repeat(64), quote: { totalPiastres: 9000 } });
-  storage.signPut = async () => { throw new Error('Isolated unavailable signer.'); };
-  await assert.rejects(signUpload(guest, { purpose: 'payment_proof', mimeType: 'image/png', sizeBytes: PNG.length, checkoutKey }), { code: 'STORAGE_UNAVAILABLE' });
-  assert.equal(await Upload.countDocuments(), 0);
-  assert.equal((await UploadQuota.findOne({ owner: guest })).activeCount, 0);
+test('presigning failures release quota without creating a successful upload', async () => {
+  const order = await proofOrder(); storage.signPut = async () => { throw Error('Isolated unavailable signer'); };
+  await assert.rejects(signUpload(guest, { purpose: 'payment_proof', mimeType: 'image/png', sizeBytes: PNG.length, orderId: String(order._id) }), { code: 'STORAGE_UNAVAILABLE' });
+  assert.equal(await Upload.countDocuments(), 0); assert.equal((await UploadQuota.findOne({ owner: guest })).activeCount, 0);
 });
 
 test('failed object cleanup retains its record and retries instead of orphaning storage', async () => {

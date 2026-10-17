@@ -109,6 +109,7 @@ export function evaluateCustomization(templateInput, componentsInput, input, { r
       const component = option.componentId ? components.get(stringId(option.componentId)) : null;
       if (option.componentId && (!component || component.reviewRequired || !component.enabledForCustomization || !component.configurationApproved || !component.priceApproved || !integer(component.pricePiastres, 0, 100000000))) throw configurationError('A configured component is awaiting approval.', 'COMPONENT_UNAVAILABLE', 409);
       if (quantity && (!option.active || (component && !componentAvailable(component, quantity)))) throw configurationError(`${option.label} is currently unavailable.`, 'COMPONENT_UNAVAILABLE', 409);
+      if (quantity && component && (!Number.isSafeInteger(component.pricePiastres) || component.pricePiastres <= 0)) throw configurationError('This component requires a separately accepted quotation.', 'COMPONENT_QUOTATION_REQUIRED', 409);
       const optionUnitPiastres = sum(option.priceAdjustmentPiastres || 0, component?.pricePiastres || 0);
       adjustmentPiastres = sum(adjustmentPiastres, optionUnitPiastres * (quantity - baseline));
       if (quantity) {

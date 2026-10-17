@@ -1,16 +1,15 @@
+import PersonalizationSummary from '../commerce/PersonalizationSummary.jsx';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useCart } from '../commerce/CartContext';
-import { commerceError, commerceGet, commercePost, discardUploads, money, uploadPrivateFile } from '../commerce/api';
-import { LocalFileField } from '../commerce/ConfiguredFields';
+import { commerceError, commerceGet, commercePost, money } from '../commerce/api';
 import { emitTracking } from '../tracking/client';
 import { useSession } from '../auth/SessionProvider.jsx';
 import { privateQueryKey } from '../auth/session.js';
 import { FieldError, fieldErrorProps, focusInvalidField, nativeFieldErrors, validationFieldErrors } from '../components/FormFeedback.jsx';
 import { checkoutSession, clearCheckoutSession, markCheckoutPending, markCheckoutRejected } from '../commerce/checkout-session.js';
 
-const proofField = { key: 'payment_proof', label: 'InstaPay payment proof', required: true, minFiles: 1, maxFiles: 1, maxBytes: 5 * 1024 * 1024, acceptedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'] };
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
@@ -19,7 +18,8 @@ export default function CheckoutPage() {
   const checkoutOwner = checkoutOwnerKey ? `checkout:${checkoutOwnerKey}` : session.ownerKey;
   const [customer, setCustomer] = useState({ name: '', email: '', phone: '', governorate: '', address: '', notes: '' });
   const [paymentMethod, setPaymentMethod] = useState('cod');
-  const [proof, setProof] = useState([]);
+  const personalized = cart.items.some(item => item.requiresPersonalization || Object.keys(item.personalization || {}).length > 0 || item.customization);
+  useEffect(() => { if (personalized) setPaymentMethod('instapay'); }, [personalized]);
   const [discountCode, setDiscountCode] = useState('');
   const [appliedCode, setAppliedCode] = useState('');
   const [fieldError, setFieldError] = useState('');
@@ -27,15 +27,14 @@ export default function CheckoutPage() {
   const [uploadStatus, setUploadStatus] = useState('');
   const prefix = useId();
   const submissionKey = useRef(null);
-  const proofUpload = useRef(null);
   const requestSnapshot = useRef(null);
   const [uncertainOwner, setUncertainOwner] = useState(null);
   const [recoveryMessage, setRecoveryMessage] = useState('');
   const uncertain = uncertainOwner === checkoutOwner || session.ready && checkoutSession(checkoutOwner).pending;
   useEffect(() => {
-    submissionKey.current = null; proofUpload.current = null; requestSnapshot.current = null;
+    submissionKey.current = null; requestSnapshot.current = null;
     setCustomer({ name: '', email: '', phone: '', governorate: '', address: '', notes: '' });
-    setProof([]); setFieldErrors({}); setFieldError(''); setRecoveryMessage('');
+    setFieldErrors({}); setFieldError(''); setRecoveryMessage('');
     setUncertainOwner(null);
   }, [session.ownerKey, checkoutOwner]);
   const config = useQuery({ queryKey: privateQueryKey(session.ownerKey, 'checkout-config'), queryFn: ({ signal }) => commerceGet('/checkout/config', undefined, signal), enabled: session.ready, retry: false, staleTime: 60_000 });
@@ -44,7 +43,7 @@ export default function CheckoutPage() {
     submissionKey.current ||= checkoutSession(checkoutOwner).key;
     return commercePost('/checkout/quote', { checkoutKey: submissionKey.current, paymentMethod, governorate: customer.governorate, ...(appliedCode ? { discountCode: appliedCode } : {}) }, { signal });
   }, enabled: session.ready && enabled && !uncertain && Boolean(customer.governorate) && cart.items.length > 0, retry: false, staleTime: 0 });
-  const totals = quote.data?.quote || quote.data;
+  const totals = quote.data?.totals || quote.data?.quote || quote.data;
   useEffect(() => { if (quote.data?.tracking) emitTracking(quote.data.tracking); }, [quote.data]);
   function confirmed(result) {
     const order = result.order;
@@ -62,25 +61,15 @@ export default function CheckoutPage() {
   const submit = useMutation({ mutationFn: async () => {
     if (requestSnapshot.current) return commercePost('/orders', requestSnapshot.current);
     if (!enabled) throw new Error('Ordering has not been enabled yet.');
-    if (paymentMethod === 'instapay' && proof.length !== 1) { setFieldError('Select one payment proof before placing your order.'); throw new Error('Payment proof is required.'); }
     submissionKey.current ||= checkoutSession(checkoutOwner).key;
-    let paymentProofId;
-    const uploadedIds = [];
-    if (paymentMethod === 'instapay') {
-      if (proofUpload.current?.file === proof[0]) paymentProofId = proofUpload.current.id;
-      else {
-        try { paymentProofId = await uploadPrivateFile(proof[0], { purpose: 'payment_proof', checkoutKey: submissionKey.current, onProgress: setUploadStatus }, uploadedIds); }
-        catch (error) { await discardUploads(uploadedIds); throw error; }
-        proofUpload.current = { file: proof[0], id: paymentProofId };
-      }
-    }
-    // Keep a completed proof for an idempotent retry if the submission response is lost.
     setUploadStatus('Submitting your order securely…');
-    requestSnapshot.current = { checkoutKey: submissionKey.current, customer: { ...customer }, paymentMethod, ...(appliedCode ? { discountCode: appliedCode } : {}), ...(paymentProofId ? { paymentProofId } : {}) };
+    requestSnapshot.current = { checkoutKey: submissionKey.current, customer: { ...customer }, paymentMethod, ...(appliedCode ? { discountCode: appliedCode } : {}) };
     markCheckoutPending(checkoutOwner);
     return commercePost('/orders', requestSnapshot.current);
   }, onSuccess: confirmed, onError: (error) => {
-    if (requestSnapshot.current && (!error.response || error.response.status >= 500 || error.response.status === 409)) setUncertainOwner(checkoutOwner);
+    const reviewable = ['CHECKOUT_QUOTE_REQUIRED', 'CHECKOUT_CHANGED', 'PRODUCT_UNAVAILABLE', 'INSUFFICIENT_STOCK', 'QUOTATION_REQUIRED'].includes(error.response?.data?.error?.code);
+    if (reviewable) { markCheckoutRejected(checkoutOwner); requestSnapshot.current = null; setUncertainOwner(null); void refresh().catch(() => {}); void quote.refetch(); }
+    else if (requestSnapshot.current && (!error.response || error.response.status >= 500 || error.response.status === 409)) setUncertainOwner(checkoutOwner);
     else if (requestSnapshot.current) { markCheckoutRejected(checkoutOwner); requestSnapshot.current = null; }
     setFieldErrors(Object.fromEntries(Object.entries(validationFieldErrors(error)).map(([key, value]) => [key.replace(/^customer\./, ''), value])));
   }, onSettled: () => setUploadStatus('') });
@@ -103,14 +92,15 @@ export default function CheckoutPage() {
         <div className="commerce-field"><label htmlFor={`${prefix}-governorate`}>Governorate</label><select {...control('governorate')} required><option value="">Select governorate</option>{(config.data.governorates || []).map((area) => <option value={area.id} key={area.id}>{area.name}</option>)}</select><FieldError id={`${prefix}-governorate`}>{fieldErrors.governorate}</FieldError></div>
         <div className="commerce-field"><label htmlFor={`${prefix}-address`}>Delivery address</label><textarea {...control('address')} required minLength={10} maxLength={500} autoComplete="street-address" rows={3}/><FieldError id={`${prefix}-address`}>{fieldErrors.address}</FieldError></div>
         <div className="commerce-field"><label htmlFor={`${prefix}-notes`}>Order notes (optional)</label><textarea {...control('notes')} maxLength={1000} rows={2}/><FieldError id={`${prefix}-notes`}>{fieldErrors.notes}</FieldError></div>
-      </div><fieldset className="commerce-payment"><legend>Payment Method</legend><label><input type="radio" name="payment" value="cod" checked={paymentMethod === 'cod'} onChange={() => setPaymentMethod('cod')} />Cash on Delivery</label><p>Payment is collected when your order is delivered.</p><label><input type="radio" name="payment" value="instapay" checked={paymentMethod === 'instapay'} onChange={() => setPaymentMethod('instapay')} />InstaPay — full payment</label>
-        {paymentMethod === 'instapay' && <div className="commerce-notice"><p>Transfer the full order total, including shipping, to <strong>{config.data.instaPayNumber || '01060673073'}</strong>.</p><p>Payment is manually verified. Selecting a screenshot does not mark your order as paid.</p><LocalFileField field={proofField} value={proof} onChange={setProof} disabled={submit.isPending} error={fieldError} /><p className="commerce-muted">Proof uploads only when you press Place Order.</p></div>}
+      </div><fieldset className="commerce-payment"><legend>Payment Method</legend><label><input type="radio" name="payment" value="cod" disabled={personalized} checked={paymentMethod === 'cod'} onChange={() => setPaymentMethod('cod')} />Cash on Delivery</label><p>{personalized ? 'Personalized orders use InstaPay. COD requires a separately authorized owner quotation before acceptance.' : 'Payment is collected when your order is delivered.'}</p><label><input type="radio" name="payment" value="instapay" checked={paymentMethod === 'instapay'} onChange={() => setPaymentMethod('instapay')} />InstaPay — full payment</label>
+        {paymentMethod === 'instapay' && <div className="commerce-notice"><p>Place your order first. Your order reference and verified InstaPay instructions appear after the order is accepted. Do not transfer before receiving that reference.</p><p>The initial transfer covers merchandise only. Delivery is confirmed separately through WhatsApp; initial contact is within 12 hours.</p></div>}
       </fieldset></fieldset></section>
-      <aside className="commerce-summary"><h2>Your Order</h2>{cart.items.map((item) => <div className="commerce-summary-item" key={item.id}><span>{item.name} × {item.quantity}</span><strong>{money(item.lineTotalPiastres)}</strong></div>)}
+      <aside className="commerce-summary"><h2>Your Order</h2>{cart.items.map((item) => <div className="commerce-summary-item" key={item.id}><span>{item.name} × {item.quantity}</span><strong>{money(item.lineTotalPiastres)}</strong><PersonalizationSummary values={item.personalization} definitions={item.personalizationDefinitions} /></div>)}
         <label className="commerce-field">Discount code<input value={discountCode} maxLength={40} disabled={submit.isPending || uncertain} onChange={(event) => setDiscountCode(event.target.value)} /></label><button className="button button-secondary" type="button" disabled={uncertain || !customer.governorate || quote.isFetching || submit.isPending} onClick={() => setAppliedCode(discountCode.trim())}>Apply code</button>
         {quote.isFetching && <p role="status">Calculating your total…</p>}{quote.error && <p className="form-error" role="alert">{commerceError(quote.error)}</p>}
         {customer.governorate && <button className="commerce-link-button" type="button" disabled={uncertain || quote.isFetching || submit.isPending} onClick={() => quote.refetch()}>Refresh order total</button>}
-        {totals && <dl><div><dt>Subtotal</dt><dd>{money(totals.subtotalPiastres)}</dd></div>{(totals.discountPiastres || 0) > 0 && <div><dt>Discounts</dt><dd>−{money(totals.discountPiastres)}</dd></div>}<div><dt>Shipping</dt><dd>{money(totals.shippingPiastres)}</dd></div><div className="commerce-total"><dt>Total</dt><dd>{money(totals.totalPiastres)}</dd></div></dl>}
+        {totals && <dl><div><dt>Subtotal</dt><dd>{money(totals.subtotalPiastres)}</dd></div>{(totals.discountPiastres || 0) > 0 && <div><dt>Discounts</dt><dd>−{money(totals.discountPiastres)}</dd></div>}<div><dt>Shipping</dt><dd>Pending Confirmation</dd></div><div className="commerce-total"><dt>Merchandise amount</dt><dd>{money(totals.totalPiastres)}</dd></div></dl>}
+        <p>Delivery is not included. The owner will contact you on WhatsApp within 12 hours to agree the fee. This is not free shipping.</p><p>{paymentMethod === 'cod' ? 'Payable now: EGP 0.00. Merchandise and accepted delivery charges are collected on delivery.' : 'Payable after order creation: the verified merchandise amount above. Delivery remains separate.'}</p>
         {(fieldError || submit.error) && <p className="form-error" role="alert">{fieldError || commerceError(submit.error)}</p>}
         {submit.isPending && <p className="upload-progress" role="status"><progress aria-label="Placing your order"/>{uploadStatus || 'Preparing your order…'}</p>}
         <button className="button button-primary" type="submit" disabled={uncertain || submit.isPending || !totals || quote.isFetching || Boolean(quote.error) || cart.items.some((item) => !item.valid)}>{submit.isPending ? 'Placing your order…' : 'Place Order'}</button><p className="commerce-muted">Availability, quantities and approved prices are verified by the server before an order is accepted.</p>

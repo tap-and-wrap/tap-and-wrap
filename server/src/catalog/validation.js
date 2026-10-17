@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { engravingRequestPolicy } from '../commerce/request-validation.js';
 import { isSafeImageReference } from './fields.js';
 
 const objectId = z.string().regex(/^[a-f\d]{24}$/i, 'Expected a MongoDB object ID');
@@ -40,6 +41,7 @@ const personalizationFieldSchema = z.object({
 }).strict();
 
 const productFields = {
+  engravingRequest: engravingRequestPolicy.optional(),
   name: boundedText(240).min(1),
   slug,
   description: boundedText(10000).optional(),
@@ -52,9 +54,10 @@ const productFields = {
   priceApproved: bool.optional(),
   inventory: inventorySchema.optional(),
   status: z.enum(['draft', 'ready', 'hold']).optional(),
+  visibility: z.enum(['hidden', 'public', 'withdrawn']).optional(),
   sku: boundedText(100).optional(),
   variants: z.array(variantSchema).max(30).optional(),
-  personalization: z.object({ fields: z.array(personalizationFieldSchema).max(20) }).strict().optional(),
+  personalization: z.object({ requiredBeforePurchase: bool.optional(), fields: z.array(personalizationFieldSchema).max(20) }).strict().optional(),
   customization: z.object({
     enabled: bool.optional(),
     templateId: objectId.nullable().optional(),
@@ -108,6 +111,7 @@ export const publicProductQuerySchema = z.object(commonQueryFields).strict();
 export const adminProductQuerySchema = z.object({
   ...commonQueryFields,
   status: z.enum(['draft', 'ready', 'hold']).optional(),
+  visibility: z.enum(['hidden', 'public', 'withdrawn', 'unreviewed']).optional(),
   priceApproved: booleanQuery.optional(),
   inventoryApproved: booleanQuery.optional(),
   inventoryMode: z.enum(['tracked', 'made_to_order']).optional(),

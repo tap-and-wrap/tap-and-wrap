@@ -1,13 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { env } from '../config/env.js';
 import { assertDatabaseWriteAllowed } from '../config/database-safety.js';
-import { NotificationEvent, ORDER_NOTIFICATION_EVENTS } from '../models/NotificationEvent.js';
+import { NotificationEvent, ORDER_NOTIFICATION_EVENTS, REQUEST_NOTIFICATION_EVENTS } from '../models/NotificationEvent.js';
 import { AccountActionToken } from '../models/AccountActionToken.js';
 import { emailSettings, assertSafeEmailRecipient } from '../email/settings.js';
-import { renderEmailTemplate } from '../email/templates.js';
+import { createResendProvider } from '../email/resend.js';
+export { createResendProvider } from '../email/resend.js';
 import { createGmailProvider } from '../email/gmail.js';
 import { accountActionUrl } from '../email/action-secrets.js';
 import { shouldStop, boundedOperation } from './work-budget.js';
+import { enqueueOwnerEvents, ownerEventEligible } from './owner-notifications.js';
 
 const MAX_ATTEMPTS = 6;
 const LEASE_MS = 120000;
@@ -31,30 +33,6 @@ export function assertSafeNotificationRecipient(recipient, settings = notificati
   return assertSafeEmailRecipient(recipient, settings);
 }
 
-export function createResendProvider(settings = process.env) {
-  if (process.env.NODE_ENV === 'test') throw notificationError('TEST_PROVIDER_NOT_CONFIGURED');
-  const config = notificationSettings({ ...settings, EMAIL_PROVIDER: 'resend' });
-  if (!config.enabled || !config.configured || (!config.production && !config.safeRecipients.length)) {
-    throw notificationError('NOTIFICATIONS_DISABLED');
-  }
-  return {
-    supportsIdempotency: true,
-    async send(event, options = {}) {
-      assertSafeNotificationRecipient(event.recipient, config);
-      const message = renderEmailTemplate(event, { clientOrigin: settings.CLIENT_ORIGIN || env.clientOrigin, ...options });
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST', signal: AbortSignal.timeout(15000),
-        headers: { Authorization: `Bearer ${settings.RESEND_API_KEY}`, 'Content-Type': 'application/json', 'Idempotency-Key': event.eventKey },
-        body: JSON.stringify({ from: config.from, to: [event.recipient], ...message }),
-      });
-      if (!response.ok) throw notificationError(response.status === 429 ? 'PROVIDER_RATE_LIMIT' : 'PROVIDER_DELIVERY_FAILED');
-      const result = await response.json();
-      if (typeof result.id !== 'string' || result.id.length > 180) throw notificationError('INVALID_PROVIDER_RESPONSE');
-      return { id: result.id };
-    },
-  };
-}
-
 export function createNotificationProvider(settings = process.env) {
   const provider = notificationSettings(settings).provider;
   if (!['gmail', 'resend'].includes(provider)) throw notificationError('INVALID_EMAIL_PROVIDER');
@@ -68,9 +46,11 @@ export function setNotificationProviderForTests(provider) {
 
 export async function enqueueOrderEvent(order, event, { session, eventVersion } = {}) {
   if (!ORDER_NOTIFICATION_EVENTS.includes(event)) throw notificationError('INVALID_ORDER_EVENT', 400);
+  await enqueueOwnerEvents(order, 'order', event, { session, eventVersion });
   const orderId = order?._id;
   const recipient = order?.customer?.email;
   const orderNumber = String(order?.orderNumber || order?.publicOrderNumber || '');
+  if (orderId && !validEmail(recipient)) return null; // WhatsApp-first quotations may have no usable email.
   if (!orderId || !validEmail(recipient) || !/^\d{6}$/.test(orderNumber)) throw notificationError('INVALID_NOTIFICATION_SNAPSHOT', 400);
   const version = eventVersion ?? order.statusHistory?.length ?? 1;
   if (!Number.isSafeInteger(version) || version < 1 || version > 1000000) throw notificationError('INVALID_EVENT_VERSION', 400);
@@ -78,11 +58,27 @@ export async function enqueueOrderEvent(order, event, { session, eventVersion } 
   writeGuard();
   await NotificationEvent.updateOne({ eventKey }, { $setOnInsert: {
     eventKey, orderId, event, recipient: recipient.toLowerCase(),
-    snapshot: { orderNumber,
+    snapshot: { items: (order.lines || []).slice(0, 20).map(line => ({ name: String(line.name || '').slice(0, 160), quantity: line.quantity })), orderNumber, orderChannel: order.orderChannel || 'website', accountingVersion: order.accountingVersion || 0, shippingState: order.charges?.find(charge => charge.kind === 'shipping')?.state || null,
+      paymentState: order.paymentState,
+      ...(order.orderChannel === 'owner_quotation' && Number.isSafeInteger(order.acceptedQuotation?.totalPiastres) ? { acceptedQuotationTotalPiastres: order.acceptedQuotation.totalPiastres } : {}),
+      ...(order.accountingVersion === 1 ? { financial: { collectedPiastres: order.financialSummary?.collectedPiastres, refundedPiastres: order.financialSummary?.refundedPiastres, outstandingPiastres: order.financialSummary?.outstandingPiastres } } : {}),
+      charges: (order.charges || []).slice(0, 30).map(charge => ({ label: charge.label, amountPiastres: charge.amountPiastres, state: charge.state, pricing: charge.pricing, collectionMethod: charge.collectionMethod })),
       ...(Number.isSafeInteger(order?.totals?.totalPiastres) && order.totals.totalPiastres >= 0 ? { totalPiastres: order.totals.totalPiastres } : {}),
       ...(['cod', 'instapay'].includes(order?.paymentMethod) ? { paymentMethod: order.paymentMethod } : {}),
     }, state: 'queued', attempts: 0, nextAttemptAt: new Date(), createdAt: new Date(), updatedAt: new Date(),
   } }, { upsert: true, session, timestamps: false });
+  return eventKey;
+}
+
+export async function enqueueRequestEvent(record, event, { session, eventVersion = 1 } = {}) {
+  if (!REQUEST_NOTIFICATION_EVENTS.includes(event)) throw notificationError('INVALID_REQUEST_EVENT', 400);
+  await enqueueOwnerEvents(record, 'request', event, { session, eventVersion });
+  if (!validEmail(record.customer?.email)) return null;
+  const quote = record.quotations?.at(-1), eventKey = `request:${record._id}:${event}:${eventVersion}`;
+  writeGuard();
+  await NotificationEvent.updateOne({ eventKey }, { $setOnInsert: { eventKey, requestId: record._id, event, recipient: record.customer.email.toLowerCase(),
+    snapshot: { requestReference: record.reference, service: record.service, ...(quote ? { quotationVersion: quote.version, quotationTotalPiastres: quote.totalPiastres, baseUnitPiastres: quote.baseUnitPiastres, quantity: record.details.quantity, discountPiastres: quote.discountPiastres, shippingPiastres: quote.shippingPiastres, charges: quote.charges.map(charge => ({ label: charge.label, quantity: charge.quantity, unitPricePiastres: charge.unitPricePiastres })), allowedPaymentMethods: quote.allowedPaymentMethods } : {}) },
+    state: 'queued', attempts: 0, nextAttemptAt: new Date() } }, { upsert: true, session });
   return eventKey;
 }
 
@@ -99,9 +95,12 @@ export async function cleanupNotificationSecrets({ batchSize = 20, now = new Dat
   const stopped = () => { if (shouldStop(budget)) { counts.stopped = true; return true; } return false; };
   if (stopped()) return counts;
   const interrupted = await NotificationEvent.find({ state: 'processing', leaseUntil: { $lte: now }, dispatchStartedAt: { $exists: true } })
-    .select('_id').sort({ leaseUntil: 1, _id: 1 }).limit(batchSize).lean().maxTimeMS(3000);
-  if (interrupted.length) counts.uncertain += (await NotificationEvent.updateMany({ _id: { $in: interrupted.map(event => event._id) }, state: 'processing', leaseUntil: { $lte: now }, dispatchStartedAt: { $exists: true } },
-    { $set: { state: 'uncertain', lastErrorCode: 'SMTP_DELIVERY_UNCERTAIN' }, $unset: { leaseToken: 1, leaseUntil: 1, sealedActionToken: 1 } })).modifiedCount;
+    .select('_id dispatchProvider').sort({ leaseUntil: 1, _id: 1 }).limit(batchSize).lean().maxTimeMS(3000);
+  for (const provider of ['gmail', 'resend']) {
+    const ids = interrupted.filter(event => provider === 'resend' ? event.dispatchProvider === 'resend' : event.dispatchProvider !== 'resend').map(event => event._id);
+    if (ids.length) counts.uncertain += (await NotificationEvent.updateMany({ _id: { $in: ids }, state: 'processing', leaseUntil: { $lte: now }, dispatchStartedAt: { $exists: true } },
+      { $set: { state: 'uncertain', lastErrorCode: provider === 'resend' ? 'DELIVERY_UNCERTAIN' : 'SMTP_DELIVERY_UNCERTAIN' }, $unset: { leaseToken: 1, leaseUntil: 1, sealedActionToken: 1 } })).modifiedCount;
+  }
   if (stopped()) return counts;
   const exhausted = await NotificationEvent.find({ state: { $in: ['queued', 'failed', 'processing'] }, attempts: { $gte: MAX_ATTEMPTS },
     $or: [{ state: { $in: ['queued', 'failed'] } }, { leaseUntil: { $lte: now } }] }).select('_id').sort({ createdAt: 1, _id: 1 }).limit(batchSize).lean().maxTimeMS(3000);
@@ -109,9 +108,9 @@ export async function cleanupNotificationSecrets({ batchSize = 20, now = new Dat
     $or: [{ state: { $in: ['queued', 'failed'] } }, { leaseUntil: { $lte: now } }] },
     { $set: { state: 'dead', lastErrorCode: 'RETRY_LIMIT_REACHED' }, $unset: { leaseToken: 1, leaseUntil: 1, sealedActionToken: 1 } })).modifiedCount;
   if (stopped()) return counts;
-  const terminal = await NotificationEvent.find({ state: { $in: ['sent', 'dead', 'uncertain'] }, sealedActionToken: { $exists: true } })
+  const terminal = await NotificationEvent.find({ state: { $in: ['sent', 'dead', 'uncertain', 'suppressed'] }, sealedActionToken: { $exists: true } })
     .select('_id').sort({ createdAt: 1, _id: 1 }).limit(batchSize).lean().maxTimeMS(3000);
-  if (terminal.length) counts.cleanedSecrets += (await NotificationEvent.updateMany({ _id: { $in: terminal.map(event => event._id) }, state: { $in: ['sent', 'dead', 'uncertain'] } },
+  if (terminal.length) counts.cleanedSecrets += (await NotificationEvent.updateMany({ _id: { $in: terminal.map(event => event._id) }, state: { $in: ['sent', 'dead', 'uncertain', 'suppressed'] } },
     { $unset: { sealedActionToken: 1 } })).modifiedCount;
   if (stopped()) return counts;
   const expiredFilter = { expiresAt: { $lte: now }, $or: [{ state: { $in: ['queued', 'failed'] } }, { state: 'processing', leaseUntil: { $lte: now }, dispatchStartedAt: { $exists: false } }] };
@@ -138,7 +137,7 @@ export async function runNotificationBatch({ batchSize = 20, now = new Date(), b
   const usingMock = process.env.NODE_ENV === 'test' && Boolean(testProvider);
   const config = notificationSettings();
   if (process.env.NODE_ENV === 'test' && !usingMock) return { enabled: false, claimed: 0, sent: 0, failed: 0, ...maintenance };
-  if (!usingMock && (!config.enabled || !config.configured || (!config.production && !config.safeRecipients.length))) {
+  if (!usingMock && (!config.enabled || !config.configured || !config.deliveryNotBefore || (!config.production && !config.safeRecipients.length))) {
     return { enabled: false, claimed: 0, sent: 0, failed: 0, ...maintenance };
   }
   const provider = usingMock ? testProvider : createNotificationProvider();
@@ -149,6 +148,7 @@ export async function runNotificationBatch({ batchSize = 20, now = new Date(), b
     const leaseToken = randomUUID();
     writeGuard();
     const event = await NotificationEvent.findOneAndUpdate({
+      ...(config.deliveryNotBefore ? { createdAt: { $gte: config.deliveryNotBefore } } : {}),
       attempts: { $lt: MAX_ATTEMPTS },
       $or: [
         { state: { $in: ['queued', 'failed'] }, nextAttemptAt: { $lte: now } },
@@ -163,6 +163,10 @@ export async function runNotificationBatch({ batchSize = 20, now = new Date(), b
     counts.claimed += 1;
     let deliveryAccepted = false;
     try {
+      if (!await ownerEventEligible(event, now)) {
+        await NotificationEvent.updateOne({ _id: event._id, state: 'processing', leaseToken }, { $set: { state: 'suppressed', lastErrorCode: 'OWNER_ALERT_NO_LONGER_REQUIRED' }, $unset: { leaseToken: 1, leaseUntil: 1 } });
+        counts.suppressed = (counts.suppressed || 0) + 1; continue;
+      }
       // Even an injected test provider only sees explicit safe test addresses.
       if (usingMock) {
         const safeTestRecipient = /^[^\s@]+@[^\s@]+\.test$/i.test(event.recipient) ? [event.recipient.toLowerCase()] : [];
@@ -174,13 +178,13 @@ export async function runNotificationBatch({ batchSize = 20, now = new Date(), b
         if (!currentToken) throw Object.assign(notificationError('ACCOUNT_ACTION_EXPIRED'), { terminal: true });
       }
       const actionUrl = accountActionUrl(event);
-      if (provider.supportsIdempotency === false) {
+      {
         writeGuard();
-        const dispatch = await NotificationEvent.updateOne({ _id: event._id, state: 'processing', leaseToken }, { $set: { dispatchStartedAt: new Date() } });
+        const dispatch = await NotificationEvent.updateOne({ _id: event._id, state: 'processing', leaseToken }, { $set: { dispatchStartedAt: now, dispatchProvider: provider.supportsIdempotency === false ? 'gmail' : 'resend' } });
         if (dispatch.modifiedCount !== 1) throw notificationError('NOTIFICATION_LEASE_LOST');
       }
       const result = await boundedOperation(signal => provider.send(event, { actionUrl, signal }), { budget, timeoutMs: 45000,
-        code: provider.supportsIdempotency === false ? 'SMTP_DELIVERY_UNCERTAIN' : 'PROVIDER_TIMEOUT' });
+        code: provider.supportsIdempotency === false ? 'SMTP_DELIVERY_UNCERTAIN' : 'DELIVERY_UNCERTAIN' });
       if (!result || typeof result.id !== 'string') throw notificationError('INVALID_PROVIDER_RESPONSE');
       deliveryAccepted = true;
       writeGuard();
@@ -190,9 +194,9 @@ export async function runNotificationBatch({ batchSize = 20, now = new Date(), b
       });
       counts.sent += saved.modifiedCount;
     } catch (error) {
-      const uncertain = error.code === 'SMTP_DELIVERY_UNCERTAIN' || (deliveryAccepted && provider.supportsIdempotency === false);
+      const uncertain = ['SMTP_DELIVERY_UNCERTAIN', 'DELIVERY_UNCERTAIN'].includes(error.code) || deliveryAccepted;
       const terminal = uncertain || error.terminal === true || event.attempts >= MAX_ATTEMPTS;
-      const safeCode = uncertain ? 'SMTP_DELIVERY_UNCERTAIN' : ['UNSAFE_DEVELOPMENT_RECIPIENT', 'PROVIDER_RATE_LIMIT', 'INVALID_PROVIDER_RESPONSE',
+      const safeCode = uncertain ? (provider.supportsIdempotency === false ? 'SMTP_DELIVERY_UNCERTAIN' : 'DELIVERY_UNCERTAIN') : ['UNSAFE_DEVELOPMENT_RECIPIENT', 'PROVIDER_RATE_LIMIT', 'INVALID_PROVIDER_RESPONSE',
         'SMTP_DELIVERY_UNCERTAIN', 'SMTP_AUTHENTICATION_FAILED', 'SMTP_MESSAGE_REJECTED', 'SMTP_TRANSIENT_FAILURE',
         'ACCOUNT_ACTION_EXPIRED', 'INVALID_ACCOUNT_ACTION_SECRET'].includes(error.code)
         ? error.code : 'NOTIFICATION_DELIVERY_FAILED';

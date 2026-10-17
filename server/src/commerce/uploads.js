@@ -1,3 +1,6 @@
+import { Order } from '../models/Order.js';
+import { assertRequestIntakeOpen } from './request-intake.js';
+import { productPersonalizationFields } from '../../../shared/product-personalization.mjs';
 import mongoose from 'mongoose';
 import { randomUUID } from 'node:crypto';
 import { env } from '../config/env.js';
@@ -5,7 +8,6 @@ import { assertDatabaseWriteAllowed } from '../config/database-safety.js';
 import { Upload } from '../models/Upload.js';
 import { UploadQuota } from '../models/UploadQuota.js';
 import { AdminAudit } from '../models/AdminAudit.js';
-import { CheckoutIntent } from '../models/CheckoutIntent.js';
 import { loadEligibleProduct } from './pricing.js';
 import { resolveArtworkUploadField } from './customization.js';
 import {
@@ -59,26 +61,26 @@ export function serializeUpload(upload) {
 }
 
 async function policyForUpload(owner, body) {
-  if (!body || !['personalization', 'artwork', 'payment_proof'].includes(body.purpose)) {
+  if (!body || !['personalization', 'artwork', 'payment_proof', 'service_reference'].includes(body.purpose)) {
     throw fail('INVALID_UPLOAD_PURPOSE', 'Choose a supported upload purpose.');
   }
+  if (body.purpose === 'service_reference') {
+    assertRequestIntakeOpen();
+    if (!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(body.requestKey || '')) throw fail('REQUEST_KEY_REQUIRED', 'Start a customization request before uploading reference images.');
+    return { acceptedMimeTypes: UPLOAD_MIME_TYPES, maxBytes: 8 * 1024 * 1024, fieldKey: 'service_reference' };
+  }
   if (body.purpose === 'payment_proof') {
-    if (!env.checkoutEnabled) throw fail('CHECKOUT_DISABLED', 'Checkout is not available yet.', 503);
-    if (typeof body.checkoutKey !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(body.checkoutKey)) {
-      throw fail('CHECKOUT_REVIEW_REQUIRED', 'Review your checkout total before uploading payment proof.');
-    }
-    const intent = await CheckoutIntent.findOne({
-      owner, checkoutKey: body.checkoutKey, state: 'open', paymentMethod: 'instapay', expiresAt: { $gt: new Date() },
-    }).select('_id').lean();
-    if (!intent) throw fail('CHECKOUT_REVIEW_REQUIRED', 'Review your checkout total before uploading payment proof.');
+    if (!mongoose.isObjectIdOrHexString(body.orderId)) throw fail('ORDER_REQUIRED', 'Create an order before transferring and uploading proof.');
+    const order = await Order.findOne({ _id: body.orderId, owner, paymentMethod: 'instapay', orderChannel: { $ne: 'owner_quotation' }, accountingVersion: 1, fulfillmentState: { $nin: ['cancelled', 'returned', 'delivery_failed'] } }).select('_id').lean();
+    if (!order) throw fail('ORDER_NOT_FOUND', 'No eligible owned order was found.', 404);
     return { acceptedMimeTypes: UPLOAD_MIME_TYPES, maxBytes: 5 * 1024 * 1024, fieldKey: 'payment_proof' };
   }
   if (!mongoose.isObjectIdOrHexString(body.productId) || typeof body.fieldKey !== 'string'
       || !/^[a-zA-Z0-9_-]{1,80}$/.test(body.fieldKey)) throw fail('INVALID_UPLOAD_FIELD', 'Choose a configured product image field.');
   const product = await loadEligibleProduct(body.productId);
   let field;
-  if (body.purpose === 'personalization' && product.personalization?.enabled !== false) {
-    field = product.personalization?.fields?.find((candidate) => candidate.key === body.fieldKey && candidate.type === 'image');
+  if (body.purpose === 'personalization') {
+    field = productPersonalizationFields(product.personalization).find(candidate => candidate.key === body.fieldKey && candidate.type === 'image');
   } else if (artworkPolicyResolver) {
     field = await artworkPolicyResolver(product, body.fieldKey, body);
   }
@@ -135,7 +137,7 @@ export async function signUpload(owner, body) {
       writeGuard();
       [upload] = await Upload.create([{
         owner, purpose: body.purpose, productId: body.purpose === 'payment_proof' ? undefined : body.productId,
-        fieldKey: policy.fieldKey, checkoutKey: body.purpose === 'payment_proof' ? body.checkoutKey : undefined,
+        fieldKey: policy.fieldKey, requestKey: body.purpose === 'service_reference' ? body.requestKey : undefined, proofOrderId: body.purpose === 'payment_proof' ? body.orderId : undefined,
         mimeType: body.mimeType, sizeBytes: body.sizeBytes, temporaryKey: privateObjectKey(),
         signedExpiresAt: new Date(now + UPLOAD_URL_SECONDS * 1000), expiresAt: new Date(now + TEMPORARY_LIFETIME_MS),
       }], { session });
@@ -221,6 +223,23 @@ export async function retainUploads(ids, owner, orderId, { session } = {}) {
   if (changed.modifiedCount !== uploads.length) throw fail('UPLOAD_ALREADY_RETAINED', 'One or more images have already been used by an order.', 409);
   for (const upload of uploads) await releaseQuota(upload, { session });
   return uploads.map((upload) => String(upload._id));
+}
+
+export async function retainRequestUploads(ids, owner, requestKey, requestId, { session } = {}) {
+  if (!session?.inTransaction()) throw fail('UPLOAD_TRANSACTION_REQUIRED', 'Request images require a transaction.', 503);
+  const uploads = await validateUploadReferences(ids, owner, { purpose: 'service_reference', session });
+  if (!uploads.length) return;
+  const changed = await Upload.updateMany({ _id: { $in: uploads.map(upload => upload._id) }, owner, requestKey, state: 'complete', requestId: { $exists: false }, cartId: { $exists: false } }, { $set: { state: 'retained', requestId } }, { session });
+  if (changed.modifiedCount !== uploads.length) throw fail('REQUEST_FILE_CONFLICT', 'These files do not belong to this request.', 409);
+  // Pending requests still consume the private-upload quota. Submission must not
+  // create an unlimited free archive. Order conversion releases the quota once.
+}
+export async function bindRequestUploadsToOrder(ids, owner, requestId, orderId, { session } = {}) {
+  if (!session?.inTransaction()) throw fail('UPLOAD_TRANSACTION_REQUIRED', 'Order images require a transaction.', 503);
+  const uploads = await Upload.find({ _id: { $in: idsForQuery(ids) }, owner, requestId, purpose: 'service_reference', state: 'retained' }).session(session).lean();
+  if (uploads.length !== ids.length) throw fail('REQUEST_FILE_CONFLICT', 'Request files require review.', 409);
+  await Upload.updateMany({ _id: { $in: ids }, requestId, orderId: { $exists: false } }, { $set: { orderId } }, { session });
+  for (const upload of uploads) if (!upload.quotaReleased) await releaseQuota(upload, { session });
 }
 
 export async function transferUploadOwnership(ids, fromOwner, toOwner, { session, cartId } = {}) {

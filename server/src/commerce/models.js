@@ -1,4 +1,5 @@
 import { Cart } from '../models/Cart.js';
+import { ServiceRequest } from '../models/ServiceRequest.js';
 import { Order } from '../models/Order.js';
 import { CheckoutIntent } from '../models/CheckoutIntent.js';
 import { DiscountRedemption } from '../models/DiscountRedemption.js';
@@ -12,4 +13,4 @@ import { NotificationEvent } from '../models/NotificationEvent.js';
 import { AdminAudit } from '../models/AdminAudit.js';
 import { CommerceControl } from '../models/CommerceControl.js';
 import { CommerceJobRun } from '../models/CommerceJobRun.js';
-export const commerceModels = [Cart, Order, CheckoutIntent, DiscountRedemption, CustomizationTemplate, DiscountCode, BundleRule, ShippingConfig, Upload, UploadQuota, NotificationEvent, AdminAudit, CommerceControl, CommerceJobRun];
+export const commerceModels = [ServiceRequest, Cart, Order, CheckoutIntent, DiscountRedemption, CustomizationTemplate, DiscountCode, BundleRule, ShippingConfig, Upload, UploadQuota, NotificationEvent, AdminAudit, CommerceControl, CommerceJobRun];

@@ -1,3 +1,4 @@
+import { chooseImageFiles } from './media-helpers.js';
 import { expect, test } from '@playwright/test';
 import { mockCatalog } from './catalog-fixtures.js';
 import { commerceProduct, cartWithProduct, isolatedImageFile, mockCommerce } from './commerce-fixtures.js';
@@ -353,8 +354,8 @@ test('personalization errors associate with their controls and selecting/removin
   await page.getByRole('button', { name: 'Add to Cart', exact: true }).first().click();
   await expect(page.getByLabel('Recipient name', { exact: false })).toBeFocused();
   await expectLinkedError(page.getByLabel('Recipient name', { exact: false }), 'required');
-  await expectLinkedError(page.getByLabel('Recipient photo', { exact: false }), 'exactly 1');
-  await page.getByLabel('Recipient photo', { exact: false }).setInputFiles(isolatedImageFile('local-preview.png'));
+  await expectLinkedError(page.getByRole('button', { name: /^Recipient photo:/ }), 'exactly 1');
+  await chooseImageFiles(page, page, 'Recipient photo', isolatedImageFile('local-preview.png'));
   await expect(page.getByRole('img', { name: 'Selected recipient photo 1' })).toBeVisible();
   await page.getByRole('button', { name: 'Remove local-preview.png', exact: true }).click();
   await expect(page.getByRole('img', { name: 'Selected recipient photo 1' })).toHaveCount(0);
@@ -373,7 +374,7 @@ test('failed private storage preserves local selections and a deliberate retry c
     return route.fulfill({ status: 503, headers, json: { ok: false, error: { code: 'STORAGE_UNAVAILABLE', message: 'Isolated storage is unavailable. Nothing was uploaded.' } } });
   });
   await page.goto(`/products/${product.slug}`);
-  await page.getByLabel('Customer photo', { exact: false }).setInputFiles(isolatedImageFile('retry-photo.png'));
+  await chooseImageFiles(page, page, 'Customer photo', isolatedImageFile('retry-photo.png'));
   await page.getByRole('button', { name: 'Add to Cart', exact: true }).first().click();
   await expect(page.getByText('Isolated storage is unavailable. Nothing was uploaded.', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Remove retry-photo.png', exact: true })).toBeVisible();

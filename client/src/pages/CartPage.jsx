@@ -1,3 +1,4 @@
+import PersonalizationSummary from '../commerce/PersonalizationSummary.jsx';
 import { Link } from 'react-router-dom';
 import { productHref } from '../../../shared/product-paths.mjs';
 import { useCart } from '../commerce/CartContext';
@@ -16,7 +17,7 @@ export default function CartPage() {
         return <article key={item.id} className="commerce-cart-item">
         <ProductLink to={detailUrl} className="commerce-cart-photo">{item.mainImageUrl ? <img src={item.mainImageUrl} alt={item.name} loading="lazy" /> : <span>Product image</span>}</ProductLink>
         <div className="commerce-cart-item-content"><ProductLink to={detailUrl}><h2>{item.name || 'Unavailable product'}</h2></ProductLink>{item.variantKey && <p className="commerce-muted">{item.variantLabel || item.variantKey}</p>}
-          {Object.entries(item.personalization || {}).map(([key, value]) => <p key={key} className="commerce-muted">{key.replaceAll('_', ' ')}: {Array.isArray(value) ? `${value.length} private file${value.length === 1 ? '' : 's'}` : value}</p>)}
+          <PersonalizationSummary values={item.personalization} definitions={item.personalizationDefinitions} />
           {item.customization && <p className="commerce-muted">Configured for you{item.customization.templateName ? ` · ${item.customization.templateName}` : ''}</p>}
           {item.attachments?.status === 'temporary' && item.attachments.expiresAt && <p className="commerce-muted">Private cart files expire <time dateTime={item.attachments.expiresAt}>{new Date(item.attachments.expiresAt).toLocaleString()}</time> unless associated with a successful order.</p>}
           {item.attachments?.replacementRequired && <div className="commerce-notice"><p>Your private files are no longer available. Remove this item and select replacement files before adding it again.</p>{detailUrl && <Link to={detailUrl}>Review product and replace files</Link>}</div>}
@@ -24,7 +25,7 @@ export default function CartPage() {
           <div className="commerce-cart-controls"><label>Quantity<select value={item.quantity} disabled={pending || !item.valid} onChange={(event) => setQuantity(item.id, Number(event.target.value)).catch(() => {})}>{Array.from({ length: 99 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label><button className="commerce-link-button" disabled={pending} onClick={() => remove(item.id).catch(() => {})}>Remove {item.name}</button></div>
         </div><strong className="commerce-cart-line-total">{item.valid ? money(item.lineTotalPiastres) : 'Unavailable'}</strong>
       </article>; })}</section>
-      <aside className="commerce-summary"><h2>Order Summary</h2><dl><div><dt>Subtotal</dt><dd>{money(cart.subtotalPiastres)}</dd></div></dl><p className="commerce-muted">Shipping and eligible discounts are calculated at checkout. Availability and approved prices are checked again before ordering.</p>
+      <aside className="commerce-summary"><h2>Order Summary</h2><dl><div><dt>Subtotal</dt><dd>{money(cart.subtotalPiastres)}</dd></div></dl><p className="commerce-muted">Eligible discounts are verified at checkout. Delivery is separate and Pending Confirmation; the owner will contact you on WhatsApp within 12 hours. Availability and approved prices are checked again before ordering.</p>
         {invalid && <p className="form-error">Review unavailable items before checkout.</p>}
         {checkoutEnabled && !invalid ? <Link className="button button-primary" to="/checkout">Proceed to Checkout</Link> : <><button className="button button-primary" disabled>Checkout unavailable</button>{!checkoutEnabled && <p className="commerce-muted">Ordering has not been enabled yet.</p>}</>}
         <Link to="/shop" className="commerce-continue">Continue shopping</Link>

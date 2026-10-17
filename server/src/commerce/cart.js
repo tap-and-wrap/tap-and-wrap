@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import { Cart } from '../models/Cart.js';
 import { env } from '../config/env.js';
 import { assertDatabaseWriteAllowed } from '../config/database-safety.js';
-import { quoteCartLine, publicCartLine } from './pricing.js';
+import { quoteCartLine, publicCartLine, fingerprint } from './pricing.js';
 import { createPricingContext } from './pricing-context.js';
 import { transferUploadOwnership, attachUploadsToCart, detachUnusedCartUploads } from './uploads.js';
 import { commerceError, checkedMoney } from './errors.js';
@@ -49,7 +49,7 @@ async function changeCart(owner, operation) {
       await mongoose.connection.transaction(async session => {
         let cart = await Cart.findOne({ owner }).session(session);
         if (!cart) cart = new Cart({ owner, items: [], expiresAt: expiresAt() });
-        if (cart.expiresAt < new Date()) cart.items = [];
+        if (cart.expiresAt < new Date()) { cart.items = []; cart.addOperations = []; }
         await operation(cart, session); cart.expiresAt = expiresAt();
         const referenced = cart.items.flatMap(item => [...Object.values(item.personalization || {}), ...Object.values(item.customization?.fields || {})].filter(Array.isArray).flat());
         await detachUnusedCartUploads(cart._id, [...new Set(referenced)], owner, { session });
@@ -67,6 +67,15 @@ async function changeCart(owner, operation) {
 export async function addCartItem(owner, input, { onAdded } = {}) {
   let added;
   await changeCart(owner, async (cart, session) => {
+    added = null;
+    if (input.operationKey) {
+      const previous = cart.addOperations.find(entry => entry.key === input.operationKey);
+      if (previous) {
+        if (previous.requestHash !== fingerprint(input)) throw commerceError(409, 'CART_OPERATION_CONFLICT', 'This add request was already used for a different item. Review the cart.');
+        return;
+      }
+      if (cart.addOperations.length >= 60) throw commerceError(409, 'CART_OPERATION_LIMIT', 'Review your cart before starting another personalization session.');
+    }
     const quote = await quoteCartLine(input, owner, { session });
     added = { productId: quote.productId, slug: quote.slug, quantity: input.quantity, unitPricePiastres: quote.unitPricePiastres, customized: Boolean(quote.customization) };
     const existing = cart.items.find(item => item.identity === quote.identity);
@@ -79,9 +88,10 @@ export async function addCartItem(owner, input, { onAdded } = {}) {
       cart.items.push({ id: randomUUID(), identity: quote.identity, productId: quote.productId, name: quote.name, slug: quote.slug, mainImageUrl: quote.mainImageUrl, variantKey: quote.variantKey, quantity: quote.quantity, personalization: quote.personalization, customization: quote.customization || null });
     }
     await attachUploadsToCart(quote.uploadIds, owner, cart._id, { session });
+    if (input.operationKey) cart.addOperations.push({ key: input.operationKey, requestHash: fingerprint(input) });
   });
   const response = await cartResponse(owner);
-  if (onAdded) response.tracking = await onAdded(added);
+  if (onAdded && added) response.tracking = await onAdded(added);
   return response;
 }
 export async function updateCartQuantity(owner, id, quantity) {

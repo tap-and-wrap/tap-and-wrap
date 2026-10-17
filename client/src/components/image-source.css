@@ -1,0 +1,13 @@
+.image-upload-button { min-height: 44px; max-width: 100%; white-space: normal; }
+.catalog-dialog.image-source-dialog { inset: 0; margin: auto; width: min(440px, calc(100vw - 24px)); height: max-content; max-height: min(85dvh, calc(100dvh - 24px)); box-sizing: border-box; border: 1px solid #EADAD5; border-radius: 14px; overflow-y: auto; overscroll-behavior: contain; }
+.image-source-body { padding: 18px 20px 22px; }
+@media(max-width:640px) { .catalog-dialog.image-source-dialog { inset: auto 12px 12px; margin: 0 auto; } }
+.image-source-context { font-weight: 600; overflow-wrap: anywhere; }
+.image-source-options { display: grid; gap: 12px; margin-block: 20px; }
+.image-source-options button { display: flex; align-items: center; gap: 16px; min-height: 64px; padding: 16px; border: 1px solid var(--tw-border, #EADAD5); border-radius: 10px; background: #fff; color: #62483F; font: inherit; text-align: left; }
+.image-source-options button:hover { background: #FFFCFB; border-color: #915B50; }
+.image-source-options button:focus-visible, .image-upload-button:focus-visible { outline: 3px solid #795045; outline-offset: 3px; }
+.image-source-dialog p { line-height: 1.6; font-size: .9rem; }
+.image-source-dialog .image-format-help { color: #62483F; }
+.commerce-file-previews img { width: 80px; height: 80px; object-fit: contain; }
+.commerce-file-previews li { min-width: 0; overflow-wrap: anywhere; }

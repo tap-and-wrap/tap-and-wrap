@@ -1,0 +1,10 @@
+.admin-media { min-width: 0; margin-block: 1rem; }
+.admin-media-grid { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 1rem; }
+.admin-media-grid li { min-width: 0; padding: .75rem; border: 1px solid var(--color-border, #EADAD5); border-radius: 8px; display: flex; flex-direction: column; gap: .5rem; overflow-wrap: anywhere; }
+.admin-media-grid img { width: 100%; height: 160px; object-fit: contain; background: #FFFCFB; }
+.admin-media-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.admin-media button { min-height: 44px; padding: .5rem .75rem; border: 1px solid #EADAD5; border-radius: 6px; background: #FFFFFF; color: #62483F; }
+.admin-media button:disabled { opacity: .5; }
+.admin-media label { display: block; min-width: 0; width: 100%; }
+.admin-media input[type=file] { display: block; width: 100%; max-width: 100%; box-sizing: border-box; padding: .5rem 0; }
+.admin-media progress { display: block; max-width: 100%; }

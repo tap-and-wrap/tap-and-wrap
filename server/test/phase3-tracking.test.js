@@ -25,7 +25,7 @@ import { createWorkBudget } from '../src/commerce/work-budget.js';
 const SETTINGS = { META_ENABLED: 'true', META_POLICY_APPROVED: 'true', META_PIXEL_ID: '123456789', META_CONSENT_POLICY_VERSION: 'isolated-v1', SITE_ORIGIN: 'https://merchant.example.test', META_CAPI_ENABLED: 'false', META_ACCESS_TOKEN: '', META_API_VERSION: 'v24.0' };
 const original = Object.fromEntries(Object.keys(SETTINGS).map(key => [key, process.env[key]]));
 const originalCheckout = env.checkoutEnabled;
-const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X8kQAAAAASUVORK5CYII=', 'base64');
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWO4NbsXAARVAgOYIL6CAAAAAElFTkSuQmCC', 'base64');
 let fixture, server, origin, product, storage;
 before(async () => { fixture = await startTestDatabase({ models: Object.values(mongoose.models), transactions: true }); server = app.listen(0, '127.0.0.1'); await once(server, 'listening'); origin = `http://127.0.0.1:${server.address().port}/api/v1`; });
 after(async () => { for (const [key, value] of Object.entries(original)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } env.checkoutEnabled = originalCheckout; setMetaProviderForTests(); setStorageForTests(); if (server) await new Promise(resolve => server.close(resolve)); await fixture?.stop(); });
@@ -34,7 +34,7 @@ beforeEach(async () => {
   for (const model of Object.values(mongoose.models)) await model.deleteMany({});
   Object.assign(process.env, SETTINGS); env.checkoutEnabled = false; setMetaProviderForTests(); storage = createMemoryStorage(); setStorageForTests(storage);
   const category = await Category.create({ name: 'Isolated tracking category', slug: 'isolated-tracking-category' });
-  product = await Product.create({ name: 'Isolated approved tracking product', slug: 'isolated-approved-tracking-product', description: 'Test fixture only', categoryId: category._id, mainImageKey: 'fixtures/approved.webp', galleryKeys: ['fixtures/approved.webp'], pricePiastres: 12000, priceApproved: true, inventory: { mode: 'tracked', quantity: 10, approved: true, available: true }, status: 'ready' });
+  product = await Product.create({ name: 'Isolated approved tracking product', slug: 'isolated-approved-tracking-product', description: 'Test fixture only', categoryId: category._id, mainImageKey: 'fixtures/approved.webp', galleryKeys: ['fixtures/approved.webp'], pricePiastres: 12000, priceApproved: true, inventory: { mode: 'tracked', quantity: 10, approved: true, available: true }, visibility: 'public', status: 'ready' });
 });
 function client() {
   const cookies = new Map([['tw_csrf', makeCsrfToken(env.sessionSecret)]]);
@@ -49,8 +49,8 @@ async function consent(browser) { assert.equal((await browser.request('/tracking
 async function add(browser, body = {}) { return browser.request('/commerce/cart/items', { method: 'POST', body: { productId: String(product._id), quantity: 1, ...body } }); }
 async function quote(browser, paymentMethod = 'cod', checkoutKey = randomUUID()) { const response = await browser.request('/commerce/checkout/quote', { method: 'POST', body: { checkoutKey, paymentMethod, governorate: 'cairo' } }); assert.equal(response.status, 200, JSON.stringify(response.body)); return { checkoutKey, paymentMethod, quote: data(response) }; }
 async function submit(browser, intent, paymentProofId) { return browser.request('/commerce/orders', { method: 'POST', body: { checkoutKey: intent.checkoutKey, paymentMethod: intent.paymentMethod, customer: { name: 'Isolated customer', email: 'safe@example.test', phone: '01012345678', governorate: 'cairo', address: 'Isolated fixture address in Cairo' }, ...(paymentProofId ? { paymentProofId } : {}) } }); }
-async function proof(browser, intent) {
-  const signed = data(await browser.request('/commerce/uploads/sign', { method: 'POST', body: { purpose: 'payment_proof', mimeType: 'image/png', sizeBytes: PNG.length, checkoutKey: intent.checkoutKey } }));
+async function proof(browser, order) {
+  const signed = data(await browser.request('/commerce/uploads/sign', { method: 'POST', body: { purpose: 'payment_proof', mimeType: 'image/png', sizeBytes: PNG.length, orderId: order.id } }));
   const record = await Upload.findById(signed.upload.id).select('+temporaryKey'); storage.put(record.temporaryKey, PNG);
   data(await browser.request(`/commerce/uploads/${record._id}/complete`, { method: 'POST', body: {} })); return String(record._id);
 }
@@ -155,7 +155,7 @@ test('COD purchase is a single order-placement event across retries, refreshes a
   assert.equal(first.paymentTracking.name, 'AddPaymentInfo'); assert.equal(first.paymentTracking.id, duplicate.paymentTracking.id);
   assert.equal(first.paymentTracking.parameters.payment_method, 'cod');
   assert.equal(await MetaEvent.countDocuments({ name: 'AddPaymentInfo' }), 1);
-  assert.equal(first.tracking.parameters.value, 210); assert.equal(first.tracking.parameters.payment_method, 'cod');
+  assert.equal(first.tracking.parameters.value, 120); assert.equal(first.tracking.parameters.payment_method, 'cod');
   assert.equal(data(await browser.request(`/commerce/orders/${first.order.id}`)).tracking.id, first.tracking.id);
   const operator = await admin();
   assert.equal((await operator.request(`/admin/commerce/orders/${first.order.id}/state`, { method: 'PATCH', body: { revision: first.order.revision, fulfillmentState: 'confirmed' } })).status, 200);
@@ -164,18 +164,21 @@ test('COD purchase is a single order-placement event across retries, refreshes a
 });
 test('InstaPay proof submission creates no Purchase until authorized manual verification', async () => {
   const browser = client(); await consent(browser); await add(browser); env.checkoutEnabled = true;
-  const intent = await quote(browser, 'instapay'); const proofId = await proof(browser, intent);
-  const initial = data(await submit(browser, intent, proofId));
-  assert.equal(initial.tracking, null); assert.equal(initial.order.paymentState, 'awaiting_verification');
+  const intent = await quote(browser, 'instapay');
+  const initial = data(await submit(browser, intent));
+  const proofId = await proof(browser, initial.order);
+  data(await browser.request(`/commerce/orders/${initial.order.id}/accounting`, { method: 'POST', body: { revision: 0, action: 'submit_proof', uploadId: proofId } }));
+  assert.equal(initial.tracking, null); assert.equal(initial.order.paymentState, 'awaiting_transfer');
   assert.equal(initial.paymentTracking.name, 'AddPaymentInfo');
   assert.equal(initial.paymentTracking.parameters.payment_method, 'instapay');
   assert.equal(await MetaEvent.countDocuments({ name: 'OrderSubmitted' }), 1); assert.equal(await MetaEvent.countDocuments({ name: 'Purchase' }), 0);
   const operator = await admin();
-  const verified = data(await operator.request(`/admin/commerce/orders/${initial.order.id}/state`, { method: 'PATCH', body: { revision: initial.order.revision, paymentState: 'paid' } })).order;
+  const payment = { revision: 1, action: 'collection', operationKey: randomUUID(), scope: 'merchandise', amountPiastres: initial.order.totals.totalPiastres, method: 'instapay', reference: 'TRACKING-VERIFIED-TRANSFER', reconciled: true, reason: 'Actual account reconciled in fixture' };
+  const verified = data(await operator.request(`/admin/commerce/orders/${initial.order.id}/accounting`, { method: 'POST', body: payment })).order;
   assert.equal(verified.paymentState, 'paid'); assert.equal(await MetaEvent.countDocuments({ name: 'Purchase' }), 1);
   const receipt = data(await browser.request(`/commerce/orders/${initial.order.id}`)).tracking;
   assert.equal(receipt.name, 'Purchase'); assert.equal(receipt.parameters.payment_method, 'instapay');
-  assert.equal((await operator.request(`/admin/commerce/orders/${initial.order.id}/state`, { method: 'PATCH', body: { revision: verified.revision, paymentState: 'paid' } })).status, 200);
+  assert.equal((await operator.request(`/admin/commerce/orders/${initial.order.id}/accounting`, { method: 'POST', body: payment })).status, 200);
   assert.equal(await MetaEvent.countDocuments({ name: 'Purchase' }), 1);
   const stored = JSON.stringify(await MetaEvent.find({}).lean());
   assert.equal(stored.includes(proofId), false); assert.equal(stored.includes('safe@example.test'), false); assert.equal(stored.includes('01012345678'), false);
@@ -207,11 +210,11 @@ test('tracking mutations retain Origin/CSRF checks and bounded worker validation
 });
 
 test('personalized customization events use approved final prices and omit entered messages', async () => {
-  const template = await CustomizationTemplate.create({ key: 'isolated-tracking-box', name: 'Isolated template', kind: 'gift_box', version: 1,
+  const template = await CustomizationTemplate.create({ key: 'isolated-tracking-box', name: 'Isolated template', kind: 'generic', version: 1,
     status: 'approved', active: true, baseAdjustmentPiastres: 700,
     fields: [{ key: 'gift_message', label: 'Gift message', type: 'text', required: true, maxChars: 100 }],
   });
-  await Product.updateOne({ _id: product._id }, { $set: { customization: { enabled: true, templateId: template._id, serviceKind: 'gift_box' },
+  await Product.updateOne({ _id: product._id }, { $set: { customization: { enabled: true, templateId: template._id, serviceKind: 'generic' },
     personalization: { fields: [{ key: 'name', label: 'Name', type: 'short_text', required: true, maxLength: 50 }] },
   } });
   const browser = client(); await consent(browser);
@@ -248,14 +251,14 @@ test('tracking retries are bounded and stale events are suppressed without exter
 });
 
 test('CustomizationStart requires an approved available configuration and transmits only its service kind', async () => {
-  const template = await CustomizationTemplate.create({ key: 'isolated-start-box', name: 'Isolated configured service', kind: 'gift_box', status: 'approved', active: true, version: 1,
+  const template = await CustomizationTemplate.create({ key: 'isolated-start-box', name: 'Isolated configured service', kind: 'generic', status: 'approved', active: true, version: 1,
     fields: [{ key: 'photo', label: 'Private photo', type: 'image', maxFiles: 1, acceptedMimeTypes: ['image/png'] }],
   });
-  await Product.updateOne({ _id: product._id }, { $set: { customization: { enabled: true, templateId: template._id, serviceKind: 'gift_box' } } });
+  await Product.updateOne({ _id: product._id }, { $set: { customization: { enabled: true, templateId: template._id, serviceKind: 'generic' } } });
   const browser = client(); await consent(browser);
   const path = `/commerce/customization/products/${product.slug}`;
   const first = data(await browser.request(path)).tracking;
-  assert.equal(first.name, 'CustomizationStart'); assert.deepEqual(first.parameters, { service_kind: 'gift_box' });
+  assert.equal(first.name, 'CustomizationStart'); assert.deepEqual(first.parameters, { service_kind: 'generic' });
   assert.equal(data(await browser.request(path)).tracking.id, first.id);
   await CustomizationTemplate.updateOne({ _id: template._id }, { $set: { active: false } });
   assert.equal((await browser.request(path)).status, 409);

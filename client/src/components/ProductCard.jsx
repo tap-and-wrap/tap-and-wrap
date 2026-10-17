@@ -29,8 +29,8 @@ export default function ProductCard({ product }) {
         {product.category?.name && <p className="catalog-card-category">{product.category.name}</p>}
         <h3><Link to={detailUrl}>{product.name}</Link></h3>
         <p className="catalog-price">
-          <span>{enquiryRequired ? 'Price on request' : formatCatalogPrice(product.pricePiastres)}</span>
-          {!enquiryRequired && approvedPrice && Number.isSafeInteger(product.compareAtPiastres) && product.compareAtPiastres > product.pricePiastres && (
+          <span>{approvedPrice ? formatCatalogPrice(product.pricePiastres) : 'Price on request'}</span>
+          {approvedPrice && Number.isSafeInteger(product.compareAtPiastres) && product.compareAtPiastres > product.pricePiastres && (
             <del>{formatCatalogPrice(product.compareAtPiastres)}</del>
           )}
         </p>

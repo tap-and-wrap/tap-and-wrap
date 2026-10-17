@@ -1,3 +1,8 @@
+import { whatsappQuotation } from './whatsapp-quotation.js';
+import { serviceRequestRoutes, adminServiceRequestRoutes } from './service-request.routes.js';
+import { operationsRoutes } from './operations.js';
+import { accountingInput } from './accounting-validation.js';
+import { mutateOrderAccounting, orderAccounting } from './order-accounting.js';
 import { Router } from 'express';
 import { attachProductPaths } from '../catalog/product-addresses.js';
 import { productHref } from '../../../shared/product-paths.mjs';
@@ -9,11 +14,13 @@ import { csrfProtection } from '../middleware/csrf.js';
 import { env } from '../config/env.js';
 import { isDatabaseReady } from '../config/db.js';
 import { Order } from '../models/Order.js';
+import { OrderSettlement } from '../models/OrderSettlement.js';
+import { fingerprint } from './pricing.js';
 import { commerceOwner, guestOwner, rotateGuestCookie } from './ownership.js';
 import { cartResponse, addCartItem, updateCartQuantity, removeCartItem, clearCart, mergeGuestCart } from './cart.js';
 import { prepareCheckout, placeOrder, normalizePhone, presentOrder, getOwnedOrder, changeOrderState, orderFiles, findOwnedCheckoutSubmission } from './orders.js';
 import { GOVERNORATES, shippingForGovernorate } from './promotions.js';
-import ShippingConfig from '../models/ShippingConfig.js';
+
 import { openPrivateUpload } from './uploads.js';
 import { commerceError } from './errors.js';
 import { publicConfigurationRoutes } from './configuration.routes.js';
@@ -30,17 +37,18 @@ const uuid = z.string().uuid();
 const fields = z.record(z.string().regex(/^[a-z][a-z0-9_-]{0,79}$/), z.union([z.string().max(10000).refine(value => Array.from(value).length <= 5000, 'Text supports at most 5000 characters.'), z.array(id).max(10)])).refine(value => Object.keys(value).length <= 30);
 const customization = z.object({ templateId: id, version: z.number().int().min(1).max(1000000),
   selections: z.array(z.object({ groupKey: z.string().max(64), optionKey: z.string().max(64), quantity: z.number().int().min(1).max(20) }).strict()).max(100).optional(), fields: fields.optional() }).strict();
-const cartItem = z.object({ productId: id, variantKey: z.string().max(80).nullable().optional(), quantity: z.number().int().min(1).max(99), personalization: fields.optional(), customization: customization.nullable().optional() }).strict();
+const cartItem = z.object({ operationKey: uuid.optional(), productId: id, variantKey: z.string().max(80).nullable().optional(), quantity: z.number().int().min(1).max(99), personalization: fields.optional(), customization: customization.nullable().optional() }).strict();
 const paymentMethod = z.enum(['cod', 'instapay']);
 const discountCode = z.string().trim().max(40).optional();
 const customer = z.object({ name: z.string().trim().min(2).max(100), email: z.email().max(254), phone: z.string().min(10).max(25),
   governorate: z.enum(GOVERNORATES.map(value => value.id)), address: z.string().trim().min(10).max(500), notes: z.string().trim().max(1000).optional() }).strict();
 const checkoutSchema = z.object({ checkoutKey: uuid, paymentMethod, governorate: customer.shape.governorate, discountCode }).strict();
 const orderSchema = z.object({ checkoutKey: uuid, customer, paymentMethod, discountCode, paymentProofId: id.optional() }).strict();
-const states = z.object({ revision: z.number().int().nonnegative(), fulfillmentState: z.enum(['received', 'confirmed', 'preparing', 'out_for_delivery', 'delivered', 'cancelled']).optional(),
-  paymentState: z.enum(['unpaid', 'awaiting_verification', 'paid', 'rejected']).optional(), reason: z.string().trim().max(500).optional(), internalNote: z.string().trim().max(500).optional(), publicReason: z.string().trim().max(500).optional() }).strict();
+const states = z.object({ revision: z.number().int().nonnegative(), fulfillmentState: z.enum(['received', 'confirmed', 'preparing', 'out_for_delivery', 'delivered', 'delivery_failed', 'returned', 'cancelled']).optional(),
+  paymentState: z.enum(['unpaid', 'awaiting_transfer', 'awaiting_verification', 'partially_paid', 'paid', 'rejected', 'refunded']).optional(), reason: z.string().trim().max(500).optional(), internalNote: z.string().trim().max(500).optional(), publicReason: z.string().trim().max(500).optional() }).strict();
 const pageSchema = z.object({ page: z.coerce.number().int().min(1).max(200).default(1), limit: z.coerce.number().int().positive().transform(value => Math.min(value, 20)).default(20),
   q: z.string().trim().max(100).optional(), fulfillmentState: states.shape.fulfillmentState, paymentState: states.shape.paymentState,
+  action: z.enum(['awaiting_transfer', 'proof_review', 'shipping_pending', 'follow_up_overdue', 'cancellation_requested', 'refund_review']).optional(),
   sort: z.enum(['newest', 'oldest']).default('newest') }).strict();
 const shoppingLimit = rateLimit({ windowMs: 60000, limit: 90, standardHeaders: 'draft-8', legacyHeaders: false });
 const checkoutLimit = rateLimit({ windowMs: 15 * 60000, limit: 20, standardHeaders: 'draft-8', legacyHeaders: false });
@@ -59,7 +67,7 @@ export function requireCommerceDatabase(req, res, next) {
 async function listOrders(filter, query, admin) {
   const direction = query.sort === 'oldest' ? 1 : -1;
   const [orders, total] = await Promise.all([
-    Order.find(filter).select('_id orderNumber customer.name customer.governorate totals paymentMethod paymentState fulfillmentState createdAt updatedAt revision').sort({ createdAt: direction, _id: direction }).skip((query.page - 1) * query.limit).limit(query.limit).lean().maxTimeMS(3000),
+    Order.find(filter).select('_id orderNumber customer.name customer.governorate totals accountingVersion charges financialSummary followUpDueAt cancellationRequestedAt paymentMethod paymentState fulfillmentState createdAt updatedAt revision').sort({ createdAt: direction, _id: direction }).skip((query.page - 1) * query.limit).limit(query.limit).lean().maxTimeMS(3000),
     Order.countDocuments(filter).maxTimeMS(3000),
   ]);
   return { orders: orders.map(order => presentOrderSummary(order, { admin })), pagination: { page: query.page, limit: query.limit, total, pages: Math.ceil(total / query.limit) } };
@@ -69,6 +77,12 @@ function orderFilter(query) {
   if (query.q) { if (!/^[1-9][0-9]{5}$/.test(query.q)) throw commerceError(400, 'ORDER_SEARCH_INVALID', 'Search by the exact six-digit order number.'); filter.orderNumber = query.q; }
   if (query.fulfillmentState) filter.fulfillmentState = query.fulfillmentState;
   if (query.paymentState) filter.paymentState = query.paymentState;
+  if (query.action === 'awaiting_transfer') filter.paymentState = 'awaiting_transfer';
+  if (query.action === 'proof_review') filter.proofReviewRequired = true;
+  if (query.action === 'shipping_pending') filter.charges = { $elemMatch: { kind: 'shipping', state: { $in: ['pending', 'offered', 'declined'] } } };
+  if (query.action === 'follow_up_overdue') { filter.initialContactAt = null; filter.serviceRequestId = null; filter.createdAt = { $lte: new Date(Date.now() - 12 * 3600000) }; filter.fulfillmentState = { $nin: ['cancelled', 'returned', 'delivered'] }; }
+  if (query.action === 'cancellation_requested') { filter.cancellationRequestedAt = { $ne: null }; filter.fulfillmentState = { $nin: ['cancelled', 'returned'] }; }
+  if (query.action === 'refund_review') filter['financialSummary.refundReviewRequired'] = true;
   return filter;
 }
 async function streamUpload(req, res, uploadId, owner, adminUser) {
@@ -109,9 +123,7 @@ commerceRoutes.post('/cart/merge', requireAuth, async (req, res) => {
   res.json({ ok: true, data: result });
 });
 commerceRoutes.get('/checkout/config', async (req, res) => {
-  const configuration = await ShippingConfig.findOne({ key: 'egypt-v1' }).select('cairoGizaPiastres otherGovernoratesPiastres approved').lean().maxTimeMS(3000);
-  const cairo = shippingForGovernorate('cairo', configuration), other = shippingForGovernorate('alexandria', configuration);
-  res.json({ ok: true, data: { enabled: env.checkoutEnabled === true, governorates: GOVERNORATES.map(value => ({ ...value, shippingPiastres: ['cairo', 'giza'].includes(value.id) ? cairo.shippingPiastres : other.shippingPiastres })), instaPayNumber: '01060673073' } });
+  res.json({ ok: true, data: { enabled: env.checkoutEnabled === true, governorates: GOVERNORATES, shippingStatus: 'pending_confirmation', shippingPiastres: null, instaPayNumber: '01060673073' } });
 });
 commerceRoutes.get('/checkout/submissions/:checkoutKey', submissionStatusLimit, async (req, res) => {
   z.object({}).strict().parse(req.query);
@@ -138,21 +150,32 @@ commerceRoutes.post('/orders', checkoutLimit, async (req, res) => {
 commerceRoutes.post('/orders/track', trackingLimit, async (req, res) => {
   const input = z.object({ orderNumber: z.string().regex(/^[1-9][0-9]{5}$/), phone: z.string().min(10).max(25) }).strict().parse(req.body);
   const phone = normalizePhone(input.phone);
-  const order = await Order.findOne({ orderNumber: input.orderNumber, 'customer.phone': phone }).select('orderNumber fulfillmentState paymentState createdAt updatedAt').lean().maxTimeMS(3000);
+  const order = await Order.findOne({ orderNumber: input.orderNumber, 'customer.phone': phone }).select('orderNumber fulfillmentState paymentState charges accountingVersion createdAt updatedAt').lean().maxTimeMS(3000);
   if (!order) throw commerceError(404, 'TRACKING_NOT_FOUND', 'No matching order was found. Check both details.');
-  res.json({ ok: true, data: { order: { orderNumber: order.orderNumber, fulfillmentState: order.fulfillmentState, paymentState: order.paymentState, createdAt: order.createdAt, updatedAt: order.updatedAt } } });
+  res.json({ ok: true, data: { order: { orderNumber: order.orderNumber, fulfillmentState: order.fulfillmentState, paymentState: order.paymentState, shippingStatus: order.accountingVersion === 1 ? order.charges?.find(charge => charge.kind === 'shipping')?.state : 'legacy', createdAt: order.createdAt, updatedAt: order.updatedAt } } });
 });
 commerceRoutes.get('/orders', requireAuth, async (req, res) => { const query = pageSchema.parse(req.query); res.json({ ok: true, data: await listOrders({ ...orderFilter(query), userId: req.user._id }, query, false) }); });
 commerceRoutes.get('/orders/:id', async (req, res) => {
   const order = await getOwnedOrder(id.parse(req.params.id), req.commerceOwner);
-  res.json({ ok: true, data: { order: presentOrder(order), tracking: await ownedPurchaseReceipt(order, req) } });
+  res.json({ ok: true, data: { order: { ...presentOrder(order), accounting: await orderAccounting(order) }, tracking: await ownedPurchaseReceipt(order, req) } });
 });
-commerceRoutes.post('/orders/:id/cancel', async (req, res) => { const input = z.object({ revision: states.shape.revision, reason: states.shape.reason }).strict().parse(req.body); res.json({ ok: true, data: { order: await changeOrderState(id.parse(req.params.id), req.commerceOwner, { ...input, fulfillmentState: 'cancelled' }, req.user) } }); });
+commerceRoutes.post('/orders/:id/accounting', async (req, res) => { const order = await mutateOrderAccounting(id.parse(req.params.id), req.commerceOwner, accountingInput.parse(req.body), req.user); res.json({ ok: true, data: { order: { ...presentOrder(order), accounting: await orderAccounting(order) } } }); });
+commerceRoutes.post('/orders/:id/cancel', async (req, res) => { const input = z.object({ revision: states.shape.revision, reason: states.shape.reason }).strict().parse(req.body); const record = await getOwnedOrder(id.parse(req.params.id), req.commerceOwner); const order = record.accountingVersion === 1 ? presentOrder(await mutateOrderAccounting(record._id, req.commerceOwner, { ...input, action: 'request_cancel' }, req.user)) : await changeOrderState(record._id, req.commerceOwner, { ...input, fulfillmentState: 'cancelled' }, req.user); res.json({ ok: true, data: { order } }); });
 
 commerceRoutes.use(publicConfigurationRoutes);
+commerceRoutes.use(serviceRequestRoutes);
 commerceRoutes.use('/uploads', uploadsRouter);
 export const adminCommerceRoutes = Router();
 adminCommerceRoutes.use(requireCommerceDatabase, requireAuth, requireAdmin, csrfProtection);
+adminCommerceRoutes.use(operationsRoutes);
+adminCommerceRoutes.use(adminServiceRequestRoutes);
+adminCommerceRoutes.get('/settlements/lookup', async (req, res) => {
+  const input = z.object({ method: paymentMethod, reference: z.string().trim().min(3).max(120).regex(/^[A-Za-z0-9/_-]+$/) }).strict().parse(req.query);
+  const entry = await OrderSettlement.findOne({ referenceKey: fingerprint({ method: input.method, reference: input.reference.toUpperCase() }) }).lean().maxTimeMS(3000);
+  const order = entry ? await Order.findById(entry.orderId).select('orderNumber').lean().maxTimeMS(3000) : null;
+  res.json({ ok: true, data: { settlement: entry ? { id: String(entry._id), orderId: String(entry.orderId), orderNumber: order?.orderNumber || null, direction: entry.direction, amountPiastres: entry.amountPiastres, method: entry.method } : null } });
+});
+adminCommerceRoutes.post('/orders/:id/accounting', async (req, res) => { const order = await mutateOrderAccounting(id.parse(req.params.id), null, accountingInput.parse(req.body), req.user); res.json({ ok: true, data: { order: { ...presentOrder(order, { admin: true }), accounting: await orderAccounting(order, { admin: true }) } } }); });
 adminCommerceRoutes.get('/jobs', async (req, res) => {
   const query = z.object({ page: z.coerce.number().int().min(1).max(200).default(1), limit: z.coerce.number().int().min(1).max(20).default(20) }).strict().parse(req.query);
   const [runs, total, notificationDead, notificationUncertain, trackingDead, cleanupReview] = await Promise.all([
@@ -165,7 +188,7 @@ adminCommerceRoutes.get('/jobs', async (req, res) => {
   res.json({ ok: true, data: { runs, pagination: { page: query.page, limit: query.limit, total, pages: Math.ceil(total / query.limit) }, attention: { notificationDead, notificationUncertain, trackingDead, cleanupReview } } });
 });
 adminCommerceRoutes.get('/orders', async (req, res) => { const query = pageSchema.parse(req.query); res.json({ ok: true, data: await listOrders(orderFilter(query), query, true) }); });
-adminCommerceRoutes.get('/orders/:id', async (req, res) => { const order = await getOwnedOrder(id.parse(req.params.id), null, { admin: true }); res.json({ ok: true, data: { order: { ...presentOrder(order, { admin: true }), files: await orderFiles(order) } } }); });
+adminCommerceRoutes.get('/orders/:id', async (req, res) => { const order = await getOwnedOrder(id.parse(req.params.id), null, { admin: true }); const accounting = await orderAccounting(order, { admin: true }); res.json({ ok: true, data: { order: { ...presentOrder(order, { admin: true }), accounting, quotation: whatsappQuotation(order, accounting), inventoryClaims: order.inventoryClaims.map(claim => ({ sourceId: String(claim.id), label: claim.kind === 'product' ? order.lines.find(line => String(line.productId) === String(claim.id))?.name || 'Product requiring source review' : order.lines.flatMap(line => line.customization?.selections || []).find(selection => String(selection.componentId) === String(claim.id))?.componentName || 'Component requiring source review', kind: claim.kind, variantKey: claim.variantKey, quantity: claim.quantity, mode: claim.mode })), files: await orderFiles(order) } } }); });
 adminCommerceRoutes.patch('/orders/:id/state', async (req, res) => res.json({ ok: true, data: { order: await changeOrderState(id.parse(req.params.id), null, states.parse(req.body), req.user) } }));
 adminCommerceRoutes.get('/orders/:id/proof', async (req, res) => {
   const order = await getOwnedOrder(id.parse(req.params.id), null, { admin: true });

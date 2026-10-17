@@ -6,6 +6,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { boundedOperation } from './work-budget.js';
+import { verifyImageIntegrity } from '../media/image-integrity.js';
 
 export const UPLOAD_MIME_TYPES = Object.freeze(['image/jpeg', 'image/png', 'image/webp']);
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -59,6 +60,17 @@ export function createR2Storage(settings = process.env) {
           result.Body.destroy?.();
           throw storageError('INVALID_IMAGE', 400);
         }
+        chunks.push(chunk);
+      }
+      return Buffer.concat(chunks);
+    },
+    async readImage(key, { signal, etag } = {}) {
+      const result = await send(new GetObjectCommand({ Bucket: bucket, Key: key, IfMatch: etag }), signal);
+      const body = boundPrivateBody(result.Body, { signal, timeoutMs: 15000 });
+      const chunks = []; let size = 0;
+      for await (const chunk of body) {
+        size += chunk.length;
+        if (size > MAX_UPLOAD_BYTES) { body.destroy(); throw storageError('INVALID_IMAGE', 400); }
         chunks.push(chunk);
       }
       return Buffer.concat(chunks);
@@ -164,12 +176,13 @@ export function imageDimensions(bytes, mimeType) {
 
 export async function inspectStoredImage(storage, key, expected, { budget } = {}) {
   const metadata = await boundedOperation(signal => storage.head(key, { signal }), { budget, code: 'STORAGE_INSPECTION_TIMEOUT' });
-  if (!Number.isSafeInteger(metadata.sizeBytes) || metadata.sizeBytes !== expected.sizeBytes
+  if (!Number.isSafeInteger(metadata.sizeBytes) || metadata.sizeBytes < 1 || metadata.sizeBytes !== expected.sizeBytes
       || metadata.sizeBytes > MAX_UPLOAD_BYTES || metadata.mimeType !== expected.mimeType || !metadata.etag) {
     throw storageError('INVALID_IMAGE', 400);
   }
-  const bytes = await boundedOperation(signal => storage.readPrefix(key, { signal }), { budget, code: 'STORAGE_INSPECTION_TIMEOUT' });
-  return { ...imageDimensions(bytes, expected.mimeType), etag: metadata.etag };
+  const bytes = await boundedOperation(signal => storage.readImage(key, { signal, etag: metadata.etag }), { budget, code: 'STORAGE_INSPECTION_TIMEOUT' });
+  if (!Buffer.isBuffer(bytes) || bytes.length !== metadata.sizeBytes) throw storageError('INVALID_IMAGE', 400);
+  return { ...await verifyImageIntegrity(bytes, expected.mimeType), etag: metadata.etag };
 }
 
 // The mock is deliberately unavailable outside the isolated test process.
@@ -193,6 +206,10 @@ export function createMemoryStorage() {
       const object = objects.get(key);
       if (!object) throw storageError('OBJECT_NOT_FOUND', 400);
       return object.bytes.subarray(0, INSPECTION_BYTES);
+    },
+    async readImage(key, { etag } = {}) {
+      if ((await this.head(key)).etag !== etag) throw storageError('OBJECT_CHANGED', 409);
+      return Buffer.from(objects.get(key).bytes);
     },
     async copy(source, destination, { etag }) {
       const metadata = await this.head(source);

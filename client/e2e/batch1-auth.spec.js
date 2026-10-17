@@ -1,3 +1,4 @@
+import { chooseImageFiles } from './media-helpers.js';
 import { test, expect } from '@playwright/test';
 import { commerceProduct, isolatedImageFile, mockCommerce } from './commerce-fixtures.js';
 import { QueryClient, hashKey } from '@tanstack/react-query';
@@ -216,7 +217,7 @@ test('guest focus checks preserve selected browser-only personalization photos',
   const state = await mockCommerce(page, { product });
   await page.route('**/api/v1/auth/me', route => route.fulfill({ status: 401, headers, json: { ok: false, error: { code: 'UNAUTHORIZED', message: 'Sign in required.' } } }));
   await page.goto(`/products/${product.slug}`);
-  await page.getByLabel(/^Selected photo/).setInputFiles(isolatedImageFile());
+  await chooseImageFiles(page, page, /^Selected photo/, isolatedImageFile());
   await expect(page.locator('.commerce-file-previews img')).toHaveCount(1);
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expect(page.locator('.commerce-file-previews img')).toHaveCount(1);

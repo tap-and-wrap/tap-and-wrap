@@ -23,5 +23,5 @@ export function nativeFieldErrors(form) {
 }
 
 export function focusInvalidField(form) {
-  requestAnimationFrame(() => form?.querySelector(':is(input,select,textarea)[aria-invalid="true"], :is(input,select,textarea):invalid')?.focus());
+  requestAnimationFrame(() => form?.querySelector(':is(input,select,textarea,button)[aria-invalid="true"], :is(input,select,textarea):invalid')?.focus());
 }

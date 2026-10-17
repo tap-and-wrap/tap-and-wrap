@@ -59,14 +59,14 @@ async function makeProduct(overrides = {}) {
   const slug = `synthetic-inventory-${randomUUID()}`;
   return Product.create({ name: 'Synthetic approved inventory product', slug, description: 'Disposable inventory fixture.', categoryId: main._id,
     mainImageKey: `fixtures/${slug}.webp`, galleryKeys: [`fixtures/${slug}.webp`], pricePiastres: 10000, priceApproved: true,
-    inventory: inventory(), status: 'ready', ...overrides });
+    inventory: inventory(), visibility: 'public', status: 'ready', ...overrides });
 }
-async function checkout(product, { quantity = 2, variantKey, customization, discountCode } = {}) {
+async function checkout(product, { quantity = 2, variantKey, customization, discountCode, paymentMethod = 'cod' } = {}) {
   success(await request('/commerce/cart/items', { method: 'POST', headers: customer, body: { productId: String(product._id), quantity,
     ...(variantKey ? { variantKey } : {}), ...(customization ? { customization } : {}) } }), 201);
   const checkoutKey = randomUUID();
-  success(await request('/commerce/checkout/quote', { method: 'POST', headers: customer, body: { checkoutKey, paymentMethod: 'cod', governorate: 'cairo', ...(discountCode ? { discountCode } : {}) } }));
-  const body = { checkoutKey, paymentMethod: 'cod', customer: customerDetails, ...(discountCode ? { discountCode } : {}) };
+  success(await request('/commerce/checkout/quote', { method: 'POST', headers: customer, body: { checkoutKey, paymentMethod, governorate: 'cairo', ...(discountCode ? { discountCode } : {}) } }));
+  const body = { checkoutKey, paymentMethod, customer: customerDetails, ...(discountCode ? { discountCode } : {}) };
   return { body, submit: () => request('/commerce/orders', { method: 'POST', headers: customer, body }) };
 }
 function barrier() {
@@ -92,9 +92,15 @@ for (const [kind, mode] of [['product', 'tracked'], ['variant', 'tracked'], ['co
     const path = kind === 'component' ? `/admin/commerce/components/${component._id}` : `/admin/products/${product._id}`;
     const key = kind === 'component' ? 'component' : 'product';
     const loaded = success(await request(path))[key];
-    const intent = await checkout(product, { ...(kind === 'variant' ? { variantKey: 'red' } : {}), ...(template ? { customization: {
+    const intent = await checkout(product, { ...(kind === 'variant' ? { variantKey: 'red' } : {}), ...(kind === 'component' ? { paymentMethod: 'instapay' } : {}), ...(template ? { customization: {
       templateId: String(template._id), version: 1, selections: [{ groupKey: 'extras', optionKey: 'component', quantity: 1 }], fields: {},
     } } : {}) });
+    if (kind === 'component') {
+      const codKey = randomUUID();
+      success(await request('/commerce/checkout/quote', { method:'POST', headers:customer, body:{ checkoutKey:codKey, paymentMethod:'cod', governorate:'cairo' } }));
+      const denied = await request('/commerce/orders', { method:'POST', headers:customer, body:{ ...intent.body, checkoutKey:codKey, paymentMethod:'cod' } });
+      assert.equal(denied.status,409); assert.equal(denied.error.code,'QUOTATION_REQUIRED'); assert.equal(await Order.countDocuments(),0);
+    }
     const order = success(await intent.submit(), 201).order;
     const consumed = success(await request(path))[key];
     assert.equal(consumed.revision, loaded.revision + 1);
@@ -112,6 +118,11 @@ for (const [kind, mode] of [['product', 'tracked'], ['variant', 'tracked'], ['co
     assert.equal((await Model.findById(id)).__v, consumed.revision, 'Duplicate submission does not consume or advance inventory again.');
     assert.equal(await Order.countDocuments(), 1);
     const cancelled = success(await request(`/commerce/orders/${order.id}/cancel`, { method: 'POST', headers: customer, body: { revision: order.revision, reason: 'Synthetic cancellation' } })).order;
+    assert.equal(stock(success(await request(path))[key]), stock(consumed), 'Customer request does not release stock.');
+    const cancellation = { revision:cancelled.revision, action:'cancel', reconciled:true, reason:'Actual owner cancellation review' };
+    const attempts = await Promise.all([1,2].map(() => request('/admin/commerce/orders/' + order.id + '/accounting', { method:'POST', body:cancellation })));
+    assert.equal(attempts.filter(result=>result.status===200).length,1);
+    assert.equal(attempts.filter(result=>result.status===409).length,1);
     const restored = success(await request(path))[key];
     assert.equal(stock(restored), mode === 'made_to_order' ? null : kind === 'variant' ? 6 : 10);
     assert.equal(restored.revision, consumed.revision + (mode === 'tracked' ? 1 : 0));
@@ -119,7 +130,7 @@ for (const [kind, mode] of [['product', 'tracked'], ['variant', 'tracked'], ['co
       const staleRestoration = kind === 'variant' ? { variants: consumed.variants } : { inventory: consumed.inventory };
       conflict(await request(path, { method: 'PATCH', body: { expectedRevision: consumed.revision, ...staleRestoration } }));
     }
-    success(await request(`/commerce/orders/${order.id}/cancel`, { method: 'POST', headers: customer, body: { revision: cancelled.revision, reason: 'Synthetic repeated cancellation' } }));
+    assert.equal((await request('/admin/commerce/orders/' + order.id + '/accounting', { method:'POST', body:cancellation })).status,409);
     assert.equal((await Model.findById(id)).__v, restored.revision, 'Cancellation retry does not restock or advance revisions again.');
     const edited = success(await request(path, { method: 'PATCH', body: { expectedRevision: restored.revision, name: 'Fresh authorized admin edit' } }))[key];
     assert.equal(edited.revision, restored.revision + 1);

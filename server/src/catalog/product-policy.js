@@ -1,6 +1,16 @@
+import { productPersonalizationIssues } from '../../../shared/product-personalization.mjs';
 // Shared publication/inventory rules. No cart, checkout, or database mutation here.
+export function displayProductFilter() {
+  return { visibility: 'public', status: { $in: ['draft', 'ready', 'hold'] } };
+}
+
+export function approvedProductPriceFilter() {
+  return { priceApproved: true, pricePiastres: { $gt: 0 } };
+}
+
 export function publicProductFilter() {
   return {
+    visibility: 'public',
     status: 'ready', published: true, priceApproved: true, pricePiastres: { $gt: 0 },
     'inventory.approved': true, reviewRequired: false,
     $nor: [
@@ -26,6 +36,7 @@ export function orderableProductStockFilter() {
 export function getPublicationIssues(product) {
   const issues = [];
   const add = (field, message) => issues.push({ field, message });
+  for (const message of productPersonalizationIssues(product.personalization)) add('personalization.fields', message);
   if (!product.priceApproved || !Number.isSafeInteger(product.pricePiastres) || product.pricePiastres <= 0) add('priceApproved', 'Ready products require a confirmed positive price');
   if (!product.inventory?.approved) add('inventory.approved', 'Ready products require approved stock or an approved Made by Request mode');
   if (product.reviewRequired) add('reviewRequired', 'Resolve catalog review flags before making a product Ready');

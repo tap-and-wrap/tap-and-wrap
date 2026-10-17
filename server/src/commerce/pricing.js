@@ -7,6 +7,7 @@ import { mediaUrlForKey, inventoryCanOrder, productCanOrder } from '../catalog/p
 import { quoteCustomization } from './customization.js';
 import { validateUploadReferences } from './uploads.js';
 import { commerceError, checkedMoney } from './errors.js';
+import { productPersonalizationFields } from '../../../shared/product-personalization.mjs';
 
 export function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
@@ -23,6 +24,7 @@ export async function loadEligibleProduct(id, { session, context } = {}) {
   const main = context ? mainRecord?.active && !mainRecord.parentId : await Category.exists({ _id: product.categoryId, parentId: null, active: true }).session(session || null);
   const child = !product.subcategoryId || (context ? childRecord?.active && String(childRecord.parentId) === String(product.categoryId) : await Category.exists({ _id: product.subcategoryId, parentId: product.categoryId, active: true }).session(session || null));
   if (!main || !child || !productCanOrder(product)) throw commerceError(409, 'PRODUCT_UNAVAILABLE', 'This product is currently unavailable.');
+  if (['gift_box', 'laser_engraving'].includes(product.customization?.serviceKind)) throw commerceError(409, 'QUOTATION_REQUIRED', 'This service requires an accepted quotation before payment.');
   return product;
 }
 
@@ -70,8 +72,10 @@ export async function quoteCartLine(line, owner, { session, context } = {}) {
   if (!inventoryCanOrder(stock) || (stock.mode === 'tracked' && stock.quantity < line.quantity)) throw commerceError(409, 'INSUFFICIENT_STOCK', 'The requested quantity is unavailable.');
   const basePrice = variant?.pricePiastres == null ? product.pricePiastres : variant.pricePiastres;
   if (variant?.pricePiastres != null && !variant.priceApproved) throw commerceError(409, 'PRICE_UNAPPROVED', 'The selected price is not approved.');
-  const personalized = await validateFields(product.personalization?.fields || [], line.personalization || {}, owner, { productId: product._id, session, context });
+  const definitions = productPersonalizationFields(product.personalization);
+  const personalized = await validateFields(definitions, line.personalization || {}, owner, { productId: product._id, session, context });
   let adjustment = 0, customization = null, customValues = null, componentClaims = [], extraUploads = [];
+  if (line.customization && product.personalization?.requiredBeforePurchase === true) throw commerceError(400, 'INVALID_CUSTOMIZATION', 'Product personalization uses the approved product price, without template adjustments.');
   if (line.customization) {
     const quote = await quoteCustomization(product, line.customization, { session, context, requireFields: true });
     const fields = await validateFields(quote.fields || [], line.customization.fields || {}, owner, { productId: product._id, purpose: 'artwork', session, context });
@@ -89,6 +93,8 @@ export async function quoteCartLine(line, owner, { session, context } = {}) {
     categoryId: String(product.categoryId), subcategoryId: product.subcategoryId ? String(product.subcategoryId) : null,
     variantLabel: variant?.attributes?.map(attribute => `${attribute.name}: ${attribute.value}`).join(', ') || null,
     quantity: line.quantity, mainImageUrl: mediaUrlForKey(product.mainImageKey), unitPricePiastres,
+    requiresPersonalization: product.personalization?.requiredBeforePurchase === true,
+    personalizationDefinitions: definitions.map(field => ({ key: field.key, label: field.label, type: field.type })),
     lineTotalPiastres: checkedMoney(unitPricePiastres * line.quantity), customizationSnapshot: customization, uploadIds,
     inventoryClaims: [{ kind: 'product', id: String(product._id), variantKey: variant?.key || null, quantity: line.quantity, mode: stock.mode, expectedUpdatedAt: product.updatedAt },
       ...componentClaims.map(claim => ({ ...claim, quantity: checkedMoney(claim.quantityPerUnit * line.quantity) }))],

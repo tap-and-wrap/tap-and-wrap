@@ -35,6 +35,7 @@ fieldSchema.pre('validate', function () {
   if (this.type === 'select' && (!this.choices.length || this.choices.some(x => !x.trim() || x.length > 160) || new Set(this.choices).size !== this.choices.length)) this.invalidate('choices', 'Selection fields require distinct, nonempty choices');
 });
 const personalizationSchema = new mongoose.Schema({
+  requiredBeforePurchase: { type: Boolean },
   fields: { type: [fieldSchema], default: [], validate: boundedArray(20) },
 }, { _id: false, strict: 'throw' });
 const customizationSchema = new mongoose.Schema({
@@ -54,12 +55,16 @@ const schema = new mongoose.Schema({
   inventory: { type: inventorySchema, default: () => ({}) },
   variants: { type: [variantSchema], default: [], validate: boundedArray(30) },
   personalization: { type: personalizationSchema, default: () => ({}) },
+  engravingRequest: { enabled: { type: Boolean, default: false }, fonts: { type: [String], default: [], validate: boundedArray(30) }, placements: { type: [String], default: [], validate: boundedArray(30) }, materials: { type: [String], default: [], validate: boundedArray(30) }, maxTextLength: { type: Number, default: 120, min: 1, max: 1000, validate: safeInteger } },
   customization: { type: customizationSchema, default: () => ({}) },
   featured: { type: Boolean, default: false },
   featuredOrder: { type: Number, default: 0, validate: safeInteger },
   bestSeller: { type: Boolean, default: false },
   bestSellerOrder: { type: Number, default: 0, validate: safeInteger },
   status: { type: String, enum: ['draft', 'ready', 'hold'], default: 'draft' },
+  // Display permission is independent of purchase publication and launch flags.
+  // Missing legacy values fail closed until a separately reviewed transition.
+  visibility: { type: String, enum: ['hidden', 'public', 'withdrawn'], default: 'hidden' },
   // Compatibility with the starter; status is the authoritative control.
   published: { type: Boolean, default: false },
   commerceRevision: { type: Number, default: 0, validate: safeInteger },

@@ -1,5 +1,9 @@
+import { mergeInventory } from '../catalog/inventory-input.js';
+import { productPersonalizationFields } from '../../../shared/product-personalization.mjs';
+import { componentRequestPolicy } from './request-validation.js';
 import { attachProductPaths, productIdentityFilter } from '../catalog/product-addresses.js';
 import express from 'express';
+import { validateMediaReferences } from '../catalog/media.js';
 import mongoose from 'mongoose';
 import { Product } from '../models/Product.js';
 import { Category } from '../models/Category.js';
@@ -48,7 +52,16 @@ const adminRecord = (record) => {
 };
 const regex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const TEMPLATE_FIELDS = ['key', 'name', 'kind', 'status', 'active', 'pricingMode', 'baseAdjustmentPiastres', 'groups', 'fields', 'engraving'];
-const COMPONENT_FIELDS = ['name', 'description', 'pricePiastres', 'compareAtPiastres', 'priceApproved', 'inventory', 'enabledForCustomization', 'configurationApproved', 'reviewRequired', 'merchantReviewNotes'];
+const COMPONENT_FIELDS = ['requestPolicy', 'mainImageKey', 'galleryKeys', 'name', 'description', 'pricePiastres', 'compareAtPiastres', 'priceApproved', 'inventory', 'enabledForCustomization', 'configurationApproved', 'reviewRequired', 'merchantReviewNotes'];
+function validateRequestPolicy(values) {
+  if (values.requestPolicy) {
+    const policy = componentRequestPolicy.parse(values.requestPolicy);
+    if (policy.pricing === 'free') policy.unitPricePiastres = 0;
+    else if (!policy.unitPricePiastres || policy.pricing === 'pending') { policy.pricing = 'pending'; policy.unitPricePiastres = null; }
+    values.requestPolicy = policy;
+  }
+  return values;
+}
 const BUNDLE_FIELDS = ['name', 'description', 'active', 'published', 'items', 'discountKind', 'discountValue', 'maxApplications', 'priority', 'startsAt', 'endsAt'];
 const DISCOUNT_FIELDS = ['code', 'name', 'active', 'kind', 'value', 'minimumSubtotalPiastres', 'maximumDiscountPiastres', 'productIds', 'categoryIds', 'authenticatedOnly', 'stackWithBundles', 'startsAt', 'endsAt', 'usageLimit', 'perCustomerLimit'];
 
@@ -105,7 +118,7 @@ publicConfigurationRoutes.get('/customization/services/:kind/products', wrap(asy
     { $lookup: { from: Category.collection.name, localField: 'subcategoryId', foreignField: '_id', as: 'subCategory' } },
     { $match: { mainCategory: { $elemMatch: { active: true, parentId: null } }, $or: [{ subcategoryId: null }, { subCategory: { $elemMatch: { active: true } } }] } },
     { $match: { $expr: { $or: [{ $eq: [{ $ifNull: ['$subcategoryId', null] }, null] }, { $eq: [{ $arrayElemAt: ['$subCategory.parentId', 0] }, '$categoryId'] }] } } },
-    { $facet: { products: [{ $sort: { name: 1, _id: 1 } }, { $skip: skip }, { $limit: limit }, { $project: { name: 1, slug: 1, pricePiastres: 1, compareAtPiastres: 1, priceApproved: 1, featured: 1, bestSeller: 1, status: 1, published: 1, reviewRequired: 1, inventory: 1, mainImageKey: 1, variants: 1, 'personalization.fields.required': 1, 'customization.enabled': 1, categoryId: { $arrayElemAt: ['$mainCategory', 0] }, subcategoryId: { $arrayElemAt: ['$subCategory', 0] } } }], count: [{ $count: 'total' }] } }
+    { $facet: { products: [{ $sort: { name: 1, _id: 1 } }, { $skip: skip }, { $limit: limit }, { $project: { visibility: 1, name: 1, slug: 1, pricePiastres: 1, compareAtPiastres: 1, priceApproved: 1, featured: 1, bestSeller: 1, status: 1, published: 1, reviewRequired: 1, inventory: 1, mainImageKey: 1, variants: 1, 'personalization.fields': 1, 'personalization.requiredBeforePurchase': 1, 'customization.enabled': 1, categoryId: { $arrayElemAt: ['$mainCategory', 0] }, subcategoryId: { $arrayElemAt: ['$subCategory', 0] } } }], count: [{ $count: 'total' }] } }
   ];
   const [result] = await Product.aggregate(pipeline).option({ maxTimeMS: 3000 });
   respond(res, { products: await attachProductPaths((result?.products || []).map(publicProductCard)), pagination: paginationPresentation(page, limit, result?.count?.[0]?.total || 0) });
@@ -121,7 +134,7 @@ publicConfigurationRoutes.get('/customization/products/:slug', wrap(async (req, 
   const [publicCard] = await attachProductPaths([publicProductCard(product)]);
   const sourcePath = ['gift_box', 'laser_engraving'].includes(template.kind) ? `/customize/${template.kind.replaceAll('_', '-')}` : publicCard.publicPath;
   const tracking = await captureAction(req, 'CustomizationStart', { service_kind: template.kind }, { sourcePath, dedupKey: `template:${template._id}:${template.version}:product:${product._id}` });
-  respond(res, { product: { ...publicCard, personalization: { fields: product.personalization?.fields || [] }, variants: (product.variants || []).map((variant) => ({ key: variant.key, attributes: variant.attributes, pricePiastres: variant.pricePiastres == null ? product.pricePiastres : (variant.priceApproved ? variant.pricePiastres : null), priceApproved: variant.pricePiastres == null ? Boolean(product.priceApproved) : Boolean(variant.priceApproved), available: Boolean(variant.inventory?.approved && variant.inventory?.available && (variant.inventory.mode === 'made_to_order' || variant.inventory.quantity > 0)) })) }, template: publicTemplatePresentation(template, components), tracking });
+  respond(res, { product: { ...publicCard, personalization: { requiredBeforePurchase: product.personalization?.requiredBeforePurchase === true, fields: productPersonalizationFields(product.personalization) }, variants: (product.variants || []).map((variant) => ({ key: variant.key, attributes: variant.attributes, pricePiastres: variant.pricePiastres == null ? product.pricePiastres : (variant.priceApproved ? variant.pricePiastres : null), priceApproved: variant.pricePiastres == null ? Boolean(product.priceApproved) : Boolean(variant.priceApproved), available: Boolean(variant.inventory?.approved && variant.inventory?.available && (variant.inventory.mode === 'made_to_order' || variant.inventory.quantity > 0)) })) }, template: publicTemplatePresentation(template, components), tracking });
 }));
 
 publicConfigurationRoutes.post('/customization/quote', csrfProtection, wrap(async (req, res) => {
@@ -245,14 +258,16 @@ adminConfigurationRoutes.get('/components', wrap(async (req, res) => {
       filters[field] = req.query[queryKey] === 'true';
     }
   }
-  const { records, pagination } = await listConfiguration(ComponentOption, req, { filters, fields: 'externalCatalogId name slug catalogRole status pricePiastres compareAtPiastres priceApproved inventory enabledForCustomization configurationApproved reviewRequired merchantReviewNotes createdAt updatedAt' });
+  const { records, pagination } = await listConfiguration(ComponentOption, req, { filters, fields: 'requestPolicy externalCatalogId name slug catalogRole status pricePiastres compareAtPiastres priceApproved inventory enabledForCustomization configurationApproved reviewRequired merchantReviewNotes createdAt updatedAt' });
   respond(res, { components: records, pagination });
 }));
 adminConfigurationRoutes.get('/components/:id', wrap(async (req, res) => respond(res, { component: adminRecord(await findRecord(ComponentOption, idParam(req))) })));
 adminConfigurationRoutes.post('/components', wrap(async (req, res) => {
-  const values = plainBody(req.body, [...COMPONENT_FIELDS, 'slug', 'categoryId', 'subcategoryId', 'externalCatalogId', 'mainImageKey', 'galleryKeys', 'sku', 'catalogRole']);
+  const values = validateRequestPolicy(plainBody(req.body, [...COMPONENT_FIELDS, 'slug', 'categoryId', 'subcategoryId', 'externalCatalogId', 'mainImageKey', 'galleryKeys', 'sku', 'catalogRole']));
   const component = await auditedMutation(req, 'customization.component.created', 'new', async (session) => {
+    await validateMediaReferences([values.mainImageKey, ...(values.galleryKeys || [])], { session });
     const record = new ComponentOption({ ...values, catalogRole: values.catalogRole || 'Customization Option', status: 'draft', commerceRevision: 0 });
+    if (values.inventory) record.inventory = mergeInventory(undefined, values.inventory);
     if (record.configurationApproved && (record.reviewRequired || !record.enabledForCustomization || !record.priceApproved || !record.inventory.approved)) throw configurationError('Component approval requires resolved catalog review, enabled customization, approved prices and approved inventory.');
     await record.validate();
     await validateCatalogCategoryReferences(record.categoryId, record.subcategoryId, { session, fence: true });
@@ -263,6 +278,7 @@ adminConfigurationRoutes.post('/components', wrap(async (req, res) => {
 adminConfigurationRoutes.patch('/components/:id', wrap(async (req, res) => {
   const id = idParam(req);
   const { values, expectedRevision } = revisionBody(req.body, COMPONENT_FIELDS);
+  validateRequestPolicy(values);
   const component = await auditedMutation(req, 'customization.component.updated', id, async (session) => {
     const record = await findRecord(ComponentOption, id, session);
     await prepareAdminRevision(record, expectedRevision, { session });
@@ -271,16 +287,14 @@ adminConfigurationRoutes.patch('/components/:id', wrap(async (req, res) => {
     const priceChanged = ['pricePiastres', 'compareAtPiastres'].some((key) => has(key) && values[key] !== record[key]);
     let inventoryChanged = false;
     if (has('inventory')) {
-      if (!values.inventory || typeof values.inventory !== 'object' || Array.isArray(values.inventory)) throw configurationError('Inventory must be a configured inventory object.');
       const existing = record.inventory.toObject();
-      patch.inventory = { ...existing, ...values.inventory };
-      if (Object.hasOwn(values.inventory, 'mode') && values.inventory.mode !== existing.mode && !Object.hasOwn(values.inventory, 'quantity')) patch.inventory.quantity = values.inventory.mode === 'made_to_order' ? null : 10;
+      patch.inventory = mergeInventory(existing, values.inventory);
       inventoryChanged = ['mode', 'quantity', 'available'].some((key) => patch.inventory[key] !== existing[key]);
-      if (inventoryChanged && !Object.hasOwn(values.inventory, 'approved')) patch.inventory.approved = false;
     }
     if (priceChanged && !has('priceApproved')) patch.priceApproved = false;
     const meaningfulChange = priceChanged || inventoryChanged || ['name', 'description', 'enabledForCustomization', 'reviewRequired', 'priceApproved'].some((key) => has(key) && values[key] !== record[key]) || (has('inventory') && patch.inventory.approved !== record.inventory.approved);
     if (meaningfulChange && !has('configurationApproved')) patch.configurationApproved = false;
+    await validateMediaReferences([patch.mainImageKey ?? record.mainImageKey, ...(patch.galleryKeys ?? record.galleryKeys)], { session });
     record.set(patch);
     record.commerceRevision += 1;
     if (record.configurationApproved && (record.reviewRequired || !record.enabledForCustomization || !record.priceApproved || !record.inventory.approved)) throw configurationError('Component approval requires resolved catalog review, enabled customization, approved prices and approved inventory.');
@@ -346,25 +360,8 @@ adminConfigurationRoutes.get('/shipping', wrap(async (req, res) => {
   const configuration = await ShippingConfig.findOne({ key: 'egypt-v1' }).lean().maxTimeMS(3000);
   respond(res, { governorates: GOVERNORATES, configuration: configuration ? adminRecord(configuration) : { key: 'egypt-v1', cairoGizaPiastres: 9000, otherGovernoratesPiastres: 12000, approved: false, revision: 0 } });
 }));
-adminConfigurationRoutes.patch('/shipping', wrap(async (req, res) => {
-  const { values, expectedRevision } = revisionBody(req.body, ['cairoGizaPiastres', 'otherGovernoratesPiastres', 'approved']);
-  const configuration = await auditedMutation(req, 'shipping.updated', 'egypt-v1', async (session) => {
-    const record = await ShippingConfig.findOne({ key: 'egypt-v1' }).session(session) || new ShippingConfig();
-    await prepareAdminRevision(record, expectedRevision, { session });
-    const creating = record.isNew;
-    const ratesChanged = ['cairoGizaPiastres', 'otherGovernoratesPiastres'].some((key) => Object.hasOwn(values, key) && values[key] !== record[key]);
-    record.set({ ...values, ...(ratesChanged && !Object.hasOwn(values, 'approved') ? { approved: false } : {}), updatedBy: req.user._id });
-    await record.validate();
-    await record.save({ session });
-    // Mongoose initializes new-document __v to zero during save. The blank
-    // singleton form also has revision zero, so advance after insertion atomically.
-    if (creating) {
-      await ShippingConfig.updateOne({ _id: record._id, __v: 0 }, { $set: { __v: 1 } }, { session, timestamps: false });
-      record.__v = 1;
-    }
-    return record;
-  });
-  respond(res, { configuration: adminRecord(configuration) });
+adminConfigurationRoutes.patch('/shipping', wrap(async () => {
+  throw configurationError('Delivery is confirmed per order after checkout. Global checkout rates cannot be approved.', 'SHIPPING_POLICY_CHANGED', 409);
 }));
 
 adminConfigurationRoutes.patch('/products/:id/configuration', wrap(async (req, res) => {

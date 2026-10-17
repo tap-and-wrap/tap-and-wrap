@@ -1,16 +1,15 @@
 import { Link } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
 import { FeaturedCategories, BestSellerProducts } from '../components/HomeCatalog.jsx';
-import { ApprovedFaq, DeveloperHeroMedia, PublishedBundles, ReviewMarquee, TrustStatistics, useSiteContent } from '../components/PublicContent.jsx';
+import { ApprovedFaq, DeveloperHeroMedia, PublishedBundles, ReviewMarquee, TrustStatistics } from '../components/PublicContent.jsx';
 import ServiceFilm from '../components/ServiceFilm.jsx';
 import { approvedFaqFallback } from '../content/final-faq.js';
 import { ownerFeaturedReviews } from '../content/owner-confirmed-reviews.js';
 import '../home-media.css';
 
 export default function HomePage() {
-  const content = useSiteContent();
   const reviews = ownerFeaturedReviews;
-  const faq = content.data?.faq?.length ? content.data.faq : approvedFaqFallback;
+  const faq = approvedFaqFallback;
   return <main>
     <section className="hero home-media-hero" aria-labelledby="home-hero-heading">
       <DeveloperHeroMedia />

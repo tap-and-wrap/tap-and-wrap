@@ -44,10 +44,10 @@
 .home-media-hero .button-group .button { background: rgba(20,13,10,.35); border: 1px solid #FFF8F0; color: #fff; font-size: clamp(1rem, 1.25vw, 1.1rem); min-height: 50px; padding: 14px 24px; border-radius: 10px; text-shadow: 0 1px 4px rgba(0,0,0,.5); }
 .home-media-hero .button-group .button:hover { background: rgba(20,13,10,.55); border-color: #fff; }
 .home-media-hero .button-group .button:focus-visible { outline: 3px solid #fff; outline-offset: 4px; background: rgba(20,13,10,.55); }
-.home-media-hero .hero-video-control { z-index: 3; opacity: 0; pointer-events: none; }
-.home-media-hero .hero-video-control:focus-visible { opacity: 1; pointer-events: auto; }
-.home-service-media .home-service-video-toggle { opacity: 0; transition: opacity .18s; pointer-events: auto; z-index: 5; }
-.home-service-media .home-service-video-toggle:focus-visible { opacity: 1; pointer-events: auto; }
+.home-media-hero .hero-video-control { position: absolute; right: 16px; bottom: 16px; z-index: 3; opacity: 1; pointer-events: auto; min-height: 44px; min-width: 100px; padding: 10px 16px; color: #62483F; background: #FFFFFF; border: 1px solid #EADAD5; border-radius: 8px; font: inherit; box-shadow: 0 2px 12px rgba(0,0,0,.2); }
+.home-media-hero .hero-video-control:focus-visible { outline: 3px solid #FFFFFF; outline-offset: 4px; }
+.home-service-media .home-service-video-toggle { opacity: 1; pointer-events: auto; z-index: 5; min-height: 44px; }
+.home-service-media .home-service-video-toggle:focus-visible { outline: 3px solid #795045; outline-offset: 3px; }
 @media (max-width: 767px) {
   .home-media-hero .hero-film::before { display: none; }
   .home-media-hero .hero-film .website-hero-video, .home-media-hero .hero-film-poster {

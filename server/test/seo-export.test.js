@@ -11,7 +11,7 @@ import { publicProductDetail } from '../src/catalog/public-presentation.js';
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const main = { _id: '111111111111111111111111', name: 'Isolated Gifts', slug: 'isolated-gifts', active: true, parentId: null, imageKey: 'Fixtures/category.webp' };
 const child = { _id: '222222222222222222222222', name: 'Isolated Keepsakes', slug: 'isolated-keepsakes', active: true, parentId: main._id };
-const product = { _id: '333333333333333333333333', name: 'Isolated Gift', slug: 'isolated-gift', description: 'Isolated test content only.', categoryId: main._id, subcategoryId: child._id, status: 'ready', published: true, reviewRequired: false, pricePiastres: 12345, priceApproved: true, inventory: { mode: 'tracked', quantity: 10, approved: true, available: true }, variants: [], mainImageKey: 'Fixtures/main.webp', galleryKeys: ['Private/customer-file.webp'], personalization: { customerSecret: 'do-not-export-customer' }, customization: { internalConfiguration: 'do-not-export-template' }, merchantReviewNotes: 'do-not-export-source-notes', updatedAt: new Date('2026-10-09T12:00:00Z') };
+const product = { _id: '333333333333333333333333', name: 'Isolated Gift', slug: 'isolated-gift', description: 'Isolated test content only.', categoryId: main._id, subcategoryId: child._id, visibility: 'public', status: 'ready', published: true, reviewRequired: false, pricePiastres: 12345, priceApproved: true, inventory: { mode: 'tracked', quantity: 10, approved: true, available: true }, variants: [], mainImageKey: 'Fixtures/main.webp', galleryKeys: ['Private/customer-file.webp'], personalization: { customerSecret: 'do-not-export-customer' }, customization: { internalConfiguration: 'do-not-export-template' }, merchantReviewNotes: 'do-not-export-source-notes', updatedAt: new Date('2026-10-09T12:00:00Z') };
 const categories = new Map([main, child].map((category) => [category._id, exportCategoryDto(category)]));
 
 function pagedFixture(rows, calls) {
@@ -103,7 +103,7 @@ test('product DTO preserves stable public identity while dropping galleries, pri
 });
 
 test('drafts, provisional prices/inventory, unresolved reviews and category mismatches cannot be exported', () => {
-  for (const change of [{ status: 'draft' }, { published: false }, { priceApproved: false }, { pricePiastres: null }, { pricePiastres: 0 }, { inventory: { ...product.inventory, approved: false } }, { reviewRequired: true }, { subcategoryId: 'missing' }]) assert.equal(exportProductDto({ ...product, ...change }, categories), null);
+  for (const change of [{ visibility: 'hidden' }, { visibility: 'withdrawn' }, { visibility: undefined }, { status: 'draft' }, { published: false }, { priceApproved: false }, { pricePiastres: null }, { pricePiastres: 0 }, { inventory: { ...product.inventory, approved: false } }, { reviewRequired: true }, { subcategoryId: 'missing' }]) assert.equal(exportProductDto({ ...product, ...change }, categories), null);
   assert.equal(exportProductDto(product, new Map([[main._id, { ...categories.get(main._id), active: false }], [child._id, categories.get(child._id)]])), null);
   assert.equal(exportProductDto(product, new Map([[main._id, categories.get(main._id)], [child._id, { ...categories.get(child._id), parentId: 'wrong-main' }]])), null);
 });
@@ -142,13 +142,10 @@ test('incomplete, oversized or non-advancing pages abort rather than publishing 
   await assert.rejects(buildApprovedSeoExport(oversized.source), /20-record page limit/);
 });
 
-test('approved owner content exports plain text and excludes unapproved policies/notes', () => {
-  const result = exportApprovedContent({ about: { approved: true, title: 'Isolated About', body: 'Approved fixture paragraph.\n\nSecond fixture paragraph.', updatedAt: new Date('2026-10-09T12:00:00Z') }, privacyPolicy: { approved: false, title: 'Unapproved', body: 'Do not publish.' }, contact: { approved: true, email: 'fixture@example.test', body: 'Owner-provided fixture contact.' }, updatedBy: 'private-admin-id', featuredReviews: [{ sourceNote: 'private-review-source' }] });
-  assert.deepEqual(Object.keys(result.routes).sort(), ['/about', '/contact']);
-  assert.equal(result.routes['/about'].paragraphs.length, 2);
-  assert.equal(result.routes['/contact'].paragraphs.includes('Email: fixture@example.test'), true);
-  assert.equal(JSON.stringify(result).includes('private'), false);
-  assert.equal(JSON.stringify(result).includes('Do not publish'), false);
+test('fixed content export cannot be authorized or overridden by legacy database approvals', () => {
+  const result = exportApprovedContent({ about: { approved: true, title: 'Legacy override', body: 'Never publish legacy policy' }, contact: { approved: true, email: 'wrong@example.test' } });
+  assert.deepEqual(result.routes, {});
+
 });
 
 test('confirmed isolated export closes its source and writes only sanitized explicit output DTOs', async () => {

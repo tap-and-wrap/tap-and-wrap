@@ -29,7 +29,7 @@ function uploadGeneration(uploadedIds, expected) {
   return generation;
 }
 export const PRIVATE_UPLOAD_TIMEOUT_MS = 60_000;
-export async function uploadPrivateFile(file, { purpose, productId, fieldKey, checkoutKey, templateId, templateVersion, generation: expected, onProgress, signal }, uploadedIds = []) {
+export async function uploadPrivateFile(file, { purpose, productId, fieldKey, checkoutKey, orderId, requestKey, templateId, templateVersion, generation: expected, onProgress, signal }, uploadedIds = []) {
   const generation = uploadGeneration(uploadedIds, expected);
   onProgress?.('Preparing private upload…');
   const controller = new AbortController();
@@ -41,7 +41,7 @@ export async function uploadPrivateFile(file, { purpose, productId, fieldKey, ch
   const timer = setTimeout(() => { timedOut = true; controller.abort(); }, PRIVATE_UPLOAD_TIMEOUT_MS);
   try {
     const signed = await commercePost('/uploads/sign', {
-      purpose, productId, fieldKey, checkoutKey, templateId, templateVersion, mimeType: file.type, sizeBytes: file.size,
+      purpose, productId, fieldKey, checkoutKey, orderId, requestKey, templateId, templateVersion, mimeType: file.type, sizeBytes: file.size,
     }, { signal: controller.signal });
     assertAuthGeneration(generation);
     if (!signed.upload?.id || !signed.uploadUrl) throw new Error('Private storage is unavailable. Your file has not been uploaded.');
@@ -57,7 +57,7 @@ export async function uploadPrivateFile(file, { purpose, productId, fieldKey, ch
     return signed.upload.id;
   } catch (error) {
     assertAuthGeneration(generation);
-    if (timedOut) throw new Error('The private upload timed out. Your item was not added. Check your connection and try again.');
+    if (timedOut) throw new Error(purpose === 'payment_proof' ? 'The proof upload timed out. Your accepted order remains recorded. Do not transfer again; retry proof submission or contact the store.' : 'The private upload timed out. Your item was not added. Check your connection and try again.');
     throw error;
   } finally { clearTimeout(timer); unsubscribe(); signal?.removeEventListener('abort', abort); }
 }
@@ -69,7 +69,7 @@ export async function discardUploads(ids) {
   await Promise.allSettled(ids.map((id) => commerceDelete(`/uploads/${id}`)));
 }
 
-export async function uploadConfiguredFields(values, fields, { productId, purpose = 'personalization', templateId, templateVersion, onProgress }, uploadedIds = []) {
+export async function uploadConfiguredFields(values, fields, { productId, purpose = 'personalization', templateId, templateVersion, onProgress, cache }, uploadedIds = []) {
   const generation = uploadGeneration(uploadedIds);
   if (new Set((fields || []).map((field) => field.key)).size !== (fields || []).length) {
     throw new Error('This configuration contains duplicate fields. Reload the product before adding it.');
@@ -81,7 +81,13 @@ export async function uploadConfiguredFields(values, fields, { productId, purpos
     if (field.type === 'image') {
       result[field.key] = [];
       for (const file of value || []) {
-        result[field.key].push(await uploadPrivateFile(file, { purpose, productId, fieldKey: field.key, templateId, templateVersion, generation, onProgress }, uploadedIds));
+        const files = cache?.get(field.key) || new Map();
+        let id = files.get(file);
+        if (!id) {
+          id = await uploadPrivateFile(file, { purpose, productId, fieldKey: field.key, templateId, templateVersion, generation, onProgress }, uploadedIds);
+          files.set(file, id); cache?.set(field.key, files);
+        }
+        result[field.key].push(id);
         assertAuthGeneration(generation);
       }
     } else if (typeof value === 'string') result[field.key] = value;

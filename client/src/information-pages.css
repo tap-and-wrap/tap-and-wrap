@@ -1,0 +1,19 @@
+.information-page{max-width:1200px;margin:auto;padding:clamp(40px,7vw,96px) clamp(20px,4vw,48px);color:var(--text,#62483F)}
+.information-heading{max-width:820px;padding-bottom:clamp(32px,5vw,64px)}
+.information-heading h1{font-size:clamp(2.7rem,7vw,5rem);line-height:1.08;margin:16px 0 24px;letter-spacing:-.025em}
+.information-intro{font-size:clamp(1.2rem,3vw,1.65rem);line-height:1.6;max-width:620px}
+.information-layout{display:grid;grid-template-columns:minmax(180px,1fr) minmax(0,3fr);gap:clamp(28px,6vw,88px);border-top:1px solid #EADAD5;padding-top:36px}
+.information-contents{align-self:start;display:flex;flex-direction:column;gap:12px;font-size:.9rem;line-height:1.55}
+.information-contents a{color:#795045;text-underline-offset:4px}
+.information-copy{max-width:760px;min-width:0}
+.information-copy section{scroll-margin-top:calc(var(--site-header-height,100px) + 32px);padding-bottom:32px;margin-bottom:32px;border-bottom:1px solid #EADAD5}
+.information-copy h2{font-size:clamp(1.65rem,3vw,2.3rem);line-height:1.2;margin:0 0 20px}
+.information-copy p{line-height:1.85;margin:0 0 18px;overflow-wrap:anywhere}
+.information-review,.information-references{font-size:.85rem;line-height:1.7;padding:18px;border-left:3px solid #915B50;background:#fff}
+.information-support{margin-top:56px;border-block:1px solid #EADAD5;padding:36px 0;display:grid;grid-template-columns:1.5fr 1fr;gap:32px;align-items:center}
+.information-support h2{font-size:clamp(1.8rem,3.5vw,2.5rem);line-height:1.2;max-width:480px}
+.information-actions{display:flex;flex-direction:column;align-items:flex-start;gap:16px;overflow-wrap:anywhere;min-width:0}
+.information-actions a{max-width:100%;text-underline-offset:4px}
+.information-related{display:flex;flex-wrap:wrap;gap:16px 24px;padding-top:28px;font-size:.9rem;line-height:1.6}
+.information-page a:focus-visible{outline:2px solid #795045;outline-offset:5px}
+@media(max-width:700px){.information-layout,.information-support{grid-template-columns:1fr}.information-contents{padding-bottom:24px;border-bottom:1px solid #EADAD5}.information-support{gap:20px}.information-copy section{padding-bottom:20px;margin-bottom:24px}.information-actions .button{width:100%;text-align:center}}

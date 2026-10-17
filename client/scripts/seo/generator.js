@@ -1,4 +1,6 @@
+import { fixedPages, publicContacts, contentPublicationApproved, legalReviewNotice } from '../../../shared/storefront-content.mjs';
 import { productHref } from '../../../shared/product-paths.mjs';
+import { validateProductCompatibility } from '../../../shared/product-url-compatibility.mjs';
 import { categoryPublicPaths, categoryHref } from '../../../shared/category-paths.mjs';
 import { mkdir, readFile, writeFile, rm, stat, realpath, rename, rmdir, copyFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -28,7 +30,7 @@ function paragraph(value) { return `<p>${escapeHtml(cleanText(value, 10_000))}</
 
 function isApprovedProduct(product) {
   const gate = product?.seoEligibility;
-  return gate?.status === 'ready' && gate.published === true && gate.inventoryApproved === true && gate.reviewRequired === false && gate.categoriesActive === true && product.priceApproved === true && Number.isSafeInteger(product.pricePiastres) && product.pricePiastres >= 0 && (!product.variants || Array.isArray(product.variants) && product.variants.every((variant) => variant.priceApproved !== false && variant.inventory?.approved !== false && Number.isSafeInteger(variant.pricePiastres) && variant.pricePiastres >= 0));
+  return gate?.status === 'ready' && gate.published === true && gate.inventoryApproved === true && gate.reviewRequired === false && gate.categoriesActive === true && product.priceApproved === true && Number.isSafeInteger(product.pricePiastres) && product.pricePiastres > 0 && (!product.variants || Array.isArray(product.variants) && product.variants.every((variant) => variant.priceApproved !== false && variant.inventory?.approved !== false && Number.isSafeInteger(variant.pricePiastres) && variant.pricePiastres > 0));
 }
 
 function sanitizeCategory(category, mediaOrigins) {
@@ -52,12 +54,13 @@ function sanitizeProduct(product, categories, mediaOrigins, verifiedMedia) {
   const subcategory = product.subcategory ? categories.find((entry) => entry._id === String(product.subcategory._id) && entry.parentId === category._id) : null;
   if (product.subcategory && !subcategory) return null;
   return {
+    routingVersion: typeof product.routingVersion === 'string' && product.routingVersion.length <= 256 ? product.routingVersion : null,
     _id: String(product._id), name: cleanText(product.name, 160), slug: product.slug, publicPath: productHref(product), publicAliases: product.publicAliases || [], description: cleanText(product.description, 10_000), category, subcategory,
     mainImageUrl: publicImageUrl(product.mainImageUrl, mediaOrigins), mediaVerified: Boolean(verifiedMedia.get(publicImageUrl(product.mainImageUrl, mediaOrigins))), media: verifiedMedia.get(publicImageUrl(product.mainImageUrl, mediaOrigins)) || null,
     pricePiastres: product.pricePiastres, priceApproved: true, orderingAvailable: product.orderingAvailable === true,
     compareAtPiastres: Number.isSafeInteger(product.compareAtPiastres) && product.compareAtPiastres > product.pricePiastres ? product.compareAtPiastres : null,
     inventoryMode: ['tracked', 'made_to_order'].includes(product.inventoryMode || product.inventory?.mode) ? product.inventoryMode || product.inventory.mode : null,
-    variants: (product.variants || []).filter((variant) => Number.isSafeInteger(variant.pricePiastres) && variant.pricePiastres >= 0).map((variant) => ({ pricePiastres: variant.pricePiastres, orderingAvailable: variant.orderingAvailable === true, inventoryMode: ['tracked', 'made_to_order'].includes(variant.inventoryMode || variant.inventory?.mode) ? variant.inventoryMode || variant.inventory.mode : null })),
+    variants: (product.variants || []).filter((variant) => Number.isSafeInteger(variant.pricePiastres) && variant.pricePiastres > 0).map((variant) => ({ pricePiastres: variant.pricePiastres, orderingAvailable: variant.orderingAvailable === true, inventoryMode: ['tracked', 'made_to_order'].includes(variant.inventoryMode || variant.inventory?.mode) ? variant.inventoryMode || variant.inventory.mode : null })),
     updatedAt: validDate(product.updatedAt),
   };
 }
@@ -135,13 +138,24 @@ function staticBody(pathname, catalog, hasCatalogExport) {
   return paragraph('Available options and approved prices are loaded from the catalog. No product or material is eligible unless explicitly configured.');
 }
 
-export function buildSeoPlan({ catalog: input, content = {}, siteOrigin, publish = false, now = new Date(), minimumCategoryProducts = 3 } = {}) {
+export function buildSeoPlan({ catalog: input, siteOrigin, productCompatibility, publish = false, now = new Date(), minimumCategoryProducts = 3 } = {}) {
   const origin = canonicalOrigin(siteOrigin);
   if (siteOrigin && !origin) throw new Error('SITE origin must be a canonical HTTPS origin without credentials, paths, query strings or fragments');
   if (publish && (!origin || !input)) throw new Error('Indexing requires both a canonical HTTPS origin and an explicit approved catalog export');
   if (publish && (!validDate(input.generatedAt) || Date.parse(input.generatedAt) > new Date(now).valueOf())) throw new Error('SEO source generation timestamp is required and must not be in the future');
   if (!Number.isSafeInteger(minimumCategoryProducts) || minimumCategoryProducts < 1 || minimumCategoryProducts > 20) throw new Error('SEO category minimum must be an integer from 1 to 20');
   const catalog = input ? validateCatalog(input, { now }) : { products: [], categories: [], checkoutEnabled: false, report: { sourceProducts: 0, sourceCategories: 0, excludedProducts: [], excludedCategories: [], mediaUnverifiedProducts: [] } };
+  if (publish && catalog.products.some(product => !product.routingVersion)) throw new Error('SEO source requires a newly reviewed export with routing revisions');
+  if (productCompatibility !== undefined) {
+    if (publish || !origin) throw new Error('SEO product compatibility requires a canonical origin and disabled indexing');
+    const { owners } = validateProductCompatibility(productCompatibility, { origin, now });
+    for (const product of catalog.products) {
+      const canonical = productHref(product);
+      for (const pathname of [canonical, ...[product.slug, ...product.publicAliases].map(slug => `/products/${slug}`)]) {
+        if (owners.has(pathname) && owners.get(pathname) !== canonical) throw new Error('SEO product compatibility conflicts with approved product addresses');
+      }
+    }
+  }
   const routes = new Map();
   const add = (pathname, route) => routes.set(pathname, { pathname, indexable: publish && Boolean(origin), ...route });
   for (const [pathname, definition] of Object.entries(PUBLIC_STATIC_ROUTES)) {
@@ -149,10 +163,10 @@ export function buildSeoPlan({ catalog: input, content = {}, siteOrigin, publish
     add(pathname, { title: definition.title, description: definition.description, heading: definition.heading, body: staticBody(pathname, catalog, Boolean(input)), structuredData: organization ? [organization] : [] });
   }
   for (const pathname of CONTENT_ROUTES) {
-    const supplied = content.routes?.[pathname];
-    const approved = supplied?.approved === true && cleanText(supplied.title) && cleanText(supplied.description) && cleanText(supplied.heading) && Array.isArray(supplied.paragraphs) && supplied.paragraphs.length > 0 && supplied.paragraphs.length <= 100 && supplied.paragraphs.every((value) => typeof value === 'string' && cleanText(value, 10_000));
-    const label = pathname.slice(1).split('-').map((part) => `${part[0].toUpperCase()}${part.slice(1)}`).join(' ');
-    add(pathname, approved ? { title: `${cleanText(supplied.title, 120)} | Tap & Wrap`, description: cleanText(supplied.description), heading: cleanText(supplied.heading), body: supplied.paragraphs.map(paragraph).join(''), updatedAt: validDate(supplied.updatedAt), structuredData: [] } : { title: `${label} | Tap & Wrap`, description: `${label} content is awaiting owner approval.`, heading: label, body: paragraph('Development placeholder: owner-approved information is not yet available.'), indexable: false, structuredData: [] });
+    const page = fixedPages[pathname.slice(1)];
+    add(pathname, { title: `${page.title} | Tap & Wrap`, description: page.description, heading: page.title,
+      body: paragraph(page.intro) + page.sections.map(section => `<section><h2>${escapeHtml(section.heading)}</h2>${section.paragraphs.map(paragraph).join('')}</section>`).join('') + (page.legal && !contentPublicationApproved ? paragraph(legalReviewNotice) : '') + paragraph('Questions? Contact Tap & Wrap.') + link('https://wa.me/' + publicContacts.whatsapp.replace(/\D/g, ''), 'WhatsApp') + ' ' + link('mailto:' + publicContacts.email, 'Email Tap & Wrap') + ' ' + link(publicContacts.instagram, 'Instagram'),
+      indexable: publish && Boolean(origin) && contentPublicationApproved, structuredData: [] });
   }
   for (const category of catalog.categories) {
     const products = catalog.products.filter((product) => product.category._id === category._id || product.subcategory?._id === category._id);
@@ -168,6 +182,7 @@ export function buildSeoPlan({ catalog: input, content = {}, siteOrigin, publish
   }
   for (const product of catalog.products) {
     const metadata = productMetadata(product, origin, { indexable: publish, checkoutEnabled: catalog.checkoutEnabled, mediaOrigins: catalog.mediaOrigins, mediaVerified: product.mediaVerified });
+    metadata.routingVersion = product.routingVersion;
     metadata.sourceFingerprint = stableDigest(product);
     metadata.imageDimensions = product.media ? { width: product.media.width, height: product.media.height } : null;
     add(metadata.pathname, { ...metadata, heading: product.name, updatedAt: product.updatedAt, body: `${product.mainImageUrl ? `<img src="${escapeHtml(product.mainImageUrl)}" alt="${escapeHtml(product.name)}" width="900" height="900" decoding="async">` : ''}${paragraph(money(product.pricePiastres))}${product.variants.length ? paragraph(`Configured variant prices: ${[...new Set(product.variants.map((variant) => money(variant.pricePiastres)))].join(', ')}.`) : ''}${product.compareAtPiastres ? `<p>Compare-at price: <del>${escapeHtml(money(product.compareAtPiastres))}</del></p>` : ''}${paragraph(product.description)}${link(categoryHref(product.category), product.category.name)}${product.subcategory ? ` ${link(categoryHref(product.subcategory), product.subcategory.name)}` : ''}${paragraph(catalog.checkoutEnabled ? product.orderingAvailable ? 'Ordering options are available in the product form.' : 'Currently unavailable for ordering.' : 'Checkout is currently disabled.')}` });
@@ -293,9 +308,19 @@ export async function writeSeoOutput({ outputDirectory = path.join(CLIENT_DIRECT
     files.push(filename);
     files.push(generatedFilename);
   }
+  await assertRealLocation(resolvedOutput, path.join(resolvedOutput, 'spa.html'));
+  await atomicWrite(path.join(resolvedOutput, 'spa.html'), renderRouteHtml(htmlTemplate, { pathname: '/shop', title: 'Tap & Wrap', description: '', heading: 'Tap & Wrap', body: '', indexable: false, structuredData: [] }, null));
   const changeReport = comparePublications(previous?.publication, publication);
+  if (options.productCompatibility !== undefined || previous?.productCompatibility !== undefined) {
+    changeReport.productCompatibilityChanged = stableDigest(previous?.productCompatibility || null) !== stableDigest(options.productCompatibility || null);
+    changeReport.requiresDeployment ||= changeReport.productCompatibilityChanged;
+  }
   const manifest = { version: 2, origin: plan.origin, indexingEnabled: plan.report.indexingEnabled, publicRoutes: [...plan.routes.values()].filter((route) => route.indexable || !PRIVATE_STATIC.includes(route.pathname) && route.pathname !== '/404').map((route) => route.pathname), indexableRoutes: [...plan.routes.values()].filter((route) => route.indexable).map((route) => route.pathname), productSlugs: plan.catalog.products.map(product => productHref(product).split('/').at(-1)), productRedirects: Object.fromEntries(plan.catalog.products.flatMap(product => [...new Set([product.slug, ...product.publicAliases])].filter(slug => `/products/${slug}` !== productHref(product)).map(slug => [`/products/${slug}`, productHref(product)]))), categorySlugs: plan.catalog.categories.map((category) => category.slug), categoryRedirects: Object.fromEntries(plan.catalog.categories.filter(category => categoryHref(category) !== `/categories/${category.slug}`).map(category => [`/categories/${category.slug}`, categoryHref(category)])), routeFiles, publication };
   for (const file of ['sitemap.xml', 'robots.txt', 'seo-manifest.json', 'seo-change-report.json', OWNED_FILE, '.assetsignore']) await assertRealLocation(resolvedOutput, path.join(resolvedOutput, file));
+  manifest.productRouting = { version: 1, authority: 'catalog-api', cacheSeconds: 0 };
+  manifest.productSignatures = Object.fromEntries([...plan.routes.values()].filter(route => route.productSignature && route.routingVersion).map(route => [route.pathname, stableDigest([route.productSignature, plan.catalog.checkoutEnabled === true, route.routingVersion])]));
+  manifest.routeProducts = Object.fromEntries([...plan.routes.values()].filter(route => route.pathname === '/' || route.pathname === '/shop' || route.pathname.startsWith('/categories/')).map(route => [route.pathname, plan.catalog.products.filter(product => !route.pathname.startsWith('/categories/') || [categoryHref(product.category), product.subcategory && categoryHref(product.subcategory)].includes(route.pathname)).slice(0,20).map(productHref)]));
+  if (options.productCompatibility !== undefined) manifest.productCompatibility = options.productCompatibility;
   // No deploy happens here. Worker-visible publication switches only after every
   // immutable document is ready; interrupted preparation leaves the old manifest.
   if (beforeCommit) await beforeCommit({ manifest, changeReport });

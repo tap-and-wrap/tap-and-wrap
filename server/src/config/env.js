@@ -2,6 +2,10 @@ import { runtimeSettings } from './deployment.js';
 // Operational scripts set this before dynamic imports; their offline paths never load .env.
 if (process.env.TAP_WRAP_SKIP_DOTENV !== 'true') await import('dotenv/config');
 
+export function requestIntakeSettings(settings = process.env) {
+  return settings.CUSTOM_REQUESTS_ENABLED === 'true' && settings.CUSTOM_REQUESTS_LAUNCH_AUTHORIZED === 'true';
+}
+
 export const env = {
   ...runtimeSettings(),
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -16,6 +20,7 @@ export const env = {
   sessionSecret: process.env.SESSION_SECRET || '',
   // Both gates remain OFF unless an operator explicitly authorizes launch.
   checkoutEnabled: process.env.CHECKOUT_ENABLED === 'true' && process.env.COMMERCE_LAUNCH_AUTHORIZED === 'true',
+  customRequestsEnabled: requestIntakeSettings(),
 };
 export function assertAuthConfig() {
   if (env.sessionSecret.length < 32 || env.sessionSecret.startsWith('REPLACE_')) {

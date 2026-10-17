@@ -25,7 +25,7 @@ beforeEach(async () => {
   env.productAliasesEnabled = true; env.catalogBrowsePreviewEnabled = true;
   root = await Category.create({ name: 'Synthetic root', slug: 'synthetic-root' });
 });
-const draft = (slug, extra = {}) => ({ name: 'Baby Footprint Keepsake Gift Box', slug, categoryId: root._id, status: 'draft', ...extra });
+const draft = (slug, extra = {}) => ({ name: 'Baby Footprint Keepsake Gift Box', slug, categoryId: root._id, visibility: 'public', status: 'draft', ...extra });
 
 test('reviewed backfill reserves legacy and canonical URLs without changing product records', async () => {
   const product = await Product.create(draft('baby-footprint-keepsake-gift-box-b6-box-095', { externalCatalogId: 'B6-BOX-095' }));
@@ -87,13 +87,19 @@ test('address conflicts roll back product creation and stale/deleted owners are 
   await assert.rejects(getPublicProduct('corrupt-address'), { code: 'PRODUCT_ADDRESS_CONFLICT' });
 });
 
-test('visibility gates remain authoritative for aliases and disabled rollout preserves legacy routes', async () => {
+test('visibility gates and registered ownership survive disabling new canonical allocation', async () => {
   const product = await create(draft('legacy-draft'));
-  env.catalogBrowsePreviewEnabled = false;
+  await updateProduct(product._id, { visibility: 'hidden', expectedRevision: product.revision }, { actor });
   await assert.rejects(getPublicProduct('baby-footprint-keepsake-gift-box'), { status: 404 });
-  env.catalogBrowsePreviewEnabled = true; env.productAliasesEnabled = false;
+  await updateProduct(product._id, { visibility: 'public', expectedRevision: product.revision + 1 }, { actor });
+  env.productAliasesEnabled = false;
   assert.equal((await getPublicProduct(product.slug))._id, String(product._id));
-  await assert.rejects(getPublicProduct('baby-footprint-keepsake-gift-box'), { status: 404 });
+  assert.equal((await getPublicProduct('baby-footprint-keepsake-gift-box'))._id, String(product._id));
+  await assert.rejects(create(draft('baby-footprint-keepsake-gift-box', { name: 'Attempted reassignment with flag off' })), { code: 'PRODUCT_ADDRESS_RESERVED' });
+  const renamed = await updateProduct(product._id, { expectedRevision: product.revision + 2, slug: 'renamed-while-allocation-off' }, { actor });
+  assert.equal((await getPublicProduct(renamed.slug)).publicPath, '/products/baby-footprint-keepsake-gift-box');
+  const unregistered = await create(draft('unregistered-legacy', { name: 'Unregistered legacy' }));
+  assert.equal(await ProductAddress.countDocuments({ productId: unregistered._id }), 0);
 });
 
 test('public listing batches canonical reads and indexed resolver never scans product identities', async context => {

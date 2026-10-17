@@ -1,7 +1,6 @@
 import mongoose from 'mongoose';
 import DiscountCode from '../models/DiscountCode.js';
 import BundleRule from '../models/BundleRule.js';
-import ShippingConfig from '../models/ShippingConfig.js';
 import { DiscountRedemption } from '../models/DiscountRedemption.js';
 import { configurationError } from './customization.js';
 import { env } from '../config/env.js';
@@ -24,46 +23,12 @@ export const GOVERNORATES = Object.freeze([
   { id: 'suez', name: 'Suez' }
 ].map((value) => Object.freeze(value)));
 
-export function shippingForGovernorate(governorate, config = null) {
-  if (typeof governorate !== 'string' || !GOVERNORATES.some((value) => value.id === governorate)) throw configurationError('Choose a supported Egyptian governorate.', 'GOVERNORATE_INVALID');
-  if (config && !config.approved) throw configurationError('Shipping configuration awaits approval.', 'SHIPPING_UNAVAILABLE', 409);
-  const zone = ['cairo', 'giza'].includes(governorate) ? 'cairo_giza' : 'other_governorates';
-  const shippingPiastres = config ? (zone === 'cairo_giza' ? config.cairoGizaPiastres : config.otherGovernoratesPiastres) : (zone === 'cairo_giza' ? 9000 : 12000);
-  if (!Number.isSafeInteger(shippingPiastres) || shippingPiastres < 0 || shippingPiastres > 100000000) throw configurationError('Shipping configuration is invalid.', 'SHIPPING_UNAVAILABLE', 409);
-  return { governorate, zone, shippingPiastres };
+export function shippingForGovernorate(governorate) {
+  if (!GOVERNORATES.some(area => area.id === governorate)) throw configurationError('Choose a supported Egyptian governorate.', 'GOVERNORATE_INVALID');
+  return { governorate, status: 'pending_confirmation', shippingPiastres: null };
 }
-
-export async function getShippingQuote(governorate, { session } = {}) {
-  let query = ShippingConfig.findOne({ key: 'egypt-v1' }).lean().maxTimeMS(3000);
-  if (session) query = query.session(session);
-  const configuration = await query;
-  return { ...shippingForGovernorate(governorate, configuration), configurationId: configuration ? String(configuration._id) : null, configurationVersion: configuration?.__v ?? null };
-}
-
-export async function lockShippingQuote(quote, { session } = {}) {
-  if (!session?.inTransaction?.()) throw configurationError('Shipping locks require the order transaction.', 'CHECKOUT_TRANSACTION_REQUIRED', 503);
-  assertDatabaseWriteAllowed(mongoose.connection, env);
-  if (!quote || !Number.isSafeInteger(quote.shippingPiastres) || quote.shippingPiastres < 0 || !GOVERNORATES.some((governorate) => governorate.id === quote.governorate)) throw configurationError('Recalculate shipping before placing the order.', 'SHIPPING_CHANGED', 409);
-  let configurationId = quote.configurationId;
-  let configurationVersion = quote.configurationVersion;
-  if (!configurationId) {
-    if (!env.checkoutEnabled) throw configurationError('Checkout is disabled.', 'CHECKOUT_DISABLED', 503);
-    const configuration = await ShippingConfig.findOneAndUpdate(
-      { key: 'egypt-v1' },
-      { $setOnInsert: { key: 'egypt-v1', cairoGizaPiastres: 9000, otherGovernoratesPiastres: 12000, approved: true, __v: 0 } },
-      { session, upsert: true, new: true, setDefaultsOnInsert: true }
-    ).lean().maxTimeMS(3000);
-    if (!configuration.approved || shippingForGovernorate(quote.governorate, configuration).shippingPiastres !== quote.shippingPiastres) throw configurationError('Shipping changed. Review the updated total.', 'SHIPPING_CHANGED', 409);
-    configurationId = configuration._id;
-    configurationVersion = configuration.__v;
-  }
-  if (!mongoose.isValidObjectId(configurationId) || !Number.isSafeInteger(configurationVersion) || configurationVersion < 0) throw configurationError('Recalculate shipping before placing the order.', 'SHIPPING_CHANGED', 409);
-  const rateField = ['cairo', 'giza'].includes(quote.governorate) ? 'cairoGizaPiastres' : 'otherGovernoratesPiastres';
-  assertDatabaseWriteAllowed(mongoose.connection, env);
-  const locked = await ShippingConfig.findOneAndUpdate({ _id: configurationId, key: 'egypt-v1', approved: true, __v: configurationVersion, [rateField]: quote.shippingPiastres }, { $inc: { __v: 1 } }, { session, new: true }).lean().maxTimeMS(3000);
-  if (!locked) throw configurationError('Shipping changed. Review the updated total.', 'SHIPPING_CHANGED', 409);
-  return { configurationId: String(locked._id), configurationVersion: locked.__v, shippingPiastres: quote.shippingPiastres };
-}
+export async function getShippingQuote(governorate) { return shippingForGovernorate(governorate); }
+export async function lockShippingQuote() { throw configurationError('Delivery fees require order-specific customer acceptance.', 'SHIPPING_POLICY_CHANGED', 409); }
 
 function validDates(rule, now) {
   return rule.active && (!rule.startsAt || new Date(rule.startsAt) <= now) && (!rule.endsAt || new Date(rule.endsAt) > now);
@@ -162,7 +127,7 @@ export async function calculatePromotions(lines, { code, session, userId, custom
     discount = await query;
     if (!discount) throw configurationError('This discount code is not available.', 'DISCOUNT_UNAVAILABLE', 409);
     if (userId && discount.perCustomerLimit) {
-      let redemptions = DiscountRedemption.countDocuments({ discountId: discount._id, userId }).maxTimeMS(3000);
+      let redemptions = DiscountRedemption.countDocuments({ discountId: discount._id, userId, reversedAt: null }).maxTimeMS(3000);
       if (session) redemptions = redemptions.session(session);
       customerRedemptionCount = await redemptions;
     }

@@ -6,7 +6,7 @@ import { parseObjectId, parseSlug } from '../catalog/validation.js';
 import { env } from '../config/env.js';
 import {
   getPublicSiteContent, listPublicReviews, listPublicBundles, getAdminSiteContent, updateSiteContent, listAdminReviews, getAdminReview, saveReview,
-  listCustomers, websiteOverview, websiteAnalytics, listNotificationDiagnostics, notificationQuerySchema, validateWebsiteInput, siteContentSchema, createReviewSchema, updateReviewSchema, websiteQuerySchema, customerQuerySchema, publicReviewQuerySchema,
+  listCustomers, websiteOverview, websiteAnalytics, listNotificationDiagnostics, notificationQuerySchema, validateWebsiteInput, createReviewSchema, updateReviewSchema, websiteQuerySchema, customerQuerySchema, publicReviewQuerySchema,
 } from './service.js';
 
 export const publicWebsiteRouter = Router();
@@ -38,10 +38,7 @@ adminWebsiteRouter.get('/analytics', wrap(async (req, res) => respond(res, await
 adminWebsiteRouter.get('/customers', wrap(async (req, res) => respond(res, await listCustomers(validateWebsiteInput(customerQuerySchema, req.query)))));
 adminWebsiteRouter.get('/notifications', wrap(async (req, res) => respond(res, await listNotificationDiagnostics(validateWebsiteInput(notificationQuerySchema, req.query)))));
 adminWebsiteRouter.get('/content', wrap(async (req, res) => respond(res, { content: await getAdminSiteContent() })));
-adminWebsiteRouter.patch('/content', wrap(async (req, res) => {
-  await updateSiteContent(req.user, validateWebsiteInput(siteContentSchema, req.body));
-  respond(res, { content: await getAdminSiteContent() });
-}));
+adminWebsiteRouter.all('/content', wrap(async () => { await updateSiteContent(); }));
 adminWebsiteRouter.get('/reviews', wrap(async (req, res) => respond(res, await listAdminReviews(validateWebsiteInput(websiteQuerySchema, req.query)))));
 adminWebsiteRouter.get('/reviews/:id', wrap(async (req, res) => respond(res, { review: await getAdminReview(parseObjectId(req.params.id)) })));
 adminWebsiteRouter.post('/reviews', wrap(async (req, res) => {
@@ -53,6 +50,7 @@ adminWebsiteRouter.patch('/reviews/:id', wrap(async (req, res) => {
   respond(res, { review: await getAdminReview(review._id) });
 }));
 adminWebsiteRouter.get('/payment-settings', (req, res) => respond(res, {
+  customRequestsEnabled: env.customRequestsEnabled,
   checkoutEnabled: env.checkoutEnabled, methods: [{ key: 'cod', name: 'Cash on Delivery', verification: 'Collection must be recorded by an authorized admin.' }, { key: 'instapay', name: 'InstaPay', fullPaymentOnly: true, transferNumber: '01060673073', verification: 'Private proof requires manual admin verification.' }],
   launchManagedByEnvironment: true, editable: false,
 }));

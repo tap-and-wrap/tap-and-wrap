@@ -1,9 +1,12 @@
+import { mergeInventory } from './inventory-input.js';
+import { productRoutingVersion } from '../../../shared/product-seo.mjs';
 import { attachProductPaths, productIdentityFilter, reserveProductAddresses } from './product-addresses.js';
 import { categoryPublicPaths } from '../../../shared/category-paths.mjs';
+import { validateMediaReferences } from './media.js';
 import { Product } from '../models/Product.js';
 import { Category } from '../models/Category.js';
 import { ComponentOption } from '../models/ComponentOption.js';
-import { publicProductFilter, orderableProductStockFilter } from './product-policy.js';
+import { publicProductFilter, displayProductFilter, approvedProductPriceFilter, orderableProductStockFilter } from './product-policy.js';
 import { mediaUrlForKey, publicProductCard, publicProductDetail } from './public-presentation.js';
 import { adminProductPreviewPresentation, isAdminPreviewEnabled, stagingProductPresentation, isStagingPreviewEnabled } from './staging-preview.js';
 import { env } from '../config/env.js';
@@ -13,12 +16,12 @@ import { recordAdminAudit } from '../commerce/audit.js';
 import { validateCatalogCategoryReferences, fenceCategoryRelation } from './category-integrity.js';
 
 const QUERY_TIMEOUT_MS = 3000;
-const LIST_FIELDS = '_id name slug categoryId subcategoryId mainImageKey pricePiastres compareAtPiastres priceApproved sku inventory.mode inventory.available inventory.quantity inventory.approved featured featuredOrder bestSeller bestSellerOrder createdAt';
-const PUBLIC_LIST_FIELDS = `${LIST_FIELDS} status published reviewRequired variants.inventory variants.pricePiastres variants.priceApproved personalization.fields.required customization.enabled`;
+const LIST_FIELDS = '_id name slug visibility categoryId subcategoryId mainImageKey pricePiastres compareAtPiastres priceApproved sku inventory.mode inventory.available inventory.quantity inventory.approved featured featuredOrder bestSeller bestSellerOrder createdAt';
+const PUBLIC_LIST_FIELDS = `${LIST_FIELDS} status published reviewRequired variants.inventory variants.pricePiastres variants.priceApproved personalization.fields personalization.requiredBeforePurchase customization.enabled`;
 const ADMIN_LIST_FIELDS = `${LIST_FIELDS} __v externalCatalogId catalogRole status published priceApproved inventory.quantity inventory.approved reviewRequired updatedAt`;
 // Never mix a parent and its dotted child in a MongoDB projection (Path collision).
 const PUBLIC_DETAIL_FIELDS = `${LIST_FIELDS} status published reviewRequired description galleryKeys variants personalization customization updatedAt`;
-const ADMIN_DETAIL_FIELDS = `${ADMIN_LIST_FIELDS} description galleryKeys variants personalization customization merchantReviewNotes reviewReasons variantSourceNotes catalogConfidence`;
+const ADMIN_DETAIL_FIELDS = `${ADMIN_LIST_FIELDS} description galleryKeys variants personalization customization engravingRequest merchantReviewNotes reviewReasons variantSourceNotes catalogConfidence`;
 const CATEGORY_FIELDS = '_id name slug parentId imageKey active featured order createdAt updatedAt __v';
 const SORTS = {
   featured: { featured: -1, featuredOrder: 1, createdAt: -1, _id: -1 },
@@ -54,7 +57,7 @@ function sameId(left, right) {
 async function activeCategories() {
   const identities = await Category.find({}).select('_id parentId name slug active').lean().maxTimeMS(QUERY_TIMEOUT_MS);
   const publicPaths = categoryPublicPaths(identities);
-  const graph = identities.filter(category => catalogBrowsePreviewIsEnabled() || category.active);
+  const graph = identities.filter(category => category.active);
   const main = graph.filter((category) => !category.parentId);
   const mainIds = main.map((category) => category._id);
   const rootIds = new Set(mainIds.map(String));
@@ -64,14 +67,15 @@ async function activeCategories() {
 }
 
 export function catalogBrowsePreviewIsEnabled() {
-  return env.catalogBrowsePreviewEnabled === true && env.checkoutEnabled !== true;
+  // Retained for callers during transition; the global public preview bypass is retired.
+  return false;
 }
 
 async function visibleProductFilter(categories) {
   const { mainIds, childGroups } = categories ?? await activeCategories();
   return {
     $and: [
-      catalogBrowsePreviewIsEnabled() ? { $or: [publicProductFilter(), { status: { $in: ['draft', 'hold'] } }] } : publicProductFilter(),
+      displayProductFilter(),
       { $or: [{ categoryId: { $in: mainIds }, subcategoryId: null }, ...childGroups] },
     ],
   };
@@ -80,7 +84,7 @@ async function visibleProductFilter(categories) {
 async function categoryFromSlug(slugValue, publicOnly = false) {
   const category = await Category.findOne({ slug: slugValue }).select('_id parentId active').lean().maxTimeMS(QUERY_TIMEOUT_MS);
   if (!category) throw catalogError(404, 'CATEGORY_NOT_FOUND', 'Category not found');
-  if (publicOnly && !catalogBrowsePreviewIsEnabled()) {
+  if (publicOnly) {
     if (!category.active) throw catalogError(404, 'CATEGORY_NOT_FOUND', 'Category not found');
     if (category.parentId) {
       const parent = await Category.findOne({ _id: category.parentId, active: true, parentId: null }).select('_id').lean().maxTimeMS(QUERY_TIMEOUT_MS);
@@ -107,11 +111,11 @@ async function filtersForQuery(query, admin) {
   if (query.availability) {
     const available = orderableProductStockFilter();
     // Browse-only records cannot satisfy the Available filter or masquerade as in-stock.
-    const orderable = catalogBrowsePreviewIsEnabled() && !admin ? { $and: [publicProductFilter(), available] } : available;
+    const orderable = !admin ? { $and: [publicProductFilter(), available] } : available;
     filters.$and = query.availability === 'available' ? [orderable] : [{ $nor: [orderable] }];
   }
-  if (catalogBrowsePreviewIsEnabled() && !admin && (query.minPrice !== undefined || query.maxPrice !== undefined || ['price_asc', 'price_desc'].includes(query.sort))) {
-    filters.$and = [...(filters.$and || []), publicProductFilter()];
+  if (!admin && (query.minPrice !== undefined || query.maxPrice !== undefined)) {
+    filters.$and = [...(filters.$and || []), approvedProductPriceFilter()];
   }
   if (query.category) {
     const category = await categoryFromSlug(query.category, !admin);
@@ -129,6 +133,7 @@ async function filtersForQuery(query, admin) {
     filters.subcategoryId = category._id;
   }
   if (admin) {
+    if (query.visibility !== undefined) filters.visibility = query.visibility === 'unreviewed' ? { $exists: false } : query.visibility;
     for (const field of ['status', 'priceApproved', 'reviewRequired']) {
       if (query[field] !== undefined) filters[field] = query[field];
     }
@@ -145,17 +150,27 @@ export async function listProducts(query, { admin = false } = {}) {
   const visibility = admin ? null : await visibleProductFilter();
   const filter = admin ? filters : { $and: [visibility, filters] };
   const { pricePiastres: _priceBounds, ...rangeFilters } = filters;
-  const rangeFilter = admin ? { $and: [rangeFilters, { pricePiastres: { $type: 'number' } }] } : { $and: [visibility, rangeFilters, ...(catalogBrowsePreviewIsEnabled() ? [publicProductFilter()] : [])] };
-  const [products, total, priceRanges] = await Promise.all([
-    Product.find(filter).select(admin ? ADMIN_LIST_FIELDS : PUBLIC_LIST_FIELDS)
+  const rangeFilter = admin ? { $and: [rangeFilters, { pricePiastres: { $type: 'number' } }] } : { $and: [visibility, rangeFilters, approvedProductPriceFilter()] };
+  const priceSort = !admin && ['price_asc', 'price_desc'].includes(query.sort);
+  const productsQuery = priceSort ? Product.aggregate([
+    { $match: filter },
+    { $addFields: { _confirmedPrice: { $cond: [{ $and: [{ $eq: ['$priceApproved', true] }, { $gt: ['$pricePiastres', 0] }] }, '$pricePiastres', null] } } },
+    { $addFields: { _hasPrice: { $ne: ['$_confirmedPrice', null] } } },
+    { $sort: { _hasPrice: -1, _confirmedPrice: query.sort === 'price_asc' ? 1 : -1, _id: 1 } },
+    { $skip: pagination.skip }, { $limit: pagination.limit },
+    { $project: Object.fromEntries(PUBLIC_LIST_FIELDS.split(' ').map(field => [field, 1])) },
+  ]).option({ maxTimeMS: QUERY_TIMEOUT_MS }).then(products => Product.populate(products, [{ path: 'categoryId', select: 'name slug active' }, { path: 'subcategoryId', select: 'name slug active' }]))
+    : Product.find(filter).select(admin ? ADMIN_LIST_FIELDS : PUBLIC_LIST_FIELDS)
       .populate(admin ? [] : [{ path: 'categoryId', select: 'name slug active' }, { path: 'subcategoryId', select: 'name slug active' }])
-      .sort(SORTS[query.sort ?? 'newest']).skip(pagination.skip).limit(pagination.limit).lean().maxTimeMS(QUERY_TIMEOUT_MS),
+      .sort(SORTS[query.sort ?? 'newest']).skip(pagination.skip).limit(pagination.limit).lean().maxTimeMS(QUERY_TIMEOUT_MS);
+  const [products, total, priceRanges] = await Promise.all([
+    productsQuery,
     Product.countDocuments(filter).maxTimeMS(QUERY_TIMEOUT_MS),
     query.includePriceRange === false ? Promise.resolve(null) : Product.aggregate([{ $match: rangeFilter }, { $group: { _id: null, min: { $min: '$pricePiastres' }, max: { $max: '$pricePiastres' } } }])
       .option({ maxTimeMS: QUERY_TIMEOUT_MS }),
   ]);
-  const enquiryCategories = admin && catalogBrowsePreviewIsEnabled() ? await activeCategories() : null;
-  const listedForEnquiry = product => enquiryCategories !== null && ['draft', 'hold'].includes(product.status) && (
+  const enquiryCategories = admin ? await activeCategories() : null;
+  const listedForEnquiry = product => enquiryCategories !== null && product.visibility === 'public' && ['draft', 'hold'].includes(product.status) && (
     product.subcategoryId == null
       ? enquiryCategories.mainIds.some(id => sameId(id, product.categoryId))
       : enquiryCategories.childGroups.some(group => sameId(group.categoryId, product.categoryId) && group.subcategoryId.$in.some(id => sameId(id, product.subcategoryId)))
@@ -167,21 +182,21 @@ export async function listProducts(query, { admin = false } = {}) {
   };
 }
 
-export async function getPublicProduct(slugValue) {
+export async function getPublicProduct(slugValue, { includeRelated = true, includeRoutingVersion = false } = {}) {
   const graph = await activeCategories();
   const visibility = await visibleProductFilter(graph);
   const product = await Product.findOne({ $and: [visibility, await productIdentityFilter(slugValue)] })
-    .select(PUBLIC_DETAIL_FIELDS)
-    .populate([{ path: 'categoryId', select: 'name slug active' }, { path: 'subcategoryId', select: 'name slug active' }])
+    .select(`${PUBLIC_DETAIL_FIELDS} __v`)
+    .populate([{ path: 'categoryId', select: 'name slug active __v' }, { path: 'subcategoryId', select: 'name slug active __v' }])
     .lean().maxTimeMS(QUERY_TIMEOUT_MS);
   if (!product) throw catalogError(404, 'PRODUCT_NOT_FOUND', 'Product not found');
-  const related = await Product.find({ $and: [visibility, { categoryId: product.categoryId._id, _id: { $ne: product._id } }] })
+  const related = includeRelated ? await Product.find({ $and: [visibility, { categoryId: product.categoryId._id, _id: { $ne: product._id } }] })
     .select(PUBLIC_LIST_FIELDS).sort(SORTS.featured).limit(4)
     .populate([{ path: 'categoryId', select: 'name slug active' }, { path: 'subcategoryId', select: 'name slug active' }])
-    .lean().maxTimeMS(QUERY_TIMEOUT_MS);
+    .lean().maxTimeMS(QUERY_TIMEOUT_MS) : [];
   const detail = publicProductDetail(product);
   for (const key of ['category', 'subcategory']) if (detail[key]) detail[key].publicPath = graph.publicPaths.get(String(detail[key]._id));
-  return { ...(await attachProductPaths([detail]))[0], relatedProducts: await attachProductPaths(related.map(publicProductCard)) };
+  return { ...(await attachProductPaths([detail]))[0], ...(includeRoutingVersion ? { routingVersion: productRoutingVersion(product) } : {}), relatedProducts: await attachProductPaths(related.map(publicProductCard)) };
 }
 
 export async function getAdminProduct(id, { session } = {}) {
@@ -210,23 +225,6 @@ export async function getStagingProductPreview(id) {
     .lean().maxTimeMS(QUERY_TIMEOUT_MS);
   if (!product) throw catalogError(404, 'PRODUCT_NOT_FOUND', 'Product not found');
   return stagingProductPresentation(product);
-}
-
-function mergeInventory(current, patch) {
-  const previous = current?.toObject ? current.toObject() : (current ?? {});
-  const result = { ...previous, ...patch };
-  const changed = ['mode', 'quantity', 'available'].some((field) => patch[field] !== undefined && patch[field] !== previous[field]);
-  if (changed && patch.approved === undefined) result.approved = false;
-  if (result.mode === 'made_to_order') {
-    if (patch.quantity !== undefined && patch.quantity !== null) {
-      throw catalogError(400, 'INVALID_INVENTORY', 'Made by Request inventory must not have a stock quantity');
-    }
-    result.quantity = null;
-  } else if (result.mode === 'tracked' && result.quantity == null) {
-    result.quantity = 10;
-    if (patch.approved === undefined) result.approved = false;
-  }
-  return result;
 }
 
 function normalizeVariants(current, next) {
@@ -269,10 +267,11 @@ export async function createProduct(input, { actor } = {}) {
   return catalogTransaction(async (session) => {
     await validateCatalogCategoryReferences(input.categoryId, input.subcategoryId, { session, fence: true });
     const product = new Product(input);
-    if (input.inventory) product.inventory = mergeInventory(product.inventory, input.inventory);
+    if (input.inventory) product.inventory = mergeInventory(undefined, input.inventory);
     if (input.variants) product.variants = normalizeVariants([], input.variants);
     assertDatabaseWriteAllowed(Product.db, env);
     await reserveProductAddresses(product, { session });
+    await validateMediaReferences([product.mainImageKey, ...product.galleryKeys], { session });
     await product.save({ session });
     await catalogAudit(actor, 'product', 'created', product, input, null, session);
     return getAdminProduct(product._id, { session });
@@ -298,6 +297,7 @@ export async function updateProduct(id, input, { actor } = {}) {
   product.set(patch);
   assertDatabaseWriteAllowed(Product.db, env);
   await reserveProductAddresses(product, { session });
+  await validateMediaReferences([product.mainImageKey, ...product.galleryKeys], { session });
   await product.save({ session });
   await catalogAudit(actor, 'product', 'updated', product, patch, beforeRevision, session);
   return getAdminProduct(product._id, { session });
@@ -326,7 +326,7 @@ export async function listCategories(query, { admin = false } = {}) {
     categoryVisibility = await activeCategories();
     const { mainIds, childIds } = categoryVisibility;
     filter._id = { $in: [...mainIds, ...childIds] };
-    if (!catalogBrowsePreviewIsEnabled()) filter.active = true;
+    filter.active = true;
   } else if (query.active !== undefined) filter.active = query.active;
   if (query.parent === 'root') filter.parentId = null;
   else if (query.parent) filter.parentId = (await categoryFromSlug(query.parent, !admin))._id;
@@ -384,6 +384,7 @@ export async function createCategory(input, { actor } = {}) {
     await validateCategoryParent(input.parentId, undefined, session);
     assertDatabaseWriteAllowed(Category.db, env);
     const category = new Category(input);
+    await validateMediaReferences([category.imageKey], { session });
     await category.save({ session });
     await catalogAudit(actor, 'category', 'created', category, input, null, session);
     return adminRevision(await Category.findById(category._id).select(CATEGORY_FIELDS).session(session).lean().maxTimeMS(QUERY_TIMEOUT_MS));
@@ -410,6 +411,7 @@ export async function updateCategory(id, input, { actor } = {}) {
   const { expectedRevision: _expectedRevision, ...patch } = input;
   category.set(patch);
   assertDatabaseWriteAllowed(Category.db, env);
+  await validateMediaReferences([category.imageKey], { session });
   await category.save({ session });
   await catalogAudit(actor, 'category', 'updated', category, patch, beforeRevision, session);
   return adminRevision(await Category.findById(category._id).select(CATEGORY_FIELDS).session(session).lean().maxTimeMS(QUERY_TIMEOUT_MS));

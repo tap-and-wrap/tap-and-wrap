@@ -18,7 +18,7 @@ beforeEach(async () => {
   inactive = await Category.create({ name: 'Synthetic inactive', slug: 'synthetic-inactive', active: false });
 });
 const ready = (index, extra = {}) => ({ name: `Synthetic ${index}`, slug: `synthetic-${index}`, description: 'Disposable catalog measurement fixture.', categoryId: root._id,
-  subcategoryId: child._id, mainImageKey: 'fixtures/catalog.webp', galleryKeys: ['fixtures/catalog.webp'], status: 'ready', pricePiastres: 1000 + index, priceApproved: true, inventory: { mode: 'tracked', quantity: 10, approved: true, available: true }, ...extra });
+  subcategoryId: child._id, mainImageKey: 'fixtures/catalog.webp', galleryKeys: ['fixtures/catalog.webp'], visibility: 'public', status: 'ready', pricePiastres: 1000 + index, priceApproved: true, inventory: { mode: 'tracked', quantity: 10, approved: true, available: true }, ...extra });
 
 test('one authoritative category graph read preserves approval/hierarchy gates and twenty-item pagination', async context => {
   const originalBrowsePreview = env.catalogBrowsePreviewEnabled;

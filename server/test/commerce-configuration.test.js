@@ -86,13 +86,13 @@ test('customization model validates keys, limits, explicit engraving settings an
   await assert.rejects(new CustomizationTemplate({ key: 'bad-delta', name: 'Bad', kind: 'tray', pricingMode: 'delta', groups: [{ key: 'extras', label: 'Extras', minChoices: 1, maxChoices: 1, options: [{ key: 'one', label: 'One', defaultQuantity: 0 }] }] }).validate());
 });
 
-test('all 27 governorates have validated integer shipping rates, with no international zone', () => {
+test('all 27 governorates retain null pending delivery amounts and reject international zones', () => {
   assert.equal(GOVERNORATES.length, 27);
   assert.equal(new Set(GOVERNORATES.map((value) => value.id)).size, 27);
-  for (const governorate of GOVERNORATES) assert.equal(shippingForGovernorate(governorate.id).shippingPiastres, ['cairo', 'giza'].includes(governorate.id) ? 9000 : 12000);
-  assert.equal(shippingForGovernorate('cairo', { approved: true, cairoGizaPiastres: 10000, otherGovernoratesPiastres: 15000 }).shippingPiastres, 10000);
+  for (const governorate of GOVERNORATES) assert.equal(shippingForGovernorate(governorate.id).shippingPiastres, null);
+  assert.equal(shippingForGovernorate('cairo', { approved: true, cairoGizaPiastres: 10000, otherGovernoratesPiastres: 15000 }).shippingPiastres, null);
   assert.throws(() => shippingForGovernorate('international'));
-  assert.throws(() => shippingForGovernorate('cairo', { approved: false }));
+  assert.equal(shippingForGovernorate('cairo', { approved: false }).shippingPiastres, null);
 });
 
 const firstProduct = String(id());

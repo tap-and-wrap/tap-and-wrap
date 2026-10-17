@@ -1,0 +1,23 @@
+.service-request-page{max-width:1240px}
+.service-request-intro{max-width:720px;margin-bottom:32px;font-size:1.05rem;line-height:1.7}
+.service-request-layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:28px;align-items:start}
+.service-request-fields{display:grid;gap:24px;border:0;margin:0;padding:0;min-width:0}
+.service-request-card,.service-request-receipt{background:#fff;border:1px solid #EADAD5;border-radius:12px;padding:24px;min-width:0}
+.service-request-card h2{font-family:'Cormorant Garamond',serif;margin-top:0}
+.service-request-card :is(input,select,textarea){max-width:100%;min-width:0}
+.service-request-card input[type=file]{width:100%}
+.service-request-card .commerce-field{margin:14px 0}
+.service-request-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 20px}
+.service-request-grid:has(textarea) .commerce-field:has(textarea){grid-column:1/-1}
+.service-request-estimate{position:sticky;top:calc(var(--site-header-height,84px) + 20px)}
+.service-request-estimate .button{width:100%;white-space:normal;margin-top:12px}
+.service-request-search{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
+.request-component-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:18px}
+.request-component{border:1px solid #EADAD5;padding:14px;border-radius:8px;overflow-wrap:anywhere}
+.request-component img{width:100px;height:100px;object-fit:cover;border-radius:6px;display:block;margin-bottom:12px}
+.request-component input[type=checkbox]{margin-right:8px;width:18px;height:18px}
+.service-request-receipt{max-width:760px}.service-request-receipt .button{margin:10px 12px 0 0}
+.request-quote-row{border:1px solid #EADAD5;padding:16px;border-radius:8px;margin:12px 0}
+.request-quote-text{width:100%;min-height:240px;resize:vertical;white-space:pre-wrap}
+@media(max-width:900px){.service-request-layout{grid-template-columns:1fr}.service-request-estimate{position:static}.service-request-grid{grid-template-columns:1fr}}
+@media(max-width:480px){.service-request-card,.service-request-receipt{padding:18px}.request-component-grid{grid-template-columns:1fr}.service-request-page{padding-inline:16px}.service-request-search .button{width:100%}}

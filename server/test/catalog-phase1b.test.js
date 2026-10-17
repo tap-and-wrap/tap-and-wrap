@@ -34,7 +34,7 @@ describe('Phase 1B catalog API contracts', { concurrency: false }, () => {
       name: `Fixture ${slug}`, slug, description: 'Isolated fixture description',
       categoryId: main._id, subcategoryId: child._id,
       mainImageKey: `fixtures/${slug}.webp`, galleryKeys: [`fixtures/${slug}.webp`, `fixtures/${slug}-detail.webp`],
-      pricePiastres: 1000, priceApproved: true, reviewRequired: false, status: 'ready',
+      pricePiastres: 1000, priceApproved: true, reviewRequired: false, visibility: 'public', status: 'ready',
       inventory: { mode: 'tracked', quantity: 10, approved: true, available: true },
       ...overrides,
     };
@@ -83,7 +83,8 @@ describe('Phase 1B catalog API contracts', { concurrency: false }, () => {
     assert.equal(response.body.products[0].category.slug, main.slug);
     assert.equal(response.body.products[0].subcategory.slug, child.slug);
     const soldOut = await request('/public/products?q=Ceramic&availability=sold_out');
-    assert.deepEqual(soldOut.body.products.map((product) => product.slug), ['mug-out']);
+    assert.deepEqual(soldOut.body.products.map((product) => product.slug), ['draft-cheap', 'mug-out']);
+    assert.equal(soldOut.body.products[0].pricePiastres, null);
     assert.equal(soldOut.body.products[0].orderingAvailable, false);
   });
 
@@ -114,17 +115,21 @@ describe('Phase 1B catalog API contracts', { concurrency: false }, () => {
   it('skips unused range aggregation while retaining filtered counts, category scope and pagination', async (context) => {
     await Product.create(Array.from({ length: 23 }, (_, index) => ready(`no-range-${index}`, { pricePiastres: 1000 + index })));
     await Product.create(ready('no-range-draft', { status: 'draft', priceApproved: false }));
-    const aggregate = context.mock.method(Product, 'aggregate', () => { throw new Error('Unused range aggregate was executed'); });
+    const originalAggregate = Product.aggregate.bind(Product);
+    const aggregate = context.mock.method(Product, 'aggregate', (pipeline) => {
+      assert.equal(pipeline.some(stage => stage.$group), false, 'Unused price range aggregation must not execute');
+      return originalAggregate(pipeline); // Confirmed-price sorting still needs its bounded pipeline.
+    });
     const response = await request(`/public/products?includePriceRange=false&category=${main.slug}&subcategory=${child.slug}&availability=available&minPrice=1000&maxPrice=1022&page=2&limit=100&sort=price_asc`);
     assert.equal(response.status, 200);
     assert.deepEqual(response.body.pagination, { page: 2, limit: 20, total: 23, pages: 2 });
     assert.equal(response.body.products.length, 3);
     assert.equal('priceRange' in response.body, false);
-    assert.equal(aggregate.mock.callCount(), 0);
+    assert.equal(aggregate.mock.callCount(), 1);
     const admin = await request('/admin/products?includePriceRange=false', { headers: adminHeaders });
     assert.equal(admin.status, 200);
     assert.equal('priceRange' in admin.body, false);
-    assert.equal(aggregate.mock.callCount(), 0);
+    assert.equal(aggregate.mock.callCount(), 1);
   });
 
   it('strictly validates the optional range flag without relaxing price or query validation', async () => {
@@ -170,12 +175,12 @@ describe('Phase 1B catalog API contracts', { concurrency: false }, () => {
     const root = await request(`/public/categories/${main.slug}`);
     assert.equal(root.status, 200);
     assert.equal(root.body.category.parent, null);
-    assert.equal(root.body.category.productCount, 1);
+    assert.equal(root.body.category.productCount, 2);
     assert.equal('imageKey' in root.body.category, false);
     const detail = await request(`/public/categories/${child.slug}`);
     assert.equal(detail.status, 200);
-    assert.deepEqual(detail.body.category.parent, { _id: String(main._id), name: main.name, slug: main.slug });
-    assert.equal(detail.body.category.productCount, 1);
+    assert.deepEqual(detail.body.category.parent, { _id: String(main._id), name: main.name, slug: main.slug, publicPath: '/categories/phase-1b-fixture-category' });
+    assert.equal(detail.body.category.productCount, 2);
     main.active = false;
     await main.save();
     assert.equal((await request(`/public/categories/${main.slug}`)).status, 404);
@@ -210,7 +215,7 @@ describe('Phase 1B catalog API contracts', { concurrency: false }, () => {
     assert.equal(product.customization.serviceEntryEligible, false);
     assert.equal(product.relatedProducts.length, 4);
     assert.ok(product.relatedProducts.every((entry) => entry.slug !== product.slug));
-    assert.equal('priceApproved' in product.variants[1], false);
+    assert.equal(product.variants[1].priceApproved, true);
   });
 
   it('preserves omitted option configurations and exposes protected explicit merchandising controls', async () => {

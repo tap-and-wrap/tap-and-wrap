@@ -81,12 +81,14 @@ test('password reset consumes one token, revokes all sessions and queues one sec
   assert.equal(await bcrypt.compare('replacement-fixture-password', (await User.findById(user._id).select('+passwordHash')).passwordHash), true);
   assert.equal((await request('/reset-password', { body: { token, newPassword: 'second-fixture-password' } })).status, 400);
   assert.equal(await NotificationEvent.countDocuments({ event: 'password_changed' }), 1);
-  assert.equal((await request('/me', { method: 'GET' })).status, 401);
+  const revoked = await request('/me', { method: 'GET' });
+  assert.equal(revoked.status, 200); assert.equal(revoked.body.data.user, null);
   // A login that read the old password just before reset may insert late. Its
   // captured authentication version must still invalidate that new session.
   const stale = newSessionToken();
   await Session.create({ userId: user._id, tokenHash: hashSession(stale), authVersion: 0, expiresAt: new Date(Date.now() + 3600000) });
-  assert.equal((await request('/me', { method: 'GET', extraHeaders: { Cookie: `tw_session=${stale}` } })).status, 401);
+  const staleResult = await request('/me', { method: 'GET', extraHeaders: { Cookie: `tw_session=${stale}` } });
+  assert.equal(staleResult.status, 200); assert.equal(staleResult.body.data.user, null);
 });
 
 test('concurrent reset attempts cannot consume a token twice', async () => {

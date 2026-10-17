@@ -2,7 +2,7 @@ import { pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
 import { validateDatabaseUri, assertDatabaseWriteAllowed } from '../src/config/database-safety.js';
-import { createWorkBudget, shouldStop, boundedOperation } from '../src/commerce/work-budget.js';
+import { createWorkBudget, shouldStop, boundedOperation, remainingBudgetMs } from '../src/commerce/work-budget.js';
 import { CommerceJobRun } from '../src/models/CommerceJobRun.js';
 
 export function parseJobArguments(args) {
@@ -72,13 +72,15 @@ export async function executeCommerceBatch({ batchSize = 20, maxDurationMs = 600
     ['tracking', adapters?.trackingBatch || runMetaBatch, true],
     ['uploads', adapters?.uploadCleanup || cleanupExpiredUploads, adapters?.storageEnabled ?? process.env.STORAGE_ENABLED === 'true'],
   ];
-  for (const [name, perform, enabled] of work) {
+  for (const [stageIndex, [name, perform, enabled]] of work.entries()) {
     if (!enabled) { stages[name] = { enabled: false }; continue; }
     if (shouldStop(budget)) { stages[name] = { stopped: true }; continue; }
     const stageStarted = Date.now();
     try {
       assertDatabaseWriteAllowed(mongoose.connection, env);
-      const result = await perform({ batchSize, budget });
+      const stageBudget = createWorkBudget({ maxDurationMs: Math.max(100, Math.floor(remainingBudgetMs(budget) / (work.length - stageIndex))), signal: budget.signal });
+      stageBudget.deadline = Math.min(stageBudget.deadline, budget.deadline);
+      const result = await perform({ batchSize, budget: stageBudget });
       stages[name] = Object.fromEntries(Object.entries(result || {}).filter(([key, value]) => /^[a-zA-Z][a-zA-Z0-9]{0,50}$/.test(key) && (typeof value === 'boolean' || Number.isSafeInteger(value))));
     } catch {
       // A failed independent provider must not starve other maintenance stages.

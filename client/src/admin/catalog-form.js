@@ -1,3 +1,4 @@
+import { productPersonalizationIssues } from '../../../shared/product-personalization.mjs';
 export function catalogId(value) {
   if (typeof value === 'string') return value;
   return value?.id || value?._id || '';
@@ -39,14 +40,32 @@ export function integerInput(value, label) {
 function inventoryDraft(inventory = {}) {
   return {
     mode: inventory.mode || 'tracked',
-    quantity: inventory.mode === 'made_to_order' ? '' : (inventory.quantity == null ? '' : String(inventory.quantity)),
+    quantity: inventory.approved !== true || inventory.mode === 'made_to_order' ? '' : (inventory.quantity == null ? '' : String(inventory.quantity)),
+    originalQuantity: inventory.quantity ?? 0,
     approved: inventory.approved === true,
     available: inventory.available !== false,
   };
 }
 
+export function inventoryChoice(inventory) {
+  if (inventory.choice) return inventory.choice;
+  if (inventory.available === false) return 'unavailable';
+  return inventory.approved ? inventory.mode : 'unconfirmed';
+}
+
+export function selectInventoryAvailability(inventory, choice) {
+  if (choice === 'made_to_order') return { ...inventory, choice, mode: 'made_to_order', quantity: '', approved: true, available: true };
+  if (choice === 'tracked') return { ...inventory, choice, mode: 'tracked', quantity: '', approved: false, available: true };
+  if (choice === 'unavailable') return { ...inventory, choice, available: false };
+  return { ...inventory, choice: 'unconfirmed', approved: false, available: false };
+}
+
 export function createProductDraft(product = {}) {
   return {
+    personalization: structuredClone(product.personalization || { fields: [] }),
+    personalizationEdited: false,
+    engravingRequest: structuredClone(product.engravingRequest || { enabled: false, fonts: [], placements: [], materials: [], maxTextLength: 120 }),
+    engravingEdited: false,
     name: product.name || '',
     slug: product.slug || '',
     description: product.description || '',
@@ -57,6 +76,7 @@ export function createProductDraft(product = {}) {
     priceApproved: product.priceApproved === true,
     sku: product.sku || '',
     status: product.status || 'draft',
+    visibility: product.visibility || 'hidden',
     inventory: inventoryDraft(product.inventory),
     galleryKeys: [...(product.galleryKeys || [])],
     variants: (product.variants || []).map((variant) => ({
@@ -78,13 +98,17 @@ export function createProductDraft(product = {}) {
 function inventoryPayload(inventory, label) {
   return {
     mode: inventory.mode,
-    quantity: inventory.mode === 'made_to_order' ? null : integerInput(inventory.quantity, `${label} quantity`),
+    quantity: inventory.mode === 'made_to_order' ? null : !inventory.approved && inventory.quantity === '' ? inventory.originalQuantity ?? 0 : integerInput(inventory.quantity, `${label} quantity`),
     approved: inventory.approved,
     available: inventory.available,
   };
 }
 
 export function createProductPayload(draft) {
+  const issues = productPersonalizationIssues(draft.personalization);
+  if (draft.personalizationEdited && issues.length && draft.status === 'ready') {
+    const error = new Error(issues[0]); error.details = [{ field: 'personalization.requiredBeforePurchase', message: issues[0] }]; throw error;
+  }
   const galleryKeys = draft.galleryKeys.map((value) => value.trim()).filter(Boolean);
   if (galleryKeys.length > 23) throw new Error('A product can have at most 23 image references.');
   if (new Set(galleryKeys).size !== galleryKeys.length) throw new Error('Image references must be unique.');
@@ -95,6 +119,8 @@ export function createProductPayload(draft) {
     throw priceValidationError('Compare-at price must be at least the product price.', 'Compare-at price');
   }
   return {
+    ...(draft.personalizationEdited ? { personalization: draft.personalization } : {}),
+    ...(draft.engravingEdited ? { engravingRequest: { ...draft.engravingRequest, ...Object.fromEntries(['fonts', 'placements', 'materials'].map(key => [key, (draft.engravingRequest[key] || []).map(value => value.trim()).filter(Boolean)])) } } : {}),
     name: draft.name.trim(),
     slug: draft.slug.trim(),
     description: draft.description,
@@ -105,6 +131,7 @@ export function createProductPayload(draft) {
     priceApproved: draft.priceApproved,
     sku: draft.sku.trim(),
     status: draft.status,
+    visibility: draft.visibility,
     inventory: inventoryPayload(draft.inventory, 'Product'),
     mainImageKey: galleryKeys[0] || null,
     galleryKeys,

@@ -78,44 +78,14 @@ test('admin review form authors real-configured content with explicit approval a
   expect(fixture.writes[1].payload).toEqual({ status: 'hidden', expectedRevision: 0 });
 });
 
-test('content approval clears when edited and policies require explicit owner-provided text', async ({ page }) => {
+test('fixed pages expose an owner guide and links without mutation controls', async ({ page }) => {
   const fixture = await websiteFixture(page);
   await page.goto('/admin/website/content');
-  await page.getByRole('combobox', { name: /^Section/ }).selectOption('privacyPolicy');
-  await page.getByLabel('Page title', { exact: true }).fill('Isolated Privacy Policy');
-  await page.getByLabel('Owner-approved page text').fill('Owner-supplied isolated policy workflow fixture.');
-  await page.getByLabel('Owner approval confirmed; make this section public').check();
-  await page.getByLabel('Owner-approved page text').fill('Revised owner-supplied isolated policy fixture.');
-  await expect(page.getByLabel('Owner approval confirmed; make this section public')).not.toBeChecked();
-  await page.getByLabel('Owner approval confirmed; make this section public').check();
-  await page.getByRole('button', { name: 'Save section', exact: true }).click();
-  await expect.poll(() => fixture.writes.length).toBe(1);
-  expect(fixture.writes[0].payload).toEqual({ expectedRevision: 0, privacyPolicy: { title: 'Isolated Privacy Policy', body: 'Revised owner-supplied isolated policy fixture.', approved: true } });
-  expect(fixture.writes[0].csrf).toBeTruthy();
-});
-
-test('stale content saves retain merchant draft until an explicit confirmed reload', async ({ page }) => {
-  const fixture = await websiteFixture(page);
-  await page.goto('/admin/website/content');
-  await page.getByLabel('Page title', { exact: true }).fill('My unsaved title');
-  await page.getByLabel('Owner-approved page text').fill('My unsaved reviewed text');
-  fixture.content.about = { title: 'Other editor title', body: 'Other editor saved content', approved: false };
-  fixture.content.revision = 1;
-  await page.getByRole('button', { name: 'Save section', exact: true }).click();
-  await expect(page.getByText('This record changed after you opened it. Your changes were not saved.', { exact: true })).toBeVisible();
-  await expect(page.getByLabel('Page title', { exact: true })).toHaveValue('My unsaved title');
-  expect(fixture.writes[0].payload.expectedRevision).toBe(0);
-  expect(fixture.content.about.title).toBe('Other editor title');
-  await page.getByRole('button', { name: 'Reload latest record', exact: true }).click();
-  await page.getByRole('button', { name: 'Keep my draft', exact: true }).click();
-  await expect(page.getByLabel('Page title', { exact: true })).toHaveValue('My unsaved title');
-  await page.getByRole('button', { name: 'Reload latest record', exact: true }).click();
-  await page.getByRole('button', { name: 'Confirm reload and discard draft', exact: true }).click();
-  await expect(page.getByLabel('Page title', { exact: true })).toHaveValue('Other editor title');
-  await page.getByLabel('Page title', { exact: true }).fill('Reviewed latest edit');
-  await page.getByRole('button', { name: 'Save section', exact: true }).click();
-  await expect(page.getByText('Changes saved.', { exact: true })).toBeVisible();
-  expect(fixture.writes[1].payload.expectedRevision).toBe(1);
+  await expect(page.getByRole('heading', { name: 'Pages, policies & owner guide' })).toBeVisible();
+  await expect(page.getByRole('main').getByRole('link', { name: 'Returns & Refunds', exact: true })).toHaveAttribute('href', '/refund-policy');
+  await expect(page.getByRole('button', { name: 'Save section' })).toHaveCount(0);
+  await expect(page.locator('main textarea, main input')).toHaveCount(0);
+  expect(fixture.writes).toHaveLength(0);
 });
 
 test('stale review editor retains a genuine quotation draft until confirmed reload', async ({ page }) => {
@@ -173,13 +143,15 @@ test('delivery diagnostics and payment settings are read-only and responsive on 
   page.on('pageerror', (error) => pageErrors.push(error.message));
   await page.setViewportSize({ width: 320, height: 800 });
   await page.goto('/admin/website/notifications');
+  await expect(page.getByRole('cell', { name: 'Delivery uncertain; verify provider records', exact: true })).toBeVisible();
+  await page.getByText('Technical diagnostic', { exact: true }).click();
   await expect(page.getByText('SMTP_ACCEPTANCE_UNCERTAIN')).toBeVisible();
   await expect(page.getByText(/automatic retries are suppressed/)).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.locator('.admin-navigation-toggle').click();
   await page.getByRole('link', { name: 'Payment settings', exact: true }).click();
   await expect(page.getByText(/disabled pending launch approval/)).toBeVisible();
-  await expect(page.getByText('Full-payment transfer number: 01060673073')).toBeVisible();
+  await expect(page.getByText('Verified InstaPay destination: 01060673073')).toBeVisible();
   await expect(page.getByRole('button', { name: /Enable checkout|Send|Retry email/ })).toHaveCount(0);
   expect(fixture.writes).toHaveLength(0);
   expect(pageErrors).toEqual([]);

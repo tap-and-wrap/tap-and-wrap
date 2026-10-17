@@ -24,7 +24,7 @@ import { resetCommerceLimitsForTests } from '../src/commerce/routes.js';
 
 const ROOT = '/api/v1/commerce';
 const ADMIN_ROOT = '/api/v1/admin/commerce';
-const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X8kQAAAAASUVORK5CYII=', 'base64');
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWO4NbsXAARVAgOYIL6CAAAAAElFTkSuQmCC', 'base64');
 const CUSTOMER = { name: 'Isolated Customer', email: 'customer@example.test', phone: '01012345678',
   governorate: 'cairo', address: '10 Test Street, Test District, Cairo' };
 let fixture;
@@ -64,7 +64,7 @@ async function makeProduct(overrides = {}) {
   return Product.create({ name: 'Isolated approved product', slug, description: 'Product fixture', categoryId: main._id,
     subcategoryId: child._id, mainImageKey: `products/${slug}.webp`, galleryKeys: [`products/${slug}.webp`],
     pricePiastres: 12000, priceApproved: true, inventory: { mode: 'tracked', quantity: 10, approved: true, available: true },
-    status: 'ready', ...overrides });
+    visibility: 'public', status: 'ready', ...overrides });
 }
 
 function browserClient() {
@@ -128,9 +128,9 @@ async function submit(client, intent, { customer = CUSTOMER, paymentProofId } = 
   } });
 }
 
-async function proofFor(client, intent) {
+async function proofFor(client, order) {
   const signed = await client.request(`${ROOT}/uploads/sign`, { method: 'POST', body: {
-    purpose: 'payment_proof', mimeType: 'image/png', sizeBytes: PNG.length, checkoutKey: intent.checkoutKey,
+    purpose: 'payment_proof', mimeType: 'image/png', sizeBytes: PNG.length, orderId: order.id,
   } });
   assert.equal(signed.status, 201, JSON.stringify(signed.body));
   const id = data(signed).upload.id;
@@ -221,7 +221,7 @@ test('required photo counts, upload ownership and cart attachments are enforced 
   await add(guest, { personalization: { photo: [firstId] } });
   assert.equal((await add(guest, { personalization: { photo: [secondId] } })).items.length, 2);
   assert.equal((await guest.request(`${ROOT}/uploads/${firstId}`, { method: 'DELETE' })).status, 409);
-  const order = orderOf(await submit(guest, await review(guest)));
+  const order = orderOf(await submit(guest, await review(guest, { paymentMethod: 'instapay' })));
   assert.equal(order.lines.length, 2);
   assert.equal((await Upload.findById(firstId)).state, 'retained');
   assert.equal((await Upload.findById(secondId)).state, 'retained');
@@ -270,14 +270,14 @@ test('checkout is disabled by default and rejects unapproved products after cart
   assert.equal((await Product.findById(product._id)).inventory.quantity, 10);
 });
 
-test('shipping is server calculated and international or unknown governorates are rejected', async () => {
+test('shipping is pending while valid governorates are checked and international or unknown governorates are rejected', async () => {
   env.checkoutEnabled = true;
   const guest = browserClient();
   await add(guest);
   const cairo = await review(guest, { governorate: 'cairo' });
   const other = await review(guest, { governorate: 'alexandria' });
-  assert.equal(cairo.quote.totals?.shippingPiastres ?? cairo.quote.shippingPiastres, 9000);
-  assert.equal(other.quote.totals?.shippingPiastres ?? other.quote.shippingPiastres, 12000);
+  assert.equal(cairo.quote.totals.shippingPiastres, null);
+  assert.equal(other.quote.totals.shippingPiastres, null);
   const invalid = await guest.request(`${ROOT}/checkout/quote`, { method: 'POST', body: { checkoutKey: randomUUID(), paymentMethod: 'cod', governorate: 'international' } });
   assert.equal(invalid.status, 400);
 });
@@ -364,7 +364,7 @@ test('configured variants require selection, use their approved price and track 
   const availableAfter = data(await guest.request('/api/v1/public/products?availability=available&limit=20')).products;
   assert.equal(availableAfter.some((candidate) => candidate._id === String(product._id)), false);
   const admin = await authenticated('admin');
-  const cancelled = await admin.client.request(`${ADMIN_ROOT}/orders/${order.id}/state`, { method: 'PATCH', body: { revision: 0, fulfillmentState: 'cancelled' } });
+  const cancelled = await admin.client.request(`${ADMIN_ROOT}/orders/${order.id}/accounting`, { method: 'POST', body: { revision: 0, action: 'cancel', reason: 'Reviewed fixture cancellation', reconciled: true } });
   assert.equal(cancelled.status, 200, JSON.stringify(cancelled.body));
   const restocked = await Product.findById(product._id);
   assert.equal(restocked.variants[0].inventory.quantity, 1);
@@ -541,7 +541,7 @@ test('admin order listing is protected and cancellation restocks exactly once', 
   assert.ok([200, 400].includes(oversized.status));
   const listing = data(oversized.status === 400 ? await admin.client.request(`${ADMIN_ROOT}/orders?limit=20`) : oversized);
   assert.ok(listing.pagination.limit <= 20);
-  const cancelled = await admin.client.request(`${ADMIN_ROOT}/orders/${id}/state`, { method: 'PATCH', body: { revision: 0, fulfillmentState: 'cancelled', reason: 'Isolated cancellation' } });
+  const cancelled = await admin.client.request(`${ADMIN_ROOT}/orders/${id}/accounting`, { method: 'POST', body: { revision: 0, action: 'cancel', reason: 'Isolated cancellation', reconciled: true } });
   assert.equal(cancelled.status, 200, JSON.stringify(cancelled.body));
   assert.equal((await Product.findById(product._id)).inventory.quantity, 10);
   const repeated = await admin.client.request(`${ADMIN_ROOT}/orders/${id}/state`, { method: 'PATCH', body: { revision: 0, fulfillmentState: 'cancelled' } });
@@ -560,14 +560,14 @@ test('InstaPay proof stays private and unpaid until explicit audited admin verif
   const photoId = await personalizationPhoto(guest);
   await add(guest, { personalization: { photo: [photoId] } });
   const intent = await review(guest, { paymentMethod: 'instapay' });
-  const noProof = await submit(guest, intent);
-  assert.equal(noProof.status, 400);
-  const proofId = await proofFor(guest, intent);
-  const created = await submit(guest, intent, { paymentProofId: proofId });
-  assert.equal(created.status, 201, JSON.stringify(created.body));
-  const order = orderOf(created);
-  const id = order.id || order._id;
-  assert.equal(order.paymentState, 'awaiting_verification');
+  const created = await submit(guest, intent);
+  assert.equal(created.status, 201);
+  const order = orderOf(created), id = order.id;
+  assert.equal(order.paymentState, 'awaiting_transfer');
+  const proofId = await proofFor(guest, order);
+  const submitted = await guest.request(`${ROOT}/orders/${id}/accounting`, { method: 'POST', body: { revision: 0, action: 'submit_proof', uploadId: proofId } });
+  assert.equal(submitted.status, 200, JSON.stringify(submitted.body));
+  assert.equal(orderOf(submitted).paymentState, 'awaiting_verification');
   assert.equal((await Upload.findById(proofId)).state, 'retained');
   const stranger = await authenticated();
   assert.equal((await stranger.client.request(`${ADMIN_ROOT}/orders/${id}/proof`)).status, 403);
@@ -605,7 +605,7 @@ test('InstaPay proof stays private and unpaid until explicit audited admin verif
   assert.match(viewed.headers.get('cache-control'), /no-store/);
   assert.equal(storageBodyReads, 1);
   assert.ok(await AdminAudit.countDocuments({ resourceType: 'upload', action: 'private_file_viewed' }));
-  const verified = await admin.client.request(`${ADMIN_ROOT}/orders/${id}/state`, { method: 'PATCH', body: { revision: 0, paymentState: 'paid', reason: 'Isolated manual verification' } });
+  const verified = await admin.client.request(`${ADMIN_ROOT}/orders/${id}/accounting`, { method: 'POST', body: { revision: 1, action: 'collection', operationKey: randomUUID(), scope: 'merchandise', amountPiastres: order.totals.totalPiastres, method: 'instapay', reference: 'ISOLATED-VERIFIED-TRANSFER', reconciled: true, reason: 'Isolated manual account verification' } });
   assert.equal(verified.status, 200, JSON.stringify(verified.body));
   assert.equal(orderOf(verified).paymentState, 'paid');
   const cancelledPaid = await admin.client.request(`${ADMIN_ROOT}/orders/${id}/state`, { method: 'PATCH', body: { revision: 1, fulfillmentState: 'cancelled' } });
@@ -623,13 +623,15 @@ test('COD payment and fulfillment states remain separate and audit every sensiti
   assert.equal(premature.status, 409);
   const invalid = await admin.client.request(`${ADMIN_ROOT}/orders/${order.id}/state`, { method: 'PATCH', body: { revision: 0, fulfillmentState: 'delivered' } });
   assert.equal(invalid.status, 409);
+  await admin.client.request(`${ADMIN_ROOT}/orders/${order.id}/accounting`, { method: 'POST', body: { revision: 0, action: 'quote_charge', chargeId: 'shipping', pricing: 'free', amountPiastres: 0, collectionMethod: 'cod' } });
+  await admin.client.request(`${ADMIN_ROOT}/orders/${order.id}/accounting`, { method: 'POST', body: { revision: 1, action: 'accept_charge', chargeId: 'shipping', accepted: true, customerConfirmed: true, reason: 'Customer accepted explicitly waived delivery in fixture' } });
   const states = ['confirmed', 'preparing', 'out_for_delivery', 'delivered'];
   for (let revision = 0; revision < states.length; revision += 1) {
-    const result = await admin.client.request(`${ADMIN_ROOT}/orders/${order.id}/state`, { method: 'PATCH', body: { revision, fulfillmentState: states[revision] } });
+    const result = await admin.client.request(`${ADMIN_ROOT}/orders/${order.id}/state`, { method: 'PATCH', body: { revision: revision + 2, fulfillmentState: states[revision] } });
     assert.equal(result.status, 200, JSON.stringify(result.body));
     assert.equal(orderOf(result).paymentState, 'unpaid');
   }
-  const collected = await admin.client.request(`${ADMIN_ROOT}/orders/${order.id}/state`, { method: 'PATCH', body: { revision: 4, paymentState: 'paid', reason: 'Isolated COD collection confirmation' } });
+  const collected = await admin.client.request(`${ADMIN_ROOT}/orders/${order.id}/accounting`, { method: 'POST', body: { revision: 6, action: 'collection', operationKey: randomUUID(), scope: 'merchandise', amountPiastres: order.totals.totalPiastres, method: 'cod', reference: 'ACTUAL-COD-FIXTURE', reconciled: true, reason: 'Isolated COD collection confirmation' } });
   assert.equal(collected.status, 200, JSON.stringify(collected.body));
   assert.equal(orderOf(collected).paymentState, 'paid');
   assert.equal(orderOf(collected).fulfillmentState, 'delivered');
@@ -674,7 +676,7 @@ test('customer order APIs hide legacy/private notes while authorized admins reta
   assert.equal((await stranger.client.request(`${ADMIN_ROOT}/orders/${order.id}`)).status, 403);
 });
 
-test('actual normalized engraving DTO yields one private upload and immutable cart-to-order snapshots', async () => {
+test('quotation-based engraving cannot enter unfinished automatic checkout or create artwork uploads', async () => {
   env.checkoutEnabled = true;
   const template = await CustomizationTemplate.create({ key: 'engraving-contract-fixture', name: 'Approved engraving fixture', kind: 'laser_engraving', status: 'approved', active: true,
     fields: [{ key: 'gift-message', label: 'Gift message', type: 'text', maxChars: 120 }],
@@ -682,33 +684,8 @@ test('actual normalized engraving DTO yields one private upload and immutable ca
       materials: [{ key: 'wood', label: 'Approved wood', adjustmentPiastres: 200 }], fonts: [{ key: 'plain', label: 'Approved plain font', adjustmentPiastres: 100 }] } });
   await Product.updateOne({ _id: product._id }, { $set: { customization: { enabled: true, templateId: template._id, serviceKind: 'laser_engraving', serviceEntryEligible: true } } });
   const guest = browserClient();
-  const serialized = data(await guest.request(`${ROOT}/customization/products/${product.slug}`)).template;
-  assert.equal(new Set(serialized.fields.map(field => field.key)).size, serialized.fields.length);
-  assert.equal(serialized.fields.filter(field => field.key === 'engraving_artwork').length, 1);
-  const signed = await guest.request(`${ROOT}/uploads/sign`, { method: 'POST', body: { purpose: 'artwork', mimeType: 'image/png', sizeBytes: PNG.length,
-    productId: String(product._id), fieldKey: 'engraving_artwork', templateId: String(template._id), templateVersion: template.version } });
-  assert.equal(signed.status, 201, JSON.stringify(signed.body));
-  const uploadId = data(signed).upload.id;
-  storage.put((await Upload.findById(uploadId).select('+temporaryKey')).temporaryKey, PNG);
-  assert.equal((await guest.request(`${ROOT}/uploads/${uploadId}/complete`, { method: 'POST', body: {} })).status, 200);
-  const customization = { templateId: serialized._id, version: serialized.version, selections: [], fields: {
-    'gift-message': 'Preserved hyphenated field', engraving_text: 'Immutable engraving text', engraving_material: 'wood', engraving_font: 'plain', engraving_artwork: [uploadId] } };
-  const quote = await guest.request(`${ROOT}/customization/quote`, { method: 'POST', body: { productId: String(product._id), customization } });
-  assert.equal(quote.status, 200, JSON.stringify(quote.body));
-  assert.equal(data(quote).unitPricePiastres, 12800);
-  const cart = await add(guest, { customization });
-  assert.equal(cart.items[0].customization.fields.engraving_artwork.length, 1);
-  const placed = await submit(guest, await review(guest));
-  assert.equal(placed.status, 201, JSON.stringify(placed.body));
-  const order = orderOf(placed);
-  assert.equal(order.lines[0].unitPricePiastres, 12800);
-  assert.equal(order.lines[0].customization.fields['gift-message'], 'Preserved hyphenated field');
-  assert.equal(order.lines[0].customization.engraving.text, 'Immutable engraving text');
-  assert.equal((await Upload.findById(uploadId)).state, 'retained');
-  assert.equal(await Upload.countDocuments({ purpose: 'artwork' }), 1);
-  await Product.updateOne({ _id: product._id }, { $set: { pricePiastres: 50000 } });
-  await CustomizationTemplate.updateOne({ _id: template._id }, { $set: { active: false } });
-  const unchanged = orderOf(await guest.request(`${ROOT}/orders/${order.id}`));
-  assert.deepEqual(unchanged.lines[0].customization, order.lines[0].customization);
-  assert.equal(unchanged.lines[0].unitPricePiastres, 12800);
+  const blocked = await guest.request(`${ROOT}/customization/products/${product.slug}`);
+  assert.equal(blocked.status, 409); assert.equal(blocked.body.error.code, 'QUOTATION_REQUIRED');
+  assert.equal(await Order.countDocuments(), 0); assert.equal(await Upload.countDocuments(), 0);
+
 });
