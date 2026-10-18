@@ -1,0 +1,137 @@
+/* V2 satin visuals and subtle bow movement, paired with the original V1 seamless paper opening. */
+.tw-ribbon-opening {
+  position: fixed; inset: 0; z-index: 1900; isolation: isolate;
+  overflow: hidden; pointer-events: none; background: transparent;
+}
+.tw-ribbon-opening__paper {
+  position: absolute; inset-block: 0; width: 50.3%;
+  background:
+    radial-gradient(ellipse at 45% 48%, rgb(255 255 255 / 49%), transparent 66%),
+    linear-gradient(112deg, #faf1e9 0%, #f1e2d6 50%, #f9efe6 100%);
+  box-shadow: inset 0 0 62px rgb(126 85 75 / 12%), 0 0 28px rgb(68 45 43 / 12%);
+  backface-visibility: hidden;
+  will-change: transform;
+}
+.tw-ribbon-opening__paper--left {
+  left: 0; border-right: 1px solid #e4c7ba;
+  animation: tw-paper-left 1650ms cubic-bezier(.71, .03, .24, 1) both;
+}
+.tw-ribbon-opening__paper--right {
+  right: 0; border-left: 1px solid #e4c7ba;
+  background:
+    radial-gradient(ellipse at 55% 48%, rgb(255 255 255 / 49%), transparent 66%),
+    linear-gradient(248deg, #faf1e9 0%, #f1e2d6 50%, #f9efe6 100%);
+  animation: tw-paper-right 1650ms cubic-bezier(.71, .03, .24, 1) both;
+}
+/* Satin crossing ribbons remain attached to the paper as it slides away. */
+.tw-ribbon-opening__paper::after {
+  content: ''; position: absolute; top: 50%; left: 0; right: 0;
+  height: clamp(42px, 6vw, 70px); transform: translateY(-50%);
+  background: linear-gradient(180deg,
+    #87564e 0%, #d7ada3 8%, #f8dfd5 19%, #d2a39a 37%,
+    #b67d73 57%, #f4d1c5 76%, #99675f 100%);
+  border-block: 1px solid rgb(112 72 65 / 22%);
+  box-shadow: 0 7px 20px rgb(91 54 47 / 15%);
+}
+.tw-ribbon-opening__paper::before {
+  content: ''; position: absolute; z-index: 1;
+  top: 0; bottom: 0; width: clamp(42px, 6vw, 70px);
+  background: linear-gradient(90deg,
+    #946056 0%, #e3bdb2 12%, #fae2d7 24%, #c29187 51%, #ebc7bb 78%, #936157 100%);
+  box-shadow: 0 0 17px rgb(75 43 35 / 14%);
+}
+.tw-ribbon-opening__paper--left::before { right: 0; }
+.tw-ribbon-opening__paper--right::before { left: 0; }
+.tw-ribbon-opening__center {
+  position: absolute; inset: 0; z-index: 2;
+  display: grid; place-items: center;
+  transform: translateY(-4px);
+  animation: tw-bow-whole 1600ms ease-in-out both;
+  will-change: transform, opacity;
+}
+.tw-ribbon-opening__bow {
+  width: clamp(152px, 24vw, 246px); height: auto;
+  overflow: visible;
+  filter: drop-shadow(0 9px 11px rgb(78 44 38 / 19%));
+}
+.tw-ribbon-opening__loop, .tw-ribbon-opening__tail, .tw-ribbon-opening__knot {
+  transform-box: fill-box; will-change: transform, opacity;
+}
+.tw-ribbon-opening__loop--left {
+  transform-origin: 88% 58%;
+  animation: tw-loop-left 1450ms cubic-bezier(.3, .6, .2, 1) both;
+}
+.tw-ribbon-opening__loop--right {
+  transform-origin: 12% 58%;
+  animation: tw-loop-right 1450ms cubic-bezier(.3, .6, .2, 1) both;
+}
+.tw-ribbon-opening__tail--left {
+  transform-origin: 80% 7%;
+  animation: tw-tail-left 1520ms cubic-bezier(.26, .64, .19, 1) both;
+}
+.tw-ribbon-opening__tail--right {
+  transform-origin: 20% 7%;
+  animation: tw-tail-right 1520ms cubic-bezier(.26, .64, .19, 1) both;
+}
+.tw-ribbon-opening__knot {
+  transform-origin: 50% 50%;
+  animation: tw-knot-release 1100ms cubic-bezier(.34, .2, .27, 1) both;
+}
+/* A very small light change adds depth; not sparkles or a flashing transition. */
+.tw-ribbon-opening__shine {
+  position: absolute; inset: 0; z-index: 1;
+  background: radial-gradient(ellipse at center, rgb(255 246 237 / 52%), transparent 45%);
+  opacity: 0; transform: scaleX(.4);
+  animation: tw-reveal-glow 1700ms ease-out both;
+  pointer-events: none;
+}
+@keyframes tw-bow-whole {
+  0%, 12% { opacity: 1; transform: translateY(-4px) rotate(-1.2deg) scale(1); }
+  23% { opacity: 1; transform: translateY(-6px) rotate(1deg) scale(1.025); }
+  37% { opacity: 1; transform: translateY(-4px) rotate(-1deg) scale(.99); }
+  72% { opacity: 1; transform: translateY(-9px) rotate(-2.5deg) scale(.99); }
+  91%, 100% { opacity: 0; transform: translateY(-24px) rotate(-5deg) scale(.92); }
+}
+@keyframes tw-loop-left {
+  0%, 15% { transform: rotate(0) translate(0, 0) scale(1); opacity: 1; }
+  28% { transform: rotate(7deg) translate(3px, 0) scale(.96, .98); opacity: 1; }
+  54% { transform: rotate(-19deg) translate(-15px, -4px) scale(1.04, .95); opacity: 1; }
+  80% { opacity: .88; }
+  100% { transform: rotate(-43deg) translate(-64px, -21px) scale(1.09, .92); opacity: 0; }
+}
+@keyframes tw-loop-right {
+  0%, 15% { transform: rotate(0) translate(0, 0) scale(1); opacity: 1; }
+  28% { transform: rotate(-6deg) translate(-3px, 0) scale(.97, .99); opacity: 1; }
+  54% { transform: rotate(18deg) translate(14px, -5px) scale(1.05, .95); opacity: 1; }
+  80% { opacity: .88; }
+  100% { transform: rotate(42deg) translate(65px, -22px) scale(1.08, .91); opacity: 0; }
+}
+@keyframes tw-tail-left {
+  0%, 21% { transform: rotate(0) translate(0, 0); opacity: 1; }
+  40% { transform: rotate(-9deg) translate(-4px, 4px); opacity: 1; }
+  72% { transform: rotate(27deg) translate(-22px, 12px); opacity: .95; }
+  100% { transform: rotate(53deg) translate(-54px, 40px); opacity: 0; }
+}
+@keyframes tw-tail-right {
+  0%, 21% { transform: rotate(0) translate(0, 0); opacity: 1; }
+  40% { transform: rotate(8deg) translate(4px, 4px); opacity: 1; }
+  72% { transform: rotate(-28deg) translate(24px, 14px); opacity: .95; }
+  100% { transform: rotate(-50deg) translate(56px, 40px); opacity: 0; }
+}
+@keyframes tw-knot-release {
+  0%, 28% { transform: rotate(0) scale(1); opacity: 1; }
+  48% { transform: rotate(-11deg) scale(.93); opacity: 1; }
+  100% { transform: rotate(-31deg) scale(.46); opacity: 0; }
+}
+/* Original V1 one-sweep paper opening, restored verbatim. No mid-flight stops or 3D turns. */
+@keyframes tw-paper-left { 0%, 31% { transform: translateX(0); } 100% { transform: translateX(-102%); } }
+@keyframes tw-paper-right { 0%, 31% { transform: translateX(0); } 100% { transform: translateX(102%); } }
+@keyframes tw-reveal-glow {
+  0%, 38% { opacity: 0; transform: scaleX(.32); }
+  59% { opacity: .28; transform: scaleX(.7); }
+  100% { opacity: 0; transform: scaleX(1.6); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tw-ribbon-opening { display: none; }
+  .tw-ribbon-opening * { animation: none !important; }
+}

@@ -3,6 +3,7 @@ import { ArrowUpRight } from 'lucide-react';
 import { FeaturedCategories, BestSellerProducts } from '../components/HomeCatalog.jsx';
 import { ApprovedFaq, DeveloperHeroMedia, PublishedBundles, ReviewMarquee, TrustStatistics } from '../components/PublicContent.jsx';
 import ServiceFilm from '../components/ServiceFilm.jsx';
+import RibbonOpening from '../components/RibbonOpening.jsx';
 import { approvedFaqFallback } from '../content/final-faq.js';
 import { ownerFeaturedReviews } from '../content/owner-confirmed-reviews.js';
 import '../home-media.css';
@@ -10,7 +11,7 @@ import '../home-media.css';
 export default function HomePage() {
   const reviews = ownerFeaturedReviews;
   const faq = approvedFaqFallback;
-  return <main>
+  return <><RibbonOpening/><main>
     <section className="hero home-media-hero" aria-labelledby="home-hero-heading">
       <DeveloperHeroMedia />
       <div className="home-hero-content">
@@ -30,5 +31,5 @@ export default function HomePage() {
     </div></section>
     {reviews.length > 0 && <section className="section home-reviews-section" aria-labelledby="home-reviews-heading"><div className="section-heading"><p className="eyebrow">KIND WORDS</p><h2 id="home-reviews-heading">What Our Customers Say</h2></div><div className="home-named-review-carousel"><ReviewMarquee reviews={reviews}/></div></section>}
     {faq.length > 0 && <section className="section faq-section" aria-labelledby="home-faq-heading"><div className="section-heading"><p className="eyebrow">ANY QUESTIONS?</p><h2 id="home-faq-heading">Frequently Asked Questions</h2></div><ApprovedFaq entries={faq} categorized/></section>}
-  </main>;
+  </main></>;
 }
