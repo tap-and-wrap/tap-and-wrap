@@ -53,37 +53,39 @@ test('attention queue bounds larger workloads to twenty and paginates without ex
   assert.doesNotMatch(JSON.stringify(pages), /Private operator note|requestHash|checkoutKey|objectKey/);
 });
 
-for (const kind of ['order', 'request']) test(`${kind}: exact 0/9/12-hour boundaries allow at most two initial-contact emails`, async () => {
+for (const kind of ['order', 'request']) test(`${kind}: exact 0/9/12-hour boundaries send only one initial-contact email`, async () => {
   const record = await (kind === 'order' ? order() : request());
   const enqueue = () => kind === 'order' ? enqueueOrderEvent(record, 'order_received') : enqueueRequestEvent(record, 'request_received');
-  await enqueue(); await enqueue(); assert.equal(await NotificationEvent.countDocuments(), 2);
+  await enqueue(); await enqueue(); assert.equal(await NotificationEvent.countDocuments(), 1);
   const sent = provider(); await runNotificationBatch({ now }); assert.equal(sent.length, 1); assert.equal(sent[0].event, 'owner_new');
   await runNotificationBatch({ now: new Date(plus(9).getTime() - 1) }); assert.equal(sent.length, 1);
-  await Promise.all([runNotificationBatch({ now: plus(9) }), runNotificationBatch({ now: plus(9) })]); assert.equal(sent.length, 2); assert.equal(sent[1].event, 'owner_contact_reminder');
+  await Promise.all([runNotificationBatch({ now: plus(9) }), runNotificationBatch({ now: plus(9) })]); assert.equal(sent.length, 1);
   assert.equal(contactTiming(record, new Date(plus(12).getTime() - 1)).overdue, false);
   assert.equal(contactTiming(record, plus(12)).overdue, true);
-  await runNotificationBatch({ now: plus(12) }); await runNotificationBatch({ now: plus(40) }); assert.equal(sent.length, 2);
+  await runNotificationBatch({ now: plus(12) }); await runNotificationBatch({ now: plus(40) }); assert.equal(sent.length, 1);
   await contacted(kind, record, plus(13)); const saved = await (kind === 'order' ? Order : ServiceRequest).findById(record._id).lean();
   assert.equal(contactTiming(saved, plus(14)).overdue, false); assert.equal(saved.contactHistory.length, 1); assert.equal(saved.paymentState, kind === 'order' ? 'awaiting_transfer' : undefined);
 });
-test('recorded contact cancels the pending reminder; immutable retries and stale revisions preserve audit history', async () => {
+test('recorded contact has no email reminder; immutable retries and stale revisions preserve audit history', async () => {
   const record = await order(); await enqueueOrderEvent(record, 'order_received'); const sent = provider(); await runNotificationBatch({ now });
   const key = randomUUID(); await contacted('order', record, plus(8), { operationKey: key }); await contacted('order', record, plus(8), { operationKey: key });
   assert.equal((await Order.findById(record._id)).contactHistory.length, 1);
   await assert.rejects(contacted('order', record, plus(8)), { code: 'EDIT_CONFLICT' });
-  await runNotificationBatch({ now: plus(9) }); assert.equal(sent.length, 1); assert.equal((await NotificationEvent.findOne({ event: 'owner_contact_reminder' })).state, 'suppressed');
+  await runNotificationBatch({ now: plus(9) }); assert.equal(sent.length, 1); assert.equal(await NotificationEvent.countDocuments({ event: 'owner_contact_reminder' }), 0);
 });
 
-test('contact suppresses a claimed but undispatched reminder; a dispatch already in flight is never replayed', async () => {
-  const record = await order(); await enqueueOrderEvent(record, 'order_received'); provider(); await runNotificationBatch({ now });
-  await NotificationEvent.updateOne({ event: 'owner_contact_reminder' }, { $set: { state: 'processing', leaseToken: 'synthetic-claim', leaseUntil: plus(10) } });
-  await contacted('order', record, plus(9)); assert.equal((await NotificationEvent.findOne({ event: 'owner_contact_reminder' })).state, 'suppressed');
-  const sent = provider(); await runNotificationBatch({ now: plus(11) }); assert.equal(sent.length, 0);
-  const second = await order({ orderNumber: '123457' }); await enqueueOrderEvent(second, 'order_received'); provider(); await runNotificationBatch({ now });
-  let inFlight = 0;
-  provider({ async send() { inFlight++; await contacted('order', second, plus(9)); return { id: 'synthetic-in-flight' }; } });
-  await runNotificationBatch({ now: plus(9) }); await runNotificationBatch({ now: plus(24) });
-  assert.equal(inFlight, 1); assert.equal(contactTiming(await Order.findById(second._id), plus(24)).overdue, false);
+test('legacy queued reminder emails are suppressed and newly created owner alerts do not replay', async () => {
+  const record = await order(); await enqueueOrderEvent(record, 'order_received');
+  const immediate = provider(); await runNotificationBatch({ now }); assert.equal(immediate.length, 1);
+  await NotificationEvent.create({ eventKey: 'legacy-owner-reminder', orderId: record._id,
+    event: 'owner_contact_reminder', audience: 'owner', recipient: 'owner@example.test',
+    snapshot: {}, state: 'queued', attempts: 0, nextAttemptAt: plus(9) });
+  const later = provider(); await runNotificationBatch({ now: plus(9) });
+  assert.equal(later.length, 0);
+  assert.equal((await NotificationEvent.findOne({ event: 'owner_contact_reminder' })).state, 'suppressed');
+  const second = await order({ orderNumber: '123457' }); await enqueueOrderEvent(second, 'order_received');
+  const fresh = provider(); await runNotificationBatch({ now }); assert.equal(fresh.length, 1);
+  await runNotificationBatch({ now: plus(24) }); assert.equal(fresh.length, 1);
 });
 
 test('interrupted Resend dispatch is uncertain and cannot replay after the provider idempotency window', async () => {
@@ -95,13 +97,13 @@ test('interrupted Resend dispatch is uncertain and cannot replay after the provi
 });
 test('closed records and reminders first processed at 12 hours never generate a late reminder', async () => {
   const record = await request(); await enqueueRequestEvent(record, 'request_received'); const sent = provider(); await runNotificationBatch({ now });
-  await runNotificationBatch({ now: plus(12) }); assert.equal(sent.length, 1); assert.equal(await NotificationEvent.countDocuments({ state: 'suppressed' }), 1);
+  await runNotificationBatch({ now: plus(12) }); assert.equal(sent.length, 1); assert.equal(await NotificationEvent.countDocuments({ event: 'owner_contact_reminder' }), 0);
   await ServiceRequest.updateOne({ _id: record._id }, { $set: { state: 'cancelled' } }); assert.equal(contactTiming(await ServiceRequest.findById(record._id), plus(15)).overdue, false);
 });
 test('missing owner configuration and optional customer email never block requests, and converted orders do not duplicate the request sequence', async () => {
   process.env.OWNER_NOTIFICATION_RECIPIENT_CONFIRMED = 'false'; const record = await request(); await enqueueRequestEvent(record, 'request_received'); assert.equal(await NotificationEvent.countDocuments(), 0);
   process.env.OWNER_NOTIFICATION_RECIPIENT_CONFIRMED = 'true'; await enqueueRequestEvent(record, 'request_received');
-  const converted = await order({ serviceRequestId: record._id }); await enqueueOrderEvent(converted, 'order_received'); assert.equal(await NotificationEvent.countDocuments(), 2);
+  const converted = await order({ serviceRequestId: record._id }); await enqueueOrderEvent(converted, 'order_received'); assert.equal(await NotificationEvent.countDocuments(), 1);
   await enqueueOrderEvent(converted, 'payment_rejected', { eventVersion: 3 }); assert.equal(await NotificationEvent.countDocuments({ event: 'owner_action' }), 1);
 });
 test('unrelated owner alerts have independent deduplication and cannot alter financial or acceptance states', async () => {
@@ -121,11 +123,11 @@ test('real checkout and zero-template request transactions enqueue owner alerts 
     await addCartItem(owner, { productId: String(product._id), quantity: 1 }); await prepareCheckout(owner, { checkoutKey, governorate: 'cairo', paymentMethod: 'cod' });
     await placeOrder(owner, { checkoutKey, paymentMethod: 'cod', customer: { ...customer, email: 'customer@example.test', governorate: 'cairo', address: '10 Synthetic Fixture Street' } });
   } finally { env.checkoutEnabled = false; }
-  assert.equal(await NotificationEvent.countDocuments({ audience: 'owner' }), 2); assert.equal(await Order.countDocuments(), 1);
+  assert.equal(await NotificationEvent.countDocuments({ audience: 'owner' }), 1); assert.equal(await Order.countDocuments(), 1);
   const custom = await createServiceRequest(owner, serviceRequestInput.parse({ requestKey: randomUUID(), service: 'gift_box', customer: { name: customer.name, phone: '01012345678' }, details: { occasion: 'Birthday', contents: 'Synthetic request' } }));
   const action = async (name, patch = {}) => { const current = await ServiceRequest.findById(custom._id); return actOnServiceRequest(String(custom._id), requestActionInput.parse({ revision: current.revision, action: name, reason: 'Actual synthetic WhatsApp evidence', ...patch }), admin); };
   await action('prepare', { quote: { baseUnitPiastres: 10000, discountPiastres: 0, shippingPiastres: 5000, shippingFree: false, allowedPaymentMethods: ['instapay'], codAuthorized: false, charges: [] } }); await action('share'); await action('accept', { method: 'instapay', customerConfirmed: true });
-  assert.equal(await NotificationEvent.countDocuments({ audience: 'owner' }), 5);
+  assert.equal(await NotificationEvent.countDocuments({ audience: 'owner' }), 3);
   provider({ async send() { throw Object.assign(new Error('Synthetic rejected operation'), { code: 'SMTP_TRANSIENT_FAILURE' }); } }); await runNotificationBatch({ now: plus(1) });
   assert.equal(await Order.countDocuments(), 1); assert.equal((await Product.findById(product._id)).inventory.quantity, 1); assert.equal((await ServiceRequest.findById(custom._id)).state, 'accepted');
 });
