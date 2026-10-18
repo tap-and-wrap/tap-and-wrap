@@ -4,7 +4,7 @@ import AccountActions from '../components/AccountActions.jsx';
 import '../admin.css';
 
 const groups = [
-  ['Manage store', [['Requires attention', '/admin/attention'], ['Overview', '/admin/website/overview'], ['Requests / Quotations', '/admin/requests'], ['Orders', '/admin/commerce/orders'], ['Products', '/admin/products'], ['Categories', '/admin/website/categories']]],
+  ['Manage store', [['Requires attention', '/admin/attention'], ['Notifications', '/admin/notifications'], ['Overview', '/admin/website/overview'], ['Requests / Quotations', '/admin/requests'], ['Orders', '/admin/commerce/orders'], ['Products', '/admin/products'], ['Categories', '/admin/website/categories']]],
   ['Website', [['Homepage', '/admin/website/homepage'], ['Reviews', '/admin/website/reviews'], ['Pages & owner guide', '/admin/website/content']]],
   ['Commerce', [['Customization', '/admin/commerce/templates'], ['Components', '/admin/commerce/components'], ['Bundles', '/admin/commerce/bundles'], ['Discounts', '/admin/commerce/discounts'], ['Shipping', '/admin/commerce/shipping'], ['Payment settings', '/admin/website/payments']]],
   ['Operations', [['Customers', '/admin/website/customers'], ['Analytics', '/admin/website/analytics'], ['Email delivery', '/admin/website/notifications']]],

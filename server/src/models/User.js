@@ -7,6 +7,7 @@ const schema = new mongoose.Schema({
  active:{type:Boolean,default:true},
  emailVerifiedAt:{type:Date,default:null},
  authVersion:{type:Number,default:0,min:0,validate:Number.isSafeInteger},
+ adminNotificationSeenAt:{type:Date,default:null},
 },{timestamps:true});
 schema.index({email:1},{unique:true});
 schema.index({role:1,createdAt:-1,_id:-1});

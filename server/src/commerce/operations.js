@@ -15,6 +15,8 @@ import { recordAdminAudit } from './audit.js';
 import { whatsappQuotation } from './whatsapp-quotation.js';
 import { requestWhatsapp } from './service-requests.js';
 import { orderAccounting } from './order-accounting.js';
+import { User } from '../models/User.js';
+import { readAdminInbox } from './admin-notifications.js';
 
 const objectId = z.string().regex(/^[a-f0-9]{24}$/i);
 const kinds = z.enum(['order', 'request']);
@@ -95,6 +97,19 @@ export async function operationMessages(kind, record) {
 }
 export const operationsRoutes = Router();
 operationsRoutes.use((req, res, next) => { res.set({ 'Cache-Control': 'private, no-store', 'X-Robots-Tag': 'noindex, nofollow' }); next(); });
+const inboxQuery = z.object({ page: z.coerce.number().int().min(1).max(200).default(1), limit: z.coerce.number().int().min(1).max(20).default(20), view: z.enum(['all','unread','orders','requests','followups']).default('all') }).strict();
+operationsRoutes.get('/notifications', async (req, res) => {
+  const feed = await readAdminInbox({ ...inboxQuery.parse(req.query), adminId: req.user._id });
+  if (!feed) throw commerceError(403, 'ADMIN_REQUIRED', 'Administrator action required.');
+  res.json({ ok: true, data: feed });
+});
+operationsRoutes.post('/notifications/read-all', async (req, res) => {
+  assertDatabaseWriteAllowed(User.db, env);
+  const now = new Date();
+  const result = await User.updateOne({ _id: req.user._id, role: 'admin', active: true }, { $max: { adminNotificationSeenAt: now } });
+  if (result.matchedCount !== 1) throw commerceError(403, 'ADMIN_REQUIRED', 'Administrator action required.');
+  res.json({ ok: true, data: { readAt: now } });
+});
 operationsRoutes.get('/attention', async (req, res) => res.json({ ok: true, data: await attentionQueue(query.parse(req.query)) }));
 operationsRoutes.get('/attention/:kind/:id', async (req, res) => {
   const kind = kinds.parse(req.params.kind), record = await modelFor(kind).findById(objectId.parse(req.params.id)).lean().maxTimeMS(3000);

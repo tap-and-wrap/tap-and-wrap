@@ -6,6 +6,7 @@ import { useCart } from '../commerce/CartContext.jsx';
 import { useSession } from '../auth/SessionProvider.jsx';
 import { commerceError } from '../commerce/api.js';
 import useModalDialog from './useModalDialog.js';
+import AdminNotificationBell from './AdminNotificationBell.jsx';
 
 const primaryLinks = [
   { to: '/', text: 'Home', end: true },
@@ -69,6 +70,7 @@ export default function Header() {
       <Link className="site-logo" to="/" aria-label="Tap and Wrap home"><img src="/tap-wrap-logo.webp" alt="Tap & Wrap" width="2000" height="667" /></Link>
       <nav className="desktop-navigation" aria-label="Main navigation"><ul>{links.map(item => <li key={item.to}><NavLink to={item.to} end={item.end}>{item.text}</NavLink></li>)}</ul></nav>
       <div className="header-actions">
+        {admin && <AdminNotificationBell />}
         {session.ready ? <Link className="icon-button" to={accountDestination} aria-label="Account" title={admin ? 'Admin dashboard' : session.user ? 'My account and orders' : 'Sign in'}><UserRound size={20} aria-hidden="true"/></Link> : <button className="icon-button" type="button" disabled aria-label={session.phase === 'error' ? 'Account unavailable' : 'Checking account'}><UserRound size={20} aria-hidden="true"/></button>}
         <Link className="icon-button" data-cart-anchor to="/cart" aria-label={`Cart${cart.quantity ? `, ${cart.quantity} items` : ''}`} title="Cart"><ShoppingBag size={20} aria-hidden="true"/>{cart.quantity > 0 && <span className="commerce-cart-count" aria-hidden="true">{cart.quantity > 99 ? '99+' : cart.quantity}</span>}</Link>
         {admin && <button className="header-signout" type="button" disabled={logout.isPending} onClick={() => logout.mutate()}>{logout.isPending ? 'Signing out…' : 'Sign out'}</button>}
