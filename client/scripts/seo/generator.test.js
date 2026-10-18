@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, writeFile, rm, symlink } from 'node:fs/promises';
 import path from 'node:path';
 import { canonicalOrigin, canonicalUrl, publicImageUrl, productMetadata, serializeJsonLd, privatePageTitle } from '../../src/seo/metadata.js';
-import { buildSeoPlan, renderRouteHtml, sitemapXml, robotsText, validateCatalog, writeSeoOutput, CLIENT_DIRECTORY } from './generator.js';
+import { buildSeoPlan, renderRouteHtml, renderSpaShell, sitemapXml, robotsText, validateCatalog, writeSeoOutput, CLIENT_DIRECTORY } from './generator.js';
 import { handleSeoRequest } from '../../worker/seo-worker.js';
 
 const origin = 'https://shop.example';
@@ -17,6 +17,15 @@ function catalog(patch = {}) { return { version: 1, source: 'approved-public-cat
 function compatibility() {
   return { version: 1, source: 'reviewed-registered-public-product-addresses', origin, generatedAt: new Date(Date.now() - 1000).toISOString(), expiresAt: new Date(Date.now() + 3600_000).toISOString(), products: [{ canonicalPath: '/products/draft-gift', aliases: ['/products/draft-gift-123'] }] };
 }
+
+test('SPA boot shell has no temporary heading, footer, or SEO route content to flash', () => {
+  const old = renderRouteHtml(template, { pathname: '/shop', title: 'Tap & Wrap', description: '', heading: 'Tap & Wrap', body: '', indexable: false, structuredData: [] }, origin);
+  const shell = renderSpaShell(old);
+  assert.match(shell, /<div id="root"><\/div>/);
+  assert.doesNotMatch(shell, /seo-static-header|seo-static-footer|data-prerender|<h1>|seo-static\.css|data-seo-bootstrap/);
+  assert.match(shell, /name="robots" content="noindex, nofollow, noarchive"/);
+  assert.match(shell, /\/assets\/app-123\.js/);
+});
 
 test('index publication requires current routing revisions and rejects zero-price product approvals', () => {
   const old = catalog(); delete old.products[0].routingVersion;
@@ -64,7 +73,9 @@ test('prelaunch mapping remains separate from approved SEO data and works throug
     await writeSeoOutput({ outputDirectory, template, siteOrigin: origin });
     const ordinary = JSON.parse(await readFile(path.join(outputDirectory, 'seo-manifest.json'), 'utf8'));
     assert.deepEqual(ordinary.productRouting, { version: 1, authority: 'catalog-api', cacheSeconds: 0 });
-    assert.doesNotMatch(await readFile(path.join(outputDirectory, 'spa.html'), 'utf8'), /application\/ld\+json|Fixture Product|pricePiastres/);
+    const spa = await readFile(path.join(outputDirectory, 'spa.html'), 'utf8');
+    assert.doesNotMatch(spa, /application\/ld\+json|Fixture Product|pricePiastres|data-prerender|seo-static-header|seo-static-footer|<h1>/);
+    assert.match(spa, /<div id="root"><\/div>/);
     assert.equal((await handleSeoRequest(new Request(`${origin}/products/draft-gift`), env)).status, 200);
     assert.equal((await handleSeoRequest(new Request(`${origin}/products/draft-gift-123`), env)).status, 308);
     const changes = JSON.parse(await readFile(path.join(outputDirectory, 'seo-change-report.json'), 'utf8'));

@@ -1,0 +1,79 @@
+/* Quiet, seamless gifting details below the home hero. Both groups are identical. */
+.brand-icon-marquee {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 82px;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--tw-bg);
+  border-block: 1px solid var(--tw-border);
+}
+.brand-icon-marquee__track {
+  display: flex;
+  width: max-content;
+  align-items: center;
+  animation: brand-icon-marquee-scroll 36s linear infinite;
+  will-change: transform;
+}
+.brand-icon-marquee__group {
+  display: flex;
+  flex: 0 0 auto;
+  width: max-content;
+  align-items: center;
+  gap: clamp(40px, 4vw, 72px);
+  padding-right: clamp(40px, 4vw, 72px);
+}
+.brand-icon-marquee__item {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+  color: var(--tw-rose-dark);
+  font-family: var(--tw-font-body);
+  font-weight: 600;
+  font-size: .73rem;
+  line-height: 1.3;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+.brand-icon-marquee__item svg {
+  flex: 0 0 auto;
+  color: var(--tw-rose);
+}
+.brand-icon-marquee::before,
+.brand-icon-marquee::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  width: clamp(24px, 5vw, 90px);
+  pointer-events: none;
+}
+.brand-icon-marquee::before {
+  left: 0;
+  background: linear-gradient(to right, var(--tw-bg), transparent);
+}
+.brand-icon-marquee::after {
+  right: 0;
+  background: linear-gradient(to left, var(--tw-bg), transparent);
+}
+.brand-icon-marquee:hover .brand-icon-marquee__track { animation-play-state: paused; }
+@keyframes brand-icon-marquee-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+@media (max-width: 620px) {
+  .brand-icon-marquee { height: 70px; }
+  .brand-icon-marquee__group { gap: 34px; padding-right: 34px; }
+  .brand-icon-marquee__item { gap: 9px; font-size: .66rem; letter-spacing: .075em; }
+  .brand-icon-marquee__item svg { width: 22px; height: 22px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand-icon-marquee { overflow-x: auto; scrollbar-width: none; }
+  .brand-icon-marquee__track { animation: none; will-change: auto; }
+  .brand-icon-marquee::-webkit-scrollbar { display: none; }
+  .brand-icon-marquee::before, .brand-icon-marquee::after { display: none; }
+}

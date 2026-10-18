@@ -214,6 +214,19 @@ export function renderRouteHtml(template, route, origin, publication) {
   return html.replace(/<div\s+id=["']root["']\s*>[\s\S]*?<\/div>/i, `<div id="root">${body}</div>`);
 }
 
+/** The SPA fallback must not display a pretend page before React mounts.
+ * SEO prerendered documents remain unchanged and still retain their static content. */
+export function renderSpaShell(template) {
+  if (!/<div\s+id=["']root["']\s*>[\s\S]*?<\/div>/i.test(template)) throw new Error('Vite HTML template does not contain the expected root element');
+  return template
+    .replace(/<script\b[^>]*data-seo-bootstrap[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<script\b[^>]*data-seo-jsonld[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<link\b[^>]*href=["']\/seo-static\.css["'][^>]*>/gi, '')
+    .replace(/<div\s+id=["']root["']\s*>[\s\S]*?<\/div>/i, '<div id="root"></div>')
+    .replace(/<meta\b[^>]*name=["']robots["'][^>]*>/gi, '')
+    .replace('</head>', '    <meta name="robots" content="noindex, nofollow, noarchive">\n  </head>');
+}
+
 export function sitemapXml(plan) {
   const items = [...plan.routes.values()].filter((route) => route.indexable).map((route) => `<url><loc>${escapeHtml(canonicalUrl(plan.origin, route.pathname))}</loc>${route.updatedAt ? `<lastmod>${route.updatedAt}</lastmod>` : ''}</url>`);
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${items.join('')}</urlset>\n`;
@@ -309,7 +322,7 @@ export async function writeSeoOutput({ outputDirectory = path.join(CLIENT_DIRECT
     files.push(generatedFilename);
   }
   await assertRealLocation(resolvedOutput, path.join(resolvedOutput, 'spa.html'));
-  await atomicWrite(path.join(resolvedOutput, 'spa.html'), renderRouteHtml(htmlTemplate, { pathname: '/shop', title: 'Tap & Wrap', description: '', heading: 'Tap & Wrap', body: '', indexable: false, structuredData: [] }, null));
+  await atomicWrite(path.join(resolvedOutput, 'spa.html'), renderSpaShell(htmlTemplate));
   const changeReport = comparePublications(previous?.publication, publication);
   if (options.productCompatibility !== undefined || previous?.productCompatibility !== undefined) {
     changeReport.productCompatibilityChanged = stableDigest(previous?.productCompatibility || null) !== stableDigest(options.productCompatibility || null);
