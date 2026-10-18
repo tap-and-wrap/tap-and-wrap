@@ -66,7 +66,7 @@ export function FeaturedCategories() {
     <div className="home-category-grid" ref={scroller} aria-label="Shop gift categories">
       {query.data.categories.map(category => <Link className="home-category" key={category._id} to={categoryHref(category)} aria-label={`Shop ${category.name}`}>
         <div className="home-category-image">{thumbnailFor(category) ? <img src={thumbnailFor(category)} alt="" loading="lazy" width="1200" height="900" /> : <span aria-hidden="true">Tap & Wrap</span>}</div>
-        <div className="home-category-caption"><h3>{category.name}</h3><span className="home-category-cta">Shop Now <span aria-hidden="true">↗</span></span></div>
+        <div className="home-category-caption"><h3>{category.name}</h3><span className="home-category-cta">Shop Now</span></div>
       </Link>)}
     </div>
     <nav className="home-category-navigation" aria-label="Category carousel navigation">
