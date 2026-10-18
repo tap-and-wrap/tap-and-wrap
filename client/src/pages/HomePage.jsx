@@ -5,6 +5,7 @@ import { ApprovedFaq, DeveloperHeroMedia, PublishedBundles, ReviewMarquee } from
 import ServiceFilm from '../components/ServiceFilm.jsx';
 import BrandIconMarquee from '../components/BrandIconMarquee.jsx';
 import RibbonOpening from '../components/RibbonOpening.jsx';
+import HomeMotion from '../components/HomeMotion.jsx';
 import { approvedFaqFallback } from '../content/final-faq.js';
 import { ownerFeaturedReviews } from '../content/owner-confirmed-reviews.js';
 import '../home-media.css';
@@ -12,7 +13,7 @@ import '../home-media.css';
 export default function HomePage() {
   const reviews = ownerFeaturedReviews;
   const faq = approvedFaqFallback;
-  return <><RibbonOpening/><main>
+  return <><RibbonOpening/><HomeMotion/><main className="home-page">
     <section className="hero home-media-hero" aria-labelledby="home-hero-heading">
       <DeveloperHeroMedia />
       <div className="home-hero-content">

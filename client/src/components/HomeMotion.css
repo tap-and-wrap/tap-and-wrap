@@ -1,0 +1,80 @@
+/* Tap & Wrap premium motion: no new assets, no looping section animations.
+ * Default content is visible. Only the observing homepage opts into reveals. */
+@media (prefers-reduced-motion: no-preference) {
+  .home-page .section-heading[data-tw-motion="waiting"],
+  .home-page .home-service-card[data-tw-motion="waiting"] {
+    opacity: 0;
+    transform: translate3d(0, 16px, 0);
+  }
+  .home-page .section-heading[data-tw-motion="visible"] {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    transition: opacity 620ms cubic-bezier(.2,.7,.2,1), transform 620ms cubic-bezier(.2,.7,.2,1);
+  }
+  .home-page .home-service-card[data-tw-motion="visible"] {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    transition: opacity 620ms cubic-bezier(.2,.7,.2,1), transform 620ms cubic-bezier(.2,.7,.2,1), box-shadow 240ms ease;
+  }
+
+  .home-page .home-category,
+  .catalog-card {
+    transition: transform 260ms cubic-bezier(.2,.7,.2,1), box-shadow 260ms ease, border-color 260ms ease;
+  }
+  .catalog-card-image img {
+    transition: transform 360ms cubic-bezier(.2,.7,.2,1);
+  }
+  .home-page .home-category-cta,
+  .home-page .button,
+  .home-page .home-slide-arrow,
+  .catalog-card .catalog-card-action {
+    transition: transform 220ms cubic-bezier(.2,.7,.2,1), background-color 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
+  }
+  .home-page .home-service-detail > span svg {
+    transition: transform 260ms cubic-bezier(.2,.7,.2,1);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .home-page .home-category:hover,
+    .catalog-card:hover {
+      transform: translateY(-3px);
+    }
+    .catalog-card:hover .catalog-card-image img {
+      transform: scale(1.04);
+    }
+    .home-page .home-category:hover .home-category-cta,
+    .home-page .button:hover:not(:disabled),
+    .home-page .home-slide-arrow:hover:not(:disabled),
+    .catalog-card .catalog-card-action:hover:not(:disabled) {
+      transform: translateY(-2px);
+    }
+    .home-page .home-service-detail:hover > span svg {
+      transform: translate(3px, -3px);
+    }
+  }
+  .home-page .button:active:not(:disabled),
+  .catalog-card .catalog-card-action:active:not(:disabled),
+  .home-page .home-slide-arrow:active:not(:disabled) {
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-page .section-heading[data-tw-motion],
+  .home-page .home-service-card[data-tw-motion] {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+  .home-page .home-category,
+  .catalog-card,
+  .catalog-card-image img,
+  .home-page .home-category-cta,
+  .home-page .button,
+  .home-page .home-slide-arrow,
+  .catalog-card .catalog-card-action,
+  .home-page .home-service-detail > span svg {
+    transform: none !important;
+    transition: none !important;
+  }
+}
