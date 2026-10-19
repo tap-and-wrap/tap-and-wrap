@@ -109,7 +109,7 @@ const commonQueryFields = {
   includePriceRange: booleanQuery.optional(),
 };
 
-export const publicProductQuerySchema = z.object(commonQueryFields).strict();
+export const publicProductQuerySchema = z.object({ ...commonQueryFields, sort: z.enum(['discovery', 'featured', 'best_sellers', 'newest', 'price_asc', 'price_desc', 'name_asc', 'name_desc']).optional() }).strict();
 export const adminProductQuerySchema = z.object({
   ...commonQueryFields,
   status: z.enum(['draft', 'ready', 'hold']).optional(),

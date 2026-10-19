@@ -145,22 +145,59 @@ async function filtersForQuery(query, admin) {
   return filters;
 }
 
+// Stable pseudo-random discovery order. ObjectId counters are mixed twice instead of
+// sorting by import time or doing a new $sample for every page request.
+// A fixed order is essential to preserve unique products across page navigation.
+const DISCOVERY_PRIME = 2147483647;
+const DISCOVERY_MULTIPLIER = 48271;
+const GIFT_BOX_CATEGORY = /gift[\s-]*box(?:es)?|gift[\s-]*set(?:s)?|hamper(?:s)?/i;
+function discoveryOrder(giftCategoryIds) {
+  const hex = { $toString: '$_id' };
+  const counter = { $add: Array.from({ length: 6 }, (_, i) => ({
+    $multiply: [{ $indexOfCP: ['0123456789abcdef', { $substrCP: [hex, 18 + i, 1] }] }, 16 ** (5 - i)],
+  })) };
+  const scrambled = { $mod: [{ $multiply: [
+    { $mod: [{ $multiply: [counter, DISCOVERY_MULTIPLIER] }, DISCOVERY_PRIME] },
+    DISCOVERY_MULTIPLIER,
+  ] }, DISCOVERY_PRIME] };
+  const gift = { $or: [
+    { $in: ['$categoryId', giftCategoryIds] },
+    { $in: ['$subcategoryId', giftCategoryIds] },
+    { $regexMatch: { input: '$name', regex: 'gift[\\s-]*box(?:es)?|gift[\\s-]*set(?:s)?|hamper(?:s)?', options: 'i' } },
+  ] };
+  // Favor actual gift boxes/sets, but retain a mixed first page.
+  return { $cond: [gift, { $multiply: [scrambled, 0.25] }, scrambled] };
+}
+
 export async function listProducts(query, { admin = false } = {}) {
   const pagination = paginationFor(!admin && query.bestSeller === true ? { ...query, limit: Math.min(query.limit ?? 8, 8) } : query);
   const filters = await filtersForQuery(query, admin);
-  const visibility = admin ? null : await visibleProductFilter();
+  const graph = admin ? null : await activeCategories();
+  const visibility = admin ? null : await visibleProductFilter(graph);
   const filter = admin ? filters : { $and: [visibility, filters] };
   const { pricePiastres: _priceBounds, ...rangeFilters } = filters;
   const rangeFilter = admin ? { $and: [rangeFilters, { pricePiastres: { $type: 'number' } }] } : { $and: [visibility, rangeFilters, approvedProductPriceFilter()] };
   const priceSort = !admin && ['price_asc', 'price_desc'].includes(query.sort);
-  const productsQuery = priceSort ? Product.aggregate([
-    { $match: filter },
+  const discoverySort = !admin && query.sort === 'discovery';
+  const projection = Object.fromEntries(PUBLIC_LIST_FIELDS.split(' ').map(field => [field, 1]));
+  const giftCategoryIds = discoverySort ? graph.identities.filter(category => category.active &&
+    GIFT_BOX_CATEGORY.test(`${category.name} ${category.slug}`)).map(category => category._id) : [];
+  const stages = discoverySort ? [
+    { $match: filter }, { $project: projection },
+    { $addFields: { _discoveryOrder: discoveryOrder(giftCategoryIds) } },
+    { $sort: { _discoveryOrder: 1, _id: 1 } },
+    { $skip: pagination.skip }, { $limit: pagination.limit },
+    { $unset: '_discoveryOrder' },
+  ] : priceSort ? [
+{ $match: filter },
     { $addFields: { _confirmedPrice: { $cond: [{ $and: [{ $eq: ['$priceApproved', true] }, { $gt: ['$pricePiastres', 0] }] }, '$pricePiastres', null] } } },
     { $addFields: { _hasPrice: { $ne: ['$_confirmedPrice', null] } } },
     { $sort: { _hasPrice: -1, _confirmedPrice: query.sort === 'price_asc' ? 1 : -1, _id: 1 } },
     { $skip: pagination.skip }, { $limit: pagination.limit },
     { $project: Object.fromEntries(PUBLIC_LIST_FIELDS.split(' ').map(field => [field, 1])) },
-  ]).option({ maxTimeMS: QUERY_TIMEOUT_MS }).then(products => Product.populate(products, [{ path: 'categoryId', select: 'name slug active' }, { path: 'subcategoryId', select: 'name slug active' }]))
+  ] : null;
+  const productsQuery = stages ? Product.aggregate(stages).option({ maxTimeMS: QUERY_TIMEOUT_MS })
+    .then(products => Product.populate(products, [{ path: 'categoryId', select: 'name slug active' }, { path: 'subcategoryId', select: 'name slug active' }]))
     : Product.find(filter).select(admin ? `${ADMIN_LIST_FIELDS} purchaseSetup variants.inventory variants.priceApproved variants.pricePiastres personalization` : PUBLIC_LIST_FIELDS)
       .populate(admin ? [] : [{ path: 'categoryId', select: 'name slug active' }, { path: 'subcategoryId', select: 'name slug active' }])
       .sort(SORTS[query.sort ?? 'newest']).skip(pagination.skip).limit(pagination.limit).lean().maxTimeMS(QUERY_TIMEOUT_MS);

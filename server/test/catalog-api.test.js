@@ -387,4 +387,29 @@ describe('catalog API with an isolated MongoDB database', { concurrency: false }
     const { loadEligibleProduct } = await import('../src/commerce/pricing.js');
     await assert.rejects(loadEligibleProduct(product.id), { code: 'PRODUCT_UNAVAILABLE' });
   });
+
+  it('discovery shuffles imported category groups, favors gift boxes and keeps pages stable', async () => {
+    const giftBoxCategory = await Category.create({ name: 'Gift Boxes', slug: 'gift-boxes' });
+    const otherCategory = await Category.create({ name: 'Home Decor', slug: 'home-decor' });
+    const grouped = [
+      ...Array.from({ length: 50 }, (_, index) => readyInput(`watch-${index}`, { name: `Watch ${index}` })),
+      ...Array.from({ length: 16 }, (_, index) => readyInput(`gift-box-${index}`, { name: `Curated Gift Box ${index}`, categoryId: giftBoxCategory._id, subcategoryId: null })),
+      ...Array.from({ length: 34 }, (_, index) => readyInput(`decor-${index}`, { name: `Decor ${index}`, categoryId: otherCategory._id, subcategoryId: null })),
+    ];
+    await Product.insertMany(grouped);
+    const first = await request('/public/products?sort=discovery&page=1');
+    const second = await request('/public/products?sort=discovery&page=2');
+    const repeated = await request('/public/products?sort=discovery&page=1');
+    assert.equal(first.status, 200);
+    assert.equal(second.status, 200);
+    assert.deepEqual(first.body.pagination, { page: 1, limit: 20, total: 100, pages: 5 });
+    const a = first.body.products.map(product => product._id);
+    const b = second.body.products.map(product => product._id);
+    assert.deepEqual(repeated.body.products.map(product => product._id), a, 'Refreshing retains the same order');
+    assert.equal(new Set([...a, ...b]).size, 40, 'Pagination never repeats a product');
+    assert.ok(new Set(first.body.products.map(product => product.category.slug)).size >= 2, 'First page should span categories');
+    assert.ok(first.body.products.some(product => product.category.slug === 'gift-boxes'), 'Gift boxes must appear early');
+    assert.ok(first.body.products.every(product => !('_discoveryOrder' in product)), 'No internal ranking leaks to customers');
+    assert.equal((await request('/admin/products?sort=discovery', { headers: adminHeaders })).status, 400, 'Admin sorting remains unchanged');
+  });
 });
