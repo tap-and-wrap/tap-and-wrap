@@ -1,4 +1,5 @@
 export const CATALOG_SORTS = [
+  { value: 'discovery', label: 'Discover' },
   { value: 'featured', label: 'Featured' },
   { value: 'best_sellers', label: 'Best Sellers' },
   { value: 'newest', label: 'Newest' },
@@ -33,7 +34,7 @@ export function piastresToInput(value) {
 export function readCatalogParams(searchParams) {
   const positiveInteger = (value, fallback) => /^\d+$/.test(value || '') && Number.isSafeInteger(Number(value)) && Number(value) > 0 && Number(value) <= 200 ? Number(value) : fallback;
   const price = (key) => /^\d+$/.test(searchParams.get(key) || '') && Number.isSafeInteger(Number(searchParams.get(key))) ? searchParams.get(key) : '';
-  const sort = searchParams.get('sort') || 'featured';
+  const sort = searchParams.get('sort') || 'discovery';
   return {
     q: (searchParams.get('q') || '').trim().slice(0, 100),
     category: searchParams.get('category') || '',
@@ -41,7 +42,7 @@ export function readCatalogParams(searchParams) {
     availability: ['available', 'sold_out'].includes(searchParams.get('availability')) ? searchParams.get('availability') : '',
     minPrice: price('minPrice'),
     maxPrice: price('maxPrice'),
-    sort: CATALOG_SORTS.some((item) => item.value === sort) ? sort : 'featured',
+    sort: CATALOG_SORTS.some((item) => item.value === sort) ? sort : 'discovery',
     page: positiveInteger(searchParams.get('page'), 1),
     limit: 20,
   };

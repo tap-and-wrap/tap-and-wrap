@@ -90,3 +90,16 @@
 }
 .home-media-hero .video-surface-control:focus-visible,
 .home-service-media .video-surface-control:focus-visible { outline: 3px solid white; outline-offset: -6px; }
+
+/* Tap & Wrap hero controls: the outline CTA must never become white-on-white. */
+.home-media-hero .button-group .button.button-outline:hover {
+  background: rgba(20, 13, 10, .55);
+  border-color: #fff;
+  color: #fff;
+  opacity: 1;
+}
+.home-media-hero .button-group .button.button-outline:focus-visible {
+  background: rgba(20, 13, 10, .55);
+  border-color: #fff;
+  color: #fff;
+}
