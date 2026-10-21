@@ -85,13 +85,20 @@ for (const role of [null, 'customer', 'admin']) {
       await expect(nav.getByRole('link', { name: 'Dashboard', exact: true })).toHaveCount(0);
       await expect(nav.getByRole('link', { name: 'Contact', exact: true })).toHaveCount(0);
       if (width < 1024) {
-        const row = page.locator('.drawer-account-actions');
-        await expect(row.getByRole('link', { name: 'Account', exact: true })).toHaveAttribute('href', role === 'admin' ? '/admin' : role === 'customer' ? '/my-orders' : '/login');
-        await expect(page.locator('.drawer-account').getByText('Administrator account', { exact: true })).toHaveCount(role === 'admin' ? 1 : 0);
-        if (role) await row.getByRole('button', { name: 'Sign out', exact: true }).click();
-        else await row.getByRole('link', { name: 'Login', exact: true }).click();
-        await expect(page).toHaveURL(/\/login$/);
-        await expect(page.getByRole('dialog')).toHaveCount(0);
+        const drawer = page.getByRole('dialog', { name: 'Explore Tap & Wrap' });
+        await expect(drawer).toBeVisible();
+        await expect(drawer.getByRole('link', { name: 'Account', exact: true })).toHaveCount(0);
+        await expect(drawer.getByRole('button', { name: 'Sign out', exact: true })).toHaveCount(0);
+        await page.keyboard.press('Escape');
+        await expect(drawer).toHaveCount(0);
+        await expect(page.locator('header').getByRole('link', { name: 'Account', exact: true })).toHaveAttribute('href', role === 'admin' ? '/admin' : role === 'customer' ? '/my-orders' : '/login');
+        if (role === 'admin') {
+          await expect(page.locator('header .header-signout')).toBeHidden();
+        } else {
+          await expect(page.locator('header').getByRole('button', { name: 'Sign out', exact: true })).toHaveCount(0);
+          await page.locator('header').getByRole('link', { name: 'Account', exact: true }).click();
+          await expect(page).toHaveURL(role === 'customer' ? /\/my-orders$/ : /\/login$/);
+        }
       }
     });
   }
@@ -184,11 +191,13 @@ test('announcement marquee repeats only one message with no search or dashboard 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
   await page.getByRole('button', { name: 'Open menu', exact: true }).click();
-  const drawer = page.locator('.drawer-account-actions');
-  await expect(drawer.getByRole('link', { name: 'Account', exact: true })).toHaveAttribute('href', '/admin');
-  const row = await drawer.evaluate(node => [...node.children].map(child => child.getBoundingClientRect().y + child.getBoundingClientRect().height / 2));
-  expect(Math.max(...row) - Math.min(...row)).toBeLessThan(1);
+  const drawer = page.getByRole('dialog', { name: 'Explore Tap & Wrap' });
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByRole('link', { name: 'Account', exact: true })).toHaveCount(0);
+  await expect(drawer.getByRole('button', { name: 'Sign out', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
+  await expect(drawer).toHaveCount(0);
+  await expect(page.locator('header').getByRole('link', { name: 'Account', exact: true })).toHaveAttribute('href', '/admin');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   expect(await page.locator('.announcement-track').evaluate(node => getComputedStyle(node).animationName)).toBe('none');
 });
@@ -212,52 +221,16 @@ test('footer omits Explore and uses approved accessible icon destinations only',
   }
 });
 
-test('owner-approved trust claims appear but incomplete evidence still blocks publication', async ({ page }) => {
-  await mockCatalog(page); await page.goto('/');
-  await expect(page.locator('.trust-statistic')).toHaveCount(4);
-  await expect(page.locator('.website-trust')).toBeVisible();
-  await developerFixture(page, { heroVideo: null, trustStatistics: claims.map((item, index) => index === 2 ? { ...item, approvalEvidence: '' } : item) });
-  await page.reload(); await expect(page.locator('.trust-statistic')).toHaveCount(0);
-});
-
-test('approved synthetic counters animate once without layout shifts and expose final screen-reader values', async ({ page }) => {
-  await mockCatalog(page); await developerFixture(page, { heroVideo: null, trustStatistics: claims });
-  await page.setViewportSize({ width: 390, height: 500 }); await page.goto('/');
-  const statistics = page.locator('.website-trust');
-  await expect(statistics.locator('.trust-statistic')).toHaveCount(4);
-  expect(await statistics.locator('dl').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(2);
-  await expect(statistics.locator('dd .storefront-sr-only')).toHaveText(['50K+', '90%+', '10K+', '9+']);
-  const before = await statistics.boundingBox();
-  await statistics.scrollIntoViewIfNeeded();
-  await expect(statistics.locator('dd span[aria-hidden="true"]')).toHaveText(['50K+', '90%+', '10K+', '9+']);
-  const after = await statistics.boundingBox(); expect(after.height).toBeCloseTo(before.height, 0);
-  await page.evaluate(() => window.scrollTo(0, 0)); await statistics.scrollIntoViewIfNeeded();
-  await expect(statistics.locator('dd span[aria-hidden="true"]')).toHaveText(['50K+', '90%+', '10K+', '9+']);
-  await page.setViewportSize({ width: 1440, height: 900 });
-  expect(await statistics.locator('dl').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(4);
-});
-
-test('reduced-motion counters render approved final values immediately', async ({ page }) => {
-  await mockCatalog(page); await developerFixture(page, { heroVideo: null, trustStatistics: claims });
-  await page.emulateMedia({ reducedMotion: 'reduce' }); await page.goto('/');
-  await expect(page.locator('.trust-statistic dd span[aria-hidden="true"]')).toHaveText(['50K+', '90%+', '10K+', '9+']);
-});
-
-test('fractional-scale approved counters finish at the same exact accessible value with reserved width', async ({ page }) => {
+test('retired trust statistics cannot be reintroduced through developer content', async ({ page }) => {
   await mockCatalog(page);
-  await developerFixture(page, { heroVideo: null, trustStatistics: claims.map((item, index) => index === 0 ? { ...item, value: 51250 } : item) });
-  await page.setViewportSize({ width: 390, height: 500 }); await page.goto('/');
-  const statistic = page.locator('.trust-statistic').first();
-  await expect(statistic.locator('dd .storefront-sr-only')).toHaveText('51.25K+');
-  // Reproduce a late font-face swap explicitly: the number reservation must use
-  // font-size geometry, never the fallback/font face's changing zero-glyph width.
-  await statistic.locator('dd').evaluate(element => { element.style.fontFamily = 'Georgia, serif'; });
-  const before = await statistic.locator('dd').boundingBox();
-  await statistic.locator('dd').evaluate(element => { element.style.fontFamily = 'Arial, sans-serif'; });
-  await statistic.scrollIntoViewIfNeeded();
-  await expect(statistic.locator('dd span[aria-hidden="true"]')).toHaveText('51.25K+');
-  const after = await statistic.locator('dd').boundingBox();
-  expect(after.width).toBeCloseTo(before.width, 0); expect(after.height).toBeCloseTo(before.height, 0);
+  await developerFixture(page, { heroVideo: null, trustStatistics: claims });
+  await page.goto('/');
+  await expect(page.locator('.website-trust, .trust-statistic')).toHaveCount(0);
+  const marquee = page.getByTestId('brand-icon-marquee');
+  await expect(marquee).toBeVisible();
+  await expect(marquee).toHaveAttribute('aria-hidden', 'true');
+  await expect(marquee.locator('.brand-icon-marquee__group')).toHaveCount(2);
+  await expect(page.getByText('50K+', { exact: true })).toHaveCount(0);
 });
 
 test('hero selects safe approved responsive local media and preserves an honest blocked-media fallback', async ({ page }) => {

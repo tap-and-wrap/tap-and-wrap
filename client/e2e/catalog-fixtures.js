@@ -82,7 +82,7 @@ export async function mockCatalog(page, options = {}) {
       const query = url.searchParams;
       if (query.get('q')) rows = rows.filter((item) => item.name.toLowerCase().includes(query.get('q').toLowerCase()));
       if (query.get('availability')) rows = rows.filter((item) => item.orderingAvailable === (query.get('availability') === 'available'));
-      if (query.get('bestSeller') === 'true') rows = rows.filter((item) => item.bestSeller && item.orderingAvailable);
+      if (query.get('bestSeller') === 'true') rows = rows.filter((item) => item.bestSeller && item.orderingAvailable).slice(0, options.bestSellerCount ?? Number.POSITIVE_INFINITY);
       if (query.get('category') && ![category.slug, subcategory.slug].includes(query.get('category'))) rows = [];
       const rangeRows = rows;
       if (query.has('minPrice')) rows = rows.filter((item) => item.pricePiastres >= Number(query.get('minPrice')));

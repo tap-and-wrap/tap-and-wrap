@@ -34,7 +34,8 @@ test('desktop and mobile heroes show owner-consented named reviews without inven
   await page.goto('/');
   await expect(page.locator('.hero-film video')).toHaveAttribute('src', '/media/tap-wrap-desktop-hero.mp4');
   await expect(page.locator('.home-hero-content')).toBeVisible();
-  await expect(page.locator('.website-trust .trust-statistic')).toHaveCount(4);
+  await expect(page.locator('.website-trust')).toHaveCount(0);
+  await expect(page.getByTestId('brand-icon-marquee')).toBeVisible();
   await expect(page.locator('.home-service-media video')).toHaveCount(2);
   await expect(page.getByRole('heading', { name: 'Make their heart flutter.' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'What Our Customers Say' })).toBeVisible();

@@ -22,6 +22,8 @@ test.afterEach(async ({ page, browser }, info) => {
 
 for (const width of [390, 1440]) {
   test(`both service films survive rapid controls, scroll, motion, visibility, history and refresh at ${width}px`, async ({ page }) => {
+    // This is a six-film-cycle stress test; both desktop repeats took 37–39 seconds.
+    test.setTimeout(90_000);
     await page.setViewportSize({ width, height: 844 });
     const errors = [], responses = [];
     page.on('pageerror', error => errors.push(error.message));

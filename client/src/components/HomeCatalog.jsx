@@ -82,18 +82,20 @@ export function FeaturedCategories() {
 
 export function BestSellerProducts() {
   const selected = useQuery({ queryKey: ['catalog', 'home-owner-picks'], queryFn: ({ signal }) => listProducts({ bestSeller: true, sort: 'best_sellers', limit: 8 }, signal) });
-  const fallback = useQuery({ queryKey: ['catalog', 'home-starter-picks'], queryFn: ({ signal }) => listProducts({ sort: 'newest', limit: 8 }, signal) });
+  // Do not start any fallback query until the owner selections are known.
+  const needsFallback = selected.isSuccess && selected.data.products.length < 8;
+  const fallback = useQuery({ queryKey: ['catalog', 'home-starter-picks'], queryFn: ({ signal }) => listProducts({ sort: 'newest', limit: 8 }, signal), enabled: needsFallback });
   const roots = useQuery({ queryKey: ['catalog', 'home-main-categories'], queryFn: ({ signal }) => listCategories({ parent: 'root', limit: 20 }, signal) });
   // One bounded request per distinct category rather than sampling 8 from the latest watches.
   const categoryCandidates = (roots.data?.categories || []).filter(category => category.productCount > 0).slice(0, 8);
   const picks = useQueries({ queries: categoryCandidates.map(category => ({
     queryKey: ['catalog', 'home-starter-category', category.slug],
     queryFn: ({ signal }) => listProducts({ category: category.slug, sort: 'newest', limit: 1 }, signal),
-    enabled: (selected.data?.products?.length || 0) < 8,
+    enabled: needsFallback,
     staleTime: 300_000,
   })) });
-  if (selected.isPending || fallback.isPending || roots.isPending || picks.some(query => query.isLoading)) return <p className="catalog-state" role="status">Loading featured gifts…</p>;
-  if (selected.isError || fallback.isError) return <div className="catalog-state" role="alert"><p>Featured gifts are unavailable at the moment.</p><button className="button button-outline" onClick={() => { selected.refetch(); fallback.refetch(); roots.refetch(); }}>Try again</button></div>;
+  if (selected.isPending || (needsFallback && (fallback.isPending || roots.isPending || picks.some(query => query.isLoading)))) return <p className="catalog-state" role="status">Loading featured gifts…</p>;
+  if (selected.isError || (needsFallback && fallback.isError)) return <div className="catalog-state" role="alert"><p>Featured gifts are unavailable at the moment.</p><button className="button button-outline" onClick={() => { selected.refetch(); if (needsFallback) { fallback.refetch(); roots.refetch(); } }}>Try again</button></div>;
   const ownerPicks = selected.data.products;
   const ids = new Set(ownerPicks.map(item => item._id));
   const varied = picks.flatMap(query => query.data?.products || []).filter(item => {
@@ -101,7 +103,7 @@ export function BestSellerProducts() {
     ids.add(item._id);
     return true;
   });
-  const starter = [...fallback.data.products].filter(item => !ids.has(item._id)).sort((a, b) => {
+  const starter = [...(fallback.data?.products || [])].filter(item => !ids.has(item._id)).sort((a, b) => {
     const score = value => [...value.slug].reduce((acc, letter) => (acc * 31 + letter.charCodeAt(0)) >>> 0, 11939);
     return score(a) - score(b);
   });
