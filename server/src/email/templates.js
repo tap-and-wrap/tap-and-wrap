@@ -66,7 +66,16 @@ export function renderEmailTemplate(event, { clientOrigin = process.env.CLIENT_O
     linkText = event.event === 'password_reset' ? 'Reset password' : 'Verify email';
   }
   const lines = [introduction];
-  for (const item of (Array.isArray(snapshot.items) ? snapshot.items : []).slice(0, 20)) if (typeof item.name === 'string' && Number.isInteger(item.quantity) && item.quantity > 0) lines.push(`${item.name.slice(0, 160)} x ${item.quantity}.`);
+  for (const item of (Array.isArray(snapshot.items) ? snapshot.items : []).slice(0, 20)) {
+    if (typeof item.name !== 'string' || !Number.isInteger(item.quantity) || item.quantity < 1) continue;
+    lines.push(`${item.name.slice(0, 160)} x ${item.quantity}.`);
+    if (item.kind === 'gift_box_v2') {
+      const components = (Array.isArray(item.giftBox?.components) ? item.giftBox.components : []).slice(0, 40)
+        .filter(component => typeof component.name === 'string' && Number.isSafeInteger(component.quantity) && component.quantity > 0);
+      for (const component of components) lines.push(`Per completed gift box: ${component.name.slice(0, 120)} x ${component.quantity}.`);
+      lines.push(`Gift card: ${item.giftBox?.giftCardSelected === true ? 'selected; personal message remains on the secure order page' : 'not selected'}.`);
+    }
+  }
   let ownerWhatsapp = null;
   if (/^TW-[A-F0-9]{12}$/.test(snapshot.requestReference || '')) {
     lines.push(`Request ${snapshot.requestReference}.`); link = new URL('/contact', origin).href; linkText = 'Contact Tap & Wrap';

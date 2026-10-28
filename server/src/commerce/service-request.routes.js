@@ -16,6 +16,7 @@ import { openPrivateUpload } from './uploads.js';
 import { commerceError } from './errors.js';
 import { GOVERNORATES } from './promotions.js';
 import { env } from '../config/env.js';
+import { presentGiftBoxV2Snapshot } from '../gift-box/request-presentation.js';
 
 export const serviceRequestRoutes = Router(), adminServiceRequestRoutes = Router();
 adminServiceRequestRoutes.use((req, res, next) => { res.set('Cache-Control', 'private, no-store'); res.set('X-Robots-Tag', 'noindex, nofollow, noarchive'); res.vary('Cookie'); next(); });
@@ -49,7 +50,7 @@ serviceRequestRoutes.get('/service-requests/submissions/:key', async (req, res) 
 async function detail(record) {
   const order = record.orderId ? await Order.findById(record.orderId).lean().maxTimeMS(3000) : null;
   const accounting = order ? await orderAccounting(order, { admin: true }) : null;
-  return { ...receipt(record), governorates: GOVERNORATES, customer: record.customer, details: record.details, templateSnapshot: record.templateSnapshot, productSnapshot: record.productSnapshot, components: record.components, estimate: record.estimate, quotations: record.quotations, history: record.history, revision: record.revision,
+  return { ...receipt(record), governorates: GOVERNORATES, customer: record.customer, details: record.details, giftBoxV2Snapshot: presentGiftBoxV2Snapshot(record.giftBoxV2Snapshot), templateSnapshot: record.templateSnapshot, productSnapshot: record.productSnapshot, components: record.components, estimate: record.estimate, quotations: record.quotations, history: record.history, revision: record.revision,
     status: requestStatus(record, order), whatsapp: requestWhatsapp({ ...record, linkedOrderNumber: order?.orderNumber, linkedPaymentState: order?.paymentState, linkedOutstandingPiastres: accounting?.outstandingPiastres }), order: order ? { id: String(order._id), orderNumber: order.orderNumber, fulfillmentState: order.fulfillmentState, paymentState: order.paymentState, accounting } : null,
     files: await Upload.find({ _id: { $in: record.uploadIds }, requestId: record._id, state: 'retained' }).select('_id mimeType sizeBytes').lean().maxTimeMS(3000) };
 }

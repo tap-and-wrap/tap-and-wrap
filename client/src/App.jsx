@@ -26,6 +26,11 @@ const CustomizationPage = lazy(() => import('./pages/CustomizationPage.jsx'));
 const AdminCommercePage = lazy(() => import('./pages/AdminCommercePage.jsx'));
 const AdminOrderPage = lazy(() => import('./pages/AdminOrderPage.jsx'));
 const ServiceRequestPage = lazy(() => import('./pages/ServiceRequestPage.jsx'));
+const GiftBoxBuilderPage = lazy(() => import('./pages/GiftBoxBuilderPage.jsx'));
+const AdminGiftBoxComponentsPage = lazy(() => import('./pages/AdminGiftBoxComponentsPage.jsx'));
+const AdminGiftBoxPoliciesPage = lazy(() => import('./pages/AdminGiftBoxPoliciesPage.jsx'));
+const GiftBoxGeometryReviewPage = import.meta.env.DEV ? lazy(() => import('./pages/GiftBoxGeometryReviewPage.jsx')) : null;
+const giftBoxV2Enabled = import.meta.env.VITE_GIFT_BOX_BUILDER_ENABLED === 'true' || (import.meta.env.DEV && import.meta.env.VITE_GIFT_BOX_BUILDER_ENABLED !== 'false');
 const AdminAttentionPage = lazy(() => import('./pages/AdminAttentionPage.jsx'));
 const AdminNotificationsPage = lazy(() => import('./pages/AdminNotificationsPage.jsx'));
 const AdminRequestsPage = lazy(() => import('./pages/AdminRequestsPage.jsx'));
@@ -47,7 +52,10 @@ export default function App() {
   <Route path="/products/:slug" element={<ProductPage/>}/>
   <Route path="/products/:slug/customize" element={<CustomizationPage/>}/>
   <Route path="/customize" element={<CustomizePage/>}/>
-  <Route path="/customize/gift-box" element={<ServiceRequestPage service="gift_box"/>}/>
+  <Route path="/customize/gift-box" element={giftBoxV2Enabled ? <GiftBoxBuilderPage/> : <ServiceRequestPage service="gift_box"/>}/>
+  {giftBoxV2Enabled && <Route path="/admin/gift-box/components" element={<RequireAdmin><AdminGiftBoxComponentsPage/></RequireAdmin>}/>}
+  <Route path="/admin/gift-box/fulfillment-policies" element={<RequireAdmin><AdminGiftBoxPoliciesPage/></RequireAdmin>}/>
+  {GiftBoxGeometryReviewPage && <Route path="/dev/gift-box/geometry" element={<GiftBoxGeometryReviewPage/>}/>}
   <Route path="/customize/laser-engraving" element={<ServiceRequestPage service="laser_engraving"/>}/>
   <Route path="/admin/attention" element={<RequireAdmin><AdminAttentionPage/></RequireAdmin>}/>
   <Route path="/admin/notifications" element={<RequireAdmin><AdminNotificationsPage/></RequireAdmin>}/>

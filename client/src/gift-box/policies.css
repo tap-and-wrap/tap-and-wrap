@@ -1,0 +1,37 @@
+.gb-policies-page { --gb-policy-border: var(--tw-border, #eadad5); }
+.gb-policy-editor, .gb-policy-warning, .gb-policy-box-select { width: min(100%, 58rem); }
+.gb-policy-warning { border: 1px solid var(--gb-policy-border); border-left: 3px solid #915b50; border-radius: .5rem; background: #fff; padding: 1rem; margin-bottom: 1.5rem; }
+.gb-policy-warning p { margin: .5rem 0 0; }
+.gb-policy-editor { min-width: 0; }
+.gb-policy-editor header { margin: 1.5rem 0; }
+.gb-policy-editor :is(h2,h3,h4,p,li,dd,code,summary,button) { overflow-wrap: anywhere; }
+.gb-policy-editor :is(h2,h3,h4) { margin-top: 0; }
+.gb-policy-editor :is(input,select,textarea), .gb-policy-box-select select { min-width: 0; max-width: 100%; width: 100%; }
+.gb-policy-editor :is(label,fieldset), .gb-policy-box-select { display: grid; gap: .5rem; min-width: 0; }
+.gb-policy-editor label { margin-bottom: 1rem; }
+.gb-policy-editor :is(input,select,textarea), .gb-policy-box-select select { border: 1px solid var(--admin-control-border, #9b7d72); border-radius: .3rem; background: #fff; color: #62483f; padding: .7rem; font: inherit; }
+.gb-policy-editor :is(input,select,textarea,button):focus-visible, .gb-policy-box-select select:focus-visible { outline: 2px solid #795045; outline-offset: 3px; }
+.gb-policy-editor button { min-height: 44px; width: fit-content; max-width: 100%; }
+.gb-policy-editor :is(button,input,select,textarea):disabled { cursor: not-allowed; opacity: .65; }
+.gb-policy-form, .gb-policy-approval, .gb-policy-withdraw, .gb-policy-history, .gb-policy-audit { border: 1px solid var(--gb-policy-border); border-radius: .6rem; background: #fff; padding: 1.25rem; margin: 1.5rem 0; }
+.gb-policy-editor fieldset { border: 1px solid var(--gb-policy-border); padding: 1rem; margin: 0 0 1.5rem; border-radius: .3rem; }
+.gb-policy-editor legend { font-weight: 600; max-width: 100%; padding: 0 .35rem; }
+.gb-policy-help { color: #6d554d; font-size: .875rem; line-height: 1.6; }
+.gb-policy-row, .gb-policy-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: end; }
+.gb-policy-row { padding: 1rem 0; border-bottom: 1px solid var(--gb-policy-border); margin-bottom: 1rem; }
+.gb-policy-component { padding: 1rem 0; border-top: 1px solid var(--gb-policy-border); margin-top: 1rem; }
+.gb-policy-component h4 { font-family: inherit; font-weight: 600; font-size: 1rem; }
+.gb-policy-editor .gb-policy-check { display: flex; align-items: flex-start; gap: .7rem; line-height: 1.6; }
+.gb-policy-editor .gb-policy-check input { flex: 0 0 auto; width: 1.2rem; min-height: 1.2rem; margin-top: .2rem; accent-color: #795045; }
+.gb-policy-editor details { padding: .8rem 0; border-bottom: 1px solid var(--gb-policy-border); }
+.gb-policy-editor summary { cursor: pointer; padding: .4rem 0; min-height: 44px; font-weight: 600; }
+.gb-policy-editor dl { display: grid; gap: .4rem; }
+.gb-policy-editor dt { font-weight: 600; }
+.gb-policy-editor dd { margin: 0 0 .7rem; min-width: 0; }
+.gb-policy-editor dl > div { min-width: 0; }
+.gb-policy-literal { white-space: pre-wrap; }
+@media (max-width: 600px) {
+  .gb-policy-row, .gb-policy-grid { grid-template-columns: minmax(0, 1fr); }
+  .gb-policy-form, .gb-policy-approval, .gb-policy-withdraw, .gb-policy-history, .gb-policy-audit { padding: .85rem; }
+  .gb-policy-editor fieldset { padding: .75rem; }
+}

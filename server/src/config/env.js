@@ -16,6 +16,8 @@ export const env = {
   // Temporary read-only public showcase: does not approve prices, stock, or change database records.
   catalogBrowsePreviewEnabled: process.env.CATALOG_BROWSE_PREVIEW_ENABLED === 'true',
   productAliasesEnabled: process.env.PRODUCT_ALIASES_ENABLED === 'true',
+  // Foundation API only; does not enable customer submission, conversion or checkout.
+  giftBoxBuilderBackendEnabled: process.env.GIFT_BOX_BUILDER_BACKEND_ENABLED === 'true',
   clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
   sessionSecret: process.env.SESSION_SECRET || '',
   // Both gates remain OFF unless an operator explicitly authorizes launch.

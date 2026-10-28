@@ -1,5 +1,10 @@
 import mongoose from 'mongoose';
+import { GIFT_BOX_REQUEST_KIND, GIFT_BOX_REQUEST_CONTRACT_VERSION } from '../../../shared/gift-box/request-contract.mjs';
 const schema = new mongoose.Schema({
+  giftBoxV2Snapshot: { type: mongoose.Schema.Types.Mixed, default: null, immutable: true, validate: { validator: function (value) {
+    return value === null || this.service === 'gift_box' && value.kind === GIFT_BOX_REQUEST_KIND && value.contractVersion === GIFT_BOX_REQUEST_CONTRACT_VERSION
+      && value.physicalFitReviewRequired === true && value.arrangementApproved === false && value.submissionAllowed === false && value.orderConversionAllowed === false && value.inventoryReserved === false;
+  }, message: 'V2 request snapshots must preserve all foundation review and conversion gates.' } },
   templateSnapshot: { type: mongoose.Schema.Types.Mixed, default: null, immutable: true },
   reference: { type: String, required: true, unique: true, immutable: true },
   owner: { type: String, required: true, immutable: true }, requestKey: { type: String, required: true, immutable: true }, requestHash: { type: String, required: true, immutable: true },

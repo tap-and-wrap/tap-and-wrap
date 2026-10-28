@@ -44,6 +44,19 @@ export function setNotificationProviderForTests(provider) {
   testProvider = provider || undefined;
 }
 
+function orderItemSnapshot(line) {
+  const item = { name: String(line.name || '').slice(0, 160), quantity: line.quantity };
+  if (line.kind !== 'gift_box_v2') return item;
+  // Email needs a useful purchase summary, never the private message,
+  // configuration identity, placements or editable current business settings.
+  return { ...item, kind: 'gift_box_v2', giftBox: {
+    components: (Array.isArray(line.giftBox?.components) ? line.giftBox.components : []).slice(0, 40)
+      .filter(component => ['box', 'flower', 'plush', 'chocolate', 'ribbon', 'gift_card'].includes(component.category))
+      .map(component => ({ category: component.category, name: String(component.displayName || '').slice(0, 120), quantity: component.quantityPerBox })),
+    giftCardSelected: Boolean(line.giftBox?.configuration?.selection?.giftCard),
+  } };
+}
+
 export async function enqueueOrderEvent(order, event, { session, eventVersion } = {}) {
   if (!ORDER_NOTIFICATION_EVENTS.includes(event)) throw notificationError('INVALID_ORDER_EVENT', 400);
   await enqueueOwnerEvents(order, 'order', event, { session, eventVersion });
@@ -58,7 +71,7 @@ export async function enqueueOrderEvent(order, event, { session, eventVersion } 
   writeGuard();
   await NotificationEvent.updateOne({ eventKey }, { $setOnInsert: {
     eventKey, orderId, event, recipient: recipient.toLowerCase(),
-    snapshot: { items: (order.lines || []).slice(0, 20).map(line => ({ name: String(line.name || '').slice(0, 160), quantity: line.quantity })), orderNumber, orderChannel: order.orderChannel || 'website', accountingVersion: order.accountingVersion || 0, shippingState: order.charges?.find(charge => charge.kind === 'shipping')?.state || null,
+    snapshot: { items: (order.lines || []).slice(0, 20).map(orderItemSnapshot), orderNumber, orderChannel: order.orderChannel || 'website', accountingVersion: order.accountingVersion || 0, shippingState: order.charges?.find(charge => charge.kind === 'shipping')?.state || null,
       paymentState: order.paymentState,
       ...(order.orderChannel === 'owner_quotation' && Number.isSafeInteger(order.acceptedQuotation?.totalPiastres) ? { acceptedQuotationTotalPiastres: order.acceptedQuotation.totalPiastres } : {}),
       ...(order.accountingVersion === 1 ? { financial: { collectedPiastres: order.financialSummary?.collectedPiastres, refundedPiastres: order.financialSummary?.refundedPiastres, outstandingPiastres: order.financialSummary?.outstandingPiastres } } : {}),

@@ -1,0 +1,12 @@
+import { api, safePatch, safePost, safePut } from '../services/api.js';
+export const getCatalog = async (signal, admin = false) => (await api.get(admin ? '/admin/gift-box/components' : '/gift-box/catalog', { signal, params: { limit: 100 } })).data.data;
+export const getSetting = async id => (await api.get(`/admin/gift-box/components/${id}`)).data.data.component;
+export const updateSetting = async (id, body) => (await safePatch(`/admin/gift-box/components/${id}`, body)).data.data.component;
+export const reorderCategory = async body => (await safePatch('/admin/gift-box/components/reorder', body)).data.data;
+export const getEstimate = async (body, signal) => (await safePost('/gift-box/estimate', body, { signal })).data.data.estimate;
+const policyPath = '/admin/gift-box/fulfillment-policies';
+export const getFulfillmentPolicies = async signal => (await api.get(policyPath, { signal })).data.data;
+export const getFulfillmentPolicy = async (boxId, signal, historyPage = 1) => (await api.get(`${policyPath}/${boxId}`, { signal, params: { historyPage } })).data.data.policy;
+export const saveFulfillmentDraft = async (boxId, body) => (await safePut(`${policyPath}/${boxId}/draft`, body)).data.data.policy;
+export const approveFulfillmentPolicy = async (boxId, body) => (await safePost(`${policyPath}/${boxId}/approve`, body)).data.data.policy;
+export const withdrawFulfillmentPolicy = async (boxId, body) => (await safePost(`${policyPath}/${boxId}/withdraw`, body)).data.data.policy;

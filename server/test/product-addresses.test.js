@@ -116,7 +116,7 @@ test('public listing batches canonical reads and indexed resolver never scans pr
 
 test('cart link presentation uses canonical addresses without changing snapshots, totals or retention', async () => {
   const product = await create(draft('legacy-cart-product'));
-  const cart = await Cart.create({ owner: 'guest:isolated-alias-fixture', expiresAt: new Date(Date.now() + 60000),
+  const cart = await Cart.create({ owner: `guest:${'c'.repeat(64)}`, expiresAt: new Date(Date.now() + 60000),
     items: [{ id: 'fixture-line', identity: 'fixture-identity', productId: product._id, name: product.name, slug: product.slug, quantity: 1 }] });
   const before = await Cart.findById(cart._id).lean();
   const response = await cartResponse(cart.owner);

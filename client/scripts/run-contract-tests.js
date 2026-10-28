@@ -1,15 +1,47 @@
 import { fork, spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { once } from 'node:events';
+import { readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 const cwd = fileURLToPath(new URL('../', import.meta.url));
 const keys = ['PATH','Path','SystemRoot','WINDIR','TEMP','TMP','COMSPEC','PATHEXT','USERPROFILE','LOCALAPPDATA','APPDATA','PLAYWRIGHT_CHANNEL'];
 const safe = Object.fromEntries(keys.filter(k => process.env[k] !== undefined).map(k => [k, process.env[k]]));
 const args = process.argv.slice(2), enabled = args.includes('--enabled-checkout');
+if (args.length === 0) {
+  // Each spec retains the real rate limits and receives its own fresh database,
+  // API and browser fixture. Explicit selections keep the original lifecycle.
+  const specs = (await readdir(new URL('../connected-e2e/', import.meta.url))).filter(name => name.endsWith('contracts.spec.js')).sort();
+  if (!specs.length) throw new Error('No connected contract specs were found.');
+  let activeChild, interrupted, failed = 0;
+  const handlers = new Map(['SIGINT', 'SIGTERM'].map(signal => [signal, () => { interrupted = signal; activeChild?.kill(signal); }]));
+  for (const [signal, handler] of handlers) process.on(signal, handler);
+  try {
+    for (const spec of specs) {
+      if (interrupted) break;
+      const escaped = spec.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const selector = `(^|[\\\\/])${escaped}$`;
+      console.log(`Connected contract fixture: ${spec}`);
+      const child = spawn(process.execPath, [fileURLToPath(import.meta.url), selector], {
+        cwd, env: { ...safe, NODE_OPTIONS: '' }, stdio: 'inherit', windowsHide: true,
+      });
+      activeChild = child;
+      const result = await new Promise(resolve => {
+        child.once('error', () => resolve({ code: null }));
+        child.once('close', (code, signal) => resolve({ code, signal }));
+      });
+      activeChild = null;
+      if (result.code !== 0 || result.signal) failed += 1;
+    }
+  } finally {
+    for (const [signal, handler] of handlers) process.off(signal, handler);
+  }
+  process.exitCode = interrupted ? interrupted === 'SIGINT' ? 130 : 143 : failed ? 1 : 0;
+  if (!interrupted) console.log(`Connected contract file batches passed: ${specs.length - failed}/${specs.length}.`);
+} else {
 const children = []; let browser, shuttingDown;
 async function port() { const socket = createServer(); socket.listen(0,'127.0.0.1'); await once(socket,'listening'); const value = socket.address().port; await new Promise(resolve => socket.close(resolve)); return value; }
 const apiPort = await port(); let webPort = await port(); while (webPort === apiPort) webPort = await port();
-const env = { ...safe, NODE_ENV:'test', NODE_OPTIONS:'', TAP_WRAP_ISOLATED_TEST:'true', MONGODB_URI:'', CATALOG_IMPORT_STAGING_URI:'', TAP_WRAP_CONTRACT_API_PORT:String(apiPort), TAP_WRAP_CONTRACT_WEB_PORT:String(webPort), TAP_WRAP_CONTRACT_CHECKOUT:String(enabled), VITE_API_BASE_URL:'http://127.0.0.1:' + apiPort + '/api/v1', VITE_META_ENABLED:'false', VITE_SEO_INDEXING_ENABLED:'false' };
+const env = { ...safe, NODE_ENV:'test', NODE_OPTIONS:'', TAP_WRAP_ISOLATED_TEST:'true', MONGODB_URI:'', CATALOG_IMPORT_STAGING_URI:'', TAP_WRAP_CONTRACT_API_PORT:String(apiPort), TAP_WRAP_CONTRACT_WEB_PORT:String(webPort), TAP_WRAP_CONTRACT_CHECKOUT:String(enabled), VITE_GIFT_BOX_BUILDER_ENABLED:'false', VITE_API_BASE_URL:'http://127.0.0.1:' + apiPort + '/api/v1', VITE_META_ENABLED:'false', VITE_SEO_INDEXING_ENABLED:'false' };
 async function start(file) {
   const child = fork(file, ['--isolated-contract-tests'], { cwd, env, stdio:['ignore','inherit','inherit','ipc'], windowsHide:true });
   children.push(child);
@@ -40,3 +72,4 @@ try {
   const [code] = await once(browser,'exit'); process.exitCode = code ?? 1;
 } catch { console.error('Isolated connected fixtures failed; no merchant configuration was used.'); process.exitCode=1; }
 finally { try { await cleanup(); console.log('Connected fixtures stopped cleanly.'); } catch { console.error('Connected fixture cleanup failed.'); process.exitCode=1; } }
+}

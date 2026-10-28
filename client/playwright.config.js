@@ -2,6 +2,7 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
+  testIgnore: ['**/gift-box-v2.spec.js','**/gift-box-phase35.spec.js','**/gift-box-phase4.spec.js','**/gift-box-cart.spec.js'],
   timeout: 30_000,
   expect: { timeout: 8000 },
   fullyParallel: false,
@@ -20,7 +21,7 @@ export default defineConfig({
     command: 'npm run dev -- --host 127.0.0.1 --port 5191 --strictPort',
     url: 'http://127.0.0.1:5191',
     reuseExistingServer: false,
-    env: { TAP_WRAP_ISOLATED_TEST: 'true', VITE_API_BASE_URL: 'http://127.0.0.1:4091/api/v1', VITE_META_ENABLED: 'true', VITE_SEO_INDEXING_ENABLED: 'false' },
+    env: { TAP_WRAP_ISOLATED_TEST: 'true', VITE_GIFT_BOX_BUILDER_ENABLED: 'false', VITE_API_BASE_URL: 'http://127.0.0.1:4091/api/v1', VITE_META_ENABLED: 'true', VITE_SEO_INDEXING_ENABLED: 'false' },
     timeout: 30_000,
   },
 });

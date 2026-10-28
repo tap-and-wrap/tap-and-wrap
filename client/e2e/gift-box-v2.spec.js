@@ -1,0 +1,139 @@
+import { expect, test } from '@playwright/test';
+import { ASSET_VERSION } from '../../shared/gift-box/definitions.mjs';
+import { giftBoxFixture as fixture, beginGiftBox as begin } from './gift-box-fixtures.js';
+
+test.beforeEach(async ({ page }) => { const errors = []; page.on('pageerror', error => errors.push(error.message)); page.__giftBoxErrors = errors; });
+test.afterEach(async ({ page }) => { expect(page.__giftBoxErrors).toEqual([]); });
+
+test('12-option slices persist across all steps and chocolate selectors are text only', async ({ page }, testInfo) => {
+  const f = await fixture(page); await begin(page);
+  await expect(page.locator('.gb-options-box .gb-option')).toHaveCount(12); await expect(page.getByRole('button', { name: /Load More/ })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Next', exact: true }).click(); await expect(page.locator('.gb-options-flower .gb-option')).toHaveCount(3);
+  await page.getByRole('button', { name: 'Add Fixture rose-red', exact: true }).click();
+  await page.getByRole('button', { name: 'Add Fixture rose-red', exact: true }).click();
+  await page.getByRole('button', { name: 'Next', exact: true }).click(); await expect(page.locator('.gb-options-plush .gb-option')).toHaveCount(12);
+  await page.getByRole('button', { name: /Load More/ }).click(); await expect(page.locator('.gb-options-plush .gb-option')).toHaveCount(17); await expect(page.getByRole('button', { name: /Load More/ })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Add Fixture plush-17', exact: true }).click();
+  await page.getByRole('button', { name: 'Next', exact: true }).click(); await expect(page.locator('.gb-options-chocolate .gb-option')).toHaveCount(12);
+  await expect(page.locator('.gb-options-chocolate img')).toHaveCount(0); await page.getByRole('button', { name: /Load More/ }).click(); await expect(page.locator('.gb-options-chocolate .gb-option')).toHaveCount(20);
+  await page.getByRole('button', { name: 'Add Fixture chocolate-20', exact: true }).click(); await page.getByRole('button', { name: 'Add Fixture chocolate-20', exact: true }).click();
+  await expect(page.locator('.gb-placed')).toHaveCount(5);
+  await expect.poll(() => f.estimates.at(-1)?.items).toEqual([{ componentId: 'chocolate-20', quantity: 2 }, { componentId: 'plush-17', quantity: 1 }, { componentId: 'rose-red', quantity: 2 }]);
+  await page.getByRole('button', { name: 'Back', exact: true }).click(); await expect(page.locator('.gb-options-plush .gb-option')).toHaveCount(17);
+  await page.getByRole('button', { name: 'Next', exact: true }).click(); await expect(page.locator('.gb-options-chocolate .gb-option')).toHaveCount(20);
+  expect(f.calls.filter(call => call.path.endsWith('/catalog'))).toHaveLength(1);
+  expect(f.media.some(path => path.includes('/1200/chocolate/chocolate-20-builder.webp'))).toBe(true);
+  await page.evaluate(() => { document.activeElement?.blur(); window.scrollTo({ top: 0, left: 0, behavior: 'instant' }); });
+  await page.screenshot({ path: testInfo.outputPath('mixed-arrangement-study.png'), fullPage: true });
+});
+test('saved option order is retained and media loads only the current category and selected placements', async ({ page }) => {
+  const f = await fixture(page);
+  const lastPlush = f.components.splice(f.components.findIndex(item => item.componentId === 'plush-17'), 1)[0]; f.components.unshift(lastPlush);
+  await begin(page);
+  expect(f.media.every(path => path.includes('/boxes/'))).toBe(true);
+  expect(f.media.filter(path => path.includes('/1200/')).every(path => path.endsWith('/box-2-open-top.webp'))).toBe(true);
+  await page.locator('.gb-steps button').nth(2).click(); await expect(page.locator('.gb-options-plush .gb-option').first()).toContainText('Fixture plush-17');
+  expect(f.media.some(path => path.includes('/1200/toys/'))).toBe(false);
+  await page.getByRole('button', { name: 'Add Fixture plush-17', exact: true }).click(); await expect.poll(() => f.media.some(path => path.endsWith('/1200/toys/plush-17-builder.webp'))).toBe(true);
+});
+test('local media rejects references, defective artwork, unexpected paths and cross-origin reads', async ({ page, request }) => {
+  await fixture(page); await page.goto('/dev/gift-box/geometry');
+  const prefix = `/__gift-box-local/${ASSET_VERSION}`;
+  for (const path of ['/1200/boxes/box-1-open-top.webp', '/320/ribbons/ribbons.jpeg', '/development-manifest.json', '/1200/chocolate/chocolate-21-builder.webp']) expect((await request.get(prefix + path)).status()).toBe(404);
+  expect((await request.get(`${prefix}/1200/boxes/box-2-open-top.webp`, { headers: { Origin: 'https://unapproved.example' } })).status()).toBe(404);
+  const allowed = await request.get(`${prefix}/1200/boxes/box-2-open-top.webp`); expect(allowed.status()).toBe(200); expect(allowed.headers()['content-type']).toBe('image/webp'); expect(allowed.headers()['cache-control']).toContain('no-store');
+});
+test('drag, keyboard moves, quantity changes, undo and clear preserve price separation', async ({ page }) => {
+  const f = await fixture(page); await begin(page); await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await page.getByRole('button', { name: 'Add Fixture rose-red', exact: true }).click();
+  await expect(page.locator('.gb-price-summary strong')).toContainText('20.00');
+  const item = page.locator('.gb-placed').first(), id = await item.getAttribute('data-instance-id'), before = await item.getAttribute('style');
+  const requests = f.estimates.length;
+  const bounds = await item.boundingBox(); await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2); await page.mouse.down(); await page.mouse.move(bounds.x + bounds.width / 2 + 35, bounds.y + bounds.height / 2 + 18, { steps: 5 }); await page.mouse.up();
+  await expect(item).not.toHaveAttribute('style', before); await item.focus(); await page.keyboard.press('ArrowLeft'); await page.getByRole('button', { name: 'Move up', exact: true }).click();
+  expect(f.estimates).toHaveLength(requests); expect(await item.getAttribute('data-instance-id')).toBe(id);
+  await page.getByRole('button', { name: 'Add one Fixture rose-red', exact: true }).click(); await expect(page.locator('.gb-placed')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Remove one Fixture rose-red', exact: true }).click(); await expect(page.locator('.gb-placed')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click(); await expect(page.locator('.gb-placed')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Clear items', exact: true }).click(); await expect(page.locator('.gb-placed')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click(); await expect(page.locator('.gb-placed')).toHaveCount(2);
+});
+test('box changes stage existing items, retain quantities and allow undo', async ({ page }) => {
+  await fixture(page); await begin(page); await page.getByRole('button', { name: 'Next', exact: true }).click(); await page.getByRole('button', { name: 'Add Fixture rose-yellow', exact: true }).click();
+  await page.getByRole('button', { name: 'Back', exact: true }).click(); await page.getByRole('button', { name: 'Choose Fixture box-11', exact: true }).click();
+  await expect(page.locator('.gb-placed')).toHaveCount(0); await expect(page.getByText('Items waiting for placement')).toBeVisible(); await expect(page.locator('.gb-item-list')).toContainText('Fixture rose-yellow × 1');
+  await page.getByRole('button', { name: 'Undo', exact: true }).click(); await expect(page.locator('.gb-placed')).toHaveCount(1); await expect(page.getByRole('button', { name: 'Choose Fixture box-2', exact: true })).toHaveAttribute('aria-pressed', 'true');
+});
+test('approved card supports an optional 500-code-point message without enabling submission', async ({ page }) => {
+  const f = await fixture(page); await begin(page); await page.locator('.gb-steps button').nth(4).click();
+  await expect(page.locator('.gb-options-ribbon button')).toHaveCount(12);
+  await page.getByLabel('Add a gift card').check(); await page.getByLabel('Your personal message').fill('💐'.repeat(500)); await expect(page.getByText('500 / 500 characters')).toBeVisible();
+  await page.getByLabel('Your personal message').press('a'); await expect(page.getByLabel('Your personal message')).toHaveValue('💐'.repeat(500));
+  await expect(page.locator('.gb-price-summary strong')).toContainText('20.00'); await page.getByRole('button', { name: 'Next: Review' }).click();
+  await expect(page.getByRole('button', { name: 'Request submission unavailable' })).toBeDisabled();
+  expect(f.estimates.at(-1).giftCard).toEqual({ componentId: 'gift-card-1', message: '💐'.repeat(500) });
+  expect(f.calls.every(call => !/submit|convert|order/.test(call.path))).toBe(true);
+});
+test('unpriced options and known broken artwork stay disabled; catalog and estimate failures can recover', async ({ page }) => {
+  const f = await fixture(page, { failCatalog: true, failEstimate: true }); await page.goto('/customize/gift-box'); await expect(page.getByRole('alert')).toContainText('not enabled'); f.recoverCatalog(); await page.getByRole('button', { name: 'Retry choices' }).click();
+  await expect(page.getByRole('button', { name: 'Choose Fixture box-1', exact: true })).toBeDisabled(); await page.getByRole('button', { name: 'Choose Fixture box-2', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('price needs approval'); f.recoverEstimate(); await page.getByRole('button', { name: 'Retry estimate' }).click(); await expect(page.locator('.gb-price-summary strong')).toContainText('10.00');
+  const g = await fixture(page, { unpriced: true }); await page.reload(); await expect(page.locator('.gb-option:not(:disabled)')).toHaveCount(0); expect(g.components.every(item => item.pricePiastres === null)).toBe(true);
+});
+test('admin exposes only fixed editable settings and sends revisions and explicit complimentary intent', async ({ page }) => {
+  const f = await fixture(page, { role: 'admin' }); await page.goto('/admin/gift-box/components');
+  const form = page.locator('.gb-setting-editor').filter({ hasText: 'box-2 · box · revision' });
+  await form.getByLabel('Display name', { exact: true }).fill('Renamed fixture box'); await form.getByLabel('Approved price (EGP)').fill('0'); await form.getByLabel('Explicitly approve this component as complimentary').check(); await form.getByRole('button', { name: 'Save component settings' }).click();
+  await expect(form.getByRole('status')).toHaveText('Component settings saved.');
+  expect(f.patches[0].body).toEqual({ expectedRevision: 1, displayName: 'Renamed fixture box', displayOrder: 2, enabled: true, available: true, pricePiastres: 0, confirmComplimentary: true });
+  await expect(page.getByRole('button', { name: /Create|Delete|Replace image/ })).toHaveCount(0); await expect(page.locator('input[type=file]')).toHaveCount(0);
+  await page.getByText('Reorder boxes', { exact: true }).click(); await page.getByRole('button', { name: 'Move box-3 up', exact: true }).click(); await page.getByRole('button', { name: 'Save category order' }).click();
+  // A name save advances a revision: the reorder snapshot must fail or refresh, never overwrite silently.
+  expect(f.patches.at(-1).body.items).toHaveLength(12);
+  await expect(page.locator('.gb-order').getByText(/unsaved changes are still here/)).toBeVisible();
+});
+test('admin conflict retains draft until deliberate reload, and customer cannot open the editor', async ({ page }) => {
+  await fixture(page, { role: 'admin', conflict: true }); await page.goto('/admin/gift-box/components'); const form = page.locator('.gb-setting-editor').first();
+  await form.getByLabel('Display name', { exact: true }).fill('Keep this draft'); await form.getByRole('button', { name: 'Save component settings' }).click(); await expect(form.getByText(/unsaved changes are still here/)).toBeVisible(); await expect(form.getByLabel('Display name', { exact: true })).toHaveValue('Keep this draft');
+  await form.getByRole('button', { name: 'Reload latest record' }).click(); await form.getByRole('button', { name: 'Confirm reload and discard draft' }).click(); await expect(form.getByLabel('Display name', { exact: true })).toHaveValue('Fixture box-1');
+  await fixture(page, { role: 'customer' }); await page.reload(); await expect(page.locator('.gb-setting-editor')).toHaveCount(0);
+});
+test('local geometry drafts stay unreviewed, support compartments and keep the source defect blocked', async ({ page }, testInfo) => {
+  await fixture(page); await page.goto('/dev/gift-box/geometry'); await expect(page.getByText(/Current registry: unreviewed/)).toBeVisible();
+  await page.getByLabel('Review box').selectOption('box-11'); await page.getByLabel('Region shape').selectOption('ellipse'); await page.getByRole('button', { name: 'Add draft region', exact: true }).click();
+  await page.getByLabel('Placement zone').selectOption('beside'); await page.getByRole('button', { name: 'Add draft region', exact: true }).click();
+  const json = JSON.parse(await page.getByLabel('Geometry review draft JSON').inputValue()); expect(json.reviewStatus).toBe('unreviewed'); expect(json.capacity).toBeNull(); expect(json.regions).toHaveLength(3); expect(json.besideRegions).toHaveLength(2);
+  await page.getByRole('button', { name: 'Add study sample' }).click(); await expect(page.getByText(/authoritative result: GEOMETRY_REVIEW_REQUIRED/)).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('geometry-compartments.png'), fullPage: true });
+  await page.getByLabel('Review box').selectOption('box-1'); await expect(page.getByText('Selected open box: Artwork unavailable')).toBeVisible();
+});
+for (const width of [320, 390, 768, 1440]) test(`builder and admin fit ${width}px with real local artwork and reduced motion`, async ({ page }, testInfo) => {
+  await page.setViewportSize({ width, height: 1000 }); await page.emulateMedia({ reducedMotion: 'reduce' }); await fixture(page, { role: 'admin' }); await begin(page);
+  await expect(page.locator('.gb-box-art img')).toBeVisible(); await expect.poll(() => page.locator('.gb-box-art img').evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.evaluate(() => { document.activeElement?.blur(); window.scrollTo({ top: 0, left: 0, behavior: 'instant' }); });
+  await page.screenshot({ path: testInfo.outputPath(`builder-${width}.png`), fullPage: true });
+  await page.goto('/admin/gift-box/components'); await expect(page.locator('.gb-setting-editor')).toHaveCount(12); expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+test('all twelve source box shapes have local visual review outputs without geometry approval', async ({ page }, testInfo) => {
+  await fixture(page); await page.goto('/dev/gift-box/geometry');
+  for (let n = 1; n <= 12; n++) {
+    await page.getByLabel('Review box').selectOption(`box-${n}`);
+    await expect(page.getByText(/Current registry: unreviewed/)).toBeVisible();
+    if (n > 1) await expect.poll(() => page.locator('.gb-box-art img').evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true);
+    await page.locator('.gb-geometry .gb-workspace>section').first().screenshot({ path: testInfo.outputPath(`geometry-box-${n}.png`) });
+  }
+});
+test.describe('touch layout study', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+  test('touch movement changes one instance without a new price request', async ({ page, context }) => {
+    const f = await fixture(page); await begin(page); await page.getByRole('button', { name: 'Next', exact: true }).click(); await page.getByRole('button', { name: 'Add Fixture rose-black', exact: true }).tap();
+    await expect(page.locator('.gb-price-summary strong')).toContainText('20.00');
+    const item = page.locator('.gb-placed'); await item.scrollIntoViewIfNeeded(); const before = await item.getAttribute('style'), bounds = await item.boundingBox(), count = f.estimates.length;
+    const cdp = await context.newCDPSession(page), point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...point, id: 1 }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: point.x + 35, y: point.y + 20, id: 1 }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect(item).not.toHaveAttribute('style', before); expect(f.estimates).toHaveLength(count); await cdp.detach();
+  });
+});

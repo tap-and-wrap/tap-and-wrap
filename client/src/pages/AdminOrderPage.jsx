@@ -63,7 +63,7 @@ export default function AdminOrderPage() {
   }
   return <AdminLayout title="Order details" busy={query.isPending} actions={<Link className="admin-button admin-button-secondary" to="/admin/commerce/orders">Back to orders</Link>}>
     {query.isPending ? <p className="admin-state" role="status">Loading order…</p> : query.error ? <div className="admin-state"><p role="alert">{commerceError(query.error)}</p><button className="admin-button admin-button-secondary" onClick={() => query.refetch()}>Try again</button></div> : order && <>
-      <OrderRecord order={order} headingLevel={2} />
+      <OrderRecord order={order} headingLevel={2} admin />
       {order.serviceRequestId && <Link className="admin-button admin-button-secondary" to={`/admin/requests/${order.serviceRequestId}`}>Review source request and accepted quotation</Link>}
       <ContactDetails customer={order.customer} /><AdminOrderAccounting key={id} order={order} refresh={() => invalidateAdminDependencies(queryClient, 'orders')} />
       <section className="commerce-editor"><h2>Manage Order</h2><p className="commerce-muted">Only valid next steps are offered. The server independently authorizes and records each update.</p>

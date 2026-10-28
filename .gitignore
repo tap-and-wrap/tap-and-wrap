@@ -18,6 +18,9 @@ Thumbs.db
 .vscode/
 # Original merchant catalog and local import reports (never commit without approval)
 /local-data/
+# Reviewed builder derivatives are local-only, outside Vite public/build assets.
+/client/.gift-box-assets/
+/client/test-results-gift-box-phase*/
 # Isolated browser test artifacts
 test-results/
 test-results-contracts/

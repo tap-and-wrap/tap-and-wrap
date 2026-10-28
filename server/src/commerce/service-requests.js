@@ -18,6 +18,7 @@ import { accountingSummary, orderAccounting } from './order-accounting.js';
 import { recordAdminAudit } from './audit.js';
 import { enqueueOrderEvent, enqueueRequestEvent } from './notifications.js';
 import { assertRequestIntakeOpen } from './request-intake.js';
+import { assertLegacyRequestAction, isGiftBoxV2Request } from '../gift-box/request-gates.js';
 
 const total = values => values.reduce((sum, value) => checkedMoney(sum + value), 0);
 export async function createServiceRequest(owner, input) {
@@ -111,6 +112,7 @@ export function requestStatus(record, order) {
 }
 const money = value => `EGP ${(value / 100).toFixed(2)}`;
 export function requestWhatsapp(record) {
+  if (isGiftBoxV2Request(record)) return null;
   const quote = record.quotations?.at(-1); if (!quote) return null;
   const lines = [`Tap & Wrap | ${record.service === 'gift_box' ? 'Build Your Gift Box' : 'Laser Engraving'}`, `Request ${record.reference} | Quotation v${quote.version}`, `Product/custom work: ${money(quote.baseUnitPiastres)} × ${record.details.quantity}`];
   if (record.productSnapshot) lines.push(`Product: ${record.productSnapshot.name}${record.productSnapshot.variantKey ? ` (${record.productSnapshot.variantKey})` : ''}`);
@@ -124,6 +126,7 @@ export function requestWhatsapp(record) {
   return { text, url: `https://wa.me/${phone}?text=${encodeURIComponent(text)}`, deliveryConfirmed: false };
 }
 function prepareQuotation(record, input, actor, now) {
+  assertLegacyRequestAction(record, 'prepare');
   if (!input.quote || record.quotations.length >= 20) throw requestError('Enter a bounded complete quotation.');
   const quote = structuredClone(input.quote);
   const base = checkedMoney(quote.baseUnitPiastres * record.details.quantity);
@@ -151,6 +154,7 @@ async function allocateSource(Model, id, quantity, service, { session, variantKe
   return { kind: product ? 'product' : 'component', id: String(id), variantKey: variantKey || null, quantity, mode: stock.mode };
 }
 async function convertRequest(record, quote, session, actor, delivery) {
+  assertLegacyRequestAction(record, 'convert');
   if (!env.checkoutEnabled) throw commerceError(503, 'CHECKOUT_DISABLED', 'Order conversion requires the existing authorized commerce launch gates. Requests and quotations remain available.');
   if (!delivery || !GOVERNORATES.some(area => area.id === delivery.governorate)) throw requestError('Record the agreed Egyptian delivery address and governorate from WhatsApp before creating the fulfillment order.');
   const claims = [];
@@ -182,6 +186,7 @@ export async function actOnServiceRequest(id, input, actor) {
     await session.withTransaction(async () => {
       const record = await ServiceRequest.findById(id).session(session);
       if (!record) throw commerceError(404, 'REQUEST_NOT_FOUND', 'Request not found.');
+      assertLegacyRequestAction(record, input.action);
       const quote = record.quotations.at(-1);
       if (input.action === 'convert' && quote?.orderId) { result = record.toObject(); return; }
       if (record.revision !== input.revision) throw commerceError(409, 'EDIT_CONFLICT', 'This request changed. Your draft is retained; reload before saving.');
