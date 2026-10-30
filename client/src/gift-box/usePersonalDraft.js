@@ -67,10 +67,11 @@ export function usePersonalDraft() {
     setNotice('');
   }
   function addEngraving() {
-    // Never reuse line-2 for the third (or later) draft; otherwise React keys,
-    // typed text and color/style state collide after removing middle entries.
+    // Return the new ID so the UI opens the new entry immediately. Drafts stay local.
+    const id = crypto.randomUUID();
     setEngravings(current => current.length >= MAX_ENGRAVING_LINES ? current
-      : [...current, { id: crypto.randomUUID(), text: '', styleId: null, colorId: DEFAULT_ENGRAVING_COLOR }]);
+      : [...current, { id, text: '', styleId: null, colorId: DEFAULT_ENGRAVING_COLOR }]);
+    return id;
   }
   function removeEngraving(id) {
     if (id === 'line-1') return;

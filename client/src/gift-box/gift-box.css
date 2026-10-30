@@ -147,9 +147,9 @@
 .gb-photo-order li span{flex:1 1 115px;min-width:0;overflow-wrap:anywhere;font-size:.7rem}
 .gb-photo-order button,.gb-lettering-options button,.gb-remove-engraving{min-height:44px;padding:8px 10px;border:1px solid var(--tw-rose-dark);border-radius:4px;background:var(--tw-surface);color:var(--tw-ink);cursor:pointer}
 .gb-engraving-entry{border:1px solid var(--tw-border);padding:14px;margin:12px 0}
-.gb-engraving-entry>label{display:block;font-size:.82rem;font-weight:600}
+.gb-engraving-fields>label{display:block;font-size:.82rem;font-weight:600}
 .gb-engraving-entry input{display:block;width:100%;min-height:44px;margin-top:8px;padding:10px;border:1px solid var(--tw-rose-dark);border-radius:4px;color:var(--tw-ink);background:var(--tw-surface)}
-.gb-engraving-entry>span{display:block;text-align:right;margin:6px 0;color:#71615b;font-size:.72rem}
+.gb-engraving-fields>span{display:block;text-align:right;margin:6px 0;color:#71615b;font-size:.72rem}
 .gb-lettering-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:12px}
 .gb-lettering-options button{font-size:.74rem;min-width:0}
 .gb-lettering-options button[aria-pressed=true]{border:2px solid var(--tw-button);font-weight:700}
@@ -184,3 +184,16 @@
 .gb-engraving-paper[data-preview-contrast=dark],.gb-sample-paper[data-preview-contrast=dark]{background:#38312e;border-color:#645b55}
 .gb-engraving-paper[data-preview-contrast=dark]>span,.gb-sample-paper[data-preview-contrast=dark]>small{color:#f0e9e0}
 .gb-sample-paper small{display:block;margin-top:8px}
+
+/* Phase 6B.4b.2 — compact engraving editor; all drafts remain in memory. */
+.gb-engraving-entry{padding:0;overflow:hidden}
+.gb-engraving-toggle{display:flex;flex-direction:column;gap:4px;width:100%;min-height:64px;padding:14px;text-align:left;background:var(--tw-surface);color:var(--tw-ink);border:0;cursor:pointer;font:inherit}
+.gb-engraving-toggle:hover{background:var(--tw-bg)}
+.gb-engraving-toggle:focus-visible{outline:3px solid var(--tw-button);outline-offset:-3px}
+.gb-engraving-toggle[aria-expanded=true]{border-bottom:1px solid var(--tw-border)}
+.gb-engraving-title{font-size:.9rem;font-weight:700}
+.gb-engraving-summary{font-size:.85rem;line-height:1.35;overflow-wrap:anywhere;max-width:100%;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}
+.gb-engraving-meta{font-size:.72rem;color:#71615b;overflow-wrap:anywhere}
+.gb-engraving-fields{padding:8px 14px 14px}
+.gb-engraving-fields[hidden]{display:none!important}
+.gb-engraving-entry>.gb-remove-engraving{margin:0 14px 14px}

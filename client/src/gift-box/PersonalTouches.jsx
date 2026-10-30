@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { LETTERING_STYLES, ENGRAVING_COLORS, getEngravingColor, MAX_GIFT_PHOTOS, MAX_ENGRAVING_LINES, MAX_ENGRAVING_CODEPOINTS } from '../../../shared/gift-box/lettering-styles.mjs';
 
 export function PersonalPreview({ personal, showPhotoStack = true }) {
@@ -22,6 +23,9 @@ export function PersonalPreview({ personal, showPhotoStack = true }) {
 
 export default function PersonalTouches({ personal }) {
   const {photos, engravings} = personal;
+  // A compact, single-open editor. IDs are stable even when middle entries are removed.
+  const [expandedId, setExpandedId] = useState('line-1');
+  const activeId = expandedId === null ? null : engravings.some(line => line.id === expandedId) ? expandedId : engravings.at(-1)?.id;
   return <section className="gb-personal-touches" aria-label="Make it personal">
     <div className="gb-personal-group">
       <h3>Your special photos</h3>
@@ -43,6 +47,15 @@ export default function PersonalTouches({ personal }) {
       <h3>Write something special</h3>
       <p>Names, messages and dates are entered exactly as you want them written. Dates are not reformatted.</p>
       {engravings.map((line,index)=><div className="gb-engraving-entry" key={line.id}>
+        <button type="button" className="gb-engraving-toggle"
+          aria-label={`Edit engraving ${index+1}`} aria-expanded={activeId===line.id}
+          aria-controls={`gb-engraving-fields-${line.id}`}
+          onClick={()=>setExpandedId(activeId===line.id ? null : line.id)}>
+          <span className="gb-engraving-title">Engraving {index+1} · {line.text.trim() ? 'Draft added' : 'Optional'}</span>
+          <span className="gb-engraving-summary" dir="auto">{line.text.trim() || 'Add a name, message or date'}</span>
+          <span className="gb-engraving-meta">{getEngravingColor(line.colorId).label} · {LETTERING_STYLES.find(style => style.id===line.styleId)?.customerLabel || 'No lettering style selected'} · {activeId===line.id ? 'Close editor' : 'Edit'}</span>
+        </button>
+        <div className="gb-engraving-fields" id={`gb-engraving-fields-${line.id}`} hidden={activeId!==line.id}>
         <label htmlFor={`gb-engraving-${line.id}`}>Engraving {index+1} (optional)
           <input id={`gb-engraving-${line.id}`} type="text" value={line.text} maxLength={MAX_ENGRAVING_CODEPOINTS*2}
             onChange={event=>personal.updateEngraving(line.id,{text:event.target.value})} placeholder="Your name, message or special date" />
@@ -68,9 +81,10 @@ export default function PersonalTouches({ personal }) {
             aria-pressed={line.styleId===style.id}
             onClick={()=>personal.updateEngraving(line.id,{styleId:style.id})}>{style.customerLabel}</button>)}
         </div>
+        </div>
         {index>0&&<button type="button" className="gb-remove-engraving" onClick={()=>personal.removeEngraving(line.id)}>Remove engraving {index+1}</button>}
       </div>)}
-      {engravings.length<MAX_ENGRAVING_LINES&&<button type="button" className="button button-secondary" onClick={personal.addEngraving}>+ Add another engraving</button>}
+      {engravings.length<MAX_ENGRAVING_LINES&&<button type="button" className="button button-secondary" onClick={()=>setExpandedId(personal.addEngraving())}>+ Add another engraving</button>}
       <p className="gb-help">{engravings.length} local engraving drafts · browser performance maximum: {MAX_ENGRAVING_LINES}. This does not approve a physical engraving quantity.</p>
       <p className="gb-help">These are internal lettering selections only. Exact font rendering, physical engraving and the per-entry charge are not yet connected to checkout.</p>
     </div>

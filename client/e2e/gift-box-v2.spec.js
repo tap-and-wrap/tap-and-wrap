@@ -256,10 +256,11 @@ test('engraving colors stay independent, literal and preview-only across steps',
   await expect(secondColors.getByRole('button')).toHaveCount(5);
   await page.getByLabel('Engraving 2 (optional)').fill('Forever yours');
   await secondColors.getByRole('button', { name: 'Red', exact: true }).click();
-  await expect(firstColors.getByRole('button', { name: 'White' })).toHaveAttribute('aria-pressed', 'true');
+  // First accordion panel is collapsed after the second entry opens; its selection persists.
+  await expect(page.locator('[role="group"][aria-label="Engraving 1 colors"] button[aria-label="White"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(secondColors.getByRole('button', { name: 'Red' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByLabel('Engraving 1 (optional)')).toHaveValue(original);
-  await expect(page.getByRole('group', { name: 'Engraving 1 lettering styles' }).getByRole('button', { name: 'Style 12' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[role="group"][aria-label="Engraving 1 lettering styles"] button').filter({ hasText: 'Style 12' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.gb-engraving-paper')).toHaveCount(2);
   await expect(page.locator('.gb-engraving-paper').first()).toHaveAttribute('data-color', 'white');
   await expect(page.locator('.gb-engraving-paper').nth(1)).toHaveAttribute('data-color', 'red');

@@ -148,3 +148,46 @@ for (const [width, enlarged] of [[320, false], [390, false], [768, false], [1440
     expect(noCommerceMutations(fixture.calls)).toEqual([]);
   });
 }
+
+
+// Phase 6B.4b.2: one open engraving at a time, even after edits/removals.
+for (const [width, enlarged] of [[320, false], [390, false], [1440, false], [320, true]]) {
+  test(`Phase 6B.4b.2 engraving accordions retain independent drafts at ${width}px${enlarged ? ' enlarged' : ''}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const f = await giftBoxFixture(page);
+    await beginGiftBox(page);
+    await page.locator('.gb-steps button').nth(4).click();
+    if (enlarged) await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+    const before = f.estimates.length;
+    await expect(page.getByRole('button', { name: 'Edit engraving 1' })).toHaveAttribute('aria-expanded', 'true');
+    await page.getByLabel('Engraving 1 (optional)').fill('١٢ / ١٠ / ٢٠٢٦ 💛');
+    await page.getByRole('group', { name: 'Engraving 1 colors' }).getByRole('button', { name: 'White' }).click();
+    await page.getByRole('group', { name: 'Engraving 1 lettering styles' }).getByRole('button', { name: 'Style 12' }).click();
+    await page.getByRole('button', { name: '+ Add another engraving' }).click();
+    await expect(page.getByRole('button', { name: 'Edit engraving 1' })).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByRole('button', { name: 'Edit engraving 2' })).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('.gb-engraving-fields').first()).toBeHidden();
+    await page.getByLabel('Engraving 2 (optional)').fill('A second memory');
+    await page.getByRole('button', { name: '+ Add another engraving' }).click();
+    await page.getByLabel('Engraving 3 (optional)').fill('Third entry 🎁');
+    await page.getByRole('group', { name: 'Engraving 3 colors' }).getByRole('button', { name: 'Gold' }).click();
+    await expect(page.locator('.gb-engraving-fields:not([hidden])')).toHaveCount(1);
+    await expect(page.locator('.gb-engraving-toggle')).toHaveCount(3);
+    await page.getByRole('button', { name: 'Edit engraving 1' }).click();
+    await expect(page.getByLabel('Engraving 1 (optional)')).toHaveValue('١٢ / ١٠ / ٢٠٢٦ 💛');
+    await expect(page.getByRole('group', { name: 'Engraving 1 colors' }).getByRole('button', { name: 'White' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('group', { name: 'Engraving 1 lettering styles' }).getByRole('button', { name: 'Style 12' })).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: 'Remove engraving 2' }).click();
+    await page.getByRole('button', { name: 'Edit engraving 2' }).click();
+    await expect(page.getByLabel('Engraving 2 (optional)')).toHaveValue('Third entry 🎁');
+    await expect(page.getByRole('group', { name: 'Engraving 2 colors' }).getByRole('button', { name: 'Gold' })).toHaveAttribute('aria-pressed', 'true');
+    await noHorizontalOverflow(page);
+    expect(f.estimates).toHaveLength(before);
+    await page.locator('.gb-steps button').nth(5).click();
+    await expect(page.locator('.gb-engraving-paper')).toHaveCount(2);
+    await expect(page.getByRole('button', { name: 'Next: Review' })).toBeEnabled();
+    await page.getByRole('button', { name: 'Next: Review' }).click();
+    await expect(page.getByRole('button', { name: 'Request submission unavailable' })).toBeDisabled();
+    expect(noCommerceMutations(f.calls)).toEqual([]);
+  });
+}
