@@ -5,14 +5,15 @@ import { builderError } from './validation.js';
 
 const boxIds = Array.from({ length: 12 }, (_, index) => `box-${index + 1}`);
 
-// Only current reviewed publications can override the selection ceilings.
-// Missing, unprepared, incompatible or withdrawn approvals grant no capacity.
+// Only current, owner-reviewed publications create category limits. Missing,
+// unprepared and withdrawn policies impose no invented count limits; this never
+// grants physical fit, placement approval, stock availability or direct commerce.
 export async function publishedBoxSelectionLimits(requestedBoxIds = boxIds, { session } = {}) {
   const policies = await loadPublishedGiftBoxPolicies(requestedBoxIds, { session });
   const limits = {};
   for (const boxId of requestedBoxIds) {
     const candidate = policies.get(boxId)?.limits?.maxByCategory;
-    limits[boxId] = resolveBoxCategoryLimits(boxId, candidate ? { [boxId]: candidate } : null);
+    if (candidate) limits[boxId] = resolveBoxCategoryLimits(boxId, { [boxId]: candidate });
   }
   return limits;
 }

@@ -5,13 +5,14 @@ import { componentLabel } from './state.mjs';
 import { BOX_ARTWORK_DIMENSIONS } from './artwork-dimensions.mjs';
 import { getDraftGeometry } from '../../../shared/gift-box/geometry-drafts.mjs';
 import { getFixedComponent } from '../../../shared/gift-box/definitions.mjs';
-import { getStudyScene, positionStudyItem, studyAnchor } from './placement-study.mjs';
+import { getStudyScene, positionStudyItem, studyAnchor, dropZoneForStudyItem } from './placement-study.mjs';
 
 export default function ArrangementCanvas({ state, components, dispatch, study = false, overlay, onTrace, extendedScene = false }) {
   const canvas = useRef(null), drag = useRef(null);
   const [selected, setSelected] = useState(null), [draftPosition, setDraftPosition] = useState(null);
   const active = state.instances.find(item => item.id === selected);
-  const extended=study&&(extendedScene||state.instances.some(item=>item.x!==null&&item.placementZone==='beside'));
+  const extended=study&&(extendedScene||state.instances.some(item =>
+    item.x!==null && (item.placementZone==='beside' || ['plush','chocolate'].includes(getFixedComponent(item.componentId)?.category))));
   const scene=getStudyScene(extended), draft=study&&getDraftGeometry(state.boxId);
   const boxSize=BOX_ARTWORK_DIMENSIONS[state.boxId]||[1,1];
   const boxStyle={left:`${-scene.x/scene.width*100}%`,top:`${-scene.y/scene.height*100}%`,width:`${100/scene.width}%`,height:`${100/scene.height}%`};
@@ -22,7 +23,8 @@ export default function ArrangementCanvas({ state, components, dispatch, study =
   function endDrag(event, cancel = false) {
     const current = drag.current;
     if (!current || current.pointerId !== event.pointerId) return;
-    if (!cancel && current.position) dispatch({ type: 'move', id: current.item.id, study: true, position: current.position });
+    if (!cancel && current.position) dispatch({ type: 'move', id: current.item.id, study: true,
+      position: current.position, zone: current.position.placementZone });
     drag.current = null; setDraftPosition(null);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   }
@@ -52,7 +54,10 @@ export default function ArrangementCanvas({ state, components, dispatch, study =
           }} onPointerMove={event => {
             const current = drag.current;
             if (!current || current.pointerId !== event.pointerId) return;
-            const position = positionStudyItem(state.boxId,item,{x:current.item.x+(event.clientX-current.startX)/current.rect.width*current.scene.width,y:current.item.y+(event.clientY-current.startY)/current.rect.height*current.scene.height});
+            const target = { x: current.item.x+(event.clientX-current.startX)/current.rect.width*current.scene.width,
+              y: current.item.y+(event.clientY-current.startY)/current.rect.height*current.scene.height };
+            const zone = dropZoneForStudyItem(state.boxId, item, target);
+            const position = positionStudyItem(state.boxId, item, target, zone);
             current.position = position; setDraftPosition({ id: item.id, ...position });
           }} onPointerUp={endDrag} onPointerCancel={event => endDrag(event, true)} onLostPointerCapture={event => endDrag(event, true)}>
           <Artwork componentId={item.componentId} role="placement" normalize/>

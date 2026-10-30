@@ -1,7 +1,7 @@
-// Suggested selection ceilings are not physical-fit certifications. A box's
-// current published packing policy may replace these values. None of this
-// module approves geometry, stock, artwork, payment or fulfillment.
-export const DEFAULT_BOX_CATEGORY_LIMITS = Object.freeze({ flower: 25, plush: 2, chocolate: 6 });
+// No arbitrary business selection caps. A separately reviewed, published
+// owner packing policy may still impose conservative category restrictions.
+// This never grants physical-fit or checkout approval.
+export const DEFAULT_BOX_CATEGORY_LIMITS = null;
 const categoryOrder = Object.freeze(['flower', 'plush', 'chocolate']);
 const MAX_VISUAL_UNITS = 200;
 
@@ -9,7 +9,7 @@ export function resolveBoxCategoryLimits(boxId, publishedLimits) {
   const proposed = publishedLimits?.[boxId];
   if (typeof boxId !== 'string' || !proposed || !categoryOrder.every(category =>
     Number.isSafeInteger(proposed[category]) && proposed[category] >= 0 && proposed[category] <= MAX_VISUAL_UNITS)) {
-    return DEFAULT_BOX_CATEGORY_LIMITS;
+    return null;
   }
   return Object.freeze(Object.fromEntries(categoryOrder.map(category => [category, proposed[category]])));
 }
@@ -30,5 +30,5 @@ export function countBuilderCategories(items, getCategory) {
 }
 
 export function exceedingBuilderCategories(counts, limits) {
-  return categoryOrder.filter(category => counts[category] > limits[category]);
+  return limits ? categoryOrder.filter(category => counts[category] > limits[category]) : [];
 }

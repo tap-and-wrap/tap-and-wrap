@@ -17,20 +17,20 @@ test('chocolates preserve all 20 numbered units with text selectors and no selec
     assert.equal(item.unit, 'complete-pictured-retail-unit'); assert.ok(Object.isFrozen(item));
   });
 });
-test('each rose, chocolate and plush tap adds one distinct instance and respects aggregate box caps', () => {
+test('each tap adds one distinct instance without old business category caps', () => {
   let state = changeArrangement(initialArrangement(), { type: 'box', id: 'box-2' });
-  for (let i = 0; i < 6; i++) state = changeArrangement(state, { type: 'add', id: 'chocolate-1', instanceId: `chocolate-${i}`, study: true });
-  assert.equal(state.instances.length, 6);
-  assert.equal(canAdd(state, 'chocolate-1'), false);
-  assert.equal(canAdd(state, 'chocolate-2'), false); // All chocolate types share the six-item limit.
-  assert.equal(changeArrangement(state, { type: 'add', id: 'chocolate-2', instanceId: 'extra-chocolate', study: true }), state);
-  for (let i = 0; i < 25; i++) state = changeArrangement(state, { type: 'add', id: i < 15 ? 'rose-red' : 'rose-yellow', instanceId: `rose-${i}`, study: false });
-  assert.equal(state.instances.length, 31);
-  assert.equal(canAdd(state, 'rose-black'), false); // Flower colors share the 25-item limit.
-  for (let i = 0; i < 2; i++) state = changeArrangement(state, { type: 'add', id: 'plush-1', instanceId: `plush-${i}`, study: true });
+  for (let i = 0; i < 7; i++) state = changeArrangement(state, { type: 'add', id: 'chocolate-1', instanceId: `chocolate-${i}`, study: true });
+  assert.equal(state.instances.length, 7);
+  assert.equal(canAdd(state, 'chocolate-2'), true);
+  // Seven chocolates, more than 25 mixed-color flowers and three plush toys
+  // are all valid selections. Visual fit is a separate concern.
+  for (let i = 0; i < 26; i++) state = changeArrangement(state, { type: 'add', id: i < 15 ? 'rose-red' : 'rose-yellow', instanceId: `rose-${i}`, study: false });
   assert.equal(state.instances.length, 33);
-  assert.equal(canAdd(state, 'plush-2'), false);
-  assert.equal(new Set(state.instances.map(item => item.id)).size, 33);
+  assert.equal(canAdd(state, 'rose-black'), true);
+  for (let i = 0; i < 3; i++) state = changeArrangement(state, { type: 'add', id: 'plush-1', instanceId: `plush-${i}`, study: false });
+  assert.equal(state.instances.length, 36);
+  assert.equal(canAdd(state, 'plush-2'), true);
+  assert.equal(new Set(state.instances.map(item => item.id)).size, 36);
 });
 test('changing boxes retains items but invalidates every placement; undo restores the original arrangement', () => {
   let history = { present: initialArrangement(), past: [] };

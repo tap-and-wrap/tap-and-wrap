@@ -26,7 +26,10 @@ export function canAdd(state, id, component, publishedBoxLimits, { study = false
   const quantity = counts(state.instances)[id] || 0;
   const categoryCounts = countBuilderCategories(state.instances, item => getFixedComponent(item.componentId)?.category);
   const limits = resolveBoxCategoryLimits(state.boxId, publishedBoxLimits);
-  const allowed = Boolean(state.boxId && ['flower', 'plush', 'chocolate'].includes(category) && categoryCounts[category] < limits[category]
+  // The 100-per-identity / 200-per-arrangement bounds are computational and
+  // security limits in the existing commerce contract, NOT suggested capacity.
+  const allowed = Boolean(state.boxId && ['flower', 'plush', 'chocolate'].includes(category)
+    && (!limits || categoryCounts[category] < limits[category])
     && quantity < 100 && state.instances.length < 200 && (component === undefined || componentCanSupply(component, quantity + 1)));
   if (!allowed || !study || category !== 'flower') return allowed;
   const footprint = studyFootprint(state.boxId, id);
@@ -47,8 +50,13 @@ export function changeArrangement(state, action) {
       if (action.study && !position) return state;
       return { ...state, instances: [...state.instances, {...item,...position,zone:action.study?'layout-study':'unplaced' }] };
     }
-    case 'move': return { ...state, instances: state.instances.map(item => item.id === action.id && action.study
-      ? { ...item, ...positionStudyItem(state.boxId,item,action.position), zone: 'layout-study' } : item) };
+    case 'move': return { ...state, instances: state.instances.map(item => {
+      if (item.id !== action.id || !action.study) return item;
+      const category = getFixedComponent(item.componentId)?.category;
+      const zone = ['plush', 'chocolate'].includes(category) && ['inside', 'beside'].includes(action.zone)
+        ? action.zone : (item.placementZone || 'inside');
+      return { ...item, ...positionStudyItem(state.boxId, item, action.position, zone), zone: 'layout-study' };
+    }) };
     case 'study-zone': return !action.study ? state : {...state,instances:state.instances.map(item=>item.id===action.id&&['plush','chocolate'].includes(getFixedComponent(item.componentId)?.category)
       ? {...item,...initialStudyPosition(state.boxId,item,0,action.zone==='beside'?'beside':'inside'),zone:'layout-study'} :item)};
     case 'remove': return { ...state, instances: state.instances.filter(item => item.id !== action.id) };

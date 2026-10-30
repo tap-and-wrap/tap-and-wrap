@@ -46,6 +46,17 @@ function samplePoints(region) {
   pointCache.set(region,points);return points;
 }
 export function studyAnchor(item, position=item) { return [position.x+item.width/2,position.y+item.height*item.anchorOffsetY]; }
+// The pointer chooses the zone, never the component ID or pricing. Outside both
+// proposed regions, retain the current zone and let positionStudyItem clamp.
+// This is developer-only visual metadata, not a fulfillment approval.
+export function dropZoneForStudyItem(boxId, item, position) {
+  const category = getFixedComponent(item.componentId)?.category;
+  if (!['plush', 'chocolate'].includes(category)) return 'inside';
+  const draft = getDraftGeometry(boxId), anchor = studyAnchor(item, position);
+  if (draft?.besideRegions?.some(region => contains(anchor, region))) return 'beside';
+  if (draft?.regions?.some(region => contains(anchor, region))) return 'inside';
+  return item.placementZone === 'beside' ? 'beside' : 'inside';
+}
 export function positionStudyItem(boxId,item,position,zone=item.placementZone||'inside') {
   const draft=getDraftGeometry(boxId), regions=zone==='beside'?draft?.besideRegions:draft?.regions;
   if(!regions?.length||![position.x,position.y].every(Number.isFinite))return {x:item.x,y:item.y};

@@ -159,6 +159,26 @@ test('personal step holds up to six photo previews and two literal engraving dra
 });
 
 
+test('dragging a chocolate across the box edge changes its zone without repricing', async ({ page }) => {
+  const f = await fixture(page); await begin(page); await page.locator('.gb-steps button').nth(3).click();
+  await page.getByRole('button', { name: 'Add Fixture chocolate-1', exact: true }).click();
+  const item = page.locator('.gb-placed').first();
+  const canvas = page.locator('.gb-canvas');
+  await item.scrollIntoViewIfNeeded();
+  const itemBounds = await item.boundingBox(), canvasBounds = await canvas.boundingBox();
+  const requests = f.estimates.length;
+  const start = { x: itemBounds.x + itemBounds.width/2, y: itemBounds.y + itemBounds.height/2 };
+  const outside = { x: canvasBounds.x + canvasBounds.width*0.81, y: canvasBounds.y + canvasBounds.height*0.59 };
+  await page.mouse.move(start.x,start.y); await page.mouse.down();
+  await page.mouse.move(outside.x,outside.y,{steps:8}); await page.mouse.up();
+  await item.click();
+  await expect(page.getByRole('button', { name: 'Move inside (draft)' })).toBeVisible();
+  expect(f.estimates).toHaveLength(requests);
+  await page.getByRole('button', { name: 'Move inside (draft)' }).click();
+  await expect(page.getByRole('button', { name: 'Move beside box (draft)' })).toBeVisible();
+  expect(f.estimates).toHaveLength(requests);
+});
+
 test('a chocolate may be moved beside and returned inside in the dev layout without repricing', async ({ page }) => {
   const f = await fixture(page); await begin(page);
   await page.locator('.gb-steps button').nth(3).click();

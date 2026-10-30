@@ -61,7 +61,7 @@ test('selected gift card charges the API price with blank or Unicode message and
   expect(fixture.calls.every(call => !/submit|convert|order/.test(call.path))).toBe(true);
 });
 
-test('tracked stock caps roses and made-to-order plush ignores numeric stock but obeys current box limits', async ({ page }) => {
+test('tracked roses stop at stock, while made-to-order plush has no old two-toy ceiling', async ({ page }) => {
   const fixture = await giftBoxFixture(page, { componentOverrides: {
     'rose-red': { inventoryQuantity: 2 }, 'rose-yellow': { inventoryQuantity: 0 },
     'rose-black': { available: false }, 'plush-1': { inventoryMode: 'made_to_order', inventoryQuantity: 0 },
@@ -78,9 +78,9 @@ test('tracked stock caps roses and made-to-order plush ignores numeric stock but
   await expect(rose).toBeEnabled(); await rose.click();
   await page.locator('.gb-steps button').nth(2).click();
   const plush = page.getByRole('button', { name: 'Add Fixture plush-1', exact: true });
-  await plush.click(); await plush.click(); await expect(plush).toBeDisabled();
-  await expect(plush).toContainText('Selection limit reached');
-  await expect(page.locator('.gb-price-summary strong')).toContainText('50.00');
+  await plush.click(); await plush.click(); await plush.click();
+  await expect(plush).toBeEnabled();
+  await expect(page.locator('.gb-price-summary strong')).toContainText('60.00');
   expect(fixture.estimates.every(body => body.items.every(item => item.componentId !== 'rose-red' || item.quantity <= 2))).toBe(true);
 });
 

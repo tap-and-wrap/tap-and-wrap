@@ -233,8 +233,9 @@ test('HTTP inventory edits and estimates enforce confirmed stock and ribbon stat
   assert.equal((await request(`${prefix}/rose-red`)).data.component.inventoryQuantity, 2);
   const atLimit = await estimate({ boxId: 'box-2', items: [{ componentId: 'rose-red', quantity: 25 }] });
   assert.equal(atLimit.status, 200);
-  const overLimit = await estimate({ boxId: 'box-2', items: [{ componentId: 'rose-red', quantity: 26 }] });
-  assert.equal(overLimit.status, 409); assert.equal(overLimit.error.code, 'GIFT_BOX_CATEGORY_LIMIT');
+  const noOldBusinessLimit = await estimate({ boxId: 'box-2', items: [{ componentId: 'rose-red', quantity: 26 }] });
+  assert.equal(noOldBusinessLimit.status, 200); assert.equal(noOldBusinessLimit.data.estimate.componentSubtotalPiastres, 620);
+  assert.equal((await estimate({ boxId: 'box-2', items: [{ componentId: 'rose-red', quantity: 101 }] })).status, 400); // Computational request guard.
   await patch('rose-red', { expectedRevision: 2, available: false });
   assert.equal((await estimate({ boxId: 'box-2', items: [{ componentId: 'rose-red', quantity: 1 }] })).error.code, 'GIFT_BOX_COMPONENT_UNAVAILABLE');
   for (const body of [{ inventoryQuantity: 2 }, { inventoryMode: 'made_to_order' }, { inventoryMode: 'status_only' }]) {

@@ -4,35 +4,35 @@ import { DEFAULT_BOX_CATEGORY_LIMITS, resolveBoxCategoryLimits, countBuilderCate
 import { assertBoxSelectionLimits } from '../src/gift-box/limits.js';
 import { canAdd } from '../../client/src/gift-box/state.mjs';
 
-test('all boxes start at 25 flowers / 2 plush / 6 chocolates without physical certification', () => {
-  for (let index = 1; index <= 12; index++) assert.deepEqual(resolveBoxCategoryLimits(`box-${index}`), DEFAULT_BOX_CATEGORY_LIMITS);
+test('missing physical policy does not invent 25 / 2 / 6 business limits', () => {
+  assert.equal(DEFAULT_BOX_CATEGORY_LIMITS, null);
+  for (let n=1;n<=12;n++) assert.equal(resolveBoxCategoryLimits(`box-${n}`), null);
+  const counts=assertBoxSelectionLimits({boxId:'box-2',items:[
+    {componentId:'rose-red',quantity:30},{componentId:'plush-1',quantity:4},{componentId:'chocolate-1',quantity:9}
+  ]},{}).counts;
+  assert.deepEqual(counts,{flower:30,plush:4,chocolate:9});
+  assert.deepEqual(exceedingBuilderCategories(counts,null),[]);
 });
-test('mixed-color roses share one flower ceiling', () => {
-  const items = [{ componentId: 'rose-red', quantity: 15 }, { componentId: 'rose-yellow', quantity: 10 },
-    { componentId: 'plush-1', quantity: 2 }, { componentId: 'chocolate-1', quantity: 6 }];
-  assert.deepEqual(assertBoxSelectionLimits({ boxId: 'box-2', items }, {}).counts, { flower: 25, plush: 2, chocolate: 6 });
-  assert.throws(() => assertBoxSelectionLimits({ boxId: 'box-2', items: [...items.slice(0, 1),
-    { componentId: 'rose-yellow', quantity: 11 }, ...items.slice(2)] }, {}), { code: 'GIFT_BOX_CATEGORY_LIMIT' });
-  assert.deepEqual(exceedingBuilderCategories({ flower: 26, plush: 2, chocolate: 6 }, DEFAULT_BOX_CATEGORY_LIMITS), ['flower']);
+test('approved reviewed limits are still enforceable and per box, including zero', () => {
+  const policy={'box-2':{flower:7,plush:0,chocolate:3}};
+  assert.deepEqual(resolveBoxCategoryLimits('box-2',policy),policy['box-2']);
+  assert.equal(resolveBoxCategoryLimits('box-3',policy),null);
+  assert.throws(()=>assertBoxSelectionLimits({boxId:'box-2',items:[{componentId:'plush-1',quantity:1}]},policy),{code:'GIFT_BOX_CATEGORY_LIMIT'});
+  assert.deepEqual(exceedingBuilderCategories({flower:8,plush:0,chocolate:3},policy['box-2']),['flower']);
+  assert.equal(resolveBoxCategoryLimits('box-2',{'box-2':{flower:-1,plush:2,chocolate:6}}),null);
 });
-test('current approved per-box limits can be lower or higher, including zero', () => {
-  const overrides = { 'box-2': { flower: 7, plush: 0, chocolate: 3 } };
-  assert.deepEqual(resolveBoxCategoryLimits('box-2', overrides), overrides['box-2']);
-  assert.deepEqual(resolveBoxCategoryLimits('box-3', overrides), DEFAULT_BOX_CATEGORY_LIMITS);
-  assert.throws(() => assertBoxSelectionLimits({ boxId: 'box-2', items: [{ componentId: 'plush-1', quantity: 1 }] }, overrides), { code: 'GIFT_BOX_CATEGORY_LIMIT' });
-  assert.deepEqual(resolveBoxCategoryLimits('box-2', { 'box-2': { flower: -1, plush: 2, chocolate: 6 } }), DEFAULT_BOX_CATEGORY_LIMITS);
+test('unapproved totals are computationally bounded, not presented as physical capacity',()=>{
+  assert.throws(()=>countBuilderCategories([{componentId:'rose-red',quantity:-1}],()=> 'flower'),RangeError);
+  assert.throws(()=>countBuilderCategories([{componentId:'rose-red',quantity:201}],()=> 'flower'),RangeError);
+  assert.deepEqual(countBuilderCategories([{componentId:'unknown',quantity:1}],()=>undefined),{flower:0,plush:0,chocolate:0});
 });
-test('invalid quantities cannot inflate category counts', () => {
-  assert.throws(() => countBuilderCategories([{ componentId: 'rose-red', quantity: -1 }], () => 'flower'), RangeError);
-  assert.deepEqual(countBuilderCategories([{ componentId: 'unknown', quantity: 1 }], () => undefined), { flower: 0, plush: 0, chocolate: 0 });
-});
-test('UI Add is disabled across rose colors and respects per-box overrides', () => {
-  const roseState = { boxId: 'box-2', instances: Array.from({ length: 25 }, (_, i) => ({ componentId: i < 12 ? 'rose-red' : 'rose-yellow' })) };
-  assert.equal(canAdd(roseState, 'rose-black'), false);
-  assert.equal(canAdd({ ...roseState, instances: roseState.instances.slice(1) }, 'rose-black'), true);
-  const plushState = { boxId: 'box-2', instances: [{ componentId: 'plush-1' }, { componentId: 'plush-2' }] };
-  assert.equal(canAdd(plushState, 'plush-3'), false);
-  const approved = { 'box-2': { flower: 30, plush: 1, chocolate: 4 } };
-  assert.equal(canAdd(roseState, 'rose-black', undefined, approved), true);
-  assert.equal(canAdd(plushState, 'plush-3', undefined, approved), false);
+test('visual editor permits more than old limits, yet honors owner-approved ceilings and safe state bounds',()=>{
+  const roses={boxId:'box-2',instances:Array.from({length:26},(_,i)=>({componentId:i<13?'rose-red':'rose-yellow'}))};
+  assert.equal(canAdd(roses,'rose-black'),true);
+  const plush={boxId:'box-2',instances:[{componentId:'plush-1'},{componentId:'plush-2'}]};
+  assert.equal(canAdd(plush,'plush-3'),true);
+  const approved={'box-2':{flower:26,plush:2,chocolate:6}};
+  assert.equal(canAdd(roses,'rose-black',undefined,approved),false);
+  assert.equal(canAdd(plush,'plush-3',undefined,approved),false);
+  assert.equal(canAdd({boxId:'box-2',instances:Array.from({length:100},()=>({componentId:'plush-1'}))},'plush-1'),false);
 });
