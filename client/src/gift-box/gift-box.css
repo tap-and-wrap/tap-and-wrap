@@ -155,6 +155,15 @@
 .gb-lettering-options button[aria-pressed=true]{border:2px solid var(--tw-button);font-weight:700}
 @media(max-width:760px){.gb-steps{grid-template-columns:repeat(3,minmax(0,1fr))}.gb-steps button{min-height:54px}.gb-lettering-options{grid-template-columns:repeat(2,minmax(0,1fr))}.gb-photo-order button{padding:8px}}
 
+/* Local photo prints: an illustration, not an approved print size or fit. */
+.gb-photo-on-box{position:absolute;display:block;padding:4px 4px 10px;border:0;border-radius:2px;background:#fff;box-shadow:0 3px 12px #0004;touch-action:none;cursor:grab;min-width:0;min-height:0;overflow:hidden}
+.gb-photo-on-box img{width:100%;height:100%;object-fit:cover;pointer-events:none;user-select:none;display:block}
+.gb-photo-handle{position:absolute;inset:0;width:100%;height:100%;border:0;background:transparent;cursor:grab;touch-action:none;padding:0}
+.gb-photo-handle:active{cursor:grabbing}
+.gb-photo-on-box.is-active,.gb-photo-handle:focus-visible{outline:3px solid var(--tw-rose-dark);outline-offset:2px}
+.gb-photo-position-a11y{position:absolute;clip-path:inset(50%);width:1px;height:1px;overflow:hidden;white-space:nowrap}
+.gb-photo-controls{margin:12px 0}
+
 /* Ribbon bow preview is separate from the legacy color-only options and remains local-only. */
 .gb-ribbon-option-photo{background:#fbf7f1;display:grid;place-items:center;min-height:105px;padding:10px}
 .gb-ribbon-option-photo img{width:100%;height:100%;object-fit:contain}

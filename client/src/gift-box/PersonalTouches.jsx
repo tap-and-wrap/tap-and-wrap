@@ -1,9 +1,9 @@
 import { LETTERING_STYLES, MAX_GIFT_PHOTOS, MAX_ENGRAVING_LINES, MAX_ENGRAVING_CODEPOINTS } from '../../../shared/gift-box/lettering-styles.mjs';
 
-export function PersonalPreview({ personal }) {
+export function PersonalPreview({ personal, showPhotoStack = true }) {
   if (!personal.hasContent) return null;
   return <section className="gb-personal-preview" aria-label="Personal touches preview">
-    {personal.photos.length > 0 && <div className="gb-preview-photos">
+    {showPhotoStack && personal.photos.length > 0 && <div className="gb-preview-photos">
       <p>Photo prints · illustrative stack outside the box</p>
       <div className="gb-photo-stack" aria-label={`${personal.photos.length} selected photos`}>
         {personal.photos.map((photo,index) => <div className="gb-photo-print" key={photo.id} style={{ zIndex: index + 1 }}>
@@ -24,7 +24,7 @@ export default function PersonalTouches({ personal }) {
   return <section className="gb-personal-touches" aria-label="Make it personal">
     <div className="gb-personal-group">
       <h3>Your special photos</h3>
-      <p>Add up to six photos. They appear below the box in the preview, not attached to its exterior.</p>
+      <p>Add up to six photos. Move each print inside or beside the box in the development preview. Placement and physical print size still need review.</p>
       <label className="gb-photo-field">Choose photos · {photos.length} of {MAX_GIFT_PHOTOS}
         <input aria-label="Add special photos" type="file" accept="image/jpeg,image/png,image/webp" multiple
           disabled={photos.length>=MAX_GIFT_PHOTOS}

@@ -58,6 +58,7 @@ export default function GiftBoxBuilderPage() {
     const item = components.find(component => component.componentId === id);
     if (!componentCanSupply(item)) return;
     if (item.category === 'box') {
+      if (id !== state.boxId) personal.resetPhotoPositions();
       dispatch({ type: 'box', id });
       setNotice(state.instances.length ? 'Box changed. Existing items are kept in the placement tray; arrange them again after reviewing the new box.' : 'Box selected.');
     } else if (item.category === 'ribbon') dispatch({ type: 'ribbon', id });
@@ -75,8 +76,8 @@ export default function GiftBoxBuilderPage() {
       <div className="gb-mobile-summary"><span>{state.instances.length} items{state.boxId ? ' + box' : ''}</span><strong>{priceText}</strong></div>
       <div className="gb-workspace">
         <section className="gb-preview" aria-label="Your gift box"><div className="gb-preview-heading"><h2>Your arrangement</h2><span>{state.instances.length} {state.instances.length === 1 ? 'item' : 'items'}{state.boxId ? ' + box' : ''}</span></div>
-          <ArrangementCanvas state={state} components={components} dispatch={dispatch} study={study}/>
-          <PersonalPreview personal={personal}/>
+          <ArrangementCanvas state={state} components={components} dispatch={dispatch} study={study} personal={personal}/>
+          <PersonalPreview personal={personal} showPhotoStack={!study || !state.boxId}/>
           <div className="gb-tools"><button type="button" onClick={() => dispatch({ type: 'undo' })} disabled={!history.past.length}>Undo</button><button type="button" onClick={() => dispatch({ type: 'clear' })} disabled={!state.instances.length}>Clear items</button></div>
           {study && state.boxId && <p className="gb-help">Drag chocolates and plush between the box and beside area, or use Inside/Beside buttons. Roses fill free interior spaces. This preview does not confirm physical fit.</p>}
           <div className="gb-price-summary" aria-live="polite"><span>Component estimate</span><strong>{priceText}</strong><small>Delivery quoted separately. Prices are checked by Tap &amp; Wrap.{personal.hasContent ? ' Local photo and engraving drafts are NOT included in this estimate.' : ''}</small></div>

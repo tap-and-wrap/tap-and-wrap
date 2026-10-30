@@ -159,6 +159,48 @@ test('personal step holds up to six photo previews and two literal engraving dra
 });
 
 
+test('local photo prints move inside/beside by controls, keyboard and pointer without repricing or upload', async ({ page }) => {
+  const f=await fixture(page); await begin(page); await page.locator('.gb-steps button').nth(4).click();
+  const file={name:'memory.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+zCCkAAAAASUVORK5CYII=','base64')};
+  await page.getByLabel('Add special photos').setInputFiles(file);
+  const print=page.locator('.gb-photo-on-box');
+  await expect(print).toHaveCount(1);
+  await expect(print).toHaveAttribute('data-zone','beside');
+  await expect(page.getByRole('img',{name:'Selected photo 1'})).toHaveCount(1);
+  const id=await print.getAttribute('data-photo-id');
+  const requests=f.estimates.length, before=await print.getAttribute('style');
+  await print.locator('button').focus(); await page.keyboard.press('ArrowUp');
+  await expect(print).not.toHaveAttribute('style',before);
+  await page.getByRole('button',{name:'Move photo inside (draft)'}).click();
+  await expect(print).toHaveAttribute('data-zone','inside');
+  const c=await page.locator('.gb-canvas').boundingBox(), p=await print.boundingBox();
+  await page.mouse.move(p.x+p.width/2,p.y+p.height/2); await page.mouse.down();
+  await page.mouse.move(c.x+c.width*.82,c.y+c.height*.56,{steps:8}); await page.mouse.up();
+  await expect(print).toHaveAttribute('data-zone','beside');
+  expect(await print.getAttribute('data-photo-id')).toBe(id);
+  expect(f.estimates).toHaveLength(requests);
+  expect(f.calls.filter(call=>/upload|cart\/items|orders/.test(call.path))).toHaveLength(0);
+  await page.getByRole('button',{name:'Remove photo 1'}).click();
+  await expect(print).toHaveCount(0);
+  await expect(page.getByRole('img',{name:'Selected photo 1'})).toHaveCount(0);
+});
+
+test('changing the gift box keeps local photo files but resets their draft placement', async ({ page }) => {
+  const f=await fixture(page); await begin(page); await page.locator('.gb-steps button').nth(4).click();
+  const file={name:'memory.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+zCCkAAAAASUVORK5CYII=','base64')};
+  await page.getByLabel('Add special photos').setInputFiles(file);
+  const print=page.locator('.gb-photo-on-box');
+  const id=await print.getAttribute('data-photo-id');
+  await print.locator('button').click(); await page.getByRole('button',{name:'Move photo inside (draft)'}).click();
+  await expect(print).toHaveAttribute('data-zone','inside');
+  await page.locator('.gb-steps button').nth(0).click();
+  await page.getByRole('button',{name:'Choose Fixture box-3',exact:true}).click();
+  await expect(print).toHaveAttribute('data-zone','beside');
+  await expect(print).toHaveAttribute('data-photo-id',id);
+  await expect(page.getByRole('img',{name:'Selected photo 1'})).toHaveCount(1);
+  expect(f.calls.filter(call=>/upload|cart\/items|orders/.test(call.path))).toHaveLength(0);
+});
+
 test('dragging a chocolate across the box edge changes its zone without repricing', async ({ page }) => {
   const f = await fixture(page); await begin(page); await page.locator('.gb-steps button').nth(3).click();
   await page.getByRole('button', { name: 'Add Fixture chocolate-1', exact: true }).click();

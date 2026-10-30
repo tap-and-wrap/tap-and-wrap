@@ -7,6 +7,7 @@ export function usePersonalDraft() {
   const [photos, setPhotos] = useState([]);
   const [engravings, setEngravings] = useState([{ id: 'line-1', text: '', styleId: null }]);
   const [notice, setNotice] = useState('');
+  const [photoPositions, setPhotoPositions] = useState({});
   const objectUrls = useRef(new Set());
   const photosRef = useRef([]);
   useEffect(() => { photosRef.current = photos; }, [photos]);
@@ -43,6 +44,7 @@ export function usePersonalDraft() {
     objectUrls.current.delete(removed.url);
     URL.revokeObjectURL(removed.url);
     setPhotos(current => current.filter(photo => photo.id !== id));
+    setPhotoPositions(current => { const next={...current}; delete next[id]; return next; });
     setNotice('Photo removed from this local preview.');
   }
   function movePhoto(id, delta) {
@@ -69,6 +71,13 @@ export function usePersonalDraft() {
     if (id === 'line-1') return;
     setEngravings(current => current.filter(line => line.id !== id));
   }
+  // Coordinates never leave this in-memory hook and never enter estimateSelection.
+  function placePhoto(boxId, id, position) {
+    if (!boxId || !photosRef.current.some(photo => photo.id === id) || !['inside', 'beside'].includes(position?.placementZone)
+      || ![position.x,position.y].every(Number.isFinite)) return;
+    setPhotoPositions(current => ({ ...current, [id]: { x: position.x, y: position.y, placementZone: position.placementZone } }));
+  }
+  function resetPhotoPositions() { setPhotoPositions({}); }
   const hasContent = photos.length > 0 || engravings.some(line => line.text.trim().length > 0);
-  return { photos, engravings, notice, hasContent, addPhotos, removePhoto, movePhoto, updateEngraving, addEngraving, removeEngraving };
+  return { photos, engravings, notice, hasContent, photoPositions, placePhoto, resetPhotoPositions, addPhotos, removePhoto, movePhoto, updateEngraving, addEngraving, removeEngraving };
 }

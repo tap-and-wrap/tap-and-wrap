@@ -1,17 +1,19 @@
 import { useRef, useState } from 'react';
 import Artwork from './Artwork.jsx';
 import RibbonOnBox from './RibbonOnBox.jsx';
+import PhotoPrintsOnBox, { PhotoPrintControls } from './PhotoPrintsOnBox.jsx';
 import { componentLabel } from './state.mjs';
 import { BOX_ARTWORK_DIMENSIONS } from './artwork-dimensions.mjs';
 import { getDraftGeometry } from '../../../shared/gift-box/geometry-drafts.mjs';
 import { getFixedComponent } from '../../../shared/gift-box/definitions.mjs';
 import { getStudyScene, positionStudyItem, studyAnchor, dropZoneForStudyItem } from './placement-study.mjs';
 
-export default function ArrangementCanvas({ state, components, dispatch, study = false, overlay, onTrace, extendedScene = false }) {
+export default function ArrangementCanvas({ state, components, dispatch, study = false, overlay, onTrace, extendedScene = false, personal = null }) {
   const canvas = useRef(null), drag = useRef(null);
   const [selected, setSelected] = useState(null), [draftPosition, setDraftPosition] = useState(null);
+  const [selectedPhotoId, setSelectedPhotoId] = useState(null);
   const active = state.instances.find(item => item.id === selected);
-  const extended=study&&(extendedScene||state.instances.some(item =>
+  const extended=study&&(extendedScene||Boolean(state.boxId && personal?.photos?.length)||state.instances.some(item =>
     item.x!==null && (item.placementZone==='beside' || ['plush','chocolate'].includes(getFixedComponent(item.componentId)?.category))));
   const scene=getStudyScene(extended), draft=study&&getDraftGeometry(state.boxId);
   const boxSize=BOX_ARTWORK_DIMENSIONS[state.boxId]||[1,1];
@@ -64,10 +66,13 @@ export default function ArrangementCanvas({ state, components, dispatch, study =
         </button>;
       })}
       {draft&&!draft.assetBlocked&&draft.foregroundMasks.map(mask=><div key={mask.id} className="gb-draft-rim" aria-hidden="true" style={{...boxStyle,zIndex:mask.layer,clipPath:`polygon(${mask.points.map(([x,y])=>`${x*100}% ${y*100}%`).join(',')})`}}><Artwork componentId={state.boxId} role="placement"/></div>)}
+      {study && state.boxId && personal?.photos?.length>0 && <PhotoPrintsOnBox boxId={state.boxId} scene={scene} personal={personal} selectedId={selectedPhotoId} onSelect={setSelectedPhotoId}/>}
       {study && state.boxId && state.ribbonId && <RibbonOnBox key={state.boxId} boxId={state.boxId} ribbonId={state.ribbonId} scene={scene}/>}
       {typeof overlay==='function'?overlay(scene):overlay}
       {state.boxId && <span className="gb-preview-caption">{study ? 'Photo-derived layout study · approximate scale, not guaranteed fit' : 'Placement awaiting review'}</span>}
     </div>
+    {study && state.boxId && personal?.photos?.length>0 && <p className="gb-help">Photo prints: drag inside or beside the box, focus a print and use arrow keys, or use its placement buttons. Illustrative only, not uploaded or priced.</p>}
+    {study && state.boxId && personal && <PhotoPrintControls boxId={state.boxId} personal={personal} selectedId={selectedPhotoId}/>}
     {study && state.boxId && state.ribbonId && <p className="gb-help">Move the bow by dragging it along the front of the box, or focus it and use arrow keys. Approximate placement only.</p>}
     {active && <div className="gb-move-controls" role="group" aria-label={`Position ${label(active.componentId)}`}>
       <span>{label(active.componentId)}</span>
