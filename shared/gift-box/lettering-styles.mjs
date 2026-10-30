@@ -18,8 +18,13 @@ export const LETTERING_STYLES = Object.freeze([
   id, internalName, customerLabel: `Style ${String(index+1).padStart(2,'0')}`,
   actualFontPreviewReady: false, webEmbeddingApproved: false,
 })));
-export const MAX_GIFT_PHOTOS = 6;
-export const MAX_ENGRAVING_LINES = 2;
+// Safety ceilings for memory-only browser previews, NOT merchant quantity caps,
+// approved physical packing counts, inventory, or permission to checkout.
+// 64 MiB of local source bytes limits the retained object-URL memory budget;
+// the item counts bound DOM/pointer work even for tiny files or empty drafts.
+export const MAX_GIFT_PHOTOS = 48;
+export const MAX_ENGRAVING_LINES = 24;
+export const MAX_GIFT_PHOTO_TOTAL_BYTES = 64 * 1024 * 1024;
 export const MAX_ENGRAVING_CODEPOINTS = 80;
 export const MAX_GIFT_PHOTO_BYTES = 8 * 1024 * 1024;
 export const GIFT_PHOTO_TYPES = Object.freeze(['image/jpeg','image/png','image/webp']);
@@ -47,3 +52,20 @@ export const ENGRAVING_COLORS = Object.freeze([
   { id: 'yellow', label: 'Yellow', hex: '#F0CE3A', contrast: 'dark' },
 ].map(color => Object.freeze(color)));
 export const getEngravingColor = colorId => ENGRAVING_COLORS.find(color => color.id === colorId) || ENGRAVING_COLORS[0];
+
+// A preview-only aggregate budget; every individual file still uses the
+// existing 8 MiB/type check. Not a server upload policy or packing limit.
+export function validateLocalPhotoBatch(existingFiles, incomingFiles) {
+  if (!Array.isArray(existingFiles) || !Array.isArray(incomingFiles)) return 'Invalid local photo selection.';
+  if (existingFiles.length + incomingFiles.length > MAX_GIFT_PHOTOS)
+    return `This browser preview supports at most ${MAX_GIFT_PHOTOS} photos for performance. This is not a physical packing limit.`;
+  let bytes = 0;
+  for (const file of [...existingFiles, ...incomingFiles]) {
+    const error = validateLocalPhoto(file);
+    if (error) return error;
+    bytes += file.size;
+    if (!Number.isSafeInteger(bytes) || bytes > MAX_GIFT_PHOTO_TOTAL_BYTES)
+      return 'This browser preview has a 64 MB total photo budget. Remove some photos before adding more.';
+  }
+  return null;
+}

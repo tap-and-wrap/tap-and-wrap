@@ -138,7 +138,7 @@ test.describe('touch layout study', () => {
   });
 });
 
-test('personal step holds up to six photo previews and two literal engraving drafts without contacting commerce', async ({ page }) => {
+test('personal step retains photo previews and two literal engraving drafts without contacting commerce', async ({ page }) => {
   const f = await fixture(page); await begin(page);
   await page.locator('.gb-steps button').nth(4).click();
   await expect(page.getByRole('heading', { name: 'Make It Personal' })).toBeVisible();
@@ -269,5 +269,36 @@ test('engraving colors stay independent, literal and preview-only across steps',
   await expect(page.locator('.gb-engraving-paper').first()).toHaveAttribute('data-color', 'white');
   await expect(page.locator('.gb-engraving-paper').nth(1)).toHaveAttribute('data-color', 'red');
   expect(f.estimates).toHaveLength(estimateCalls);
+  expect(f.calls.filter(call => /upload|cart\/items|orders|checkout|submit/.test(call.path))).toHaveLength(0);
+});
+
+
+test('seven local photos and three separate engravings remain editable and never touch commerce', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const f = await fixture(page); await begin(page);
+  await expect(page.locator('.gb-price-summary strong')).toContainText('10.00');
+  const estimateCount = f.estimates.length;
+  await page.locator('.gb-steps button').nth(4).click();
+  const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+zCCkAAAAASUVORK5CYII=', 'base64');
+  await page.getByLabel('Add special photos').setInputFiles(Array.from({length:7}, (_,i) => ({name:`photo-${i+1}.png`,mimeType:'image/png',buffer:bytes})));
+  await expect(page.locator('.gb-photo-order li')).toHaveCount(7);
+  await expect(page.locator('.gb-photo-on-box')).toHaveCount(7);
+  await expect(page.getByLabel('Add special photos')).toBeEnabled();
+  await page.getByLabel('Engraving 1 (optional)').fill('١٢ / ١٠ / ٢٠٢٦');
+  await page.getByRole('button', {name:'+ Add another engraving'}).click();
+  await page.getByLabel('Engraving 2 (optional)').fill('Second entry');
+  await page.getByRole('button', {name:'+ Add another engraving'}).click();
+  await page.getByLabel('Engraving 3 (optional)').fill('Third entry 💛');
+  await page.getByRole('group', {name:'Engraving 3 colors'}).getByRole('button',{name:'Gold'}).click();
+  await expect(page.getByRole('group', {name:'Engraving 3 colors'}).getByRole('button',{name:'Gold'})).toHaveAttribute('aria-pressed','true');
+  await page.getByRole('button',{name:'Remove engraving 2'}).click();
+  await expect(page.getByLabel('Engraving 2 (optional)')).toHaveValue('Third entry 💛');
+  await expect(page.getByRole('group',{name:'Engraving 2 colors'}).getByRole('button',{name:'Gold'})).toHaveAttribute('aria-pressed','true');
+  await expect(page.getByLabel('Engraving 1 (optional)')).toHaveValue('١٢ / ١٠ / ٢٠٢٦');
+  await page.locator('.gb-steps button').nth(5).click();
+  await expect(page.locator('.gb-engraving-paper')).toHaveCount(2);
+  await expect(page.locator('.gb-engraving-paper').nth(1)).toHaveAttribute('data-color','gold');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(f.estimates).toHaveLength(estimateCount);
   expect(f.calls.filter(call => /upload|cart\/items|orders|checkout|submit/.test(call.path))).toHaveLength(0);
 });

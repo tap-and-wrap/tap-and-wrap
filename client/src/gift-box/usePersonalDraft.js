@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { LETTERING_STYLES, ENGRAVING_COLORS, DEFAULT_ENGRAVING_COLOR, MAX_GIFT_PHOTOS, MAX_ENGRAVING_LINES, validateDraftEngraving, validateLocalPhoto } from '../../../shared/gift-box/lettering-styles.mjs';
+import { LETTERING_STYLES, ENGRAVING_COLORS, DEFAULT_ENGRAVING_COLOR, MAX_ENGRAVING_LINES, validateDraftEngraving, validateLocalPhotoBatch } from '../../../shared/gift-box/lettering-styles.mjs';
 
 // This hook holds memory-only preview drafts. Never send File, object URL,
 // customer engraving text, or a candidate style to existing v1 commerce APIs.
@@ -18,10 +18,7 @@ export function usePersonalDraft() {
   function addPhotos(fileList) {
     const candidates = Array.from(fileList || []);
     if (!candidates.length) return;
-    if (photosRef.current.length + candidates.length > MAX_GIFT_PHOTOS) {
-      setNotice(`Choose no more than ${MAX_GIFT_PHOTOS} photos per gift.`); return;
-    }
-    const problem = candidates.map(validateLocalPhoto).find(Boolean);
+    const problem = validateLocalPhotoBatch(photosRef.current.map(photo => photo.file), candidates);
     if (problem) { setNotice(problem); return; }
     const existing = new Set(photosRef.current.map(photo => photo.fileKey));
     const seen = new Set();
@@ -35,6 +32,9 @@ export function usePersonalDraft() {
       objectUrls.current.add(url);
       return { id: crypto.randomUUID(), file, fileKey: `${file.name}\u0000${file.size}\u0000${file.lastModified}`, name: file.name, url };
     });
+    // Synchronize the ref immediately so two quick file-picker changes cannot
+    // bypass the aggregate byte/count budget before useEffect runs.
+    photosRef.current = [...photosRef.current, ...additions];
     setPhotos(current => [...current, ...additions]);
     setNotice(`${additions.length} local photo preview${additions.length===1?'':'s'} added. Photos have not been uploaded.`);
   }
@@ -43,6 +43,7 @@ export function usePersonalDraft() {
     if (!removed) return;
     objectUrls.current.delete(removed.url);
     URL.revokeObjectURL(removed.url);
+    photosRef.current = photosRef.current.filter(photo => photo.id !== id);
     setPhotos(current => current.filter(photo => photo.id !== id));
     setPhotoPositions(current => { const next={...current}; delete next[id]; return next; });
     setNotice('Photo removed from this local preview.');
@@ -66,7 +67,10 @@ export function usePersonalDraft() {
     setNotice('');
   }
   function addEngraving() {
-    setEngravings(current => current.length >= MAX_ENGRAVING_LINES ? current : [...current, { id: 'line-2', text: '', styleId: null, colorId: DEFAULT_ENGRAVING_COLOR }]);
+    // Never reuse line-2 for the third (or later) draft; otherwise React keys,
+    // typed text and color/style state collide after removing middle entries.
+    setEngravings(current => current.length >= MAX_ENGRAVING_LINES ? current
+      : [...current, { id: crypto.randomUUID(), text: '', styleId: null, colorId: DEFAULT_ENGRAVING_COLOR }]);
   }
   function removeEngraving(id) {
     if (id === 'line-1') return;

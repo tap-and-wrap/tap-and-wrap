@@ -25,8 +25,8 @@ export default function PersonalTouches({ personal }) {
   return <section className="gb-personal-touches" aria-label="Make it personal">
     <div className="gb-personal-group">
       <h3>Your special photos</h3>
-      <p>Add up to six photos. Move each print inside or beside the box in the development preview. Placement and physical print size still need review.</p>
-      <label className="gb-photo-field">Choose photos · {photos.length} of {MAX_GIFT_PHOTOS}
+      <p>Add photo prints and move them inside or beside the box. The browser has a memory/performance safety budget, not a physical packing allowance.</p>
+      <label className="gb-photo-field">Choose photos · {photos.length} selected (local preview safety maximum: {MAX_GIFT_PHOTOS})
         <input aria-label="Add special photos" type="file" accept="image/jpeg,image/png,image/webp" multiple
           disabled={photos.length>=MAX_GIFT_PHOTOS}
           onChange={event => { personal.addPhotos(event.target.files); event.target.value=''; }}/>
@@ -68,9 +68,10 @@ export default function PersonalTouches({ personal }) {
             aria-pressed={line.styleId===style.id}
             onClick={()=>personal.updateEngraving(line.id,{styleId:style.id})}>{style.customerLabel}</button>)}
         </div>
-        {index>0&&<button type="button" className="gb-remove-engraving" onClick={()=>personal.removeEngraving(line.id)}>Remove second engraving</button>}
+        {index>0&&<button type="button" className="gb-remove-engraving" onClick={()=>personal.removeEngraving(line.id)}>Remove engraving {index+1}</button>}
       </div>)}
       {engravings.length<MAX_ENGRAVING_LINES&&<button type="button" className="button button-secondary" onClick={personal.addEngraving}>+ Add another engraving</button>}
+      <p className="gb-help">{engravings.length} local engraving drafts · browser performance maximum: {MAX_ENGRAVING_LINES}. This does not approve a physical engraving quantity.</p>
       <p className="gb-help">These are internal lettering selections only. Exact font rendering, physical engraving and the per-entry charge are not yet connected to checkout.</p>
     </div>
     {personal.notice && <p role="alert" className="gb-feedback">{personal.notice}</p>}

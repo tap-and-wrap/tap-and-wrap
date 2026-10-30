@@ -22,7 +22,7 @@ test('five immutable local engraving colors map to fixed safe color tokens', () 
 test('color choices do not alter the twelve unlicensed styles or character validation', () => {
   assert.equal(LETTERING_STYLES.length, 12);
   assert.ok(LETTERING_STYLES.every(style => !style.actualFontPreviewReady && !style.webEmbeddingApproved));
-  assert.equal(MAX_ENGRAVING_LINES, 2);
+  assert.equal(MAX_ENGRAVING_LINES, 24);
   assert.equal(validateDraftEngraving('١٢ / ١٠ / ٢٠٢٦ 💛'), true);
   assert.equal(validateDraftEngraving('💛'.repeat(81)), false);
   assert.equal(ENGRAVING_COLORS.find(color => color.id === 'white').contrast, 'dark');
