@@ -33,7 +33,7 @@ for(const width of [320,390])test(`mobile ${width}: options and Load More preced
 for(const width of [320,390,768,1024])test(`text enlarged to 200 percent at ${width}px preserves readable content order`,async({page})=>{
   await page.setViewportSize({width,height:1000});await giftBoxFixture(page);await beginGiftBox(page);
   await page.evaluate(()=>{document.documentElement.style.fontSize='200%';});await top(page);await order(page);
-  await page.locator('.gb-steps button').nth(4).click();await page.getByLabel('Add a gift card').check();await page.getByLabel('Your personal message').fill('Synthetic review message.');
+  await page.locator('.gb-steps button').nth(5).click();await page.getByLabel('Add a gift card').check();await page.getByLabel('Your personal message').fill('Synthetic review message.');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
 });
 test('200 percent zoom equivalent reflow retains options before actions',async({page},info)=>{
@@ -61,8 +61,8 @@ test('mixed draft proportions, layering, drag, remove and undo preserve server p
   await page.getByRole('button',{name:'Undo',exact:true}).click();await expect(page.getByRole('button',{name:'Move beside box (draft)'})).toBeVisible();
   await page.getByRole('button',{name:'Remove selected item'}).click();await expect(page.locator('.gb-placed')).toHaveCount(4);await page.getByRole('button',{name:'Undo',exact:true}).click();await expect(page.locator('.gb-placed')).toHaveCount(5);
 });
-test('Step 5 keeps solid ribbon choices and a plain Unicode gift-card message',async({page},info)=>{
-  await giftBoxFixture(page);await beginGiftBox(page);await page.locator('.gb-steps button').nth(4).click();await page.getByLabel('Add a gift card').check();
+test('Step 6 keeps solid ribbon choices and a plain Unicode gift-card message',async({page},info)=>{
+  await giftBoxFixture(page);await beginGiftBox(page);await page.locator('.gb-steps button').nth(5).click();await page.getByLabel('Add a gift card').check();
   await page.getByLabel('Your personal message').fill('A little something, chosen just for you.\nSynthetic review message.');
   await top(page);await capture(page,info,'step-5-finishing-touches.png',{fullPage:true});
   await page.getByLabel('Your personal message').fill('💐'.repeat(500));await expect(page.getByText('500 / 500 characters')).toBeVisible();await page.getByLabel('Your personal message').press('x');await expect(page.getByLabel('Your personal message')).toHaveValue('💐'.repeat(500));

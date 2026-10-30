@@ -6,7 +6,7 @@
 .gb-heading>p:last-child{font-size:.95rem;line-height:1.7}
 .gb-development-note{border-block:1px solid var(--tw-border);padding:12px 0;font-size:.82rem;line-height:1.6;text-align:center;margin-bottom:24px}
 .gb-development-note a{font-weight:600;text-decoration:underline;margin-left:8px}
-.gb-steps{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;background:var(--tw-bg);position:sticky;top:var(--site-header-height,84px);z-index:110;padding:10px 0 14px;margin-bottom:28px;border-bottom:1px solid var(--tw-border)}
+.gb-steps{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;background:var(--tw-bg);position:sticky;top:var(--site-header-height,84px);z-index:110;padding:10px 0 14px;margin-bottom:28px;border-bottom:1px solid var(--tw-border)}
 .gb-steps button{display:flex;gap:10px;align-items:center;justify-content:center;background:transparent;border:0;border-bottom:2px solid transparent;padding:10px 5px;min-height:48px;color:var(--tw-ink);font-size:.8rem;line-height:1.3;cursor:pointer}
 .gb-steps button>span:first-child{width:25px;height:25px;border:1px solid var(--tw-rose-dark);border-radius:50%;display:grid;place-content:center;flex:none;font-size:.7rem}
 .gb-steps [aria-current=step]{border-bottom-color:var(--tw-button);font-weight:600}
@@ -124,3 +124,33 @@
 @media(max-width:360px){.gb-options:not(.gb-options-chocolate){grid-template-columns:repeat(2,minmax(0,1fr))}.gb-navigation>.button{min-width:75px}.gb-skip{margin-left:0}.gb-steps button>span:last-child{font-size:.56rem}}
 @media(max-width:760px){.gb-mobile-summary{position:sticky;top:var(--site-header-height,84px);z-index:109;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;background:var(--tw-bg);font-size:.76rem;padding:10px 0;border-bottom:1px solid var(--tw-border);margin-top:0;margin-bottom:18px}.gb-mobile-summary strong{font-weight:500;text-align:right}.gb-choices h2{scroll-margin-top:calc(var(--site-header-height,84px) + 70px)}}
 @media(prefers-reduced-motion:reduce){.gb-page *{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+
+/* Phase 6B1: preview-only personalization; no upload or paid commerce */
+.gb-personal-preview{padding:12px 0;border-bottom:1px solid var(--tw-border)}
+.gb-preview-photos{text-align:center;font-size:.79rem}
+.gb-photo-stack{display:flex;align-items:center;justify-content:center;min-height:132px;padding:16px;overflow:hidden}
+.gb-photo-print{position:relative;background:#fff;border:6px solid #fff;border-bottom-width:18px;box-shadow:0 3px 12px #0002;border-radius:2px;width:min(23%,82px);aspect-ratio:3 / 4;flex:none;transform:rotate(-2deg)}
+.gb-photo-print+.gb-photo-print{margin-left:-8%;transform:rotate(3deg)}
+.gb-photo-print:nth-child(3n){transform:rotate(-4deg)}
+.gb-photo-print img{width:100%;height:100%;object-fit:cover}
+.gb-engraving-paper,.gb-sample-paper{padding:20px;background:#fff;border:1px solid var(--tw-border);margin:12px 0;text-align:center;overflow-wrap:anywhere}
+.gb-engraving-paper span,.gb-sample-paper small{color:#71615b;font-size:.68rem}
+.gb-engraving-paper p,.gb-sample-paper p{font:500 clamp(1rem,2vw,1.5rem)/1.4 Georgia,serif;white-space:pre-wrap}
+.gb-personal-group{padding:16px 0 24px;border-top:1px solid var(--tw-border)}
+.gb-personal-group h3{font:500 1.55rem/1.2 var(--tw-font-display);margin:0 0 8px}
+.gb-personal-group p{font-size:.82rem;line-height:1.6}
+.gb-photo-field{display:block;border:1px solid var(--tw-rose-dark);border-radius:4px;padding:12px;font-size:.85rem}
+.gb-photo-field input{display:block;width:100%;margin-top:10px;font:inherit;max-width:100%}
+.gb-photo-order{list-style:none;margin:12px 0;padding:0}
+.gb-photo-order li{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;padding:8px;border-bottom:1px solid var(--tw-border)}
+.gb-photo-order img{width:42px;height:42px;object-fit:cover}
+.gb-photo-order li span{flex:1 1 115px;min-width:0;overflow-wrap:anywhere;font-size:.7rem}
+.gb-photo-order button,.gb-lettering-options button,.gb-remove-engraving{min-height:44px;padding:8px 10px;border:1px solid var(--tw-rose-dark);border-radius:4px;background:var(--tw-surface);color:var(--tw-ink);cursor:pointer}
+.gb-engraving-entry{border:1px solid var(--tw-border);padding:14px;margin:12px 0}
+.gb-engraving-entry>label{display:block;font-size:.82rem;font-weight:600}
+.gb-engraving-entry input{display:block;width:100%;min-height:44px;margin-top:8px;padding:10px;border:1px solid var(--tw-rose-dark);border-radius:4px;color:var(--tw-ink);background:var(--tw-surface)}
+.gb-engraving-entry>span{display:block;text-align:right;margin:6px 0;color:#71615b;font-size:.72rem}
+.gb-lettering-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:12px}
+.gb-lettering-options button{font-size:.74rem;min-width:0}
+.gb-lettering-options button[aria-pressed=true]{border:2px solid var(--tw-button);font-weight:700}
+@media(max-width:760px){.gb-steps{grid-template-columns:repeat(3,minmax(0,1fr))}.gb-steps button{min-height:54px}.gb-lettering-options{grid-template-columns:repeat(2,minmax(0,1fr))}.gb-photo-order button{padding:8px}}

@@ -13,7 +13,7 @@ const save = form => form.getByRole('button', { name: 'Save component settings',
 test('all 21 solid ribbons use API names, selection, saved order and persisted Load More', async ({ page }) => {
   const fixture = await giftBoxFixture(page, { componentOverrides: { 'ribbon-peach': { displayName: 'Fixture final ribbon', pricePiastres: 2537 } } });
   await beginGiftBox(page);
-  await page.locator('.gb-steps button').nth(4).click();
+  await page.locator('.gb-steps button').nth(5).click();
   await expect(page.locator('.gb-options-ribbon .gb-option')).toHaveCount(12);
   await expect(page.locator('.gb-options-ribbon img')).toHaveCount(0);
   await page.getByRole('button', { name: /Load More/ }).click();
@@ -36,7 +36,7 @@ test('all 21 solid ribbons use API names, selection, saved order and persisted L
 
 test('selected gift card charges the API price with blank or Unicode message and stays out of checkout', async ({ page }) => {
   const fixture = await giftBoxFixture(page, { componentOverrides: { 'gift-card-1': { displayName: 'Fixture keepsake card', pricePiastres: 1875 } } });
-  await beginGiftBox(page); await page.locator('.gb-steps button').nth(4).click();
+  await beginGiftBox(page); await page.locator('.gb-steps button').nth(5).click();
   const toggle = page.getByLabel('Add a gift card'), message = page.getByLabel('Your personal message');
   await expect(toggle).not.toBeChecked(); await toggle.check();
   await expect(message).toHaveValue('');
@@ -78,7 +78,7 @@ test('tracked stock caps both add controls; removing permits another unit and ma
 
 test('unavailable finishing settings remain visible and disabled', async ({ page }) => {
   await giftBoxFixture(page, { componentOverrides: { 'gift-card-1': { inventoryQuantity: 0 }, 'ribbon-white': { available: false } } });
-  await beginGiftBox(page); await page.locator('.gb-steps button').nth(4).click();
+  await beginGiftBox(page); await page.locator('.gb-steps button').nth(5).click();
   await expect(page.getByLabel('Add a gift card')).toBeDisabled();
   await expect(page.locator('#gb-card-policy')).toContainText('unavailable');
   await expect(page.getByRole('button', { name: 'Choose Fixture ribbon-white', exact: true })).toBeDisabled();
@@ -145,7 +145,7 @@ test('revision conflicts preserve price, inventory and availability drafts until
 
 for (const width of [320, 390, 768, 1440]) test(`finishing choices and inventory admin reflow at ${width}px`, async ({ page }, info) => {
   await page.setViewportSize({ width, height: 1000 }); await page.emulateMedia({ reducedMotion: 'reduce' });
-  await giftBoxFixture(page, { role: 'admin' }); await beginGiftBox(page); await page.locator('.gb-steps button').nth(4).click();
+  await giftBoxFixture(page, { role: 'admin' }); await beginGiftBox(page); await page.locator('.gb-steps button').nth(5).click();
   await page.getByRole('button', { name: /Load More/ }).click(); await page.getByRole('button', { name: 'Choose Fixture ribbon-peach', exact: true }).click();
   await page.getByLabel('Add a gift card').check(); await page.getByLabel('Your personal message').fill('Synthetic review message.');
   await expect(page.locator('.gb-price-summary strong')).toContainText('30.00');

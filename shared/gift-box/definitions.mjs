@@ -18,6 +18,7 @@ export const BUILDER_STEPS = deepFreeze([
   { id: 'flowers', title: 'Fill With Flowers', required: false },
   { id: 'plush', title: 'Add Plush Toys', required: false },
   { id: 'chocolates', title: 'Add Chocolates', required: false },
+  { id: 'personal', title: 'Make It Personal', required: false },
   { id: 'finishing', title: 'Finishing Touches', required: false },
 ]);
 

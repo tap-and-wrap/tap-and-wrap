@@ -38,9 +38,9 @@ test('registry identities, assets and pending catalogs cannot be changed through
   assert.equal(getFixedComponent('box-13'), null);
 });
 
-test('the final five steps preserve optional skipping without making the box optional', () => {
-  assert.deepEqual(BUILDER_STEPS.map(step => step.title), ['Choose Your Box', 'Fill With Flowers', 'Add Plush Toys', 'Add Chocolates', 'Finishing Touches']);
-  assert.deepEqual(BUILDER_STEPS.map(step => step.required), [true, false, false, false, false]);
+test('the final six steps include personal touches without making the box optional', () => {
+  assert.deepEqual(BUILDER_STEPS.map(step => step.title), ['Choose Your Box', 'Fill With Flowers', 'Add Plush Toys', 'Add Chocolates', 'Make It Personal', 'Finishing Touches']);
+  assert.deepEqual(BUILDER_STEPS.map(step => step.required), [true, false, false, false, false, false]);
 });
 
 test('finishing definitions have fixed identities and colors without prices, images or placement elements', () => {

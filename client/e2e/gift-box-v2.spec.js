@@ -65,7 +65,7 @@ test('box changes stage existing items, retain quantities and allow undo', async
   await page.getByRole('button', { name: 'Undo', exact: true }).click(); await expect(page.locator('.gb-placed')).toHaveCount(1); await expect(page.getByRole('button', { name: 'Choose Fixture box-2', exact: true })).toHaveAttribute('aria-pressed', 'true');
 });
 test('approved card supports an optional 500-code-point message without enabling submission', async ({ page }) => {
-  const f = await fixture(page); await begin(page); await page.locator('.gb-steps button').nth(4).click();
+  const f = await fixture(page); await begin(page); await page.locator('.gb-steps button').nth(5).click();
   await expect(page.locator('.gb-options-ribbon button')).toHaveCount(12);
   await page.getByLabel('Add a gift card').check(); await page.getByLabel('Your personal message').fill('💐'.repeat(500)); await expect(page.getByText('500 / 500 characters')).toBeVisible();
   await page.getByLabel('Your personal message').press('a'); await expect(page.getByLabel('Your personal message')).toHaveValue('💐'.repeat(500));
@@ -136,4 +136,24 @@ test.describe('touch layout study', () => {
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await expect(item).not.toHaveAttribute('style', before); expect(f.estimates).toHaveLength(count); await cdp.detach();
   });
+});
+
+test('personal step holds up to six photo previews and two literal engraving drafts without contacting commerce', async ({ page }) => {
+  const f = await fixture(page); await begin(page);
+  await page.locator('.gb-steps button').nth(4).click();
+  await expect(page.getByRole('heading', { name: 'Make It Personal' })).toBeVisible();
+  const file = { name: 'family.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+zCCkAAAAASUVORK5CYII=', 'base64') };
+  await page.getByLabel('Add special photos').setInputFiles(file);
+  await expect(page.getByRole('img', { name: 'Selected photo 1' })).toBeVisible();
+  await page.getByLabel('Engraving 1 (optional)').fill('١٢ / ١٠ / ٢٠٢٦');
+  await page.getByRole('button', { name: '+ Add another engraving' }).click();
+  await page.getByLabel('Engraving 2 (optional)').fill('Forever yours');
+  await page.getByRole('group', { name: 'Engraving 2 lettering styles' }).getByRole('button', { name: 'Style 12' }).click();
+  await expect(page.getByRole('img', { name: 'Selected photo 1' })).toHaveCount(1);
+  await page.locator('.gb-steps button').nth(5).click();
+  await expect(page.getByRole('img', { name: 'Selected photo 1' })).toBeVisible();
+  await page.getByRole('button', { name: 'Next: Review' }).click();
+  await expect(page.getByText('1 selected photo(s); 2 engraving(s). Not uploaded or priced.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Request submission unavailable' })).toBeDisabled();
+  expect(f.calls.filter(call => ['upload', 'cart/items', 'orders'].some(fragment => call.path.includes(fragment)))).toHaveLength(0);
 });
