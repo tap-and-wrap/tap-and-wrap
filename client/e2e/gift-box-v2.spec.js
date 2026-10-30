@@ -233,3 +233,41 @@ test('a chocolate may be moved beside and returned inside in the dev layout with
   await expect(page.getByRole('button', { name: 'Move beside box (draft)' })).toBeVisible();
   expect(f.estimates).toHaveLength(before);
 });
+
+
+test('engraving colors stay independent, literal and preview-only across steps', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  const f = await fixture(page); await begin(page);
+  await expect(page.locator('.gb-price-summary strong')).toContainText('10.00');
+  const estimateCalls = f.estimates.length;
+  await page.locator('.gb-steps button').nth(4).click();
+  const original = '١٢ / ١٠ / ٢٠٢٦ 💛';
+  await page.getByLabel('Engraving 1 (optional)').fill(original);
+  const firstColors = page.getByRole('group', { name: 'Engraving 1 colors' });
+  await expect(firstColors.getByRole('button')).toHaveCount(5);
+  await firstColors.getByRole('button', { name: 'White', exact: true }).click();
+  await expect(firstColors.getByRole('button', { name: 'White' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.gb-sample-paper').first()).toHaveAttribute('data-color', 'white');
+  await expect(page.locator('.gb-sample-paper p').first()).toHaveCSS('color', 'rgb(255, 255, 255)');
+  await expect(page.locator('.gb-sample-paper').first()).toHaveAttribute('data-preview-contrast', 'dark');
+  await page.getByRole('group', { name: 'Engraving 1 lettering styles' }).getByRole('button', { name: 'Style 12' }).click();
+  await page.getByRole('button', { name: '+ Add another engraving' }).click();
+  const secondColors = page.getByRole('group', { name: 'Engraving 2 colors' });
+  await expect(secondColors.getByRole('button')).toHaveCount(5);
+  await page.getByLabel('Engraving 2 (optional)').fill('Forever yours');
+  await secondColors.getByRole('button', { name: 'Red', exact: true }).click();
+  await expect(firstColors.getByRole('button', { name: 'White' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(secondColors.getByRole('button', { name: 'Red' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByLabel('Engraving 1 (optional)')).toHaveValue(original);
+  await expect(page.getByRole('group', { name: 'Engraving 1 lettering styles' }).getByRole('button', { name: 'Style 12' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.gb-engraving-paper')).toHaveCount(2);
+  await expect(page.locator('.gb-engraving-paper').first()).toHaveAttribute('data-color', 'white');
+  await expect(page.locator('.gb-engraving-paper').nth(1)).toHaveAttribute('data-color', 'red');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.locator('.gb-steps button').nth(5).click();
+  await expect(page.locator('.gb-engraving-paper').first()).toContainText(original);
+  await expect(page.locator('.gb-engraving-paper').first()).toHaveAttribute('data-color', 'white');
+  await expect(page.locator('.gb-engraving-paper').nth(1)).toHaveAttribute('data-color', 'red');
+  expect(f.estimates).toHaveLength(estimateCalls);
+  expect(f.calls.filter(call => /upload|cart\/items|orders|checkout|submit/.test(call.path))).toHaveLength(0);
+});

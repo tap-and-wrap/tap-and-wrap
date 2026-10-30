@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { LETTERING_STYLES, MAX_GIFT_PHOTOS, MAX_ENGRAVING_LINES, validateDraftEngraving, validateLocalPhoto } from '../../../shared/gift-box/lettering-styles.mjs';
+import { LETTERING_STYLES, ENGRAVING_COLORS, DEFAULT_ENGRAVING_COLOR, MAX_GIFT_PHOTOS, MAX_ENGRAVING_LINES, validateDraftEngraving, validateLocalPhoto } from '../../../shared/gift-box/lettering-styles.mjs';
 
 // This hook holds memory-only preview drafts. Never send File, object URL,
 // customer engraving text, or a candidate style to existing v1 commerce APIs.
 export function usePersonalDraft() {
   const [photos, setPhotos] = useState([]);
-  const [engravings, setEngravings] = useState([{ id: 'line-1', text: '', styleId: null }]);
+  const [engravings, setEngravings] = useState([{ id: 'line-1', text: '', styleId: null, colorId: DEFAULT_ENGRAVING_COLOR }]);
   const [notice, setNotice] = useState('');
   const [photoPositions, setPhotoPositions] = useState({});
   const objectUrls = useRef(new Set());
@@ -61,11 +61,12 @@ export function usePersonalDraft() {
       return;
     }
     if (Object.hasOwn(patch, 'styleId') && patch.styleId !== null && !LETTERING_STYLES.some(style => style.id === patch.styleId)) return;
+    if (Object.hasOwn(patch, 'colorId') && !ENGRAVING_COLORS.some(color => color.id === patch.colorId)) return;
     setEngravings(current => current.map(line => line.id === id ? { ...line, ...patch } : line));
     setNotice('');
   }
   function addEngraving() {
-    setEngravings(current => current.length >= MAX_ENGRAVING_LINES ? current : [...current, { id: 'line-2', text: '', styleId: null }]);
+    setEngravings(current => current.length >= MAX_ENGRAVING_LINES ? current : [...current, { id: 'line-2', text: '', styleId: null, colorId: DEFAULT_ENGRAVING_COLOR }]);
   }
   function removeEngraving(id) {
     if (id === 'line-1') return;

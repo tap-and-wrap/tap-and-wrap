@@ -174,3 +174,13 @@
 .gb-bow-on-box:focus-visible{outline:3px solid var(--tw-button);outline-offset:2px}
 .gb-bow-on-box img{width:100%;height:100%;object-fit:contain;pointer-events:none;user-select:none}
 .gb-bow-on-box .gb-bow-unavailable{padding:2px;background:#fffffff0}
+
+/* Phase 6B.3b — strictly local engraving color study; no physical/price approval. */
+.gb-engraving-colors{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 18px}
+.gb-engraving-colors button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;min-width:0;padding:8px 11px;background:var(--tw-surface);border:1px solid var(--tw-rose-dark);border-radius:4px;color:var(--tw-ink);font:inherit;font-size:.79rem;cursor:pointer}
+.gb-engraving-colors button[aria-pressed=true]{border:2px solid var(--tw-button);font-weight:700;padding:7px 10px}
+.gb-engraving-colors button:focus-visible{outline:3px solid var(--tw-button);outline-offset:2px}
+.gb-engraving-swatch{width:20px;height:20px;border:1px solid #777;box-shadow:0 0 0 1px #ffffff70 inset;border-radius:50%;flex:none}
+.gb-engraving-paper[data-preview-contrast=dark],.gb-sample-paper[data-preview-contrast=dark]{background:#38312e;border-color:#645b55}
+.gb-engraving-paper[data-preview-contrast=dark]>span,.gb-sample-paper[data-preview-contrast=dark]>small{color:#f0e9e0}
+.gb-sample-paper small{display:block;margin-top:8px}

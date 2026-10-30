@@ -34,3 +34,16 @@ export function validateLocalPhoto(file) {
   }
   return null;
 }
+
+// Visual-only engraving ink/material COLOR CANDIDATES. These choices do not
+// represent a real material, print guarantee, licensed font, price or approval.
+// Never accept a customer-supplied CSS color/hex string as an engraving style.
+export const DEFAULT_ENGRAVING_COLOR = 'black';
+export const ENGRAVING_COLORS = Object.freeze([
+  { id: 'black', label: 'Black', hex: '#252220', contrast: 'light' },
+  { id: 'white', label: 'White', hex: '#FFFFFF', contrast: 'dark' },
+  { id: 'red', label: 'Red', hex: '#C92339', contrast: 'light' },
+  { id: 'gold', label: 'Gold', hex: '#D4AF37', contrast: 'dark' },
+  { id: 'yellow', label: 'Yellow', hex: '#F0CE3A', contrast: 'dark' },
+].map(color => Object.freeze(color)));
+export const getEngravingColor = colorId => ENGRAVING_COLORS.find(color => color.id === colorId) || ENGRAVING_COLORS[0];

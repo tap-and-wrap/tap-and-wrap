@@ -1,4 +1,4 @@
-import { LETTERING_STYLES, MAX_GIFT_PHOTOS, MAX_ENGRAVING_LINES, MAX_ENGRAVING_CODEPOINTS } from '../../../shared/gift-box/lettering-styles.mjs';
+import { LETTERING_STYLES, ENGRAVING_COLORS, getEngravingColor, MAX_GIFT_PHOTOS, MAX_ENGRAVING_LINES, MAX_ENGRAVING_CODEPOINTS } from '../../../shared/gift-box/lettering-styles.mjs';
 
 export function PersonalPreview({ personal, showPhotoStack = true }) {
   if (!personal.hasContent) return null;
@@ -11,9 +11,10 @@ export function PersonalPreview({ personal, showPhotoStack = true }) {
         </div>)}
       </div>
     </div>}
-    {personal.engravings.filter(line => line.text.trim()).map((line, index) => <div className="gb-engraving-paper" key={line.id}>
-      <span>Engraving {index+1} · font rendering pending approval</span>
-      <p dir="auto">{line.text}</p>
+    {personal.engravings.filter(line => line.text.trim()).map((line, index) => <div className="gb-engraving-paper" key={line.id}
+      data-color={getEngravingColor(line.colorId).id} data-preview-contrast={getEngravingColor(line.colorId).contrast}>
+      <span>Engraving {index+1} · {getEngravingColor(line.colorId).label} candidate · font rendering pending approval</span>
+      <p dir="auto" style={{color:getEngravingColor(line.colorId).hex}}>{line.text}</p>
     </div>)}
     <p className="gb-help">Local preview only. These files and words have not been submitted or included in the estimated price.</p>
   </section>;
@@ -47,7 +48,20 @@ export default function PersonalTouches({ personal }) {
             onChange={event=>personal.updateEngraving(line.id,{text:event.target.value})} placeholder="Your name, message or special date" />
         </label>
         <span>{[...line.text].length} / {MAX_ENGRAVING_CODEPOINTS} characters</span>
-        {line.text.trim() && <div className="gb-sample-paper"><p dir="auto">{line.text}</p><small>Text layout only · exact font preview pending</small></div>}
+        {line.text.trim() && <div className="gb-sample-paper" data-color={getEngravingColor(line.colorId).id}
+          data-preview-contrast={getEngravingColor(line.colorId).contrast}>
+          <p dir="auto" style={{color:getEngravingColor(line.colorId).hex}}>{line.text}</p>
+          <small>{getEngravingColor(line.colorId).label} · illustrative color only; exact font and material pending approval</small>
+        </div>}
+        <p className="gb-help">Choose an engraving color. Appearance on the real material requires owner review.</p>
+        <div className="gb-engraving-colors" role="group" aria-label={`Engraving ${index+1} colors`}>
+          {ENGRAVING_COLORS.map(color => <button key={color.id} type="button" aria-label={color.label}
+            aria-pressed={getEngravingColor(line.colorId).id === color.id}
+            onClick={() => personal.updateEngraving(line.id, { colorId: color.id })}>
+            <span className="gb-engraving-swatch" style={{ backgroundColor: color.hex }} aria-hidden="true" />
+            <span>{color.label}</span>
+          </button>)}
+        </div>
         <p className="gb-help">Select a lettering style (preview fonts must be licensed before release).</p>
         <div className="gb-lettering-options" role="group" aria-label={`Engraving ${index+1} lettering styles`}>
           {LETTERING_STYLES.map(style=><button key={style.id} type="button"
