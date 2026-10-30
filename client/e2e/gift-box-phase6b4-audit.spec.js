@@ -191,3 +191,52 @@ for (const [width, enlarged] of [[320, false], [390, false], [1440, false], [320
     expect(noCommerceMutations(f.calls)).toEqual([]);
   });
 }
+
+// Phase 6B.4b.3 — real browser-generated sample image; never touches R2 or checkout.
+for (const [width, enlarged] of [[320, false], [390, false], [768, false], [1440, false], [320, true]]) {
+  test(`Phase 6B.4b.3 photo inspection and final review remain separate at ${width}px${enlarged ? ' with enlarged text' : ''}`, async ({ page }, info) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width, height: 900 });
+    const f = await giftBoxFixture(page);
+    await beginGiftBox(page);
+    await expect(page.locator('.gb-price-summary strong')).toContainText('10.00');
+    const sample = await page.evaluate(() => {
+      const image = document.createElement('canvas');
+      image.width = 240; image.height = 180;
+      const ctx = image.getContext('2d');
+      ctx.fillStyle='#9ecae1'; ctx.fillRect(0,0,240,180);
+      ctx.fillStyle='#426b47'; ctx.fillRect(0,110,240,70);
+      ctx.fillStyle='#c84f55'; ctx.fillRect(64,50,110,75);
+      ctx.fillStyle='#f1d785'; ctx.beginPath(); ctx.arc(190,35,20,0,2*Math.PI); ctx.fill();
+      return image.toDataURL('image/png').split(',')[1];
+    });
+    await page.locator('.gb-steps button').nth(4).click();
+    const estimateRequests = f.estimates.length;
+    await page.getByLabel('Add special photos').setInputFiles({name:'contrast-sample.png',mimeType:'image/png',buffer:Buffer.from(sample,'base64')});
+    await expect(page.locator('.gb-photo-on-box')).toHaveCount(1);
+    const footprintBefore = await page.locator('.gb-photo-on-box').getAttribute('style');
+    await page.getByRole('button', { name: 'Position photo print 1' }).click();
+    const preview = page.getByRole('img', { name: 'Larger local preview of photo 1' });
+    await expect(preview).toBeVisible();
+    await expect(page.getByRole('group', {name: 'Selected photo preview'})).toContainText('does not represent actual print dimensions');
+    const size = await preview.boundingBox();
+    expect(size.width).toBeGreaterThanOrEqual(110);
+    expect(await page.locator('.gb-photo-on-box').getAttribute('style')).toBe(footprintBefore);
+    if (enlarged) await page.evaluate(() => { document.documentElement.style.fontSize='200%'; });
+    await noHorizontalOverflow(page);
+    await capture(page,info,`phase6b4b3-photo-inspection-${width}${enlarged ? '-text200' : ''}.png`);
+    expect(f.estimates).toHaveLength(estimateRequests);
+    await page.locator('.gb-steps button').nth(5).click();
+    await page.getByRole('button', { name: 'Choose Fixture ribbon-cream-ivory', exact: true }).click();
+    await expect(page.locator('.gb-price-summary strong')).toContainText('20.00');
+    await page.getByRole('button', { name: 'Next: Review' }).click();
+    const review = page.locator('.gb-review');
+    await expect(review.getByRole('group', {name:'Component estimate'})).toContainText('20.00');
+    await expect(review.getByRole('group', {name:'Component estimate'})).toContainText('not included');
+    await expect(review.getByRole('region', {name:'Local personalization drafts'})).toContainText('1 selected photo(s); 0 engraving(s). Not uploaded or priced.');
+    await expect(page.getByRole('button', { name: 'Request submission unavailable' })).toBeDisabled();
+    await noHorizontalOverflow(page);
+    await capture(page,info,`phase6b4b3-final-review-${width}${enlarged ? '-text200' : ''}.png`);
+    expect(noCommerceMutations(f.calls)).toEqual([]);
+  });
+}

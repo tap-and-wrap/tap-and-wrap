@@ -197,3 +197,18 @@
 .gb-engraving-fields{padding:8px 14px 14px}
 .gb-engraving-fields[hidden]{display:none!important}
 .gb-engraving-entry>.gb-remove-engraving{margin:0 14px 14px}
+
+/* Phase 6B.4b.3 — larger inspection only; no changes to photo placement/scale. */
+.gb-photo-inspector{display:flex;align-items:center;flex-wrap:wrap;gap:14px;padding:14px;margin:10px 0 12px;background:var(--tw-surface);border:1px solid var(--tw-border);border-radius:4px;min-width:0}
+.gb-photo-inspector img{display:block;flex:0 1 168px;width:min(100%,168px);height:auto;max-height:200px;object-fit:contain;background:#fff;border:6px solid #fff;box-shadow:0 3px 12px #0002}
+.gb-photo-inspector>div{flex:1 1 150px;min-width:0;overflow-wrap:anywhere}
+.gb-photo-inspector strong{font-size:.85rem}
+.gb-photo-inspector .gb-help{margin:6px 0 0}
+.gb-review-components{min-width:0}
+.gb-review-components h3,.gb-review-drafts h3{font:500 1.2rem/1.3 var(--tw-font-display);margin:0 0 12px}
+.gb-review-estimate{padding:16px;margin:20px 0;background:var(--tw-surface);border:1px solid var(--tw-border);border-left:3px solid var(--tw-rose-dark);border-radius:3px}
+.gb-review-estimate span{display:block;font-size:.84rem;font-weight:600}
+.gb-review-estimate strong{display:block;font:500 1.6rem/1.3 var(--tw-font-display);overflow-wrap:anywhere;margin:6px 0}
+.gb-review-estimate p{font-size:.82rem;line-height:1.5;margin:0}
+.gb-review-drafts{border-top:1px solid var(--tw-border);padding-top:16px;margin-top:18px;overflow-wrap:anywhere}
+.gb-review-restriction{font-size:.85rem;line-height:1.6}

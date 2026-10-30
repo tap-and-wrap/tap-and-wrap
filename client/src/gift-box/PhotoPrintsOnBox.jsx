@@ -70,9 +70,18 @@ export function PhotoPrintControls({ boxId, personal, selectedId }) {
     const zone=position.placementZone==='beside'?'inside':'beside';
     personal.placePhoto(boxId,photo.id,movePhotoPrint(boxId,position,position,zone));
   };
-  return <div className="gb-move-controls gb-photo-controls" role="group" aria-label={`Position photo print ${index+1} controls`}>
-    <span>Photo print {index+1} · {position.placementZone} (layout study)</span>
-    {moves.map(([name,dx,dy])=><button key={name} type="button" onClick={()=>shift(dx,dy)} aria-label={`Move photo ${name.toLowerCase()}`}>{name}</button>)}
-    <button type="button" onClick={swap}>{position.placementZone==='beside'?'Move photo inside (draft)':'Move photo beside box (draft)'}</button>
+  return <div className="gb-photo-selected">
+    <div className="gb-photo-inspector" role="group" aria-label="Selected photo preview">
+      <img src={photo.url} alt={`Larger local preview of photo ${index+1}`} />
+      <div>
+        <strong>Photo {index+1} · larger preview</strong>
+        <p className="gb-help">Original photo preview only. This view does not represent actual print dimensions or approved packing.</p>
+      </div>
+    </div>
+    <div className="gb-move-controls gb-photo-controls" role="group" aria-label={`Position photo print ${index+1} controls`}>
+      <span>Photo print {index+1} · {position.placementZone} (layout study)</span>
+      {moves.map(([name,dx,dy])=><button key={name} type="button" onClick={()=>shift(dx,dy)} aria-label={`Move photo ${name.toLowerCase()}`}>{name}</button>)}
+      <button type="button" onClick={swap}>{position.placementZone==='beside'?'Move photo inside (draft)':'Move photo beside box (draft)'}</button>
+    </div>
   </div>;
 }

@@ -173,9 +173,34 @@ test('local photo prints move inside/beside by controls, keyboard and pointer wi
   await expect(print).not.toHaveAttribute('style',before);
   await page.getByRole('button',{name:'Move photo inside (draft)'}).click();
   await expect(print).toHaveAttribute('data-zone','inside');
-  const c=await page.locator('.gb-canvas').boundingBox(), p=await print.boundingBox();
-  await page.mouse.move(p.x+p.width/2,p.y+p.height/2); await page.mouse.down();
-  await page.mouse.move(c.x+c.width*.82,c.y+c.height*.56,{steps:8}); await page.mouse.up();
+  // Root-cause regression: Playwright scrollIntoViewIfNeeded checked viewport
+  // intersection, but a sticky step-nav covered the photo's center. The old
+  // pointer press hit the navigation overlay and selected text, not this handle.
+  // Return to the stable top-of-page view and verify the real pointer target.
+  await page.evaluate(async () => {
+    document.documentElement.style.scrollBehavior = 'auto';
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+  const handle = print.locator('.gb-photo-handle');
+  await expect.poll(() => handle.evaluate(node => {
+    const rect = node.getBoundingClientRect();
+    const x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
+    const hit = document.elementFromPoint(x, y);
+    return rect.width > 0 && rect.height > 0 &&
+      x >= 0 && x < innerWidth && y >= 0 && y < innerHeight &&
+      (hit === node || node.contains(hit));
+  }), { message: 'Photo drag handle must be the unobstructed hit target' }).toBe(true);
+  const c = await page.locator('.gb-canvas').boundingBox();
+  const p = await handle.boundingBox();
+  const source = { x: p.x + p.width / 2, y: p.y + p.height / 2 };
+  const target = { x: c.x + c.width * .82, y: c.y + c.height * .56 };
+  expect(await page.evaluate(({x,y}) => {
+    const canvas = document.querySelector('.gb-canvas');
+    return !!canvas && canvas.contains(document.elementFromPoint(x,y));
+  }, target)).toBe(true);
+  await page.mouse.move(source.x, source.y); await page.mouse.down();
+  await page.mouse.move(target.x, target.y, { steps: 8 }); await page.mouse.up();
   await expect(print).toHaveAttribute('data-zone','beside');
   expect(await print.getAttribute('data-photo-id')).toBe(id);
   expect(f.estimates).toHaveLength(requests);
