@@ -10,18 +10,24 @@ test.afterEach(async ({ page }) => { expect(page.__phase4Errors).toEqual([]); })
 const editor = (page, id) => page.locator('.gb-setting-editor').filter({ hasText: `${id} · ` });
 const save = form => form.getByRole('button', { name: 'Save component settings', exact: true }).click();
 
-test('all 21 solid ribbons use API names, selection, saved order and persisted Load More', async ({ page }) => {
+test('all 21 bow choices retain API names, prices and 12-plus-9 Load More, and the selected bow can move', async ({ page }) => {
   const fixture = await giftBoxFixture(page, { componentOverrides: { 'ribbon-peach': { displayName: 'Fixture final ribbon', pricePiastres: 2537 } } });
   await beginGiftBox(page);
   await page.locator('.gb-steps button').nth(5).click();
   await expect(page.locator('.gb-options-ribbon .gb-option')).toHaveCount(12);
-  await expect(page.locator('.gb-options-ribbon img')).toHaveCount(0);
+  await expect(page.locator('.gb-options-ribbon .gb-ribbon-option-photo')).toHaveCount(12);
+  await expect(page.getByRole('button', { name: /Load More/ })).toContainText('9 more');
   await page.getByRole('button', { name: /Load More/ }).click();
   await expect(page.locator('.gb-options-ribbon .gb-option')).toHaveCount(21);
   const ribbon = page.getByRole('button', { name: 'Choose Fixture final ribbon', exact: true });
   await ribbon.click();
   await expect(ribbon).toHaveAttribute('aria-pressed', 'true');
   await expect(ribbon).toContainText('Selected');
+  const bow = page.getByRole('button', { name: 'Position the selected bow on the front of the gift box' });
+  await expect(bow).toBeVisible();
+  const before = await bow.getAttribute('style');
+  await bow.focus(); await page.keyboard.press('ArrowRight');
+  await expect(bow).not.toHaveAttribute('style', before);
   await expect(ribbon.locator('.gb-ribbon-color')).toHaveCSS('background-color', 'rgb(243, 181, 143)');
   await expect(page.locator('.gb-price-summary strong')).toContainText('35.37');
   expect(fixture.estimates.at(-1).ribbonId).toBe('ribbon-peach');
@@ -30,6 +36,7 @@ test('all 21 solid ribbons use API names, selection, saved order and persisted L
   await expect(page.locator('.gb-options-ribbon .gb-option')).toHaveCount(21);
   await expect(ribbon).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'No ribbon', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Position the selected bow on the front of the gift box' })).toHaveCount(0);
   await expect(page.locator('.gb-price-summary strong')).toContainText('10.00');
   expect(fixture.media.every(path => !/ribbon|card/.test(path))).toBe(true);
 });
@@ -54,7 +61,7 @@ test('selected gift card charges the API price with blank or Unicode message and
   expect(fixture.calls.every(call => !/submit|convert|order/.test(call.path))).toBe(true);
 });
 
-test('tracked stock caps both add controls; removing permits another unit and made-to-order ignores saved numeric stock', async ({ page }) => {
+test('tracked stock caps roses and made-to-order plush ignores numeric stock but obeys current box limits', async ({ page }) => {
   const fixture = await giftBoxFixture(page, { componentOverrides: {
     'rose-red': { inventoryQuantity: 2 }, 'rose-yellow': { inventoryQuantity: 0 },
     'rose-black': { available: false }, 'plush-1': { inventoryMode: 'made_to_order', inventoryQuantity: 0 },
@@ -71,7 +78,8 @@ test('tracked stock caps both add controls; removing permits another unit and ma
   await expect(rose).toBeEnabled(); await rose.click();
   await page.locator('.gb-steps button').nth(2).click();
   const plush = page.getByRole('button', { name: 'Add Fixture plush-1', exact: true });
-  await plush.click(); await plush.click(); await expect(plush).toBeEnabled();
+  await plush.click(); await plush.click(); await expect(plush).toBeDisabled();
+  await expect(plush).toContainText('Selection limit reached');
   await expect(page.locator('.gb-price-summary strong')).toContainText('50.00');
   expect(fixture.estimates.every(body => body.items.every(item => item.componentId !== 'rose-red' || item.quantity <= 2))).toBe(true);
 });

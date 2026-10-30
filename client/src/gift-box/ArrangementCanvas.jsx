@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import Artwork from './Artwork.jsx';
+import RibbonOnBox from './RibbonOnBox.jsx';
 import { componentLabel } from './state.mjs';
 import { BOX_ARTWORK_DIMENSIONS } from './artwork-dimensions.mjs';
 import { getDraftGeometry } from '../../../shared/gift-box/geometry-drafts.mjs';
@@ -58,9 +59,11 @@ export default function ArrangementCanvas({ state, components, dispatch, study =
         </button>;
       })}
       {draft&&!draft.assetBlocked&&draft.foregroundMasks.map(mask=><div key={mask.id} className="gb-draft-rim" aria-hidden="true" style={{...boxStyle,zIndex:mask.layer,clipPath:`polygon(${mask.points.map(([x,y])=>`${x*100}% ${y*100}%`).join(',')})`}}><Artwork componentId={state.boxId} role="placement"/></div>)}
+      {study && state.boxId && state.ribbonId && <RibbonOnBox key={state.boxId} boxId={state.boxId} ribbonId={state.ribbonId} scene={scene}/>}
       {typeof overlay==='function'?overlay(scene):overlay}
       {state.boxId && <span className="gb-preview-caption">{study ? 'Photo-derived layout study · approximate scale, not guaranteed fit' : 'Placement awaiting review'}</span>}
     </div>
+    {study && state.boxId && state.ribbonId && <p className="gb-help">Move the bow by dragging it along the front of the box, or focus it and use arrow keys. Approximate placement only.</p>}
     {active && <div className="gb-move-controls" role="group" aria-label={`Position ${label(active.componentId)}`}>
       <span>{label(active.componentId)}</span>
       {study && <>{[['Left', -0.02, 0], ['Up', 0, -0.02], ['Down', 0, 0.02], ['Right', 0.02, 0]].map(([name, x, y]) => <button type="button" key={name} onClick={() => move(active, x, y)} aria-label={`Move ${name.toLowerCase()}`}>{name}</button>)}</>}

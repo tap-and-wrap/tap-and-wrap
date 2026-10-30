@@ -45,18 +45,21 @@ test('200 percent zoom equivalent reflow retains options before actions',async({
 });
 test('mixed draft proportions, layering, drag, remove and undo preserve server price separation',async({page},info)=>{
   const fixture=await giftBoxFixture(page);await beginGiftBox(page);await page.locator('.gb-steps button').nth(1).click();
-  for(const color of ['red','yellow','black'])await page.getByRole('button',{name:`Add Fixture rose-${color}`,exact:true}).click();
-  await page.locator('.gb-steps button').nth(2).click();await page.getByRole('button',{name:'Add Fixture plush-1',exact:true}).click();
-  await page.locator('.gb-steps button').nth(3).click();await page.getByRole('button',{name:/Load More/}).click();await page.getByRole('button',{name:'Add Fixture chocolate-20',exact:true}).click();
-  await expect(page.locator('.gb-price-summary strong')).toContainText('60.00');
-  const toy=page.locator('.gb-placed[aria-label^="Move Fixture plush-1"]'),rose=page.locator('.gb-placed[aria-label^="Move Fixture rose-red"]');
-  const toyBounds=await toy.boundingBox(),roseBounds=await rose.boundingBox();expect(toyBounds.height).toBeGreaterThan(roseBounds.height*2);
+  await page.getByRole('button',{name:'Add Fixture rose-red',exact:true}).click();
+  const rose=page.locator('.gb-placed[aria-label^="Move Fixture rose-red"]');
   await rose.scrollIntoViewIfNeeded();
   const calls=fixture.estimates.length,before=await rose.getAttribute('style'),bounds=await rose.boundingBox();
   await page.mouse.move(bounds.x+bounds.width/2,bounds.y+bounds.height/2);await page.mouse.down();await page.mouse.move(bounds.x+bounds.width/2+25,bounds.y+bounds.height/2+16,{steps:6});await page.mouse.up();
   await expect(rose).not.toHaveAttribute('style',before);expect(fixture.estimates).toHaveLength(calls);
+  for(const color of ['yellow','black'])await page.getByRole('button',{name:`Add Fixture rose-${color}`,exact:true}).click();
+  await page.locator('.gb-steps button').nth(2).click();await page.getByRole('button',{name:'Add Fixture plush-1',exact:true}).click();
+  await page.locator('.gb-steps button').nth(3).click();await page.getByRole('button',{name:/Load More/}).click();await page.getByRole('button',{name:'Add Fixture chocolate-20',exact:true}).click();
+  await expect(page.locator('.gb-price-summary strong')).toContainText('60.00');
+  const toy=page.locator('.gb-placed[aria-label^="Move Fixture plush-1"]');
+  const toyBounds=await toy.boundingBox(),roseBounds=await rose.boundingBox();expect(toyBounds.height).toBeGreaterThan(roseBounds.height*2);
   await top(page);await capture(page,info,'desktop-mixed-arrangement-after.png',{fullPage:true});
-  await toy.focus();await page.keyboard.press('Enter');await page.getByRole('button',{name:'Move beside box (draft)'}).click();expect(fixture.estimates).toHaveLength(calls);
+  const callsBeforeBesideMove = fixture.estimates.length;
+  await toy.focus();await page.keyboard.press('Enter');await page.getByRole('button',{name:'Move beside box (draft)'}).click();expect(fixture.estimates).toHaveLength(callsBeforeBesideMove);
   await top(page);await capture(page.locator('.gb-preview'),info,'oversized-plush-beside-proposal.png');
   await page.getByRole('button',{name:'Undo',exact:true}).click();await expect(page.getByRole('button',{name:'Move beside box (draft)'})).toBeVisible();
   await page.getByRole('button',{name:'Remove selected item'}).click();await expect(page.locator('.gb-placed')).toHaveCount(4);await page.getByRole('button',{name:'Undo',exact:true}).click();await expect(page.locator('.gb-placed')).toHaveCount(5);
