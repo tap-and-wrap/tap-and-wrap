@@ -44,7 +44,7 @@ test('visible bounds and source aspect ratios match the audited manifest',async(
 });
 test('draft proportions follow visible artwork rather than transparent padding or a square frame',()=>{
   const box='box-2', rose=studyFootprint(box,'rose-red'),toy=studyFootprint(box,'plush-1'),bar=studyFootprint(box,'chocolate-20'),bag=studyFootprint(box,'chocolate-3');
-  assert.ok(toy.height>rose.height*2);assert.ok(rose.width>bar.width*.65);assert.ok(bar.width>bar.height*1.5);assert.ok(bag.height>bag.width);
+  assert.ok(toy.height>rose.height*2);assert.ok(rose.width>bar.width*.45);assert.ok(bar.width>bar.height*1.5);assert.ok(bag.height>bag.width);
   const metric=ARTWORK_METRICS['plush-1'], [l,t,r,b]=metric.visibleBounds;
   assert.ok(Math.abs(toy.height/toy.width-(b-t+1)/(r-l+1)*1374/1145)<1e-10);
 });

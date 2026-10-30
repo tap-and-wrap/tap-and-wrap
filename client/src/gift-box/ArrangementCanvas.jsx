@@ -59,13 +59,13 @@ export default function ArrangementCanvas({ state, components, dispatch, study =
       })}
       {draft&&!draft.assetBlocked&&draft.foregroundMasks.map(mask=><div key={mask.id} className="gb-draft-rim" aria-hidden="true" style={{...boxStyle,zIndex:mask.layer,clipPath:`polygon(${mask.points.map(([x,y])=>`${x*100}% ${y*100}%`).join(',')})`}}><Artwork componentId={state.boxId} role="placement"/></div>)}
       {typeof overlay==='function'?overlay(scene):overlay}
-      {state.boxId && <span className="gb-preview-caption">{study ? 'Layout study · scale & fit unreviewed' : 'Placement awaiting review'}</span>}
+      {state.boxId && <span className="gb-preview-caption">{study ? 'Photo-derived layout study · approximate scale, not guaranteed fit' : 'Placement awaiting review'}</span>}
     </div>
     {active && <div className="gb-move-controls" role="group" aria-label={`Position ${label(active.componentId)}`}>
       <span>{label(active.componentId)}</span>
       {study && <>{[['Left', -0.02, 0], ['Up', 0, -0.02], ['Down', 0, 0.02], ['Right', 0.02, 0]].map(([name, x, y]) => <button type="button" key={name} onClick={() => move(active, x, y)} aria-label={`Move ${name.toLowerCase()}`}>{name}</button>)}</>}
       <button type="button" onClick={() => dispatch({ type: 'remove', id: active.id })}>Remove selected item</button>
-      {study&&getFixedComponent(active.componentId)?.category==='plush'&&<button type="button" onClick={()=>dispatch({type:'study-zone',id:active.id,zone:active.placementZone==='beside'?'inside':'beside',study:true})}>{active.placementZone==='beside'?'Move inside (draft)':'Move beside box (draft)'}</button>}
+      {study&&['plush','chocolate'].includes(getFixedComponent(active.componentId)?.category)&&<button type="button" onClick={()=>dispatch({type:'study-zone',id:active.id,zone:active.placementZone==='beside'?'inside':'beside',study:true})}>{active.placementZone==='beside'?'Move inside (draft)':'Move beside box (draft)'}</button>}
     </div>}
     {state.instances.some(item => item.x === null) && <div className="gb-unplaced"><p>Items waiting for placement</p>{state.instances.filter(item => item.x === null).map(item => <div key={item.id}><span>{label(item.componentId)}</span>{study && <button type="button" onClick={() => { setSelected(item.id); move(item, 0, 0); }}>Place in layout study</button>}<button type="button" onClick={() => dispatch({ type: 'remove', id: item.id })}>Remove</button></div>)}</div>}
   </div>;

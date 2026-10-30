@@ -1,6 +1,7 @@
 import { getFixedComponent } from '../../../shared/gift-box/definitions.mjs';
 import { countBuilderCategories, resolveBoxCategoryLimits } from '../../../shared/gift-box/selection-limits.mjs';
 import { initialStudyPosition, positionStudyItem, studyFootprint } from './placement-study.mjs';
+import { findNextRosePosition } from './rose-packing.mjs';
 export { STUDY_SIZES } from './placement-study.mjs';
 
 export const initialArrangement = () => ({ boxId: null, instances: [], ribbonId: null, cardEnabled: false, message: '' });
@@ -20,29 +21,35 @@ export function componentCanSupply(component, quantity = 1) {
   if (component.inventoryMode === 'made_to_order') return true;
   return component.inventoryMode === 'tracked' && Number.isSafeInteger(component.inventoryQuantity) && component.inventoryQuantity >= quantity;
 }
-export function canAdd(state, id, component, publishedBoxLimits) {
+export function canAdd(state, id, component, publishedBoxLimits, { study = false } = {}) {
   const category = getFixedComponent(id)?.category;
   const quantity = counts(state.instances)[id] || 0;
   const categoryCounts = countBuilderCategories(state.instances, item => getFixedComponent(item.componentId)?.category);
   const limits = resolveBoxCategoryLimits(state.boxId, publishedBoxLimits);
-  return Boolean(state.boxId && ['flower', 'plush', 'chocolate'].includes(category) && categoryCounts[category] < limits[category]
+  const allowed = Boolean(state.boxId && ['flower', 'plush', 'chocolate'].includes(category) && categoryCounts[category] < limits[category]
     && quantity < 100 && state.instances.length < 200 && (component === undefined || componentCanSupply(component, quantity + 1)));
+  if (!allowed || !study || category !== 'flower') return allowed;
+  const footprint = studyFootprint(state.boxId, id);
+  return Boolean(footprint && findNextRosePosition(state.boxId, { ...footprint, componentId: id }, state.instances));
 }
 export function changeArrangement(state, action) {
   switch (action.type) {
     case 'box': return action.id !== state.boxId && getFixedComponent(action.id)?.category === 'box' ? { ...state, boxId: action.id,
       instances: state.instances.map(item => ({ ...item, ...studyFootprint(action.id,item.componentId), x: null, y: null, placementZone:null, regionId:null, layerBase:null, zone: 'unplaced' })) } : state;
     case 'add': {
-      if (!canAdd(state, action.id, action.component, action.boxLimits) || state.instances.some(item => item.id === action.instanceId)) return state;
+      if (!canAdd(state, action.id, action.component, action.boxLimits, { study: action.study }) || state.instances.some(item => item.id === action.instanceId)) return state;
       const footprint=studyFootprint(state.boxId,action.id,action.reviewSize);
       const item={id:action.instanceId,componentId:action.id,...footprint};
       const existingCount=state.instances.filter(entry=>getFixedComponent(entry.componentId).category===getFixedComponent(action.id).category).length;
-      return { ...state, instances: [...state.instances, {...item,
-        ...(action.study ? initialStudyPosition(state.boxId,item,existingCount) : {x:null,y:null}),zone:action.study?'layout-study':'unplaced' }] };
+      const position = action.study && getFixedComponent(action.id)?.category === 'flower'
+        ? findNextRosePosition(state.boxId, item, state.instances)
+        : action.study ? initialStudyPosition(state.boxId,item,existingCount) : {x:null,y:null};
+      if (action.study && !position) return state;
+      return { ...state, instances: [...state.instances, {...item,...position,zone:action.study?'layout-study':'unplaced' }] };
     }
     case 'move': return { ...state, instances: state.instances.map(item => item.id === action.id && action.study
       ? { ...item, ...positionStudyItem(state.boxId,item,action.position), zone: 'layout-study' } : item) };
-    case 'study-zone': return !action.study ? state : {...state,instances:state.instances.map(item=>item.id===action.id&&getFixedComponent(item.componentId)?.category==='plush'
+    case 'study-zone': return !action.study ? state : {...state,instances:state.instances.map(item=>item.id===action.id&&['plush','chocolate'].includes(getFixedComponent(item.componentId)?.category)
       ? {...item,...initialStudyPosition(state.boxId,item,0,action.zone==='beside'?'beside':'inside'),zone:'layout-study'} :item)};
     case 'remove': return { ...state, instances: state.instances.filter(item => item.id !== action.id) };
     case 'clear': return { ...state, instances: [] };

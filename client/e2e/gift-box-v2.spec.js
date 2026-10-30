@@ -157,3 +157,17 @@ test('personal step holds up to six photo previews and two literal engraving dra
   await expect(page.getByRole('button', { name: 'Request submission unavailable' })).toBeDisabled();
   expect(f.calls.filter(call => ['upload', 'cart/items', 'orders'].some(fragment => call.path.includes(fragment)))).toHaveLength(0);
 });
+
+
+test('a chocolate may be moved beside and returned inside in the dev layout without repricing', async ({ page }) => {
+  const f = await fixture(page); await begin(page);
+  await page.locator('.gb-steps button').nth(3).click();
+  await page.getByRole('button', { name: 'Add Fixture chocolate-1', exact: true }).click();
+  await page.locator('.gb-placed').first().click();
+  const before = f.estimates.length;
+  await page.getByRole('button', { name: 'Move beside box (draft)' }).click();
+  await expect(page.getByRole('button', { name: 'Move inside (draft)' })).toBeVisible();
+  await page.getByRole('button', { name: 'Move inside (draft)' }).click();
+  await expect(page.getByRole('button', { name: 'Move beside box (draft)' })).toBeVisible();
+  expect(f.estimates).toHaveLength(before);
+});

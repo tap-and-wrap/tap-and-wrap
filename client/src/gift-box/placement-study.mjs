@@ -5,7 +5,14 @@ import { ARTWORK_METRICS } from './artwork-metrics.mjs';
 
 // Ratios are visual proposals relative to the photographed well's width.
 // They are never dimensions, capacity limits, or approved production scales.
-export const STUDY_SIZES = Object.freeze({ flower:.22, plush:.58, chocolate:.28 });
+export const STUDY_SIZES = Object.freeze({ flower:.17, plush:.58, chocolate:.28 });
+// Per-box provisional rose-head ratios inferred from supplied photography.
+// They must not become approved packing/checkout measurements.
+export const ROSE_STUDY_SIZES = Object.freeze({
+  'box-1':.17, 'box-2':.17, 'box-3':.17, 'box-4':.18,
+  'box-5':.18, 'box-6':.18, 'box-7':.16, 'box-8':.16,
+  'box-9':.16, 'box-10':.16, 'box-11':.15, 'box-12':.17,
+});
 const anchorOffsets = { flower:.5, plush:.92, chocolate:.65 };
 const scene = { x:-.05, y:-.03, width:1.50, height:1.12 };
 export const getStudyScene = extended => extended ? scene : { x:0,y:0,width:1,height:1 };
@@ -19,7 +26,7 @@ export function studyFootprint(boxId, componentId, reviewSize) {
   if (!draft || !metric || !STUDY_SIZES[category]) return null;
   const [left,top,right,bottom]=metric.visibleBounds, width=right-left+1, height=bottom-top+1;
   const wellWidth=Math.max(...draft.regions.map(region=>regionBounds(region).width));
-  const ratio=Number.isFinite(reviewSize)&&reviewSize>=.02&&reviewSize<=.8 ? reviewSize : STUDY_SIZES[category];
+  const ratio=Number.isFinite(reviewSize)&&reviewSize>=.02&&reviewSize<=.8 ? reviewSize : category==='flower' ? ROSE_STUDY_SIZES[boxId] ?? STUDY_SIZES.flower : STUDY_SIZES[category];
   const longSide=wellWidth*ratio;
   const visualWidth=longSide*width/Math.max(width,height), visualHeight=longSide*height/Math.max(width,height)*draft.sourceSize[0]/draft.sourceSize[1];
   return { size:visualWidth, width:visualWidth, height:visualHeight, anchorOffsetY:anchorOffsets[category], scaleReview:'draft-only' };
