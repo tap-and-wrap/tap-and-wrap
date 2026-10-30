@@ -9,6 +9,7 @@ import { recordAdminAudit } from '../commerce/audit.js';
 import { approvedPrice, calculateEstimate, requireComponent, selectionLines } from './pricing.js';
 import { builderError, catalogQuery, reorderInput, settingPatch } from './validation.js';
 import { applyInventoryPatch, inventoryEligibility } from './inventory.js';
+import { publishedBoxSelectionLimits, assertBoxSelectionLimits } from './limits.js';
 
 export async function ensureBuilderBackend() {
   if (!env.giftBoxBuilderBackendEnabled) throw builderError(404, 'GIFT_BOX_BACKEND_DISABLED', 'The builder backend is not enabled.');
@@ -39,11 +40,12 @@ export async function listBuilderComponents(rawQuery, { admin = false } = {}) {
   const definitions = FIXED_COMPONENTS.filter(item => !input.category || item.category === input.category);
   const settings = await GiftBoxComponentSetting.find({ componentId: { $in: definitions.map(item => item.id) } }).lean().maxTimeMS(3000);
   const byId = new Map(settings.map(item => [item.componentId, item]));
+  const boxLimits = await publishedBoxSelectionLimits();
   const categories = ['box', 'flower', 'plush', 'chocolate', 'ribbon', 'gift_card'];
   const ordered = [...definitions].sort((a, b) => categories.indexOf(a.category) - categories.indexOf(b.category)
     || (byId.get(a.id)?.displayOrder ?? a.initialDisplayOrder) - (byId.get(b.id)?.displayOrder ?? b.initialDisplayOrder)
     || a.initialDisplayOrder - b.initialDisplayOrder || a.id.localeCompare(b.id));
-  return { catalogVersion: CATALOG_VERSION, components: ordered.slice((input.page - 1) * input.limit, input.page * input.limit).map(item => present(item, byId.get(item.id), admin)),
+  return { catalogVersion: CATALOG_VERSION, boxLimits, components: ordered.slice((input.page - 1) * input.limit, input.page * input.limit).map(item => present(item, byId.get(item.id), admin)),
     pagination: { page: input.page, limit: input.limit, total: ordered.length, pages: Math.ceil(ordered.length / input.limit) },
     pendingCategories: Object.keys(PENDING_CATEGORIES).filter(key => !FIXED_COMPONENTS.some(item => item.category === key)),
     arrangementApproved: false, submissionAllowed: false, orderConversionAllowed: false };
@@ -128,6 +130,8 @@ export async function estimateBuilderSelection(raw) {
     let result;
     // Coherent price snapshot across all selected settings; no writes or inventory claims.
     await session.withTransaction(async () => {
+      const boxLimits = await publishedBoxSelectionLimits([input.boxId], { session });
+      assertBoxSelectionLimits(input, boxLimits);
       const settings = await GiftBoxComponentSetting.find({ componentId: { $in: lines.map(line => line.definition.id) } }).session(session).lean().maxTimeMS(3000);
       result = calculateEstimate(input, settings);
     }, { readConcern: { level: 'snapshot' } });

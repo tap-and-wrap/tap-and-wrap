@@ -1,4 +1,5 @@
 import { getFixedComponent } from '../../../shared/gift-box/definitions.mjs';
+import { countBuilderCategories, resolveBoxCategoryLimits } from '../../../shared/gift-box/selection-limits.mjs';
 import { initialStudyPosition, positionStudyItem, studyFootprint } from './placement-study.mjs';
 export { STUDY_SIZES } from './placement-study.mjs';
 
@@ -19,16 +20,20 @@ export function componentCanSupply(component, quantity = 1) {
   if (component.inventoryMode === 'made_to_order') return true;
   return component.inventoryMode === 'tracked' && Number.isSafeInteger(component.inventoryQuantity) && component.inventoryQuantity >= quantity;
 }
-export function canAdd(state, id, component) {
+export function canAdd(state, id, component, publishedBoxLimits) {
+  const category = getFixedComponent(id)?.category;
   const quantity = counts(state.instances)[id] || 0;
-  return Boolean(state.boxId && ['flower', 'plush', 'chocolate'].includes(getFixedComponent(id)?.category) && quantity < 100 && state.instances.length < 200 && (component === undefined || componentCanSupply(component, quantity + 1)));
+  const categoryCounts = countBuilderCategories(state.instances, item => getFixedComponent(item.componentId)?.category);
+  const limits = resolveBoxCategoryLimits(state.boxId, publishedBoxLimits);
+  return Boolean(state.boxId && ['flower', 'plush', 'chocolate'].includes(category) && categoryCounts[category] < limits[category]
+    && quantity < 100 && state.instances.length < 200 && (component === undefined || componentCanSupply(component, quantity + 1)));
 }
 export function changeArrangement(state, action) {
   switch (action.type) {
     case 'box': return action.id !== state.boxId && getFixedComponent(action.id)?.category === 'box' ? { ...state, boxId: action.id,
       instances: state.instances.map(item => ({ ...item, ...studyFootprint(action.id,item.componentId), x: null, y: null, placementZone:null, regionId:null, layerBase:null, zone: 'unplaced' })) } : state;
     case 'add': {
-      if (!canAdd(state, action.id, action.component) || state.instances.some(item => item.id === action.instanceId)) return state;
+      if (!canAdd(state, action.id, action.component, action.boxLimits) || state.instances.some(item => item.id === action.instanceId)) return state;
       const footprint=studyFootprint(state.boxId,action.id,action.reviewSize);
       const item={id:action.instanceId,componentId:action.id,...footprint};
       const existingCount=state.instances.filter(entry=>getFixedComponent(entry.componentId).category===getFixedComponent(action.id).category).length;

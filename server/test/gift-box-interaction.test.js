@@ -17,12 +17,20 @@ test('chocolates preserve all 20 numbered units with text selectors and no selec
     assert.equal(item.unit, 'complete-pictured-retail-unit'); assert.ok(Object.isFrozen(item));
   });
 });
-test('each rose or chocolate tap adds exactly one distinct instance and bounded quantities', () => {
+test('each rose, chocolate and plush tap adds one distinct instance and respects aggregate box caps', () => {
   let state = changeArrangement(initialArrangement(), { type: 'box', id: 'box-2' });
-  for (let i = 0; i < 100; i++) state = changeArrangement(state, { type: 'add', id: 'chocolate-1', instanceId: `unit-${i}`, study: true });
-  assert.equal(state.instances.length, 100); assert.equal(canAdd(state, 'chocolate-1'), false); assert.equal(canAdd(state, 'rose-red'), true);
-  assert.equal(changeArrangement(state, { type: 'add', id: 'chocolate-1', instanceId: 'unit-extra', study: true }), state);
-  assert.equal(new Set(state.instances.map(item => item.id)).size, 100);
+  for (let i = 0; i < 6; i++) state = changeArrangement(state, { type: 'add', id: 'chocolate-1', instanceId: `chocolate-${i}`, study: true });
+  assert.equal(state.instances.length, 6);
+  assert.equal(canAdd(state, 'chocolate-1'), false);
+  assert.equal(canAdd(state, 'chocolate-2'), false); // All chocolate types share the six-item limit.
+  assert.equal(changeArrangement(state, { type: 'add', id: 'chocolate-2', instanceId: 'extra-chocolate', study: true }), state);
+  for (let i = 0; i < 25; i++) state = changeArrangement(state, { type: 'add', id: i < 15 ? 'rose-red' : 'rose-yellow', instanceId: `rose-${i}`, study: true });
+  assert.equal(state.instances.length, 31);
+  assert.equal(canAdd(state, 'rose-black'), false); // Flower colors share the 25-item limit.
+  for (let i = 0; i < 2; i++) state = changeArrangement(state, { type: 'add', id: 'plush-1', instanceId: `plush-${i}`, study: true });
+  assert.equal(state.instances.length, 33);
+  assert.equal(canAdd(state, 'plush-2'), false);
+  assert.equal(new Set(state.instances.map(item => item.id)).size, 33);
 });
 test('changing boxes retains items but invalidates every placement; undo restores the original arrangement', () => {
   let history = { present: initialArrangement(), past: [] };
@@ -41,10 +49,19 @@ test('draft movement keeps an anchor in a proposed floor without changing pricin
 });
 test('clear and remove are undoable; history stays bounded and invalid IDs are ignored', () => {
   let history = { present: { ...initialArrangement(), boxId: 'box-2' }, past: [] };
-  for (let i = 0; i < 40; i++) history = arrangementReducer(history, { type: 'add', id: 'rose-red', instanceId: String(i), study: true });
+  for (let i = 0; i < 25; i++) history = arrangementReducer(history, { type: 'add', id: 'rose-red', instanceId: String(i), study: true });
+  // Exercise the 30-entry undo-history bound with successful remove/add edits,
+  // rather than exceeding the new 25-flower ceiling.
+  for (let i = 25; i < 40; i++) {
+    const action = i % 2 === 1
+      ? { type: 'remove', id: history.present.instances[0].id }
+      : { type: 'add', id: 'rose-red', instanceId: String(i), study: true };
+    history = arrangementReducer(history, action);
+  }
   assert.equal(history.past.length, 30);
+  const countBeforeClear = history.present.instances.length;
   history = arrangementReducer(history, { type: 'clear' }); assert.equal(history.present.instances.length, 0);
-  history = arrangementReducer(history, { type: 'undo' }); assert.equal(history.present.instances.length, 40);
+  history = arrangementReducer(history, { type: 'undo' }); assert.equal(history.present.instances.length, countBeforeClear);
   assert.equal(changeArrangement(history.present, { type: 'add', id: 'invented-chocolate', instanceId: 'x' }), history.present);
 });
 test('Unicode message drafts count code points and do not invent a gift-card component or free estimate', () => {
