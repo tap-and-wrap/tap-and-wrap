@@ -69,8 +69,8 @@ export default function ArrangementCanvas({ state, components, dispatch, study =
       {study && state.boxId && personal?.photos?.length>0 && <PhotoPrintsOnBox boxId={state.boxId} scene={scene} personal={personal} selectedId={selectedPhotoId} onSelect={setSelectedPhotoId}/>}
       {study && state.boxId && state.ribbonId && <RibbonOnBox key={state.boxId} boxId={state.boxId} ribbonId={state.ribbonId} scene={scene}/>}
       {typeof overlay==='function'?overlay(scene):overlay}
-      {state.boxId && <span className="gb-preview-caption">{study ? 'Photo-derived layout study · approximate scale, not guaranteed fit' : 'Placement awaiting review'}</span>}
     </div>
+    {state.boxId && <p className="gb-preview-caption">{study ? 'Photo-derived layout study · approximate scale, not guaranteed fit' : 'Placement awaiting review'}</p>}
     {study && state.boxId && personal?.photos?.length>0 && <p className="gb-help">Photo prints: drag inside or beside the box, focus a print and use arrow keys, or use its placement buttons. Illustrative only, not uploaded or priced.</p>}
     {study && state.boxId && personal && <PhotoPrintControls boxId={state.boxId} personal={personal} selectedId={selectedPhotoId}/>}
     {study && state.boxId && state.ribbonId && <p className="gb-help">Move the bow by dragging it along the front of the box, or focus it and use arrow keys. Approximate placement only.</p>}

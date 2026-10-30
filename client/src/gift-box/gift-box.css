@@ -25,7 +25,7 @@
 .gb-preview-empty p{font:500 clamp(2rem,4vw,3.3rem)/1.15 var(--tw-font-display);margin:16px 0}
 .gb-preview-empty>span:last-child{font-size:.85rem}
 .gb-preview-flower{font-size:2.5rem;color:var(--tw-rose-dark)}
-.gb-preview-caption{position:absolute;z-index:500;bottom:10px;left:10px;right:10px;padding:6px 10px;font-size:.68rem;text-align:center;pointer-events:none;background:#ffffffed;border:1px solid var(--tw-border);border-radius:3px}
+.gb-preview-caption{position:static;box-sizing:border-box;width:100%;margin:10px 0 0;padding:8px 10px;font-size:.75rem;line-height:1.5;text-align:center;overflow-wrap:anywhere;background:#ffffffed;border:1px solid var(--tw-border);border-radius:3px}
 .gb-placed{position:absolute;background:transparent;border:1px solid transparent;padding:0;touch-action:none;cursor:grab;border-radius:3px;min-width:0;min-height:0}
 .gb-placed img{width:100%;height:100%;object-fit:contain;pointer-events:none}
 .gb-normalized-artwork{position:absolute;inset:0;display:block;overflow:hidden;pointer-events:none}

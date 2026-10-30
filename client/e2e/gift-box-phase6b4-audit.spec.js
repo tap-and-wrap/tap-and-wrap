@@ -118,3 +118,33 @@ test('Phase 6B.4a Box 11 study does not silently approve physical fit', async ({
   await expect(page.getByRole('button', { name: 'Request submission unavailable' })).toBeDisabled();
   expect(noCommerceMutations(f.calls)).toEqual([]);
 });
+
+
+for (const [width, enlarged] of [[320, false], [390, false], [768, false], [1440, false], [320, true]]) {
+  test(`Phase 6B.4b preview note never covers box artwork at ${width}px${enlarged ? ' with 200% text' : ''}`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 950 });
+    const fixture = await giftBoxFixture(page);
+    await beginGiftBox(page);
+    await page.locator('.gb-steps button').nth(5).click();
+    await page.getByRole('button', { name: 'Choose Fixture ribbon-cream-ivory', exact: true }).click();
+    if (enlarged) await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+    const note = page.locator('.gb-preview-caption');
+    await expect(note).toHaveText('Photo-derived layout study · approximate scale, not guaranteed fit');
+    const bounds = await page.locator('.gb-preview-content').evaluate(root => {
+      const note = root.querySelector('.gb-preview-caption');
+      const canvas = root.querySelector('.gb-canvas');
+      const n = note.getBoundingClientRect();
+      const c = canvas.getBoundingClientRect();
+      return { separateSibling: note.parentElement === root,
+        gap: n.top - c.bottom, noteLeft: n.left, noteRight: n.right,
+        canvasLeft: c.left, canvasRight: c.right };
+    });
+    expect(bounds.separateSibling).toBe(true);
+    expect(bounds.gap).toBeGreaterThanOrEqual(5);
+    expect(bounds.noteLeft).toBeGreaterThanOrEqual(bounds.canvasLeft - 1);
+    expect(bounds.noteRight).toBeLessThanOrEqual(bounds.canvasRight + 1);
+    await noHorizontalOverflow(page);
+    await page.screenshot({ path: info.outputPath(`phase6b4b-caption-${width}${enlarged ? '-text200' : ''}.png`), fullPage: true });
+    expect(noCommerceMutations(fixture.calls)).toEqual([]);
+  });
+}
