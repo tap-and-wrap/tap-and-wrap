@@ -1,5 +1,6 @@
 import { OrderSettlement } from '../models/OrderSettlement.js';
 import { GiftBoxComponentSetting } from '../models/GiftBoxComponentSetting.js';
+import { GiftBoxPersonalizationOption } from '../models/GiftBoxPersonalizationOption.js';
 import { GiftBoxFulfillmentPolicyFence } from '../models/GiftBoxFulfillmentPolicyFence.js';
 import { GiftBoxPhysicalPolicy } from '../models/GiftBoxPhysicalPolicy.js';
 import { GiftBoxPolicyPublication } from '../models/GiftBoxPolicyPublication.js';
@@ -23,7 +24,7 @@ import { assertDatabaseWriteAllowed, DatabaseSafetyError } from './database-safe
 export const databaseModels = [...new Set([OrderSettlement, Product, Category, ComponentOption, User, Session, ...commerceModels,
   ...(process.env.CATALOG_MEDIA_UPLOADS_ENABLED === 'true' ? [CatalogMedia] : []),
   ...websiteModels, AccountActionToken, EmailRateWindow, TrackingConsent, MetaEvent, ...(env.productAliasesEnabled ? [ProductAddress] : []),
-  ...(env.giftBoxBuilderBackendEnabled ? [GiftBoxComponentSetting, GiftBoxFulfillmentPolicyFence, GiftBoxPhysicalPolicy, GiftBoxPolicyPublication] : [])])];
+  ...(env.giftBoxBuilderBackendEnabled ? [GiftBoxComponentSetting, GiftBoxFulfillmentPolicyFence, GiftBoxPhysicalPolicy, GiftBoxPolicyPublication, ...(env.giftBoxPersonalizationOptionsEnabled ? [GiftBoxPersonalizationOption] : [])] : [])])];
 
 function sameKeys(required, actual) {
   const entries = Object.entries(required);

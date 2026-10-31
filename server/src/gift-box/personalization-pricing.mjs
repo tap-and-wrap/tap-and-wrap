@@ -38,7 +38,8 @@ export function priceGiftBoxPersonalization({ intent: raw, boxId, owner, uploads
       || upload.fieldKey!=='gift_box_photo' || upload.state!=='complete' || !(upload.expiresAt instanceof Date)
       || upload.expiresAt<=new Date() || (upload.cartId && (!cartId || String(upload.cartId)!==String(cartId)))) reject('GIFT_BOX_UPLOAD_INVALID');
     const option=byOption.get(photo.printOptionId);
-    if (option?.kind!=='photo_print' || !goodPrice(option)) reject('GIFT_BOX_PRINT_PRICE_PENDING');
+    if (option?.kind!=='photo_print' || !goodPrice(option)
+      || option.boxIds !== undefined && (!Array.isArray(option.boxIds) || !option.boxIds.includes(boxId))) reject('GIFT_BOX_PRINT_PRICE_PENDING');
     amount=addMoney(amount,option.pricePiastres);
     return { uploadId:photo.uploadId, printOptionId:option.optionId, zone:photo.zone,x:photo.x,y:photo.y,
       pricePiastres:option.pricePiastres, optionRevision:option.__v,
@@ -46,7 +47,9 @@ export function priceGiftBoxPersonalization({ intent: raw, boxId, owner, uploads
   });
   const engravings=intent.engravings.map(line => {
     const option=byOption.get(line.surfaceOptionId);
-    if (option?.kind!=='engraving_surface' || !goodPrice(option) || option.fontLicensesConfirmed !== true
+    if (option?.kind!=='engraving_surface' || !goodPrice(option)
+      || option.boxIds !== undefined && (!Array.isArray(option.boxIds) || !option.boxIds.includes(boxId))
+      || option.fontLicensesConfirmed !== true
       || !Array.isArray(option.approvedStyleIds) || !option.approvedStyleIds.includes(line.styleId)
       || !Array.isArray(option.approvedColorIds) || !option.approvedColorIds.includes(line.colorId))
       reject('GIFT_BOX_ENGRAVING_PRICE_PENDING');

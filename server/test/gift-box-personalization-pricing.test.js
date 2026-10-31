@@ -44,3 +44,8 @@ test('photos attached to a different cart cannot be reused across cart transacti
  assert.throws(()=>quote({uploads:[{...upload,cartId:'d'.repeat(24)}]}),/not ready/);
  assert.equal(quote({uploads:[{...upload,cartId:'d'.repeat(24)}],cartId:'d'.repeat(24)}).unitAdjustmentPiastres,1200);
 });
+
+test('saved box restrictions prevent charging an option on a different gift box',()=>{
+ assert.throws(()=>quote({options:[{...option,boxIds:['box-1']}]}),/not ready/);
+ assert.equal(quote({options:[{...option,boxIds:['box-2']}]}).unitAdjustmentPiastres,1200);
+});

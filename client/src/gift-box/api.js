@@ -10,3 +10,11 @@ export const getFulfillmentPolicy = async (boxId, signal, historyPage = 1) => (a
 export const saveFulfillmentDraft = async (boxId, body) => (await safePut(`${policyPath}/${boxId}/draft`, body)).data.data.policy;
 export const approveFulfillmentPolicy = async (boxId, body) => (await safePost(`${policyPath}/${boxId}/approve`, body)).data.data.policy;
 export const withdrawFulfillmentPolicy = async (boxId, body) => (await safePost(`${policyPath}/${boxId}/withdraw`, body)).data.data.policy;
+
+// Personalization option listing and read-only quote; no Add-to-Cart or checkout permission.
+export const getGiftBoxPersonalizationOptions = async (signal, admin = false) =>
+  (await api.get(admin ? '/admin/gift-box/personalization-options' : '/gift-box/personalization-options', { signal })).data.data;
+export const saveGiftBoxPersonalizationOption = async (optionId, body) =>
+  (await safePatch(`/admin/gift-box/personalization-options/${optionId}`, body)).data.data.option;
+export const getGiftBoxPersonalizationQuote = async (boxId, intent, signal) =>
+  (await safePost('/gift-box/personalization-quote', { boxId, intent }, { signal })).data.data.personalization;

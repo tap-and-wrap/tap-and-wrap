@@ -21,6 +21,7 @@ export const env = {
   // OFF by default. Operational enablement is not a substitute for validated
   // component settings, published physical policies, and private artwork.
   giftBoxDirectCommerceEnabled: process.env.GIFT_BOX_DIRECT_COMMERCE_ENABLED === 'true',
+  giftBoxPersonalizationOptionsEnabled: process.env.GIFT_BOX_PERSONALIZATION_OPTIONS_ENABLED === 'true',
   clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
   sessionSecret: process.env.SESSION_SECRET || '',
   // Both gates remain OFF unless an operator explicitly authorizes launch.
