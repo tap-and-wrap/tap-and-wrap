@@ -49,7 +49,7 @@ export async function giftBoxFixture(page, options = {}) {
     refreshAvailability();
     const id = path.split('/').at(-1), record = components.find(item => item.componentId === id);
     if (record) return reply({ component: record });
-    return reply({ components, pagination: { total: components.length, pages: 1 }, pendingCategories: [], submissionAllowed: false });
+    return reply({ components, pagination: { total: components.length, pages: 1 }, pendingCategories: [], submissionAllowed: false, directCommerceEnabled: options.directCommerceEnabled === true, orderableBoxIds: options.directCommerceEnabled ? ['box-2'] : [] });
   });
   return { ...base, components, estimates, patches, calls, media, recoverCatalog: () => { failCatalog = false; }, recoverEstimate: () => { failEstimate = false; } };
 }

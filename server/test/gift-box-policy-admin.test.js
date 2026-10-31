@@ -22,7 +22,7 @@ import { assertGiftBoxFulfillment, getGiftBoxFulfillmentPolicy } from '../src/gi
 import { setGiftBoxCartPoliciesForDisposableTest, clearGiftBoxCartPoliciesForDisposableTest } from '../src/gift-box/cart-pricing.js';
 import { setGiftBoxCheckoutHooksForDisposableTest } from '../src/gift-box/checkout-guard.js';
 import { addCartItem, quoteCart } from '../src/commerce/cart.js';
-import { prepareCheckout, prepareGiftBoxCheckoutForDisposableTest, placeGiftBoxOrderForDisposableTest } from '../src/commerce/orders.js';
+import { prepareCheckout, placeOrder, prepareGiftBoxCheckoutForDisposableTest, placeGiftBoxOrderForDisposableTest } from '../src/commerce/orders.js';
 import { fingerprint } from '../src/commerce/pricing.js';
 import { newSessionToken, hashSession, makeCsrfToken } from '../src/utils/tokens.js';
 import { startTestDatabase } from './helpers/database.js';
@@ -399,4 +399,31 @@ test('order policy references remain immutable after withdrawal while new quotes
   await approve(approval(renewed.data.policy.revision)); await addCartItem(owner, giftCartInput());
   await assert.rejects(prepareCheckout(owner, { checkoutKey: randomUUID(), paymentMethod: 'instapay', governorate: 'cairo' }), { code: 'GIFT_BOX_CHECKOUT_DISABLED' });
   const quote = await quoteCart(owner); assert.equal(quote.items[0].checkoutAllowed, false);
+});
+
+
+test('real customer cart and checkout reuse published policy and inventory, never synthetic approvals', async () => {
+  const previous = env.giftBoxDirectCommerceEnabled;
+  try {
+    await seedGiftCartSettings(admin.user._id);
+    env.giftBoxDirectCommerceEnabled = true;
+    await assert.rejects(addCartItem(owner, giftCartInput(giftCartConfiguration())), { code: 'GIFT_BOX_FULFILLMENT_UNAPPROVED' });
+    await publish();
+    const result = await addCartItem(owner, giftCartInput(giftCartConfiguration()));
+    assert.equal(result.cart.items.length, 1);
+    assert.equal(result.cart.items[0].kind, 'gift_box_v2');
+    assert.equal(result.checkoutEnabled, true);
+    const checkoutKey = randomUUID();
+    const quote = await prepareCheckout(owner, { checkoutKey, paymentMethod: 'instapay', governorate: 'cairo' });
+    assert.ok(quote.totals.totalPiastres > 0);
+    const placed = await placeOrder(owner, { checkoutKey, paymentMethod: 'instapay', customer });
+    const stored = await Order.findById(placed.id).lean();
+    assert.equal(stored.lines.length, 1);
+    assert.equal(stored.lines[0].kind, 'gift_box_v2');
+    assert.equal(stored.lines[0].giftBox.configuration.selection.boxId, 'box-2');
+    assert.ok(stored.inventoryClaims.some(item => item.kind === 'gift_box_component'));
+    assert.equal(stored.paymentMethod, 'instapay');
+    assert.equal(stored.charges[0].amountPiastres, null);
+    assert.equal(await Cart.countDocuments({ owner }), 0);
+  } finally { env.giftBoxDirectCommerceEnabled = previous; }
 });

@@ -74,7 +74,7 @@ test('approved card supports an optional 500-code-point message without enabling
   await page.getByLabel('Add a gift card').check(); await page.getByLabel('Your personal message').fill('💐'.repeat(500)); await expect(page.getByText('500 / 500 characters')).toBeVisible();
   await page.getByLabel('Your personal message').press('a'); await expect(page.getByLabel('Your personal message')).toHaveValue('💐'.repeat(500));
   await expect(page.locator('.gb-price-summary strong')).toContainText('20.00'); await page.getByRole('button', { name: 'Next: Review' }).click();
-  await expect(page.getByRole('button', { name: 'Request submission unavailable' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Add completed gift to cart', exact: true })).toBeDisabled();
   expect(f.estimates.at(-1).giftCard).toEqual({ componentId: 'gift-card-1', message: '💐'.repeat(500) });
   expect(f.calls.every(call => !/submit|convert|order/.test(call.path))).toBe(true);
 });
@@ -158,7 +158,7 @@ test('personal step retains photo previews and two literal engraving drafts with
   await expect(page.getByRole('img', { name: 'Selected photo 1' })).toBeVisible();
   await page.getByRole('button', { name: 'Next: Review' }).click();
   await expect(page.getByText('1 selected photo(s); 2 engraving(s). Not uploaded or priced.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Request submission unavailable' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Add completed gift to cart', exact: true })).toBeDisabled();
   expect(f.calls.filter(call => ['upload', 'cart/items', 'orders'].some(fragment => call.path.includes(fragment)))).toHaveLength(0);
 });
 

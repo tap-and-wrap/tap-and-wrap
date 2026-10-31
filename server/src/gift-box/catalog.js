@@ -10,6 +10,7 @@ import { approvedPrice, calculateEstimate, requireComponent, selectionLines } fr
 import { builderError, catalogQuery, reorderInput, settingPatch } from './validation.js';
 import { applyInventoryPatch, inventoryEligibility } from './inventory.js';
 import { publishedBoxSelectionLimits, assertBoxSelectionLimits } from './limits.js';
+import { giftBoxRuntimeCommerceOpen } from './runtime-commerce.js';
 
 export async function ensureBuilderBackend() {
   if (!env.giftBoxBuilderBackendEnabled) throw builderError(404, 'GIFT_BOX_BACKEND_DISABLED', 'The builder backend is not enabled.');
@@ -48,7 +49,8 @@ export async function listBuilderComponents(rawQuery, { admin = false } = {}) {
   return { catalogVersion: CATALOG_VERSION, boxLimits, components: ordered.slice((input.page - 1) * input.limit, input.page * input.limit).map(item => present(item, byId.get(item.id), admin)),
     pagination: { page: input.page, limit: input.limit, total: ordered.length, pages: Math.ceil(ordered.length / input.limit) },
     pendingCategories: Object.keys(PENDING_CATEGORIES).filter(key => !FIXED_COMPONENTS.some(item => item.category === key)),
-    arrangementApproved: false, submissionAllowed: false, orderConversionAllowed: false };
+    arrangementApproved: false, submissionAllowed: false, orderConversionAllowed: false,
+    directCommerceEnabled: giftBoxRuntimeCommerceOpen(env), orderableBoxIds: giftBoxRuntimeCommerceOpen(env) ? Object.keys(boxLimits) : [] };
 }
 export async function getBuilderSetting(id) {
   await ensureBuilderBackend();

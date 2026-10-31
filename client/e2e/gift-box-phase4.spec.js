@@ -57,7 +57,7 @@ test('selected gift card charges the API price with blank or Unicode message and
   expect(fixture.estimates.at(-1).giftCard).toBeNull();
   await toggle.check(); await expect(message).toHaveValue('💐'.repeat(500));
   await page.getByRole('button', { name: 'Next: Review' }).click();
-  await expect(page.getByRole('button', { name: 'Request submission unavailable' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Add completed gift to cart', exact: true })).toBeDisabled();
   expect(fixture.calls.every(call => !/submit|convert|order/.test(call.path))).toBe(true);
 });
 

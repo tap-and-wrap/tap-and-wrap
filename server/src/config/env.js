@@ -18,6 +18,9 @@ export const env = {
   productAliasesEnabled: process.env.PRODUCT_ALIASES_ENABLED === 'true',
   // Foundation API only; does not enable customer submission, conversion or checkout.
   giftBoxBuilderBackendEnabled: process.env.GIFT_BOX_BUILDER_BACKEND_ENABLED === 'true',
+  // OFF by default. Operational enablement is not a substitute for validated
+  // component settings, published physical policies, and private artwork.
+  giftBoxDirectCommerceEnabled: process.env.GIFT_BOX_DIRECT_COMMERCE_ENABLED === 'true',
   clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
   sessionSecret: process.env.SESSION_SECRET || '',
   // Both gates remain OFF unless an operator explicitly authorizes launch.

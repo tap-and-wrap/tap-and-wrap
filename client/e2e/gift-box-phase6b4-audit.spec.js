@@ -74,7 +74,8 @@ for (const width of [320, 390, 768, 1440]) {
     await page.getByRole('button', { name: 'Next: Review' }).click();
     await expect(page.getByRole('heading', { name: 'Review your gift' })).toBeVisible();
     await expect(page.getByText('3 selected photo(s); 3 engraving(s). Not uploaded or priced.')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Request submission unavailable' })).toBeDisabled();
+    await expect(page.locator('.gb-review-drafts [role=status]')).toContainText('3 beside');
+    await expect(page.getByRole('button', { name: 'Add completed gift to cart', exact: true })).toBeDisabled();
     await expect(page.locator('.gb-review')).toContainText('١٢ / ١٠ / ٢٠٢٦ 💛');
     expect(noCommerceMutations(f.calls)).toEqual([]);
     await noHorizontalOverflow(page);
@@ -96,7 +97,7 @@ test('Phase 6B.4a double-width text preserves the personal step and closed submi
   await page.locator('.gb-steps button').nth(5).click();
   await noHorizontalOverflow(page);
   await page.getByRole('button', { name: 'Next: Review' }).click();
-  await expect(page.getByRole('button', { name: 'Request submission unavailable' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Add completed gift to cart', exact: true })).toBeDisabled();
   expect(noCommerceMutations(f.calls)).toEqual([]);
 });
 
@@ -115,7 +116,7 @@ test('Phase 6B.4a Box 11 study does not silently approve physical fit', async ({
   await capture(page, info, 'phase6b4-box11-two-level-390.png');
   await page.locator('.gb-steps button').nth(5).click();
   await page.getByRole('button', { name: 'Next: Review' }).click();
-  await expect(page.getByRole('button', { name: 'Request submission unavailable' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Add completed gift to cart', exact: true })).toBeDisabled();
   expect(noCommerceMutations(f.calls)).toEqual([]);
 });
 
@@ -187,7 +188,7 @@ for (const [width, enlarged] of [[320, false], [390, false], [1440, false], [320
     await expect(page.locator('.gb-engraving-paper')).toHaveCount(2);
     await expect(page.getByRole('button', { name: 'Next: Review' })).toBeEnabled();
     await page.getByRole('button', { name: 'Next: Review' }).click();
-    await expect(page.getByRole('button', { name: 'Request submission unavailable' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Add completed gift to cart', exact: true })).toBeDisabled();
     expect(noCommerceMutations(f.calls)).toEqual([]);
   });
 }
@@ -234,7 +235,7 @@ for (const [width, enlarged] of [[320, false], [390, false], [768, false], [1440
     await expect(review.getByRole('group', {name:'Component estimate'})).toContainText('20.00');
     await expect(review.getByRole('group', {name:'Component estimate'})).toContainText('not included');
     await expect(review.getByRole('region', {name:'Local personalization drafts'})).toContainText('1 selected photo(s); 0 engraving(s). Not uploaded or priced.');
-    await expect(page.getByRole('button', { name: 'Request submission unavailable' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Add completed gift to cart', exact: true })).toBeDisabled();
     await noHorizontalOverflow(page);
     await capture(page,info,`phase6b4b3-final-review-${width}${enlarged ? '-text200' : ''}.png`);
     expect(noCommerceMutations(f.calls)).toEqual([]);

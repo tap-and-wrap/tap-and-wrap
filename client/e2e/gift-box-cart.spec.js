@@ -103,8 +103,8 @@ test('builder review stays closed and does not invoke cart APIs when selections 
   await page.getByRole('button', { name: 'Choose Fixture ribbon-cream-ivory', exact: true }).click();
   await page.getByRole('button', { name: 'Next: Review', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Review your gift', exact: true })).toBeVisible();
-  await expect(page.getByText('Your selections are prepared for cart review.', { exact: false })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Request submission unavailable', exact: true })).toBeDisabled();
+  await expect(page.getByText('Online ordering for this arrangement is not yet configured.', { exact: false })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add completed gift to cart', exact: true })).toBeDisabled();
   expect(fixture.calls.filter(call => call.path.endsWith('/requests'))).toHaveLength(0);
   expect(fixture.state.cart.items).toHaveLength(0);
 });
@@ -151,4 +151,32 @@ test('builder serializer rejects unfinished arrangements, absent ribbons, malfor
   expect(() => prepareGiftBoxCommerceConfiguration(duplicate, { cardId: 'gift-card-1' })).toThrow();
   for (const quantity of [0, 1.5, '2', 100]) expect(() => prepareGiftBoxCartPayload(arrangement(), { cardId: 'gift-card-1', quantity, operationKey: '30000000-0000-4000-8000-000000000001' })).toThrow();
   expect(() => prepareGiftBoxCartPayload(arrangement())).toThrow();
+});
+
+
+test('ready gift-box review adds a complete configuration with one operation key', async ({ page }) => {
+  const fixture = await giftBoxFixture(page, { directCommerceEnabled: true });
+  let sent = null;
+  await page.route('**/api/v1/commerce/cart/items', route => {
+    const headers = { 'access-control-allow-origin': 'http://127.0.0.1:5191',
+      'access-control-allow-credentials': 'true', 'access-control-allow-headers': 'content-type,x-csrf-token',
+      'access-control-allow-methods': 'POST,OPTIONS' };
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+    sent = route.request().postDataJSON();
+    return route.fulfill({ json: { ok: true, data: { cart: { items: [], subtotalPiastres: 0, quantity: 0 } } }, headers });
+  });
+  await beginGiftBox(page);
+  await page.getByRole('button', { name: 'Finishing Touches', exact: false }).click();
+  await page.getByRole('button', { name: 'Choose Fixture ribbon-cream-ivory', exact: true }).click();
+  await page.getByRole('button', { name: 'Next: Review', exact: true }).click();
+  const button = page.getByRole('button', { name: 'Add completed gift to cart', exact: true });
+  await expect(button).toBeEnabled();
+  await button.click();
+  await expect.poll(() => sent?.kind).toBe('gift_box_v2');
+  expect(sent.operationKey).toMatch(/^[a-f0-9-]{36}$/i);
+  expect(sent.configuration.selection).toMatchObject({ boxId: 'box-2', ribbonId: 'ribbon-cream-ivory' });
+  expect(sent.configuration.placements).toEqual([]);
+  expect(JSON.stringify(sent)).not.toMatch(/pricePiastres|approvedBy|photoFile|blob:/);
+  await expect(page).toHaveURL(/\/cart$/);
+  expect(fixture.calls.filter(call => call.path.endsWith('/requests'))).toHaveLength(0);
 });

@@ -13,6 +13,7 @@ import { identifyGiftBoxConfiguration } from '../gift-box/commerce-contract.js';
 import { createGiftBoxCartPricingContext, quoteGiftBoxCartLine, giftBoxCartStockErrors,
   giftBoxCartSummary, publicGiftBoxCartLine, giftCartError, giftBoxOrderInventoryClaims } from '../gift-box/cart-pricing.js';
 import { assertGiftBoxCheckoutCapability } from '../gift-box/checkout-guard.js';
+import { giftBoxRuntimeCommerceOpen } from '../gift-box/runtime-commerce.js';
 
 const expiresAt = () => new Date(Date.now() + 30 * 86400000);
 export async function readCart(owner, { session } = {}) {
@@ -30,7 +31,7 @@ async function quoteCartCore(owner, { session, strict = false } = {}, capability
   const lines = cart?.items || [];
   // This gate is unconditional, including synthetic policy fixtures. Existing
   // checkout/order services use strict quotes and can never consume gift claims.
-  if (strict && !capability && lines.some(line => line.kind === 'gift_box_v2')) throw commerceError(409, 'GIFT_BOX_CHECKOUT_DISABLED', 'Gift-box checkout is not available. Ordinary products can be ordered separately.');
+  if (strict && !capability && !giftBoxRuntimeCommerceOpen(env) && lines.some(line => line.kind === 'gift_box_v2')) throw commerceError(409, 'GIFT_BOX_CHECKOUT_DISABLED', 'Gift-box checkout is not available. Ordinary products can be ordered separately.');
   if (!session && lines.some(line => line.kind === 'gift_box_v2')) {
     return mongoose.connection.transaction(readSession => quoteCartCore(owner, { session: readSession, strict }, capability), { readConcern: { level: 'snapshot' } });
   }
@@ -41,7 +42,7 @@ async function quoteCartCore(owner, { session, strict = false } = {}, capability
     try {
       const kind = cartLineKind(item);
       const quoted = kind === 'gift_box_v2' ? quoteGiftBoxCartLine(item, giftContext) : { ...await quoteCartLine(item, owner, { session, context }), kind: 'product' };
-      if (capability && kind === 'gift_box_v2') quoted.inventoryClaims = giftBoxOrderInventoryClaims(quoted);
+      if ((capability || strict && giftBoxRuntimeCommerceOpen(env)) && kind === 'gift_box_v2') quoted.inventoryClaims = giftBoxOrderInventoryClaims(quoted);
       const expiries = quoted.uploadIds.map(id => context.uploads.get(String(id))?.expiresAt).filter(Boolean);
       items.push({ ...quoted, ...(expiries.length ? { attachments: { status: 'temporary', expiresAt: new Date(Math.min(...expiries.map(date => date.getTime()))), replacementRequired: false } } : {}) });
     }
@@ -72,7 +73,7 @@ export async function cartResponse(owner) {
   const hasGifts = items.some(item => item.kind === 'gift_box_v2');
   const paths = await attachProductPaths(items.filter(item => item.kind === 'product' && item.slug).map(item => ({ _id: item.productId, slug: item.slug })));
   const byProduct = new Map(paths.map(product => [String(product._id), product.publicPath]));
-  return { cart: { items: items.map(item => item.kind === 'product' && item.slug && byProduct.get(String(item.productId)) ? { ...item, publicPath: byProduct.get(String(item.productId)) } : item), subtotalPiastres: quote.subtotalPiastres, quantity: quote.quantity }, checkoutEnabled: env.checkoutEnabled === true && !hasGifts, giftBoxCheckoutBlocked: hasGifts,
+  return { cart: { items: items.map(item => item.kind === 'product' && item.slug && byProduct.get(String(item.productId)) ? { ...item, publicPath: byProduct.get(String(item.productId)) } : item), subtotalPiastres: quote.subtotalPiastres, quantity: quote.quantity }, checkoutEnabled: env.checkoutEnabled === true && (!hasGifts || giftBoxRuntimeCommerceOpen(env) && items.every(item => item.valid)), giftBoxCheckoutBlocked: hasGifts && !giftBoxRuntimeCommerceOpen(env),
     // A UI scope identifier only, never an authorization credential or raw owner.
     checkoutOwnerKey: createHash('sha256').update(`checkout-context:${owner}`).digest('hex') };
 }

@@ -13,6 +13,7 @@ import { assertInventory } from './inventory.js';
 import { builderError } from './validation.js';
 import { fingerprint } from '../commerce/pricing.js';
 import { loadPublishedGiftBoxPolicies } from './policy-store.js';
+import { giftBoxRuntimeCommerceOpen } from './runtime-commerce.js';
 
 let disposablePolicies = null;
 function assertDisposablePoliciesOnly() {
@@ -97,8 +98,11 @@ export function quoteGiftBoxCartLine(line, context, { stored = true } = {}) {
     // valid persisted policy still cannot open public gift cart additions.
     // Positive integration remains the existing exact-target test composition.
     if (!stored) {
-      if (disposablePolicies?.client !== GiftBoxComponentSetting.db.getClient()) throw builderError(409, 'GIFT_BOX_CART_LAUNCH_DISABLED', 'Gift-box Add to Cart remains unavailable until a separately approved release.');
-      assertDisposablePoliciesOnly();
+      const synthetic = disposablePolicies?.client === GiftBoxComponentSetting.db.getClient();
+      if (synthetic) assertDisposablePoliciesOnly();
+      else if (!giftBoxRuntimeCommerceOpen(env) || context?.policies?.get(configuration.selection.boxId) !== policy) {
+        throw builderError(409, 'GIFT_BOX_CART_LAUNCH_DISABLED', 'Gift-box ordering is not ready for this box. No cart item was added.');
+      }
     }
     const giftComponents = quote.components.map(component => ({ ...component,
       priceApprovedBy: String(context.settings.get(component.componentId).priceApprovedBy),
@@ -108,7 +112,7 @@ export function quoteGiftBoxCartLine(line, context, { stored = true } = {}) {
       name: 'Build Your Gift Box', quantity: quote.quantity, unitPricePiastres: quote.unitPricePiastres, lineTotalPiastres: quote.lineTotalPiastres,
       giftBox: giftBoxCartSummary(configuration, context.savedSettings), giftComponents,
       giftFulfillment: quote.fulfillment, giftPolicyHash: fingerprint(giftBoxFulfillmentPolicyInput.parse(policy)),
-      uploadIds: [], inventoryClaims: [], valid: true, checkoutAllowed: false, promotionsEligible: false };
+      uploadIds: [], inventoryClaims: [], valid: true, checkoutAllowed: giftBoxRuntimeCommerceOpen(env), promotionsEligible: false };
   } catch (error) { throw giftCartError(error); }
 }
 
@@ -143,5 +147,5 @@ export function publicGiftBoxCartLine(quote) {
   return { id: quote.id, kind: 'gift_box_v2', name: 'Build Your Gift Box', quantity: quote.quantity,
     valid: quote.valid, ...(quote.error ? { error: quote.error, errorCode: quote.errorCode } : {}),
     unitPricePiastres: quote.valid ? quote.unitPricePiastres : null, lineTotalPiastres: quote.valid ? quote.lineTotalPiastres : null,
-    giftBox: quote.giftBox, checkoutAllowed: false, promotionsEligible: false };
+    giftBox: quote.giftBox, checkoutAllowed: quote.checkoutAllowed === true, promotionsEligible: false };
 }
