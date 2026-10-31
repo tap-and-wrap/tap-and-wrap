@@ -212,3 +212,8 @@
 .gb-review-estimate p{font-size:.82rem;line-height:1.5;margin:0}
 .gb-review-drafts{border-top:1px solid var(--tw-border);padding-top:16px;margin-top:18px;overflow-wrap:anywhere}
 .gb-review-restriction{font-size:.85rem;line-height:1.6}
+
+/* Server-managed print and engraving options; no customer file input is stored here. */
+.gb-personal-option { display: flex; flex-direction: column; gap: .35rem; margin-block: .85rem; font-weight: 600; }
+.gb-personal-option select { min-height: 2.75rem; border: 1px solid var(--border, #d5cec5); border-radius: .55rem; background: var(--surface, #fff); color: inherit; padding: .6rem .7rem; max-width: 100%; }
+.gb-personal-option small { font-weight: 400; opacity: .8; }

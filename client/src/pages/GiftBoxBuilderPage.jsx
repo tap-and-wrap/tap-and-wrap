@@ -4,13 +4,15 @@ import { useQuery } from '@tanstack/react-query';
 import { BUILDER_STEPS, getFixedComponent } from '../../../shared/gift-box/definitions.mjs';
 import { countBuilderCategories, exceedingBuilderCategories, resolveBoxCategoryLimits } from '../../../shared/gift-box/selection-limits.mjs';
 import { arrangementReducer, canAdd, codePointCount, componentCanSupply, componentLabel, counts, estimateSelection, initialArrangement, validMessage } from '../gift-box/state.mjs';
-import { getCatalog, getEstimate } from '../gift-box/api.js';
-import { commerceError, money } from '../commerce/api.js';
+import { getCatalog, getEstimate, getGiftBoxPersonalizationOptions, getGiftBoxPersonalizationQuote } from '../gift-box/api.js';
+import { commerceError, money, uploadPrivateFile } from '../commerce/api.js';
 import ArrangementCanvas from '../gift-box/ArrangementCanvas.jsx';
 import Options from '../gift-box/Options.jsx';
 import { useSession } from '../auth/SessionProvider.jsx';
 import { useCart } from '../commerce/CartContext.jsx';
 import { prepareGiftBoxCommerceConfiguration } from '../gift-box/commerce-payload.mjs';
+import { giftBoxPersonalDraftSignature, giftBoxConfigurationWithPersonalization, estimateGiftBoxPersonalizationChoices, assertGiftBoxPersonalizationPriceUnchanged, verifyGiftBoxPersonalDraft } from '../gift-box/personalization-submission.mjs';
+import PersonalizationOptions from '../gift-box/PersonalizationOptions.jsx';
 import { usePersonalDraft } from '../gift-box/usePersonalDraft.js';
 import { summarizeGiftBoxPersonalDraft } from '../gift-box/personalization-review.mjs';
 import PersonalTouches, { PersonalPreview } from '../gift-box/PersonalTouches.jsx';
@@ -30,8 +32,32 @@ export default function GiftBoxBuilderPage() {
   const [step, setStep] = useState(0), [revealed, setRevealed] = useState({}), [review, setReview] = useState(false);
   const [notice, setNotice] = useState('');
   const personal = usePersonalDraft();
+  const [printOptionsByPhoto, setPrintOptionsByPhoto] = useState({});
+  const [surfaceOptionsByEngraving, setSurfaceOptionsByEngraving] = useState({});
+  const uploadCache = useRef(new Map());
+  const uploadIds = useRef([]);
+  const ownerRef = useRef(session.ownerKey);
+  const personalizationOptions = useQuery({
+    queryKey: ['private', session.ownerKey, 'gift-box-personalization-options'],
+    queryFn: ({ signal }) => getGiftBoxPersonalizationOptions(signal),
+    enabled: Boolean(session.ready && catalog.data?.directCommerceEnabled),
+    retry: false, staleTime: 30_000, gcTime: 0,
+  });
+
   const state = history.present, components = catalog.data?.components || [];
   const personalSummary = summarizeGiftBoxPersonalDraft(personal, state.boxId);
+  const draftSignature = giftBoxPersonalDraftSignature(state.boxId, personal, printOptionsByPhoto, surfaceOptionsByEngraving);
+  const latest = useRef({ ownerKey: session.ownerKey, draftSignature });
+  latest.current = { ownerKey: session.ownerKey, draftSignature, arrangementSignature: JSON.stringify(state) };
+  useEffect(() => {
+    // Never reuse a private upload receipt or pending operation after a verified
+    // account/guest session change. Abandoned receipts expire via backend TTL.
+    if (ownerRef.current === session.ownerKey) return;
+    ownerRef.current = session.ownerKey;
+    uploadCache.current.clear(); uploadIds.current = [];
+    pendingGiftOperation.current = null;
+  }, [session.ownerKey]);
+
   // Production placement requires the separately configured, reviewed direct-commerce lane.
   const study = import.meta.env.DEV || catalog.data?.directCommerceEnabled === true;
   const titleRef = useRef(null), shouldFocus = useRef(false), stepsRef = useRef(null), pageRef = useRef(null);
@@ -41,11 +67,13 @@ export default function GiftBoxBuilderPage() {
   const categoryCounts = countBuilderCategories(state.instances, item => getFixedComponent(item.componentId)?.category);
   const categoryOverLimit = exceedingBuilderCategories(categoryCounts, activeLimits);
   const card = components.find(item => item.category === 'gift_card');
+  const personalPriceEstimate = estimateGiftBoxPersonalizationChoices({ boxId: state.boxId, personal,
+    options: personalizationOptions.data?.options, printOptionsByPhoto, surfaceOptionsByEngraving });
   const cartConfigurationReady = useMemo(() => {
-    if (!review || categoryOverLimit.length || personal.hasContent) return false;
+    if (!review || categoryOverLimit.length || (personal.hasContent && personalPriceEstimate === null)) return false;
     try { return Boolean(prepareGiftBoxCommerceConfiguration(state, { cardId: card?.componentId })); }
     catch { return false; }
-  }, [review, state, card?.componentId, categoryOverLimit.length, personal.hasContent]);
+  }, [review, state, card?.componentId, categoryOverLimit.length, personal.hasContent, personalPriceEstimate]);
   const selectionKey = JSON.stringify(estimateSelection(state, card?.componentId));
   // Position changes leave this key unchanged: no requests are made for dragging.
   const selection = useMemo(() => JSON.parse(selectionKey), [selectionKey]);
@@ -53,7 +81,11 @@ export default function GiftBoxBuilderPage() {
   const unavailableSelection = selectedLines.some(line => !componentCanSupply(components.find(item => item.componentId === line.componentId), line.quantity));
   const estimate = useQuery({ queryKey: ['private', session.ownerKey, 'gift-box-estimate', selection], queryFn: ({ signal }) => getEstimate(selection, signal), enabled: Boolean(selection) && !unavailableSelection, retry: false, staleTime: 0, gcTime: 0 });
   const currentEstimate = selection && !unavailableSelection && estimate.isSuccess && !estimate.isFetching ? estimate.data : null;
-  const priceText = currentEstimate ? money(currentEstimate.componentSubtotalPiastres) : unavailableSelection ? 'Selection unavailable' : selection && estimate.isFetching ? 'Calculating…' : 'Awaiting estimate';
+  const combinedPiastres = currentEstimate && personalPriceEstimate !== null
+    ? currentEstimate.componentSubtotalPiastres + personalPriceEstimate : null;
+  const priceText = Number.isSafeInteger(combinedPiastres) ? money(combinedPiastres)
+    : currentEstimate ? money(currentEstimate.componentSubtotalPiastres)
+      : unavailableSelection ? 'Selection unavailable' : selection && estimate.isFetching ? 'Calculating…' : 'Awaiting estimate';
   useEffect(() => {
     if (!stepsRef.current) return undefined;
     const element = stepsRef.current;
@@ -68,8 +100,24 @@ export default function GiftBoxBuilderPage() {
     setAddingGift(true);
     setNotice('Verifying your gift box and current prices…');
     try {
-      const configuration = prepareGiftBoxCommerceConfiguration(state, { cardId: card?.componentId });
-      const signature = JSON.stringify(configuration);
+      let intent = null;
+      if (personal.hasContent) {
+        const signatureBefore = draftSignature, arrangementBefore = JSON.stringify(state), ownerKey = session.ownerKey;
+        const result = await verifyGiftBoxPersonalDraft({ boxId: state.boxId, personal, ownerKey,
+          options: personalizationOptions.data?.options, printOptionsByPhoto, surfaceOptionsByEngraving,
+          uploadFile: uploadPrivateFile, quote: getGiftBoxPersonalizationQuote,
+          cache: uploadCache.current, uploadedIds: uploadIds.current,
+          ownerIsCurrent: () => latest.current.ownerKey === ownerKey,
+          draftIsCurrent: () => latest.current.draftSignature === signatureBefore
+            && latest.current.arrangementSignature === arrangementBefore,
+          onProgress: message => setNotice(message),
+        });
+        try { assertGiftBoxPersonalizationPriceUnchanged(result.quote, personalPriceEstimate); }
+        catch (error) { void personalizationOptions.refetch(); throw error; }
+        intent = result.intent;
+      }
+      const configuration = giftBoxConfigurationWithPersonalization(state, { cardId: card?.componentId, intent });
+      const signature = `${session.ownerKey}:${JSON.stringify(configuration)}`;
       if (!pendingGiftOperation.current || pendingGiftOperation.current.signature !== signature) {
         pendingGiftOperation.current = { signature,
           payload: { kind: 'gift_box_v2', operationKey: crypto.randomUUID(), quantity: 1, configuration } };
@@ -108,7 +156,7 @@ export default function GiftBoxBuilderPage() {
           <PersonalPreview personal={personal} showPhotoStack={!study || !state.boxId}/>
           <div className="gb-tools"><button type="button" onClick={() => dispatch({ type: 'undo' })} disabled={!history.past.length}>Undo</button><button type="button" onClick={() => dispatch({ type: 'clear' })} disabled={!state.instances.length}>Clear items</button></div>
           {study && state.boxId && <p className="gb-help">Drag chocolates and plush between the box and beside area, or use Inside/Beside buttons. Roses fill free interior spaces. This preview does not confirm physical fit.</p>}
-          <div className="gb-price-summary" aria-live="polite"><span>Component estimate</span><strong>{priceText}</strong><small>Delivery quoted separately. Prices are checked by Tap &amp; Wrap.{personal.hasContent ? ' Local photo and engraving drafts are NOT included in this estimate.' : ''}</small></div>
+          <div className="gb-price-summary" aria-live="polite"><span>Component estimate</span><strong>{priceText}</strong><small>Delivery quoted separately. Prices are checked by Tap &amp; Wrap.{personal.hasContent ? personalPriceEstimate === null ? ' Choose approved options to include personalization charges.' : ' Includes selected option estimates; final prices are verified on Add to Cart.' : ''}</small></div>
           {estimate.error && <div className="gb-feedback"><p role="alert">{commerceError(estimate.error)}</p><button type="button" onClick={() => estimate.refetch()}>Retry estimate</button><button type="button" onClick={() => catalog.refetch()}>Refresh choices</button></div>}
           {unavailableSelection && <p className="gb-feedback" role="alert">A selected component is unavailable or exceeds current stock. Reduce its quantity, remove it, or choose an available replacement.</p>}
           {(state.boxId || state.instances.length > 0) && <ul className="gb-item-list">{state.boxId && <li><span>{label(state.boxId)} × 1</span><span>{currentEstimate?.items?.find(item => item.componentId === state.boxId) ? money(currentEstimate.items.find(item => item.componentId === state.boxId).lineSubtotalPiastres) : 'Pending'}</span></li>}
@@ -117,8 +165,22 @@ export default function GiftBoxBuilderPage() {
           </ul>}
         </section>
         <section className="gb-choices" aria-label="Build your gift"><header className="gb-step-intro"><p className="gb-eyebrow">{review ? 'Your gift, considered' : `Step ${step + 1} of ${BUILDER_STEPS.length} · ${step === 0 ? 'Required' : 'Optional'}`}</p><h2 ref={titleRef} tabIndex={-1}>{review ? 'Review your gift' : BUILDER_STEPS[step].title}</h2>{step > 0 && step < 4 && !review && <p className="gb-help" role="status">{categoryCounts[categories[step]]} {categories[step] === 'flower' ? 'flowers' : categories[step] === 'plush' ? 'plush toys' : 'chocolates'} selected.{activeLimits ? ` Reviewed policy ceiling: ${activeLimits[categories[step]]}.` : ' No fixed business quantity limit; placement is an approximate visual study.'}</p>}<p>{review ? 'Review your selections. If this box is ready for online ordering, you can add it to your cart.' : descriptions[step]}</p></header>
-          {review ? <div className="gb-review"><section className="gb-review-components" aria-label="Gift components"><h3>Included components</h3><p>{state.boxId ? label(state.boxId) : 'Choose a box'}</p>{Object.entries(quantities).map(([id, quantity]) => <p key={id}>{label(id)} × {quantity}</p>)}{state.ribbonId && <p>Ribbon: {label(state.ribbonId)}</p>}{state.cardEnabled && <><p>{card ? componentLabel(card) : 'Gift card'} × 1</p>{state.message && <><h3>Your message</h3><p className="gb-message">{state.message}</p></>}</>}</section><div className="gb-review-estimate" role="group" aria-label="Component estimate"><span>Estimated components only</span><strong>{priceText}</strong><p>Delivery is quoted separately. Photo prints and engravings are not included in this estimate.</p></div>{personal.hasContent && <section className="gb-review-drafts" aria-label="Local personalization drafts"><h3>Personal touches (local draft only)</h3><p>{personal.photos.length} selected photo(s); {personal.engravings.filter(line => line.text.trim()).length} engraving(s). Not uploaded or priced.</p><p role="status">Photo layout draft: {personalSummary.inside} inside, {personalSummary.beside} beside, {personalSummary.unpositioned} awaiting placement. {personalSummary.missingStyle} engraving(s) without a chosen lettering style. All print types, engraving surfaces and charges still require verified options.</p>{personal.engravings.filter(line => line.text.trim()).map(line => <p key={line.id} className="gb-message">{line.text}</p>)}</section>}<p className="gb-review-restriction">{personal.hasContent
-              ? 'Photo prints and engravings are still local drafts. Remove them to order this gift without personalization, or continue editing them here.'
+          {review ? <div className="gb-review"><section className="gb-review-components" aria-label="Gift components"><h3>Included components</h3><p>{state.boxId ? label(state.boxId) : 'Choose a box'}</p>{Object.entries(quantities).map(([id, quantity]) => <p key={id}>{label(id)} × {quantity}</p>)}{state.ribbonId && <p>Ribbon: {label(state.ribbonId)}</p>}{state.cardEnabled && <><p>{card ? componentLabel(card) : 'Gift card'} × 1</p>{state.message && <><h3>Your message</h3><p className="gb-message">{state.message}</p></>}</>}</section><div className="gb-review-estimate" role="group" aria-label="Component estimate">
+              <span>{personal.hasContent && personalPriceEstimate !== null ? 'Components + personalization estimate' : 'Estimated components only'}</span>
+              <strong>{priceText}</strong>
+              <p>Delivery is quoted separately. {personal.hasContent && personalPriceEstimate === null ? 'Photo prints and engravings are not included until approved options are selected.' : 'All prices are rechecked by the server when adding to cart.'}</p>
+            </div>
+            {personal.hasContent && <section className="gb-review-drafts" aria-label="Local personalization drafts">
+              <h3>Personal touches</h3>
+              <p>{personal.photos.length} selected photo(s); {personal.engravings.filter(line => line.text.trim()).length} engraving(s). Not uploaded or priced.</p>
+              <p role="status">Photo layout draft: {personalSummary.inside} inside, {personalSummary.beside} beside, {personalSummary.unpositioned} awaiting placement. {personalSummary.missingStyle} engraving(s) without a lettering style.</p>
+              {personal.engravings.filter(line => line.text.trim()).map(line => <p key={line.id} className="gb-message" dir="auto">{line.text}</p>)}
+              <p aria-live="polite">{personalPriceEstimate === null
+                ? 'Choose approved print types, engraving surfaces and lettering styles on Step 5.'
+                : `Selected personalization option estimate: ${money(personalPriceEstimate)}. Your photos will be securely uploaded only when you choose Add to Cart.`}</p>
+            </section>}
+            <p className="gb-review-restriction">{personal.hasContent && personalPriceEstimate === null
+              ? 'Choose approved options before adding this personalized gift to your cart.'
               : catalog.data?.directCommerceEnabled && catalog.data?.orderableBoxIds?.includes(state.boxId)
                 ? 'Your box, component availability and packing policy are checked again before it enters your cart. Delivery is quoted separately.'
                 : 'Online ordering for this arrangement is not yet configured. No order or payment has been created.'}</p>
@@ -126,7 +188,7 @@ export default function GiftBoxBuilderPage() {
               disabled={addingGift || !cartConfigurationReady || !currentEstimate || !catalog.data?.directCommerceEnabled || !catalog.data?.orderableBoxIds?.includes(state.boxId)}
               onClick={addConfiguredGiftToCart}>{addingGift ? 'Verifying your gift…' : 'Add completed gift to cart'}</button></div> : <>
             {category && <Options category={category} components={options} revealed={revealed[category] || 12} onReveal={() => setRevealed(current => ({ ...current, [category]: (current[category] || 12) + 12 }))} onChoose={choose} selectedId={category === 'box' ? state.boxId : state.ribbonId} quantities={quantities} boxSelected={Boolean(state.boxId)} canAddItem={item => canAdd(state, item.componentId, item, publishedBoxLimits, { study })}/>}
-            {step === 4 && <PersonalTouches personal={personal}/>}
+            {step === 4 && <><PersonalTouches personal={personal}/><PersonalizationOptions boxId={state.boxId} personal={personal} options={personalizationOptions.data?.options || []} printSelections={printOptionsByPhoto} onPrintSelection={(id, value) => setPrintOptionsByPhoto(old => ({ ...old, [id]: value }))} engravingSelections={surfaceOptionsByEngraving} onEngravingSelection={(id, value) => setSurfaceOptionsByEngraving(old => ({ ...old, [id]: value }))} loading={personalizationOptions.isPending} error={personalizationOptions.error} enabled={Boolean(catalog.data?.directCommerceEnabled)}/></>}
             {step === LAST_STEP && <div className="gb-finishing">{state.ribbonId && <button type="button" className="button button-secondary" onClick={() => dispatch({ type: 'ribbon', id: null })}>No ribbon</button>}<label className="gb-card-toggle"><input type="checkbox" checked={state.cardEnabled} disabled={!componentCanSupply(card) && !state.cardEnabled} aria-describedby="gb-card-policy" onChange={event => dispatch({ type: 'card', enabled: event.target.checked })}/>Add a gift card{card?.displayName ? ` · ${card.displayName}` : ''}</label><p id="gb-card-policy">{componentCanSupply(card) ? `${money(card.pricePiastres)} for one card, with or without a message. Your message is optional, up to 500 characters.` : 'Gift card unavailable · price, availability, or stock needs approval.'}</p>{state.cardEnabled && <><label htmlFor="gb-card-message">Your personal message (optional)</label><textarea id="gb-card-message" value={state.message} rows={5} aria-describedby="gb-card-count gb-card-policy" aria-invalid={!validMessage(state.message)} onChange={event => { const text = event.target.value; if (codePointCount(text) <= 500) dispatch({ type: 'message', message: text }); }}/><span id="gb-card-count">{codePointCount(state.message)} / 500 characters</span>{!validMessage(state.message) && <p role="alert">Use text without unsupported control characters.</p>}</>}</div>}
           </>}
           <p className="gb-announcement" role="status">{notice}</p>

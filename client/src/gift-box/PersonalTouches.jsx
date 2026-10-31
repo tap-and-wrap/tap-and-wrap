@@ -17,7 +17,7 @@ export function PersonalPreview({ personal, showPhotoStack = true }) {
       <span>Engraving {index+1} · {getEngravingColor(line.colorId).label} candidate · font rendering pending approval</span>
       <p dir="auto" style={{color:getEngravingColor(line.colorId).hex}}>{line.text}</p>
     </div>)}
-    <p className="gb-help">Local preview only. These files and words have not been submitted or included in the estimated price.</p>
+    <p className="gb-help">Local preview only. Private photos are uploaded only on Add to Cart, when the server verifies prices and ownership.</p>
   </section>;
 }
 
@@ -41,7 +41,7 @@ export default function PersonalTouches({ personal }) {
         <button type="button" aria-label={`Move photo ${index+1} later`} disabled={index===photos.length-1} onClick={()=>personal.movePhoto(photo.id,1)}>↓</button>
         <button type="button" aria-label={`Remove photo ${index+1}`} onClick={()=>personal.removePhoto(photo.id)}>Remove</button>
       </li>)}</ol>}
-      <p className="gb-help">Your photos stay on this device for this preview; nothing has been uploaded or priced. Reloading this page clears them.</p>
+      <p className="gb-help">Your photos stay in this browser until you choose Add to Cart. No private upload happens when you select, position or preview a photo.</p>
     </div>
     <div className="gb-personal-group">
       <h3>Write something special</h3>
@@ -86,7 +86,7 @@ export default function PersonalTouches({ personal }) {
       </div>)}
       {engravings.length<MAX_ENGRAVING_LINES&&<button type="button" className="button button-secondary" onClick={()=>setExpandedId(personal.addEngraving())}>+ Add another engraving</button>}
       <p className="gb-help">{engravings.length} local engraving drafts · browser performance maximum: {MAX_ENGRAVING_LINES}. This does not approve a physical engraving quantity.</p>
-      <p className="gb-help">These are internal lettering selections only. Exact font rendering, physical engraving and the per-entry charge are not yet connected to checkout.</p>
+      <p className="gb-help">Preview styles are illustrative; only licensed, priced surfaces approved by the owner can be verified for ordering.</p>
     </div>
     {personal.notice && <p role="alert" className="gb-feedback">{personal.notice}</p>}
   </section>;
