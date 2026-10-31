@@ -9,11 +9,12 @@ import {
 
 const router = Router();
 const signSchema = z.object({
-  purpose: z.enum(['personalization', 'artwork', 'payment_proof', 'service_reference']),
+  purpose: z.enum(['personalization', 'artwork', 'payment_proof', 'service_reference', 'gift_box_photo']),
   requestKey: z.uuid().optional(),
   mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp'], { error: 'Use JPEG, PNG or WebP. Export HEIC or other unsupported formats as JPEG or PNG, then try again.' }),
   sizeBytes: z.number().int().positive().max(10 * 1024 * 1024),
   productId: z.string().regex(/^[a-f0-9]{24}$/i).optional(),
+  giftBoxId: z.string().regex(/^box-(?:[1-9]|1[0-3])$/).optional(),
   fieldKey: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/).optional(),
   orderId: z.string().regex(/^[a-f0-9]{24}$/i).optional(),
   checkoutKey: z.uuid().optional(),
