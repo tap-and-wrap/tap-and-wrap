@@ -220,3 +220,49 @@ for (const role of [null, 'customer']) test(`${role || 'guest'} cannot enter adm
   await expect(page.getByRole('heading', { name: role ? 'Access denied' : 'Administrator sign in', exact: true })).toBeVisible();
   expect(fixture.calls).toHaveLength(0);
 });
+
+
+test('draft region names align with the current builder, without inventing capacity or granting approval', async ({ page }) => {
+  const fixture = await mockPolicies(page); await page.goto(path);
+  await expect(page.getByText('heart-floor', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Use builder preview region names (draft only)' }).click();
+  await expect(page.getByRole('textbox', { name: 'Region ID 1', exact: true })).toHaveValue('heart-floor');
+  await expect(page.getByRole('textbox', { name: 'Region ID 2', exact: true })).toHaveValue('beside-plush-proposal');
+  await expect(page.getByRole('spinbutton', { name: 'Overall maximum units', exact: true })).toHaveValue('');
+  await expect(page.getByRole('button', { name: 'Approve saved policy', exact: true })).toBeDisabled();
+  expect(fixture.calls.some(call => call.method !== 'GET')).toBe(false);
+  await expect(page.getByRole('button', { name: 'Use builder preview region names (draft only)' })).toBeDisabled();
+});
+
+test('Box 11 preview names keep separate unknown-capacity wells, with no server mutation', async ({ page }) => {
+  const fixture = await mockPolicies(page); await page.goto(path);
+  await page.getByRole('combobox', { name: 'Box', exact: true }).selectOption('box-11');
+  await page.getByRole('button', { name: 'Use builder preview region names (draft only)' }).click();
+  await expect(page.getByRole('textbox', { name: 'Region ID 1', exact: true })).toHaveValue('lower-circular-floor');
+  await expect(page.getByRole('textbox', { name: 'Region ID 2', exact: true })).toHaveValue('raised-circular-floor');
+  await expect(page.getByRole('combobox', { name: 'Region compartment 1', exact: true })).toHaveValue('lower-well');
+  await expect(page.getByRole('combobox', { name: 'Region compartment 2', exact: true })).toHaveValue('raised-well');
+  await expect(page.getByRole('spinbutton', { name: 'Compartment maximum 1', exact: true })).toHaveValue('');
+  await expect(page.getByRole('spinbutton', { name: 'Compartment maximum 2', exact: true })).toHaveValue('');
+  expect(fixture.calls.some(call => call.method !== 'GET')).toBe(false);
+});
+
+test('beside chocolate can be selected in a saved draft, without authorizing a physical policy', async ({ page }) => {
+  const fixture = await mockPolicies(page); await page.goto(path);
+  await page.getByRole('button', { name: 'Use builder preview region names (draft only)' }).click();
+  await addComponent(page, 'chocolate', 'chocolate-1');
+  await page.getByRole('spinbutton', { name: 'Maximum quantity: Fixture Chocolate One', exact: true }).fill('1');
+  await page.getByRole('checkbox', { name: 'Allow beside-plush-proposal (beside) for Fixture Chocolate One', exact: true }).check();
+  await addComponent(page, 'ribbon', 'ribbon-navy');
+  for (const [name, value] of [['Overall maximum units', '1'], ['Maximum flower units', '0'], ['Maximum plush units', '0'], ['Maximum chocolate units', '1']]) await page.getByRole('spinbutton', { name, exact: true }).fill(value);
+  for (const name of ['flowers + plush', 'flowers + chocolates', 'plush + chocolates', 'flowers + plush + chocolates']) await page.getByRole('spinbutton', { name: `Mixed ${name} limit`, exact: true }).fill('0');
+  await page.getByRole('combobox', { name: 'Lid requirement', exact: true }).selectOption('open_presentation');
+  await page.getByRole('textbox', { name: 'Lid and clearance instructions', exact: true }).fill('Synthetic tested clearance; not a real approval.');
+  await page.getByRole('textbox', { name: 'Safe packing and transport instructions', exact: true }).fill('Synthetic tested transport; not a real approval.');
+  await page.getByRole('button', { name: 'Save policy draft', exact: true }).click();
+  await expect(page.getByText('Policy draft saved. It has not been approved.', { exact: true })).toBeVisible();
+  const saved = fixture.calls.find(call => call.method === 'PUT').body;
+  expect(saved.rules.componentRules.find(rule => rule.componentId === 'chocolate-1').allowedRegionIds).toEqual(['beside-plush-proposal']);
+  expect(fixture.state.get('box-1').activePublication).toBeNull();
+  expect(fixture.calls.some(call => call.suffix.endsWith('/approve'))).toBe(false);
+});

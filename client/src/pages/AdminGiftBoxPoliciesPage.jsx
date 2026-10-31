@@ -6,6 +6,7 @@ import EditConflict from '../admin/EditConflict.jsx';
 import { useSession } from '../auth/SessionProvider.jsx';
 import { commerceError } from '../commerce/api.js';
 import { approveFulfillmentPolicy, getFulfillmentPolicies, getFulfillmentPolicy, saveFulfillmentDraft, withdrawFulfillmentPolicy } from '../gift-box/api.js';
+import { addBuilderPreviewRegionNames, builderPreviewRegionGuide } from '../gift-box/policy-region-guide.mjs';
 import '../gift-box/policies.css';
 
 const categoryNames = { flower: 'Flowers', plush: 'Plush toys', chocolate: 'Chocolates', ribbon: 'Ribbons', gift_card: 'Gift card' };
@@ -100,11 +101,16 @@ function PolicyEditor({ initial, components, onSaved }) {
   const [withdrawReason, setWithdrawReason] = useState('');
   const name = id => components.find(component => component.componentId === id)?.displayName || id;
   const { rules, packing } = values;
+  const previewGuide = builderPreviewRegionGuide(record.boxId);
   function replaceRecord(next, message = '') { setRecord(next); setValues(editValues(next)); setDirty(false); setValidation(null); setEvidence(''); setPackingTested(false); setTransportTested(false); setLidTested(false); setWithdrawReason(''); setNotice(message); }
   const mutation = useMutation({ mutationFn: ({ action, body }) => (action === 'save' ? saveFulfillmentDraft : action === 'approve' ? approveFulfillmentPolicy : withdrawFulfillmentPolicy)(record.boxId, body),
     onSuccess: async (next, { action }) => { replaceRecord(next, action === 'save' ? 'Policy draft saved. It has not been approved.' : action === 'approve' ? 'Reviewed policy version published. Public gift purchasing remains disabled.' : 'Active policy withdrawn. New gift commerce eligibility is blocked.'); await onSaved(); } });
   function changeRules(next) { setValues(current => ({ ...current, rules: next })); setDirty(true); setValidation(null); setNotice(''); }
   function changePacking(key, value) { setValues(current => ({ ...current, packing: { ...current.packing, [key]: value } })); setDirty(true); setValidation(null); setNotice(''); }
+  function suggestPreviewRegions() {
+    const draft = addBuilderPreviewRegionNames(record.boxId, rules);
+    if (draft) changeRules(draft);
+  }
   function updateArray(key, index, patch) { changeRules({ ...rules, [key]: rules[key].map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row) }); }
   function removeArray(key, index) {
     const removed = rules[key][index];
@@ -135,7 +141,12 @@ function PolicyEditor({ initial, components, onSaved }) {
     <AdminForm className="gb-policy-form" onSubmit={save} error={mutation.variables?.action === 'save' || validation ? error : null}>
       <h3>Draft packing rules</h3><p className="gb-policy-help">Enter reviewed counts, not estimated image capacities. Leave the rule section entirely blank to save a pending draft. Components without a compatibility rule are prohibited. Changing a draft never rewrites an approved version.</p>
       <fieldset disabled={mutation.isPending}>
-        <legend>Placement regions and compartments</legend><p className="gb-policy-help">Region IDs describe allowed placement associations. They do not approve photo boundaries or prove that an item fits.</p>
+        <legend>Placement regions and compartments</legend><p className="gb-policy-help">Use the same region IDs as the gift-box builder. Names alone never approve a photo boundary or certify physical fit.</p>
+        {previewGuide && <div className="gb-policy-preview-guide"><p className="gb-policy-help">Current development preview region names ({previewGuide.version}; not measured or approved):</p>
+          <ul>{previewGuide.regions.map(region => <li key={region.regionId}><code>{region.regionId}</code> — {region.zone}{region.compartmentId ? `, ${region.compartmentId}` : ''}</li>)}</ul>
+          <button type="button" disabled={rules.regions.length > 0 || rules.compartments.length > 0} onClick={suggestPreviewRegions}>Use builder preview region names (draft only)</button>
+          <p className="gb-policy-help">This only fills region identifiers. Every quantity, component compatibility, safe packing instruction and approval remains for a separate evidenced review.{previewGuide.artworkBlocked ? ' The original artwork for this box is still flagged in the source manifest.' : ''}</p>
+        </div>}
         {record.boxId === 'box-11' && <p className="gb-policy-warning">BOX-11 requires two separately reviewed compartments. Every inside region must belong to exactly one compartment; bridging between compartments is prohibited.</p>}
         <div className="gb-policy-rows" data-validation-field="rules.compartments" tabIndex={-1}>{rules.compartments.map((compartment, index) => <div className="gb-policy-row" key={index}>
           <label>Compartment ID {index + 1}<input name={`rules.compartments.${index}.id`} value={compartment.id} pattern="[a-z][a-z0-9-]{0,79}" maxLength={80} required onChange={event => {
@@ -149,7 +160,7 @@ function PolicyEditor({ initial, components, onSaved }) {
           <label>Region ID {index + 1}<input name={`rules.regions.${index}.regionId`} value={region.regionId} pattern="[a-z][a-z0-9-]{0,79}" maxLength={80} required onChange={event => {
             const nextId = event.target.value; changeRules({ ...rules, regions: rules.regions.map((row, rowIndex) => rowIndex === index ? { ...row, regionId: nextId } : row), componentRules: rules.componentRules.map(rule => ({ ...rule, allowedRegionIds: rule.allowedRegionIds.map(id => id === region.regionId && region.regionId ? nextId : id) })) });
           }}/></label>
-          <label>Region zone {index + 1}<select name={`rules.regions.${index}.zone`} value={region.zone} onChange={event => updateArray('regions', index, { zone: event.target.value, compartmentId: null })}><option value="inside">Inside</option><option value="beside">Beside (plush only)</option></select></label>
+          <label>Region zone {index + 1}<select name={`rules.regions.${index}.zone`} value={region.zone} onChange={event => updateArray('regions', index, { zone: event.target.value, compartmentId: null })}><option value="inside">Inside</option><option value="beside">Beside (plush or chocolate, if reviewed)</option></select></label>
           <label>Region compartment {index + 1}<select name={`rules.regions.${index}.compartmentId`} value={region.compartmentId || ''} disabled={region.zone === 'beside'} onChange={event => updateArray('regions', index, { compartmentId: event.target.value || null })}><option value="">No compartment</option>{rules.compartments.filter(item => item.id).map(item => <option key={item.id} value={item.id}>{item.id}</option>)}</select></label>
           <button type="button" onClick={() => removeArray('regions', index)} aria-label={`Remove region ${index + 1}`}>Remove region</button>
         </div>)}</div>
@@ -162,10 +173,10 @@ function PolicyEditor({ initial, components, onSaved }) {
         </div>
         <div data-validation-field="rules.componentRules" tabIndex={-1}>{rules.componentRules.map((rule, index) => {
           const component = components.find(item => item.componentId === rule.componentId), placed = ['flower', 'plush', 'chocolate'].includes(component?.category);
-          const allowedRegions = rules.regions.filter(region => region.regionId && (component?.category === 'plush' || region.zone === 'inside'));
+          const allowedRegions = rules.regions.filter(region => region.regionId && (['plush', 'chocolate'].includes(component?.category) || region.zone === 'inside'));
           return <section className="gb-policy-component" aria-label={`Compatibility ${rule.componentId}`} key={rule.componentId}><h4>{name(rule.componentId)}</h4><p className="gb-policy-help">{rule.componentId}</p>
             {placed ? <NumberField label={`Maximum quantity: ${name(rule.componentId)}`} name={`rules.componentRules.${index}.maxQuantity`} value={rule.maxQuantity} minimum={1} maximum={100} onChange={value => updateArray('componentRules', index, { maxQuantity: value })}/> : <p>One finishing component per completed box. No placement region applies.</p>}
-            {placed && <fieldset><legend>Allowed regions for {name(rule.componentId)}</legend>{allowedRegions.length ? allowedRegions.map(region => <label className="gb-policy-check" key={region.regionId}><input type="checkbox" name={`rules.componentRules.${index}.allowedRegionIds`} checked={rule.allowedRegionIds.includes(region.regionId)} onChange={event => updateArray('componentRules', index, { allowedRegionIds: event.target.checked ? [...rule.allowedRegionIds, region.regionId] : rule.allowedRegionIds.filter(id => id !== region.regionId) })}/>Allow {region.regionId} ({region.zone}) for {name(rule.componentId)}</label>) : <p>Add a named inside region first{component?.category === 'plush' ? ', or an explicitly reviewed beside region' : ''}.</p>}</fieldset>}
+            {placed && <fieldset><legend>Allowed regions for {name(rule.componentId)}</legend>{allowedRegions.length ? allowedRegions.map(region => <label className="gb-policy-check" key={region.regionId}><input type="checkbox" name={`rules.componentRules.${index}.allowedRegionIds`} checked={rule.allowedRegionIds.includes(region.regionId)} onChange={event => updateArray('componentRules', index, { allowedRegionIds: event.target.checked ? [...rule.allowedRegionIds, region.regionId] : rule.allowedRegionIds.filter(id => id !== region.regionId) })}/>Allow {region.regionId} ({region.zone}) for {name(rule.componentId)}</label>) : <p>Add a named inside region first{['plush', 'chocolate'].includes(component?.category) ? ', or an explicitly reviewed beside region' : ''}.</p>}</fieldset>}
             {component?.category === 'plush' && <><label className="gb-policy-check"><input type="checkbox" name={`rules.componentRules.${index}.oversizedPlush`} checked={rule.oversizedPlush} onChange={event => updateArray('componentRules', index, { oversizedPlush: event.target.checked, allowOversizedInside: false })}/>Treat {name(rule.componentId)} as oversized</label><label className="gb-policy-check"><input type="checkbox" name={`rules.componentRules.${index}.allowOversizedInside`} checked={rule.allowOversizedInside} disabled={!rule.oversizedPlush} onChange={event => updateArray('componentRules', index, { allowOversizedInside: event.target.checked })}/>Explicitly allow oversized {name(rule.componentId)} inside</label></>}
             <button type="button" onClick={() => removeArray('componentRules', index)} aria-label={`Remove compatibility ${rule.componentId}`}>Remove component rule</button>
           </section>;
@@ -187,7 +198,7 @@ function PolicyEditor({ initial, components, onSaved }) {
       <fieldset disabled={mutation.isPending}>
         <legend>Packing and handling instructions</legend><label>Lid requirement<select name="packing.lidMode" value={packing.lidMode} onChange={event => changePacking('lidMode', event.target.value)}><option value="">Not reviewed</option><option value="must_close">Lid must close</option><option value="open_presentation">Open presentation</option><option value="not_applicable">No lid applies</option></select></label>
         {notes.map(([key, label]) => <label key={key}>{label}<textarea name={`packing.${key}`} aria-label={label} aria-describedby={`packing-${key}-count`} rows={3} maxLength={2000} value={packing[key]} onChange={event => changePacking(key, event.target.value)}/><span id={`packing-${key}-count`} className="gb-policy-help">{Array.from(packing[key]).length}/1,000 Unicode characters</span></label>)}
-        <p className="gb-policy-help">Approval requires clear lid/clearance and transport instructions, plus plush handling when plush is compatible and compartment instructions for BOX-11. Actual measurements and trials remain the owner&apos;s responsibility.</p>
+        <p className="gb-policy-help">Approval requires clear lid/clearance and transport instructions, plus plush handling when plush is compatible and compartment instructions for BOX-11. Web District records verified packing evidence; missing physical facts must be confirmed, not guessed.</p>
       </fieldset>
       <button className="button button-primary" type="submit" disabled={mutation.isPending}>{mutation.isPending && mutation.variables?.action === 'save' ? 'Saving draft…' : 'Save policy draft'}</button>
     </AdminForm>
