@@ -159,6 +159,22 @@ test('canonical content identity normalizes order-insensitive rule collections w
   assert.notEqual(policyContentHash('box-2', first.rules, first.packing), policyContentHash('box-2', changed.rules, changed.packing));
 });
 
+test('an administrator must explicitly list chocolate beside regions; roses remain inside-only', () => {
+  const input = draft();
+  input.rules.regions.push({ regionId: 'isolated-beside', zone: 'beside', compartmentId: null });
+  const unchanged = policyContentHash('box-2', input.rules, input.packing);
+  const chocolate = input.rules.componentRules.find(rule => rule.componentId === 'chocolate-1');
+  chocolate.allowedRegionIds.push('isolated-beside');
+  assert.doesNotThrow(() => validatePolicyApprovalReady('box-2', input));
+  assert.notEqual(policyContentHash('box-2', input.rules, input.packing), unchanged);
+  const invalid = structuredClone(input);
+  invalid.rules.componentRules.find(rule => rule.componentId === 'rose-red').allowedRegionIds.push('isolated-beside');
+  assert.throws(() => canonicalizePolicyDraft('box-2', invalid), ZodError);
+  const notPlush = structuredClone(input);
+  notPlush.rules.componentRules.find(rule => rule.componentId === 'chocolate-1').oversizedPlush = true;
+  assert.throws(() => canonicalizePolicyDraft('box-2', notPlush), ZodError);
+});
+
 test('different tested content and handling instructions retain distinct content hashes', () => {
   const first = draft(), originalHash = policyContentHash('box-2', first.rules, first.packing);
   for (const mutate of [

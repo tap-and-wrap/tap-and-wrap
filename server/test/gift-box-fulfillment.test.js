@@ -120,6 +120,36 @@ test('inside/beside permissions and oversized plush restrictions require explici
   assert.throws(() => assertGiftBoxFulfillment(mismatchedZone, policy()), { code: 'GIFT_BOX_FULFILLMENT_PLACEMENT' });
 });
 
+test('beside-box chocolate requires an explicitly reviewed component region and valid policy', () => {
+  const chosen = configuration();
+  chosen.selection.items.push({ componentId: 'chocolate-1', quantity: 1 });
+  chosen.placements.push({ instanceId: '93f3f452-849c-4ac0-babe-996017e520e5', componentId: 'chocolate-1',
+    x: .8, y: .55, zone: 'beside', regionId: 'test-beside', layer: 3 });
+  assert.throws(() => assertGiftBoxFulfillment(chosen, null), { code: 'GIFT_BOX_FULFILLMENT_UNAPPROVED' });
+  assert.throws(() => assertGiftBoxFulfillment(chosen, policy()), { code: 'GIFT_BOX_FULFILLMENT_INCOMPATIBLE' });
+  const permitted = policy();
+  permitted.limits.maxByCategory.chocolate = 1;
+  permitted.componentRules.push({ componentId: 'chocolate-1', maxQuantity: 1,
+    allowedRegionIds: ['test-floor', 'test-beside'], oversizedPlush: false, allowOversizedInside: false });
+  const denied = structuredClone(permitted);
+  denied.componentRules.at(-1).allowedRegionIds = ['test-floor'];
+  assert.throws(() => assertGiftBoxFulfillment(chosen, denied), { code: 'GIFT_BOX_FULFILLMENT_PLACEMENT' });
+  assert.equal(assertGiftBoxFulfillment(chosen, permitted).directCommerceEligible, true);
+  assert.equal(assertGiftBoxFulfillment(chosen, permitted).physicalFitCertifiedByGeometry, false);
+  const pending = { ...permitted, status: 'pending', approvedBy: null, approvedAt: null };
+  assert.throws(() => assertGiftBoxFulfillment(chosen, pending), { code: 'GIFT_BOX_FULFILLMENT_UNAPPROVED' });
+  const withdrawn = { ...permitted, status: 'withdrawn', withdrawnAt: '2026-10-28T11:00:00Z' };
+  assert.throws(() => assertGiftBoxFulfillment(chosen, withdrawn), { code: 'GIFT_BOX_FULFILLMENT_WITHDRAWN' });
+  const counterfeit = structuredClone(permitted);
+  counterfeit.componentRules.at(-1).allowOversizedInside = true;
+  assert.equal(giftBoxFulfillmentPolicyInput.safeParse(counterfeit).success, false);
+  counterfeit.componentRules.at(-1).allowOversizedInside = false;
+  counterfeit.componentRules.at(-1).oversizedPlush = true;
+  assert.equal(giftBoxFulfillmentPolicyInput.safeParse(counterfeit).success, false);
+  const overLimit = structuredClone(permitted); overLimit.limits.maxByCategory.chocolate = 0;
+  assert.throws(() => assertGiftBoxFulfillment(chosen, overLimit), { code: 'GIFT_BOX_FULFILLMENT_LIMIT' });
+});
+
 test('Box 11 independently validates its two compartments and disallows bridging aliases', () => {
   const { configurationFixture, policyFixture } = box11();
   assert.equal(assertGiftBoxFulfillment(configurationFixture, policyFixture).directCommerceEligible, true);

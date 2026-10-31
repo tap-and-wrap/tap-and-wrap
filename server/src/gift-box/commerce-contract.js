@@ -40,7 +40,7 @@ export const giftBoxV2CommerceInput = z.object({
   const placed = new Map();
   input.placements.forEach((item, index) => {
     placed.set(item.componentId, (placed.get(item.componentId) ?? 0) + 1);
-    if (item.zone === 'beside' && getFixedComponent(item.componentId)?.category !== 'plush') context.addIssue({ code: 'custom', path: ['placements', index, 'zone'], message: 'Only plush toys may use the beside-box proposal.' });
+    if (item.zone === 'beside' && !['plush', 'chocolate'].includes(getFixedComponent(item.componentId)?.category)) context.addIssue({ code: 'custom', path: ['placements', index, 'zone'], message: 'Only plush toys and chocolates may use beside-box proposals.' });
   });
   if (placed.size !== quantities.size || [...quantities].some(([id, quantity]) => placed.get(id) !== quantity)) context.addIssue({ code: 'custom', path: ['placements'], message: 'Place every selected item exactly once with its matching component identity.' });
 });

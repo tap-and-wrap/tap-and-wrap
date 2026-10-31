@@ -58,7 +58,10 @@ export const giftBoxFulfillmentPolicyInput = z.object({
     if (new Set(rule.allowedRegionIds).size !== rule.allowedRegionIds.length || rule.allowedRegionIds.some(id => !regions.has(id))) issue(['componentRules', index, 'allowedRegionIds'], 'Use distinct recognized policy regions.');
     if (placed && !rule.allowedRegionIds.length || !placed && rule.allowedRegionIds.length) issue(['componentRules', index, 'allowedRegionIds'], 'Only placed components require approved regions.');
     if (!placed && rule.maxQuantity !== 1) issue(['componentRules', index, 'maxQuantity'], 'Finishing components are selected once per box.');
-    if (definition.category !== 'plush' && (rule.oversizedPlush || rule.allowOversizedInside || rule.allowedRegionIds.some(id => regions.get(id)?.zone === 'beside'))) issue(['componentRules', index], 'Beside and oversized permissions apply only to plush toys.');
+    // Beside-box chocolates are a visual possibility, never an automatic physical permission.
+    // Only a reviewed, component-specific policy region can grant that placement.
+    if (!['plush', 'chocolate'].includes(definition.category) && rule.allowedRegionIds.some(id => regions.get(id)?.zone === 'beside')) issue(['componentRules', index], 'Beside regions are limited to plush toys and chocolates.');
+    if (definition.category !== 'plush' && (rule.oversizedPlush || rule.allowOversizedInside)) issue(['componentRules', index], 'Oversized-plush permissions apply only to plush toys.');
     if (rule.allowOversizedInside && !rule.oversizedPlush) issue(['componentRules', index, 'allowOversizedInside'], 'Explicit inside approval applies only to an oversized plush.');
   }
   const mixedSets = new Set();

@@ -68,6 +68,14 @@ test('every selected unit requires one unique matching placement with bounded vi
   invalid({ ...raw, placements: raw.placements.map((item, index) => index ? item : { ...item, zone: 'beside' }) });
   const beside = input(); beside.placements.find(item => item.componentId === 'plush-1').zone = 'beside';
   assert.equal(giftBoxV2CommerceInput.safeParse(beside).success, true);
+  const chocolateBeside = input();
+  const chocolatePlacement = chocolateBeside.placements.find(item => item.componentId === 'chocolate-1');
+  chocolatePlacement.zone = 'beside'; chocolatePlacement.regionId = 'test-beside';
+  assert.equal(giftBoxV2CommerceInput.safeParse(chocolateBeside).success, true);
+  // A structurally valid proposal is not proof that any real box can hold it.
+  assert.notEqual(identify(chocolateBeside), identify(input()));
+  const roseBeside = input(); roseBeside.placements[0].zone = 'beside';
+  invalid(roseBeside);
 });
 
 test('gift cards retain literal well-formed Unicode messages with a 500-code-point limit', () => {

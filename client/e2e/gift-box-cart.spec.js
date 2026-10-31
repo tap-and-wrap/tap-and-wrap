@@ -113,6 +113,23 @@ const arrangement = () => ({ boxId: 'box-2', ribbonId: 'ribbon-navy', cardEnable
   instances: [{ id: '20000000-0000-4000-8000-000000000001', componentId: 'rose-red', x: .2, y: .3,
     height: .1, anchorOffsetY: .5, layerBase: 20, placementZone: 'inside', regionId: 'synthetic-floor', zone: 'layout-study' }] });
 
+test('direct-cart draft serializes chocolates beside boxes without claiming fit or allowing roses there', () => {
+  const state = arrangement();
+  state.instances.push({ id: '20000000-0000-4000-8000-000000000002', componentId: 'chocolate-1',
+    x: 1.1, y: .46, height: .12, anchorOffsetY: .5, layerBase: 20,
+    placementZone: 'beside', regionId: 'beside-plush-proposal', zone: 'layout-study' });
+  const before = structuredClone(state);
+  const configuration = prepareGiftBoxCommerceConfiguration(state, { cardId: 'gift-card-1' });
+  expect(configuration.placements.find(item => item.componentId === 'chocolate-1')).toMatchObject({
+    zone: 'beside', regionId: 'beside-plush-proposal',
+  });
+  expect(configuration.selection.items).toContainEqual({ componentId: 'chocolate-1', quantity: 1 });
+  expect(state).toEqual(before);
+  expect(JSON.stringify(configuration)).not.toMatch(/pricePiastres|approvedBy|physicalFitApproved/);
+  expect(() => prepareGiftBoxCommerceConfiguration({ ...state,
+    instances: [{ ...state.instances[0], placementZone: 'beside' }] }, { cardId: 'gift-card-1' })).toThrow();
+});
+
 test('builder serializer reuses selections and individual placement associations without amounts or identity claims', () => {
   const state = arrangement(), before = structuredClone(state);
   const payload = prepareGiftBoxCartPayload(state, { cardId: 'gift-card-1', quantity: 2, operationKey: '30000000-0000-4000-8000-000000000001' });

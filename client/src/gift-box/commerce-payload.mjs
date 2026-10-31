@@ -21,7 +21,7 @@ export function prepareGiftBoxCommerceConfiguration(state, { cardId } = {}) {
     const category = getFixedComponent(item.componentId)?.category;
     const zone = item.placementZone;
     if (!uuid(item.id) || instanceIds.has(item.id.toLowerCase()) || !['flower', 'plush', 'chocolate'].includes(category)
-      || !['inside', 'beside'].includes(zone) || zone === 'beside' && category !== 'plush'
+      || !['inside', 'beside'].includes(zone) || zone === 'beside' && !['plush', 'chocolate'].includes(category)
       || !/^[a-z][a-z0-9-]{0,79}$/.test(item.regionId || '')
       || ![item.x, item.y, item.height, item.anchorOffsetY, item.layerBase].every(Number.isFinite)) fail();
     instanceIds.add(item.id.toLowerCase());
