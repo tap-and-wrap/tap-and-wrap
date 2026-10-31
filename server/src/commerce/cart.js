@@ -203,13 +203,9 @@ export async function mergeGuestCart(fromOwner, toOwner) {
     skipped = 0;
     const source = await readCart(fromOwner, { session });
     if (!source) return;
-    if (source.items.some(line => line.kind === 'gift_box_v2' && line.configuration?.personalizationIntent))
-      throw commerceError(409, 'GIFT_BOX_PERSONALIZATION_MERGE_PENDING', 'Complete this personalized gift as a guest or remove it before signing in. The original cart remains unchanged.');
     let target = await Cart.findOne({ owner: toOwner }).session(session);
     if (!target) target = new Cart({ owner: toOwner, items: [], expiresAt: expiresAt() });
     if (target.expiresAt < new Date()) { target.items = []; target.addOperations = []; }
-    if (target.items.some(line => line.kind === 'gift_box_v2' && line.configuration?.personalizationIntent))
-      throw commerceError(409, 'GIFT_BOX_PERSONALIZATION_MERGE_PENDING', 'Personalized gift attachments need review before merging carts. Both carts remain unchanged.');
     const receipts = new Map(target.addOperations.map(entry => [entry.key, entry.requestHash]));
     for (const receipt of source.addOperations || []) {
       // Historical receipts have no per-line provenance, so even equal hashes
@@ -218,29 +214,54 @@ export async function mergeGuestCart(fromOwner, toOwner) {
       receipts.set(receipt.key, receipt.requestHash);
     }
     if (receipts.size > 60) throw commerceError(409, 'CART_OPERATION_LIMIT', 'Review your carts before combining more add operations.');
-    const giftContext = await createGiftBoxCartPricingContext([...source.items, ...target.items], { session });
+    // Personal photos must be priced and verified under their CURRENT owner and
+    // cart before any transfer. A shared context cannot authenticate files from
+    // two different sessions. The final combined cart is re-quoted after the
+    // atomic owner+cart transfer, before either cart is persisted.
+    const sourceGiftContext = await createGiftBoxCartPricingContext(source.items, { session, owner: fromOwner, cartId: source._id });
+    const existingGiftContext = await createGiftBoxCartPricingContext(target.items, { session, owner: toOwner, cartId: target._id });
+    const combinedHasPersonalPhotos = [...source.items, ...target.items].some(line => line.kind === 'gift_box_v2' && line.configuration?.personalizationIntent);
+    if (combinedHasPersonalPhotos) await validateGiftLines(target.items, session, existingGiftContext, toOwner, target._id);
+    const legacyGiftContext = combinedHasPersonalPhotos ? null : await createGiftBoxCartPricingContext([...source.items, ...target.items], { session });
     const transferredUploads = new Set();
     for (const item of source.items) {
+      const personalizedGift = item.kind === 'gift_box_v2' && Boolean(item.configuration?.personalizationIntent);
       let quote;
-      try { quote = cartLineKind(item) === 'gift_box_v2' ? quoteGiftBoxCartLine(item, giftContext) : { ...await quoteCartLine(item, fromOwner, { session }), kind: 'product' }; }
-      catch (caught) { const error = giftCartError(caught); if (!error.status || error.status >= 500) throw error; skipped += 1; continue; }
+      try { quote = cartLineKind(item) === 'gift_box_v2' ? quoteGiftBoxCartLine(item, sourceGiftContext) : { ...await quoteCartLine(item, fromOwner, { session }), kind: 'product' }; }
+      catch (caught) {
+        const error = giftCartError(caught);
+        // Never silently discard a personalized line and delete its guest cart.
+        if (personalizedGift || !error.status || error.status >= 500) throw error;
+        skipped += 1; continue;
+      }
       const existing = target.items.find(line => sameLine(line, quote));
-      if ((!existing && target.items.length >= 30) || (existing && existing.quantity + item.quantity > 99)) { skipped += 1; continue; }
+      if ((!existing && target.items.length >= 30) || (existing && existing.quantity + item.quantity > 99)) {
+        if (personalizedGift) throw commerceError(409, 'GIFT_BOX_PERSONAL_MERGE_LIMIT', 'The personalized gift cannot fit in the account cart. Both carts remain unchanged.');
+        skipped += 1; continue;
+      }
       try {
-        if (quote.kind === 'gift_box_v2') {
+        if (quote.kind === 'gift_box_v2' && !combinedHasPersonalPhotos) {
           const proposed = target.items.map(plainLine);
           if (existing) proposed.find(line => line.id === existing.id).quantity += item.quantity;
           else proposed.push(storedLine(quote, item.id));
-          await validateGiftLines(proposed, session, giftContext);
-        } else if (existing) await quoteCartLine({ ...item, quantity: existing.quantity + item.quantity }, fromOwner, { session });
-      } catch (caught) { const error = giftCartError(caught); if (!error.status || error.status >= 500) throw error; skipped += 1; continue; }
-      if (existing) {
-        existing.quantity += item.quantity;
-      } else target.items.push(quote.kind === 'gift_box_v2' ? storedLine(quote, item.id) : item);
+          await validateGiftLines(proposed, session, legacyGiftContext);
+        } else if (quote.kind === 'product' && existing) await quoteCartLine({ ...item, quantity: existing.quantity + item.quantity }, fromOwner, { session });
+      } catch (caught) {
+        const error = giftCartError(caught);
+        if (personalizedGift || !error.status || error.status >= 500) throw error;
+        skipped += 1; continue;
+      }
+      if (existing) existing.quantity += item.quantity;
+      else target.items.push(quote.kind === 'gift_box_v2' ? storedLine(quote, item.id) : item);
       quote.uploadIds.forEach(id => transferredUploads.add(id));
     }
-    await transferUploadOwnership([...transferredUploads], fromOwner, toOwner, { session });
+    // Do not leave private uploads bound to the deleted guest Cart ID. The
+    // ownership, quota counters and attachment bind share one transaction.
+    await transferUploadOwnership([...transferredUploads], fromOwner, toOwner, { session, cartId: target._id });
     await attachUploadsToCart([...transferredUploads], toOwner, target._id, { session });
+    // Repricing after the transfer validates every uploaded image under the
+    // receiving account, as well as the merged physical stock demand.
+    if (combinedHasPersonalPhotos) await validateGiftLines(target.items, session, null, toOwner, target._id);
     target.expiresAt = expiresAt();
     target.addOperations = [...receipts].map(([key, requestHash]) => ({ key, requestHash }));
     assertDatabaseWriteAllowed(Cart.db, env); await target.save({ session });
