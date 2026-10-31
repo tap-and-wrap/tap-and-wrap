@@ -1,4 +1,5 @@
 import { money } from './api';
+import { LETTERING_STYLES, ENGRAVING_COLORS } from '../../../shared/gift-box/lettering-styles.mjs';
 
 const groups = [['flower', 'Flowers'], ['plush', 'Plush toys'], ['chocolate', 'Chocolates']];
 const modeName = { tracked: 'Tracked', made_to_order: 'Made to Order', status_only: 'Status only' };
@@ -10,6 +11,9 @@ export default function GiftBoxOrderDetails({ giftBox, admin = false }) {
   const ribbonColor = /^#[a-f0-9]{6}$/i.test(giftBox.ribbon?.colorHex || '') ? giftBox.ribbon.colorHex : null;
   const policy = giftBox.fulfillment?.policyReference;
   const placements = Array.isArray(giftBox.configuration?.placements) ? giftBox.configuration.placements : [];
+  const personalized = giftBox.personalization;
+  const engravings = Array.isArray(personalized?.engravings) ? personalized.engravings : [];
+  const photos = admin && Array.isArray(personalized?.photoPrints) ? personalized.photoPrints : [];
   return <div className="commerce-gift-summary commerce-gift-order-details">
     <dl>
       <div><dt>Box</dt><dd>{giftBox.box?.displayName || 'Saved box details unavailable'}</dd></div>
@@ -21,6 +25,15 @@ export default function GiftBoxOrderDetails({ giftBox, admin = false }) {
       <div><dt>Gift card</dt><dd>{giftBox.giftCard?.selected ? 'Selected' : 'Not selected'}</dd></div>
     </dl>
     {giftBox.giftCard?.selected && (message ? <details className="commerce-gift-message"><summary>View gift-card message</summary><p>{message}</p></details> : <p className="commerce-muted">Gift card without a message.</p>)}
+    {personalized && <details className="commerce-gift-order-disclosure"><summary>Photo prints and engraving at purchase</summary>
+      <p>Photo prints: {Number.isSafeInteger(personalized.photoCount) ? personalized.photoCount : photos.length} · Engravings: {engravings.length}</p>
+      {Number.isSafeInteger(personalized.unitAdjustmentPiastres) && <p>Saved personalization adjustment per box: {money(personalized.unitAdjustmentPiastres)}</p>}
+      {engravings.length > 0 && <ol>{engravings.map((item,index)=><li key={index}>
+        <p>Engraving {index+1}: {item.text}</p><p>Style: {LETTERING_STYLES.find(style=>style.id===item.styleId)?.customerLabel || 'Saved style'} · Color: {ENGRAVING_COLORS.find(color=>color.id===item.colorId)?.label || 'Saved color'} · Surface: {item.surfaceOptionId}</p>
+        {admin && Number.isSafeInteger(item.pricePiastres) && <p>Saved price: {money(item.pricePiastres)}</p>}
+      </li>)}</ol>}
+      {admin && photos.length > 0 && <><h4>Private print instructions</h4><p className="commerce-muted">Private image files are available only through the authenticated Private Files viewer on this order. Visual coordinates are drafts, not physical-fit approval.</p><ol>{photos.map((item,index)=><li key={index}>Photo {index+1}: {item.printOptionId} · {item.zone} · x {item.x}, y {item.y}{Number.isSafeInteger(item.pricePiastres) ? ` · ${money(item.pricePiastres)}` : ''}</li>)}</ol></>}
+    </details>}
     <details className="commerce-gift-order-disclosure"><summary>Component prices at purchase</summary>
       <p className="commerce-muted">Selections above are per completed gift box. Prices below are saved purchase amounts.</p>
       <ul className="commerce-gift-order-prices">{components.map(item => <li key={item.componentId}>
