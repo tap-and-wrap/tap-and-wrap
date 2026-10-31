@@ -42,6 +42,10 @@ test('local media rejects references, defective artwork, unexpected paths and cr
   for (const path of ['/1200/boxes/box-1-open-top.webp', '/320/ribbons/ribbons.jpeg', '/development-manifest.json', '/1200/chocolate/chocolate-21-builder.webp']) expect((await request.get(prefix + path)).status()).toBe(404);
   expect((await request.get(`${prefix}/1200/boxes/box-2-open-top.webp`, { headers: { Origin: 'https://unapproved.example' } })).status()).toBe(404);
   const allowed = await request.get(`${prefix}/1200/boxes/box-2-open-top.webp`); expect(allowed.status()).toBe(200); expect(allowed.headers()['content-type']).toBe('image/webp'); expect(allowed.headers()['cache-control']).toContain('no-store');
+  const overlay = '/__gift-box-box1-overlay/box1-alpha-rgb-2026-10-31.1/1200/boxes/box-1-open-top.webp';
+  const reviewed = await request.get(overlay); expect(reviewed.status()).toBe(200); expect(reviewed.headers()['content-type']).toBe('image/webp');
+  expect((await request.get(overlay, { headers: { Origin: 'https://unapproved.example' } })).status()).toBe(404);
+  expect((await request.get(overlay.replace('/1200/', '/640/'))).status()).toBe(404);
 });
 test('drag, keyboard moves, quantity changes, undo and clear preserve price separation', async ({ page }) => {
   const f = await fixture(page); await begin(page); await page.getByRole('button', { name: 'Next', exact: true }).click();
@@ -105,7 +109,7 @@ test('local geometry drafts stay unreviewed, support compartments and keep the s
   const json = JSON.parse(await page.getByLabel('Geometry review draft JSON').inputValue()); expect(json.reviewStatus).toBe('unreviewed'); expect(json.capacity).toBeNull(); expect(json.regions).toHaveLength(3); expect(json.besideRegions).toHaveLength(2);
   await page.getByRole('button', { name: 'Add study sample' }).click(); await expect(page.getByText(/authoritative result: GEOMETRY_REVIEW_REQUIRED/)).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('geometry-compartments.png'), fullPage: true });
-  await page.getByLabel('Review box').selectOption('box-1'); await expect(page.getByText('Selected open box: Artwork unavailable')).toBeVisible();
+  await page.getByLabel('Review box').selectOption('box-1'); await expect(page.locator('.gb-geometry .gb-box-art img')).toBeVisible();
 });
 for (const width of [320, 390, 768, 1440]) test(`builder and admin fit ${width}px with real local artwork and reduced motion`, async ({ page }, testInfo) => {
   await page.setViewportSize({ width, height: 1000 }); await page.emulateMedia({ reducedMotion: 'reduce' }); await fixture(page, { role: 'admin' }); await begin(page);

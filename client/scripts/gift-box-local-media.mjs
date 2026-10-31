@@ -4,6 +4,8 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ASSET_VERSION, FIXED_COMPONENTS, ASSET_ISSUES } from '../../shared/gift-box/definitions.mjs';
+import { readBox1OverlayDerivative, BOX1_OVERLAY_URL } from './box1-overlay-local.mjs';
+import { BOX1_OVERLAY } from '../../shared/gift-box/box1-overlay.mjs';
 
 export const MEDIA_PREFIX = `/__gift-box-local/${ASSET_VERSION}/`;
 const root = fileURLToPath(new URL(`../.gift-box-assets/${ASSET_VERSION}/webp-v1/`, import.meta.url));
@@ -37,16 +39,19 @@ export async function readLocalDerivative(relative) {
 export default function giftBoxLocalMedia() {
   return { name: 'gift-box-local-media', apply: 'serve', configureServer(server) {
     server.middlewares.use(async (req, res, next) => {
-      if (!req.url.startsWith('/__gift-box-local/')) return next();
+      if (!req.url.startsWith('/__gift-box-local/') && !req.url.startsWith('/__gift-box-box1-overlay/')) return next();
       res.setHeader('Cache-Control', 'private, no-store'); res.setHeader('X-Robots-Tag', 'noindex, nofollow');
       res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
       try {
         const url = new URL(req.url, 'http://localhost');
         if (!loopback(req.socket.remoteAddress) || !loopback(new URL(`http://${req.headers.host}`).hostname)
-          || !['GET', 'HEAD'].includes(req.method) || !url.pathname.startsWith(MEDIA_PREFIX) || url.search
+          || !['GET', 'HEAD'].includes(req.method) || url.search
           || (req.headers.origin && req.headers.origin !== `http://${req.headers.host}`)) throw new Error('Local access only.');
+        const isBox1Overlay = url.pathname.startsWith('/__gift-box-box1-overlay/');
+        if (!isBox1Overlay && !url.pathname.startsWith(MEDIA_PREFIX)) throw new Error('Wrong local media version.');
+        if (isBox1Overlay && url.pathname !== BOX1_OVERLAY_URL) throw new Error('Unknown Box 1 overlay.');
         const relative = url.pathname.slice(MEDIA_PREFIX.length);
-        const bytes = await readLocalDerivative(relative);
+        const bytes = isBox1Overlay ? await readBox1OverlayDerivative(BOX1_OVERLAY.derivativePath) : await readLocalDerivative(relative);
         res.setHeader('Content-Type', 'image/webp'); res.setHeader('X-Content-Type-Options', 'nosniff');
         res.statusCode = 200; res.end(req.method === 'HEAD' ? undefined : bytes);
       } catch { res.statusCode = 404; res.end('Local builder artwork is unavailable.'); }

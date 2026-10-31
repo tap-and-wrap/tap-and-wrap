@@ -81,7 +81,7 @@ test('box 11 review starts with two circular floor proposals and unchanged submi
   await giftBoxFixture(page);await page.goto('/dev/gift-box/geometry');await page.getByLabel('Review box').selectOption('box-11');
   const draft=JSON.parse(await page.getByLabel('Geometry review draft JSON').inputValue());expect(draft.regions).toHaveLength(2);expect(draft.foregroundMasks).toHaveLength(3);expect(draft.productionApproved).toBe(false);expect(draft.capacity).toBeNull();
   await capture(page.locator('.gb-geometry .gb-workspace>section').first(),info,'box-11-two-compartments-browser.png');
-  await page.getByLabel('Review box').selectOption('box-1');await expect(page.getByRole('button',{name:'Add draft region',exact:true})).toBeDisabled();await expect(page.getByText('Selected open box: Artwork unavailable')).toBeVisible();
+  await page.getByLabel('Review box').selectOption('box-1');await expect(page.getByRole('button',{name:'Add draft region',exact:true})).toBeDisabled();await expect(page.locator('.gb-geometry .gb-box-art img')).toBeVisible();
 });
 test.describe('touch and reduced motion',()=>{
   test.use({hasTouch:true,isMobile:true,viewport:{width:390,height:844},reducedMotion:'reduce'});
