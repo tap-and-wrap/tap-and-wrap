@@ -28,7 +28,7 @@ function personalizationDefinitions(value) {
     && typeof field.label === 'string' && field.label.length <= 160 && ['image', 'short_text', 'long_text', 'select'].includes(field.type)).map(field => pick(field, ['key', 'label', 'type']));
 }
 function giftBox(value, { admin }) {
-  if (!value || value.snapshotVersion !== 'gift-box-order-v1' || !Array.isArray(value.components)
+  if (!value || !['gift-box-order-v1','gift-box-order-v2'].includes(value.snapshotVersion) || !Array.isArray(value.components)
     || value.components.length < 2 || value.components.length > 103
     || !value.components.every(component => component && typeof component === 'object' && typeof component.componentId === 'string'
       && typeof component.displayName === 'string' && ['box', 'flower', 'plush', 'chocolate', 'ribbon', 'gift_card'].includes(component.category)
@@ -57,6 +57,13 @@ function giftBox(value, { admin }) {
       ...(admin ? { ...pick(component, ['priceApproval', 'priceApprovedBy', 'priceApprovedAt', 'settingsRevision']),
         inventory: pick(component.inventory, ['owner', 'componentId', 'mode', 'requiredQuantity', 'trackedDemand']) } : {}) })),
     artwork: { status: 'unavailable' },
+    ...(value.snapshotVersion === 'gift-box-order-v2' && value.personalization && Array.isArray(value.personalization.photoPrints)
+      && Array.isArray(value.personalization.engravings) ? { personalization: {
+        photoCount: value.personalization.photoPrints.length,
+        unitAdjustmentPiastres: value.personalization.unitAdjustmentPiastres,
+        engravings: value.personalization.engravings.map(item => pick(item, ['text','styleId','colorId','surfaceOptionId','pricePiastres'])),
+        ...(admin ? { photoPrints: value.personalization.photoPrints.map(item => pick(item, ['uploadId','printOptionId','zone','x','y','pricePiastres'])) } : {}),
+      } } : {}),
   };
   if (admin) {
     result.configurationId = value.configurationId;

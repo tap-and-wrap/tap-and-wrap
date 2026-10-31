@@ -35,15 +35,18 @@ async function quoteCartCore(owner, { session, strict = false } = {}, capability
   if (!session && lines.some(line => line.kind === 'gift_box_v2')) {
     return mongoose.connection.transaction(readSession => quoteCartCore(owner, { session: readSession, strict }, capability), { readConcern: { level: 'snapshot' } });
   }
+  if (strict && !capability && !env.giftBoxPersonalizedCheckoutEnabled
+    && lines.some(line => line.kind === 'gift_box_v2' && line.configuration?.personalizationIntent))
+    throw commerceError(409, 'GIFT_BOX_PERSONALIZED_CHECKOUT_DISABLED', 'Personalized Gift Box checkout is not yet available. Your cart and photos remain saved.');
   const context = await createPricingContext(lines.filter(line => line.kind === undefined || line.kind === 'product'), owner, { session });
-  const giftContext = await createGiftBoxCartPricingContext(lines, { session });
+  const giftContext = await createGiftBoxCartPricingContext(lines, { session, owner, cartId: cart?._id });
   const items = [];
   for (const item of lines) {
     try {
       const kind = cartLineKind(item);
       const quoted = kind === 'gift_box_v2' ? quoteGiftBoxCartLine(item, giftContext) : { ...await quoteCartLine(item, owner, { session, context }), kind: 'product' };
       if ((capability || strict && giftBoxRuntimeCommerceOpen(env)) && kind === 'gift_box_v2') quoted.inventoryClaims = giftBoxOrderInventoryClaims(quoted);
-      const expiries = quoted.uploadIds.map(id => context.uploads.get(String(id))?.expiresAt).filter(Boolean);
+      const expiries = quoted.uploadIds.map(id => (kind === 'gift_box_v2' ? giftContext?.giftUploads : context.uploads)?.get(String(id))?.expiresAt).filter(Boolean);
       items.push({ ...quoted, ...(expiries.length ? { attachments: { status: 'temporary', expiresAt: new Date(Math.min(...expiries.map(date => date.getTime()))), replacementRequired: false } } : {}) });
     }
     catch (error) {
@@ -73,7 +76,7 @@ export async function cartResponse(owner) {
   const hasGifts = items.some(item => item.kind === 'gift_box_v2');
   const paths = await attachProductPaths(items.filter(item => item.kind === 'product' && item.slug).map(item => ({ _id: item.productId, slug: item.slug })));
   const byProduct = new Map(paths.map(product => [String(product._id), product.publicPath]));
-  return { cart: { items: items.map(item => item.kind === 'product' && item.slug && byProduct.get(String(item.productId)) ? { ...item, publicPath: byProduct.get(String(item.productId)) } : item), subtotalPiastres: quote.subtotalPiastres, quantity: quote.quantity }, checkoutEnabled: env.checkoutEnabled === true && (!hasGifts || giftBoxRuntimeCommerceOpen(env) && items.every(item => item.valid)), giftBoxCheckoutBlocked: hasGifts && !giftBoxRuntimeCommerceOpen(env),
+  return { cart: { items: items.map(item => item.kind === 'product' && item.slug && byProduct.get(String(item.productId)) ? { ...item, publicPath: byProduct.get(String(item.productId)) } : item), subtotalPiastres: quote.subtotalPiastres, quantity: quote.quantity }, checkoutEnabled: env.checkoutEnabled === true && (!hasGifts || giftBoxRuntimeCommerceOpen(env) && items.every(item => item.valid && item.checkoutAllowed === true)), giftBoxCheckoutBlocked: hasGifts && (!giftBoxRuntimeCommerceOpen(env) || items.some(item => item.kind === 'gift_box_v2' && item.checkoutAllowed !== true)),
     // A UI scope identifier only, never an authorization credential or raw owner.
     checkoutOwnerKey: createHash('sha256').update(`checkout-context:${owner}`).digest('hex') };
 }
@@ -87,7 +90,10 @@ async function changeCart(owner, operation) {
         if (!cart) cart = new Cart({ owner, items: [], expiresAt: expiresAt() });
         if (cart.expiresAt < new Date()) { cart.items = []; cart.addOperations = []; }
         await operation(cart, session); cart.expiresAt = expiresAt();
-        const referenced = cart.items.flatMap(item => [...Object.values(item.personalization || {}), ...Object.values(item.customization?.fields || {})].filter(Array.isArray).flat());
+        const referenced = cart.items.flatMap(item => [
+          ...Object.values(item.personalization || {}), ...Object.values(item.customization?.fields || {})
+        ].filter(Array.isArray).flat().concat(item.kind === 'gift_box_v2'
+          ? (item.configuration?.personalizationIntent?.photoPrints || []).map(photo => photo.uploadId) : []));
         await detachUnusedCartUploads(cart._id, [...new Set(referenced)], owner, { session });
         assertDatabaseWriteAllowed(Cart.db, env); await cart.save({ session });
       }, { readConcern: { level: 'snapshot' } });
@@ -111,10 +117,10 @@ function sameLine(item, quote) {
   if (cartLineKind(item) !== quote.kind || item.identity !== quote.identity) return false;
   return quote.kind !== 'gift_box_v2' || item.configurationId === quote.configurationId && JSON.stringify(item.configuration) === JSON.stringify(quote.configuration);
 }
-async function validateGiftLines(lines, session, suppliedContext) {
+async function validateGiftLines(lines, session, suppliedContext, owner, cartId) {
   const gifts = lines.filter(line => line.kind === 'gift_box_v2');
   if (!gifts.length) return;
-  const context = suppliedContext || await createGiftBoxCartPricingContext(gifts, { session });
+  const context = suppliedContext || await createGiftBoxCartPricingContext(gifts, { session, owner, cartId });
   const quotes = gifts.map(line => quoteGiftBoxCartLine(plainLine(line), context));
   const failure = giftBoxCartStockErrors(quotes, context).values().next().value;
   if (failure) throw failure;
@@ -137,7 +143,7 @@ export async function addCartItem(owner, raw, { onAdded } = {}) {
       }
       if (cart.addOperations.length >= 60) throw commerceError(409, 'CART_OPERATION_LIMIT', 'Review your cart before starting another personalization session.');
     }
-    const giftContext = kind === 'gift_box_v2' ? await createGiftBoxCartPricingContext([...cart.items, input], { session }) : null;
+    const giftContext = kind === 'gift_box_v2' ? await createGiftBoxCartPricingContext([...cart.items, input], { session, owner, cartId: cart._id }) : null;
     const quote = kind === 'gift_box_v2' ? quoteGiftBoxCartLine(input, giftContext, { stored: false }) : { ...await quoteCartLine(input, owner, { session }), kind: 'product' };
     added = { kind, ...(kind === 'product' ? { productId: quote.productId, slug: quote.slug } : {}), quantity: input.quantity, unitPricePiastres: quote.unitPricePiastres, customized: Boolean(quote.customization) };
     const existing = cart.items.find(item => sameLine(item, quote));
@@ -150,7 +156,7 @@ export async function addCartItem(owner, raw, { onAdded } = {}) {
       if (cart.items.length >= 30) throw commerceError(400, 'CART_LIMIT', 'A cart can contain at most thirty items.');
       cart.items.push(storedLine(quote));
     }
-    if (kind === 'gift_box_v2') await validateGiftLines(cart.items, session, giftContext);
+    if (kind === 'gift_box_v2') await validateGiftLines(cart.items, session, giftContext, owner, cart._id);
     await attachUploadsToCart(quote.uploadIds, owner, cart._id, { session });
     if (input.operationKey) cart.addOperations.push({ key: input.operationKey, requestHash });
   });
@@ -167,7 +173,7 @@ export async function updateCartQuantity(owner, id, quantity) {
     if (!item) throw commerceError(404, 'CART_ITEM_NOT_FOUND', 'Cart item not found.');
     const kind = cartLineKind(item);
     const quote = kind === 'gift_box_v2' ? null : await quoteCartLine({ ...item.toObject(), quantity }, owner, { session }); item.quantity = quantity;
-    if (kind === 'gift_box_v2') await validateGiftLines(cart.items, session);
+    if (kind === 'gift_box_v2') await validateGiftLines(cart.items, session, null, owner, cart._id);
     if (quote) await attachUploadsToCart(quote.uploadIds, owner, cart._id, { session });
   });
   return cartResponse(owner);
@@ -197,9 +203,13 @@ export async function mergeGuestCart(fromOwner, toOwner) {
     skipped = 0;
     const source = await readCart(fromOwner, { session });
     if (!source) return;
+    if (source.items.some(line => line.kind === 'gift_box_v2' && line.configuration?.personalizationIntent))
+      throw commerceError(409, 'GIFT_BOX_PERSONALIZATION_MERGE_PENDING', 'Complete this personalized gift as a guest or remove it before signing in. The original cart remains unchanged.');
     let target = await Cart.findOne({ owner: toOwner }).session(session);
     if (!target) target = new Cart({ owner: toOwner, items: [], expiresAt: expiresAt() });
     if (target.expiresAt < new Date()) { target.items = []; target.addOperations = []; }
+    if (target.items.some(line => line.kind === 'gift_box_v2' && line.configuration?.personalizationIntent))
+      throw commerceError(409, 'GIFT_BOX_PERSONALIZATION_MERGE_PENDING', 'Personalized gift attachments need review before merging carts. Both carts remain unchanged.');
     const receipts = new Map(target.addOperations.map(entry => [entry.key, entry.requestHash]));
     for (const receipt of source.addOperations || []) {
       // Historical receipts have no per-line provenance, so even equal hashes

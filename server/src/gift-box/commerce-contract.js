@@ -7,6 +7,7 @@ import {
   GIFT_BOX_COMMERCE_DRAFT_REFERENCE_VERSION,
 } from '../../../shared/gift-box/commerce-contract.mjs';
 import { componentId, giftCardMessage, MAX_ITEM_QUANTITY, MAX_ADDITIONAL_ITEMS } from './validation.js';
+import { parseGiftBoxPersonalizationIntent } from '../../../shared/gift-box/personalization-intent.mjs';
 
 const recognizedId = categories => componentId.refine(id => categories.includes(getFixedComponent(id)?.category), 'Choose a recognized component in the required category.');
 const coordinate = z.number().finite().min(0).max(1).transform(value => value === 0 ? 0 : value);
@@ -28,6 +29,10 @@ export const giftBoxV2CommerceInput = z.object({
   draftGeometryVersion: z.literal(GIFT_BOX_COMMERCE_DRAFT_REFERENCE_VERSION),
   coordinateSystem: z.literal(GIFT_BOX_COMMERCE_COORDINATE_SYSTEM),
   selection,
+  personalizationIntent: z.custom(value => { try {
+    const intent = parseGiftBoxPersonalizationIntent(value);
+    return intent.photoPrints.length + intent.engravings.length > 0;
+  } catch { return false; } }, 'Invalid personalized Gift Box selection.').optional(),
   placements: z.array(z.object({
     instanceId: z.uuid(), componentId: recognizedId(['flower', 'plush', 'chocolate']),
     x: coordinate, y: coordinate, zone: z.enum(['inside', 'beside']),
@@ -65,6 +70,10 @@ export function canonicalizeGiftBoxConfiguration(raw) {
     selection: { boxId: input.selection.boxId,
       items: [...input.selection.items].sort((a, b) => compareText(a.componentId, b.componentId)),
       ribbonId: input.selection.ribbonId, giftCard: input.selection.giftCard },
+    // Match the strict Zod schema's property order. Snapshot parsing otherwise
+    // changes JSON serialization and invalidates the signed configuration ID
+    // for every personalized gift (legacy gifts retain identical serialization).
+    ...(input.personalizationIntent ? { personalizationIntent: parseGiftBoxPersonalizationIntent(input.personalizationIntent) } : {}),
     placements,
   });
 }

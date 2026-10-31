@@ -4,6 +4,7 @@ import { giftBoxV2CommerceInput, identifyGiftBoxConfiguration } from './commerce
 import { addPiastres, multiplyPiastres } from './pricing.js';
 
 export const GIFT_BOX_ORDER_SNAPSHOT_VERSION = 'gift-box-order-v1';
+export const PERSONAL_GIFT_BOX_ORDER_SNAPSHOT_VERSION = 'gift-box-order-v2';
 const integer = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const quantity = integer.min(1);
 const text = z.string().min(1).max(120).refine(value => value.isWellFormed() && !/[\u0000-\u001f\u007f]/u.test(value));
@@ -24,6 +25,13 @@ const policyReference = z.object({
   boxId: text, approvedBy: text, approvedAt: timestamp, catalogVersion: text, assetVersion: text,
   geometryVersion: text, draftGeometryVersion: text,
 }).strict();
+const personalizedPhoto = z.object({ uploadId: z.string().regex(/^[a-f0-9]{24}$/), printOptionId: text, zone: z.enum(['inside','beside']),
+  x: z.number().min(0).max(1), y: z.number().min(0).max(1), pricePiastres: integer, optionRevision: integer, priceApprovedAt: timestamp }).strict();
+const personalizedEngraving = z.object({ text: z.string().min(1).max(500), styleId: text, colorId: text, surfaceOptionId: text,
+  pricePiastres: integer, optionRevision: integer, priceApprovedAt: timestamp }).strict();
+const personalizedSnapshot = z.object({ version: z.literal('gift-box-personalization-intent-v1'),
+  photoPrints: z.array(personalizedPhoto).max(48), engravings: z.array(personalizedEngraving).max(24),
+  unitAdjustmentPiastres: integer }).strict();
 const claim = z.object({ kind: z.literal('gift_box_component'), id: text, mode, quantity,
   consumedQuantity: integer, settingsRevision: integer }).strict();
 
@@ -33,13 +41,14 @@ export const giftBoxOrderLineInput = z.object({
   kind: z.literal('gift_box_v2'), name: z.literal('Build Your Gift Box'),
   quantity: quantity.max(99), unitPricePiastres: integer, lineTotalPiastres: integer,
   giftBox: z.object({
-    snapshotVersion: z.literal(GIFT_BOX_ORDER_SNAPSHOT_VERSION),
+    snapshotVersion: z.enum([GIFT_BOX_ORDER_SNAPSHOT_VERSION, PERSONAL_GIFT_BOX_ORDER_SNAPSHOT_VERSION]),
     configuration: giftBoxV2CommerceInput,
     configurationId: z.string().regex(/^gift-box-configuration-v1:[a-f0-9]{64}$/),
     components: z.array(component).min(2).max(103),
     fulfillment: z.object({ directCommerceEligible: z.literal(true), physicalFitCertifiedByGeometry: z.literal(false), policyReference }).strict(),
     inventoryClaims: z.array(claim).min(2).max(103),
     artwork: z.object({ status: z.literal('unavailable') }).strict(),
+    personalization: personalizedSnapshot.optional(),
   }).strict(),
 }).strict().superRefine((line, context) => {
   const fail = message => context.addIssue({ code: 'custom', message });
@@ -71,7 +80,22 @@ export const giftBoxOrderLineInput = z.object({
       unitTotal = addPiastres(unitTotal, item.perBoxSubtotalPiastres);
       lineTotal = addPiastres(lineTotal, item.lineSubtotalPiastres);
     }
-    if (unitTotal !== line.unitPricePiastres || lineTotal !== line.lineTotalPiastres || multiplyPiastres(unitTotal, line.quantity) !== lineTotal) fail('Charge the completed gift exactly once.');
+    const personal = saved.personalization;
+    if (Boolean(personal) !== Boolean(saved.configuration.personalizationIntent)
+      || (personal ? saved.snapshotVersion !== PERSONAL_GIFT_BOX_ORDER_SNAPSHOT_VERSION : saved.snapshotVersion !== GIFT_BOX_ORDER_SNAPSHOT_VERSION)) {
+      fail('A personalized gift requires the correct immutable snapshot version.');
+    }
+    if (personal) {
+      const intent = saved.configuration.personalizationIntent;
+      if (personal.photoPrints.length !== intent.photoPrints.length || personal.engravings.length !== intent.engravings.length
+        || personal.photoPrints.some((photo, index) => ['uploadId','printOptionId','zone','x','y'].some(key => photo[key] !== intent.photoPrints[index]?.[key]))
+        || personal.engravings.some((entry, index) => ['text','styleId','colorId','surfaceOptionId'].some(key => entry[key] !== intent.engravings[index]?.[key]))) fail('Order attachments and engraving choices must match the selected Gift Box.');
+      let personalTotal = 0;
+      for (const entry of [...personal.photoPrints, ...personal.engravings]) personalTotal = addPiastres(personalTotal, entry.pricePiastres);
+      if (personalTotal !== personal.unitAdjustmentPiastres) fail('Charge each print and engraving exactly once.');
+      unitTotal = addPiastres(unitTotal, personalTotal);
+    }
+    if (unitTotal !== line.unitPricePiastres || multiplyPiastres(unitTotal, line.quantity) !== line.lineTotalPiastres) fail('Charge the completed gift exactly once.');
   } catch { fail('Snapshot amounts and quantities must use safe integer arithmetic.'); }
   const policy = saved.fulfillment.policyReference, configuration = saved.configuration;
   if (policy.boxId !== selection.boxId || ['catalogVersion', 'assetVersion', 'geometryVersion', 'draftGeometryVersion'].some(key => policy[key] !== configuration[key])) fail('The saved policy must approve the selected box and reference versions.');
@@ -84,8 +108,11 @@ export function giftBoxOrderLine(quoted) {
   return deepFreeze(giftBoxOrderLineInput.parse({
     kind: 'gift_box_v2', name: 'Build Your Gift Box', quantity: quoted.quantity,
     unitPricePiastres: quoted.unitPricePiastres, lineTotalPiastres: quoted.lineTotalPiastres,
-    giftBox: { snapshotVersion: GIFT_BOX_ORDER_SNAPSHOT_VERSION,
+    giftBox: { snapshotVersion: quoted.giftPersonalization ? PERSONAL_GIFT_BOX_ORDER_SNAPSHOT_VERSION : GIFT_BOX_ORDER_SNAPSHOT_VERSION,
       configuration: quoted.configuration, configurationId: quoted.configurationId, components,
+      ...(quoted.giftPersonalization ? { personalization: { version: quoted.giftPersonalization.version,
+        photoPrints: quoted.giftPersonalization.photoPrints, engravings: quoted.giftPersonalization.engravings,
+        unitAdjustmentPiastres: quoted.giftPersonalization.unitAdjustmentPiastres } } : {}),
       fulfillment: quoted.giftFulfillment,
       inventoryClaims: components.map(item => ({ kind: 'gift_box_component', id: item.componentId,
         mode: item.inventory.mode, quantity: item.quantityForLine, consumedQuantity: item.inventory.trackedDemand,

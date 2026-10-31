@@ -22,6 +22,8 @@ export const env = {
   // component settings, published physical policies, and private artwork.
   giftBoxDirectCommerceEnabled: process.env.GIFT_BOX_DIRECT_COMMERCE_ENABLED === 'true',
   giftBoxPersonalizationOptionsEnabled: process.env.GIFT_BOX_PERSONALIZATION_OPTIONS_ENABLED === 'true',
+  // Explicitly OFF until account merge, file retention and end-to-end personalized checkout pass.
+  giftBoxPersonalizedCheckoutEnabled: process.env.GIFT_BOX_PERSONALIZED_CHECKOUT_ENABLED === 'true',
   clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
   sessionSecret: process.env.SESSION_SECRET || '',
   // Both gates remain OFF unless an operator explicitly authorizes launch.

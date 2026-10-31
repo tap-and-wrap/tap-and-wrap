@@ -14,6 +14,10 @@ import { builderError } from './validation.js';
 import { fingerprint } from '../commerce/pricing.js';
 import { loadPublishedGiftBoxPolicies } from './policy-store.js';
 import { giftBoxRuntimeCommerceOpen } from './runtime-commerce.js';
+import { Upload } from '../models/Upload.js';
+import { GiftBoxPersonalizationOption } from '../models/GiftBoxPersonalizationOption.js';
+import { priceGiftBoxPersonalization } from './personalization-pricing.mjs';
+import { parseGiftBoxPersonalizationIntent } from '../../../shared/gift-box/personalization-intent.mjs';
 
 let disposablePolicies = null;
 function assertDisposablePoliciesOnly() {
@@ -49,7 +53,7 @@ function trustedPolicy(boxId, context) {
 export function giftCartError(error) {
   return error instanceof ZodError ? builderError(409, 'GIFT_BOX_CONFIGURATION_INVALID', 'This saved gift configuration is no longer supported. Remove it and review the builder.') : error;
 }
-export async function createGiftBoxCartPricingContext(lines, { session } = {}) {
+export async function createGiftBoxCartPricingContext(lines, { session, owner = null, cartId = null } = {}) {
   const gifts = lines.filter(line => line.kind === 'gift_box_v2');
   if (!gifts.length) return null;
   try { await ensureBuilderBackend(); }
@@ -63,9 +67,28 @@ export async function createGiftBoxCartPricingContext(lines, { session } = {}) {
     [selection.boxId, selection.ribbonId, selection.giftCard?.componentId, ...selection.items.map(item => item.componentId)]
       .filter(Boolean).forEach(id => componentIds.add(id));
   }
+  // Uploads and prices are always read together with the cart/order transaction.
+  // Never trust a previous public quote or a browser-computed amount.
+  const personalized = gifts.filter(line => line.configuration?.personalizationIntent);
+  const personalizationError = personalized.length && (!env.giftBoxPersonalizationOptionsEnabled || !owner)
+    ? builderError(409, 'GIFT_BOX_PERSONALIZATION_DISABLED', 'Gift Box personalization is currently unavailable. Remove this gift or try again later.') : null;
+  const uploadIds = new Set(), optionIds = new Set();
+  for (const line of personalizationError ? [] : personalized) {
+    let intent;
+    try { intent = parseGiftBoxPersonalizationIntent(line.configuration.personalizationIntent); }
+    catch { continue; /* repricer will report this corrupt line as removable/unavailable */ }
+    intent.photoPrints.forEach(photo => { uploadIds.add(photo.uploadId); optionIds.add(photo.printOptionId); });
+    intent.engravings.forEach(entry => optionIds.add(entry.surfaceOptionId));
+  }
+  const giftUploads = uploadIds.size ? await Upload.find({ _id: { $in: [...uploadIds] }, owner })
+    .select('_id owner purpose giftBoxId fieldKey state expiresAt cartId').session(session || null).lean().maxTimeMS(3000) : [];
+  const giftOptions = optionIds.size ? await GiftBoxPersonalizationOption.find({ optionId: { $in: [...optionIds] } })
+    .session(session || null).lean().maxTimeMS(3000) : [];
   const savedSettings = componentIds.size ? await GiftBoxComponentSetting.find({ componentId: { $in: [...componentIds] } }).session(session || null).lean().maxTimeMS(3000) : [];
   const policies = await loadPublishedGiftBoxPolicies([...boxIds], { session });
-  return { savedSettings, settings: new Map(savedSettings.map(setting => [setting.componentId, setting])), policies };
+  return { savedSettings, settings: new Map(savedSettings.map(setting => [setting.componentId, setting])), policies,
+    giftUploads: new Map(giftUploads.map(upload => [String(upload._id), upload])),
+    giftOptions: new Map(giftOptions.map(option => [option.optionId, option])), owner, cartId, personalizationError };
 }
 
 export function giftBoxCartSummary(configuration, savedSettings = []) {
@@ -104,15 +127,27 @@ export function quoteGiftBoxCartLine(line, context, { stored = true } = {}) {
         throw builderError(409, 'GIFT_BOX_CART_LAUNCH_DISABLED', 'Gift-box ordering is not ready for this box. No cart item was added.');
       }
     }
+    const intent = configuration.personalizationIntent;
+    if (intent && context?.personalizationError) throw context.personalizationError;
+    const personal = intent ? priceGiftBoxPersonalization({ intent, boxId: configuration.selection.boxId,
+      owner: context?.owner, uploads: intent.photoPrints.map(photo => context?.giftUploads?.get(photo.uploadId)),
+      options: [...new Set([...intent.photoPrints.map(photo => photo.printOptionId), ...intent.engravings.map(entry => entry.surfaceOptionId)])]
+        .map(id => context?.giftOptions?.get(id)), cartId: context?.cartId }) : null;
+    const personalUnit = personal?.unitAdjustmentPiastres || 0;
+    const unitPricePiastres = addPiastres(quote.unitPricePiastres, personalUnit);
+    const adjustmentForLine = personalUnit * quote.quantity;
+    if (!Number.isSafeInteger(adjustmentForLine)) throw builderError(409, 'GIFT_BOX_PERSONALIZATION_TOTAL_INVALID', 'Review your personalized Gift Box prices.');
+    const lineTotalPiastres = addPiastres(quote.lineTotalPiastres, adjustmentForLine);
     const giftComponents = quote.components.map(component => ({ ...component,
       priceApprovedBy: String(context.settings.get(component.componentId).priceApprovedBy),
       priceApprovedAt: new Date(context.settings.get(component.componentId).priceApprovedAt),
     }));
     return { id: line.id, kind: 'gift_box_v2', identity: configurationId, configurationId, configuration,
-      name: 'Build Your Gift Box', quantity: quote.quantity, unitPricePiastres: quote.unitPricePiastres, lineTotalPiastres: quote.lineTotalPiastres,
+      name: 'Build Your Gift Box', quantity: quote.quantity, unitPricePiastres, lineTotalPiastres,
       giftBox: giftBoxCartSummary(configuration, context.savedSettings), giftComponents,
       giftFulfillment: quote.fulfillment, giftPolicyHash: fingerprint(giftBoxFulfillmentPolicyInput.parse(policy)),
-      uploadIds: [], inventoryClaims: [], valid: true, checkoutAllowed: giftBoxRuntimeCommerceOpen(env), promotionsEligible: false };
+      giftPersonalization: personal, uploadIds: personal?.uploadIds || [], inventoryClaims: [], valid: true,
+      checkoutAllowed: giftBoxRuntimeCommerceOpen(env) && (!personal || env.giftBoxPersonalizedCheckoutEnabled), promotionsEligible: false };
   } catch (error) { throw giftCartError(error); }
 }
 
@@ -147,5 +182,9 @@ export function publicGiftBoxCartLine(quote) {
   return { id: quote.id, kind: 'gift_box_v2', name: 'Build Your Gift Box', quantity: quote.quantity,
     valid: quote.valid, ...(quote.error ? { error: quote.error, errorCode: quote.errorCode } : {}),
     unitPricePiastres: quote.valid ? quote.unitPricePiastres : null, lineTotalPiastres: quote.valid ? quote.lineTotalPiastres : null,
-    giftBox: quote.giftBox, checkoutAllowed: quote.checkoutAllowed === true, promotionsEligible: false };
+    giftBox: quote.giftBox ? { ...quote.giftBox, ...(quote.giftPersonalization ? { personalization: {
+      photoCount: quote.giftPersonalization.photoPrints.length,
+      engravings: quote.giftPersonalization.engravings.map(entry => ({ text: entry.text, styleId: entry.styleId, colorId: entry.colorId })),
+      unitAdjustmentPiastres: quote.giftPersonalization.unitAdjustmentPiastres } } : {}) } : null,
+    checkoutAllowed: quote.checkoutAllowed === true, promotionsEligible: false };
 }
