@@ -54,7 +54,7 @@ export default function App() {
   <Route path="/products/:slug/customize" element={<CustomizationPage/>}/>
   <Route path="/customize" element={<CustomizePage/>}/>
   <Route path="/customize/gift-box" element={giftBoxV2Enabled ? <GiftBoxBuilderPage/> : <ServiceRequestPage service="gift_box"/>}/>
-  {giftBoxV2Enabled && <Route path="/admin/gift-box/components" element={<RequireAdmin><AdminGiftBoxComponentsPage/></RequireAdmin>}/>}
+  <Route path="/admin/gift-box/components" element={<RequireAdmin><AdminGiftBoxComponentsPage/></RequireAdmin>}/>
   <Route path="/admin/gift-box/personalization-options" element={<RequireAdmin><AdminGiftBoxPersonalizationPage/></RequireAdmin>}/>
   <Route path="/admin/gift-box/fulfillment-policies" element={<RequireAdmin><AdminGiftBoxPoliciesPage/></RequireAdmin>}/>
   {GiftBoxGeometryReviewPage && <Route path="/dev/gift-box/geometry" element={<GiftBoxGeometryReviewPage/>}/>}
