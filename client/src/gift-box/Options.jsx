@@ -20,7 +20,8 @@ export default function Options({ draftMode = false, category, components, revea
       return <button className={`gb-option ${selectedId === item.componentId ? 'is-selected' : ''}`} type="button" key={item.componentId}
         disabled={disabled} aria-label={`${category === 'box' || category === 'ribbon' ? 'Choose' : 'Add'} ${label}`}
         aria-pressed={category === 'box' || category === 'ribbon' ? selectedId === item.componentId : undefined} onClick={() => onChoose(item.componentId)}>
-        {['box', 'flower', 'plush'].includes(category) && <span className="gb-option-photo"><Artwork key={item.componentId} componentId={item.componentId} role="selection"/></span>}
+        {/* Use the actual transparent builder assets for every pictured choice, including chocolates. */}
+        {['box', 'flower', 'plush', 'chocolate'].includes(category) && <span className="gb-option-photo"><Artwork key={item.componentId} componentId={item.componentId} role="placement"/></span>}
         {category === 'ribbon' && (import.meta.env.DEV || configuredGiftBoxMedia({
           baseUrl: import.meta.env.VITE_GIFT_BOX_MEDIA_BASE_URL, releaseId: import.meta.env.VITE_GIFT_BOX_MEDIA_RELEASE,
         })) && <span className="gb-option-photo gb-ribbon-option-photo"><RibbonBow key={item.componentId} componentId={item.componentId}/></span>}

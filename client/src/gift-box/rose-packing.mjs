@@ -30,7 +30,9 @@ function collisionWith(item, pos, rose) {
 
 export function findNextRosePosition(boxId, rose, instances = []) {
   const draft = getDraftGeometry(boxId);
-  if (!draft?.regions?.length || draft.assetBlocked || !rose || ![rose.width, rose.height].every(n => finite(n) && n > 0)) return null;
+  // Box 1 now has a verified corrected public placement image. Its original source remains blocked;
+  // allowing photo-derived ROSE STUDY positioning does not approve physical capacity or checkout.
+  if (!draft?.regions?.length || (draft.assetBlocked && boxId !== 'box-1') || !rose || ![rose.width, rose.height].every(n => finite(n) && n > 0)) return null;
   const placed = instances.filter(item => item.x !== null && finite(item.x) && finite(item.y));
   const last = [...placed].reverse().find(item => getFixedComponent(item.componentId)?.category === 'flower' && item.placementZone !== 'beside');
   const bestOrigin = last ? centre(last, last.width, last.height) : null;

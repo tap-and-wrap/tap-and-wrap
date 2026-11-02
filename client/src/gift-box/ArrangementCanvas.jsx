@@ -14,7 +14,7 @@ export default function ArrangementCanvas({ state, components, dispatch, study =
   const [selectedPhotoId, setSelectedPhotoId] = useState(null);
   const active = state.instances.find(item => item.id === selected);
   const extended=study&&(extendedScene||Boolean(state.boxId && personal?.photos?.length)||state.instances.some(item =>
-    item.x!==null && (item.placementZone==='beside' || ['plush','chocolate'].includes(getFixedComponent(item.componentId)?.category))));
+    item.x!==null && item.placementZone==='beside'));
   const scene=getStudyScene(extended), draft=study&&getDraftGeometry(state.boxId);
   const boxSize=BOX_ARTWORK_DIMENSIONS[state.boxId]||[1,1];
   const boxStyle={left:`${-scene.x/scene.width*100}%`,top:`${-scene.y/scene.height*100}%`,width:`${100/scene.width}%`,height:`${100/scene.height}%`};
