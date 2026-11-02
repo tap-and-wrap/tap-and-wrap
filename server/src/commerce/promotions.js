@@ -5,6 +5,7 @@ import { DiscountRedemption } from '../models/DiscountRedemption.js';
 import { configurationError } from './customization.js';
 import { env } from '../config/env.js';
 import { assertDatabaseWriteAllowed } from '../config/database-safety.js';
+import { cartLineKind } from './cart-contract.js';
 
 export const GOVERNORATES = Object.freeze([
   { id: 'cairo', name: 'Cairo' }, { id: 'giza', name: 'Giza' },
@@ -46,12 +47,15 @@ function configuredDiscount(amount, kind, value) {
 
 export function evaluatePromotions(lines, rules = [], discount = null, { userId = null, now = new Date(), customerRedemptionCount = 0 } = {}) {
   if (!Array.isArray(lines) || lines.length > 100) throw configurationError('A bounded cart is required.', 'PRICING_INVALID');
-  let subtotalPiastres = 0;
+  let subtotalPiastres = 0, productSubtotalPiastres = 0;
   const available = lines.map((line, index) => {
+    const kind = cartLineKind(line);
     if (!Number.isSafeInteger(line.quantity) || line.quantity < 1 || line.quantity > 99 || !Number.isSafeInteger(line.unitPricePiastres) || line.unitPricePiastres < 0 || (line.lineTotalPiastres !== undefined && line.lineTotalPiastres !== line.quantity * line.unitPricePiastres)) throw configurationError('The cart contains invalid prices or quantities.', 'PRICING_INVALID');
     subtotalPiastres = safeSum(subtotalPiastres, line.quantity * line.unitPricePiastres);
+    if (kind === 'gift_box_v2') return null;
+    productSubtotalPiastres = safeSum(productSubtotalPiastres, line.quantity * line.unitPricePiastres);
     return { line, index, remaining: line.quantity, bundledDiscount: 0 };
-  });
+  }).filter(Boolean);
   let discountPiastres = 0;
   const applied = [];
   const sortedRules = rules.filter((rule) => validDates(rule, now)).sort((a, b) => a.priority - b.priority || String(a._id).localeCompare(String(b._id)));
@@ -99,7 +103,7 @@ export function evaluatePromotions(lines, rules = [], discount = null, { userId 
     if (!validDates(discount, now) || (discount.usageLimit !== null && discount.usageLimit !== undefined && discount.usedCount >= discount.usageLimit)) throw configurationError('This discount code is not available.', 'DISCOUNT_UNAVAILABLE', 409);
     if (discount.authenticatedOnly && !userId) throw configurationError('Sign in to use this discount code.', 'DISCOUNT_ACCOUNT_REQUIRED', 409);
     if (discount.perCustomerLimit && customerRedemptionCount >= discount.perCustomerLimit) throw configurationError('Your discount-code usage limit has been reached.', 'DISCOUNT_UNAVAILABLE', 409);
-    if (subtotalPiastres < discount.minimumSubtotalPiastres) throw configurationError('The cart does not meet this code’s minimum subtotal.', 'DISCOUNT_MINIMUM', 409);
+    if (productSubtotalPiastres < discount.minimumSubtotalPiastres) throw configurationError('The cart does not meet this code’s minimum subtotal.', 'DISCOUNT_MINIMUM', 409);
     if (applied.length && !discount.stackWithBundles) throw configurationError('This code cannot be combined with an applied bundle.', 'DISCOUNT_STACKING', 409);
     const eligible = available.filter(({ line }) => (!discount.productIds?.length && !discount.categoryIds?.length) || discount.productIds?.some((id) => String(id) === String(line.productId)) || discount.categoryIds?.some((id) => [line.categoryId, line.subcategoryId, ...(line.categoryIds || [])].filter(Boolean).some((categoryId) => String(categoryId) === String(id))));
     const eligibleSubtotal = eligible.reduce((total, entry) => safeSum(total, entry.line.quantity * entry.line.unitPricePiastres - entry.bundledDiscount), 0);
@@ -109,12 +113,12 @@ export function evaluatePromotions(lines, rules = [], discount = null, { userId 
     discountPiastres = safeSum(discountPiastres, amount);
     applied.push({ kind: 'discount', id: String(discount._id), name: discount.name, code: discount.code, discountPiastres: amount });
   }
-  discountPiastres = Math.min(subtotalPiastres, discountPiastres);
+  discountPiastres = Math.min(productSubtotalPiastres, discountPiastres);
   return { subtotalPiastres, discountPiastres, totalPiastres: subtotalPiastres - discountPiastres, applied };
 }
 
 export async function calculatePromotions(lines, { code, session, userId, customerRedemptionCount = 0, now = new Date() } = {}) {
-  const ids = [...new Set(lines.map((line) => line.productId))];
+  const ids = [...new Set(lines.filter(line => cartLineKind(line) === 'product').map((line) => line.productId))];
   let bundleQuery = BundleRule.find({ active: true, 'items.productId': { $in: ids } }).sort({ priority: 1, _id: 1 }).limit(101).lean().maxTimeMS(3000);
   if (session) bundleQuery = bundleQuery.session(session);
   const rules = await bundleQuery;

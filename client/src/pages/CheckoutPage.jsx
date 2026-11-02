@@ -18,7 +18,7 @@ export default function CheckoutPage() {
   const checkoutOwner = checkoutOwnerKey ? `checkout:${checkoutOwnerKey}` : session.ownerKey;
   const [customer, setCustomer] = useState({ name: '', email: '', phone: '', governorate: '', address: '', notes: '' });
   const [paymentMethod, setPaymentMethod] = useState('cod');
-  const personalized = cart.items.some(item => item.requiresPersonalization || Object.keys(item.personalization || {}).length > 0 || item.customization);
+  const personalized = cart.items.some(item => item.kind === 'gift_box_v2' || item.requiresPersonalization || Object.keys(item.personalization || {}).length > 0 || item.customization);
   useEffect(() => { if (personalized) setPaymentMethod('instapay'); }, [personalized]);
   const [discountCode, setDiscountCode] = useState('');
   const [appliedCode, setAppliedCode] = useState('');
@@ -39,7 +39,7 @@ export default function CheckoutPage() {
   }, [session.ownerKey, checkoutOwner]);
   const config = useQuery({ queryKey: privateQueryKey(session.ownerKey, 'checkout-config'), queryFn: ({ signal }) => commerceGet('/checkout/config', undefined, signal), enabled: session.ready, retry: false, staleTime: 60_000 });
   const enabled = config.data?.enabled === true;
-  const quote = useQuery({ queryKey: privateQueryKey(session.ownerKey, 'checkout-quote', customer.governorate, paymentMethod, appliedCode, cart.items.map((item) => ({ id: item.id, productId: item.productId, variantKey: item.variantKey, quantity: item.quantity, unitPricePiastres: item.unitPricePiastres, personalization: item.personalization, customization: item.customization })), cart.subtotalPiastres, cart.quantity), queryFn: ({ signal }) => {
+  const quote = useQuery({ queryKey: privateQueryKey(session.ownerKey, 'checkout-quote', customer.governorate, paymentMethod, appliedCode, cart.items.map((item) => ({ id: item.id, kind: item.kind, productId: item.productId, variantKey: item.variantKey, quantity: item.quantity, unitPricePiastres: item.unitPricePiastres, personalization: item.personalization, customization: item.customization })), cart.subtotalPiastres, cart.quantity), queryFn: ({ signal }) => {
     submissionKey.current ||= checkoutSession(checkoutOwner).key;
     return commercePost('/checkout/quote', { checkoutKey: submissionKey.current, paymentMethod, governorate: customer.governorate, ...(appliedCode ? { discountCode: appliedCode } : {}) }, { signal });
   }, enabled: session.ready && enabled && !uncertain && Boolean(customer.governorate) && cart.items.length > 0, retry: false, staleTime: 0 });

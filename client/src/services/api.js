@@ -74,6 +74,11 @@ export async function safePatch(url, payload, options = {}) {
   const token = await getCsrfToken();
   return api.patch(url, payload, { ...options, authGeneration: generation, headers: { ...options.headers, 'x-csrf-token': token } });
 }
+export async function safePut(url, payload, options = {}) {
+  const generation = privatePath(url) ? authGeneration() : undefined;
+  const token = await getCsrfToken();
+  return api.put(url, payload, { ...options, authGeneration: generation, headers: { ...options.headers, 'x-csrf-token': token } });
+}
 export async function safeDelete(url, options = {}) {
   const generation = privatePath(url) ? authGeneration() : undefined;
   const token = await getCsrfToken();

@@ -187,8 +187,9 @@ export async function mutateOrderAccounting(id, owner, input, actor) {
           const claims = order.inventoryClaims.map((claim, index) => {
             const quantity = input.quantities[index];
             if (!Number.isSafeInteger(quantity) || quantity < 0 || quantity > claim.quantity) fail('Use actual resellable quantities within the allocated stock.');
+            if (claim.kind === 'gift_box_component' && claim.mode !== 'tracked' && quantity !== 0) fail('Made-to-order items and ribbons have no numeric consumed stock to restore.');
             return { ...claim, quantity };
-          }).filter(claim => claim.quantity > 0);
+          });
           const returned = { inventoryClaims: claims, restockedAt: null }; await restockInventory(returned, session); order.restockedAt = returned.restockedAt;
         } else await restockInventory(order, session);
         order.fulfillmentState = 'cancelled'; event = 'cancelled'; publicReason = input.publicReason || 'Order cancelled after review. Contact the store about any refund reconciliation.';
@@ -197,8 +198,9 @@ export async function mutateOrderAccounting(id, owner, input, actor) {
         const claims = order.inventoryClaims.map((claim, index) => {
           const quantity = input.quantities[index];
           if (!Number.isSafeInteger(quantity) || quantity < 0 || quantity > claim.quantity) fail('Return quantities cannot exceed the original allocated quantities.');
+          if (claim.kind === 'gift_box_component' && claim.mode !== 'tracked' && quantity !== 0) fail('Made-to-order items and ribbons have no numeric consumed stock to restore.');
           return { ...claim, quantity };
-        }).filter(claim => claim.quantity > 0);
+        });
         const returned = { inventoryClaims: claims, restockedAt: null }; await restockInventory(returned, session); order.restockedAt = returned.restockedAt;
         event = 'inventory_reconciled';
       } else if (input.action === 'release_discount') {

@@ -29,7 +29,11 @@ export default function AuthPage({ signup = false }) {
    if (signup && newPasswordError(password)) throw new Error(newPasswordError(password));
    const response = await session.authenticate(signup ? '/auth/signup' : '/auth/login', signup ? { name, email, password } : { email, password });
    emitTracking(response.data?.data?.tracking);
-   try { await commercePost('/cart/merge', {}); await cart.refresh(); }
+   try {
+    const merged = await commercePost('/cart/merge', {});
+    await cart.refresh();
+    if (Number.isSafeInteger(merged.skipped) && merged.skipped > 0) toast(`You are signed in. ${merged.skipped} unavailable guest ${merged.skipped === 1 ? 'item could' : 'items could'} not be transferred. Review your cart.`);
+   }
    catch { await cart.refresh(); toast.error('You are signed in. Your guest cart could not be merged; please review your cart.'); }
    const returnTo = params.get('returnTo');
    const administrator = response.data?.data?.user?.role === 'admin';

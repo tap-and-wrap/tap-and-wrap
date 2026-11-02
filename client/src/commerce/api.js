@@ -29,7 +29,7 @@ function uploadGeneration(uploadedIds, expected) {
   return generation;
 }
 export const PRIVATE_UPLOAD_TIMEOUT_MS = 60_000;
-export async function uploadPrivateFile(file, { purpose, productId, fieldKey, checkoutKey, orderId, requestKey, templateId, templateVersion, generation: expected, onProgress, signal }, uploadedIds = []) {
+export async function uploadPrivateFile(file, { purpose, productId, giftBoxId, fieldKey, checkoutKey, orderId, requestKey, templateId, templateVersion, generation: expected, onProgress, signal }, uploadedIds = []) {
   const generation = uploadGeneration(uploadedIds, expected);
   onProgress?.('Preparing private upload…');
   const controller = new AbortController();
@@ -41,7 +41,7 @@ export async function uploadPrivateFile(file, { purpose, productId, fieldKey, ch
   const timer = setTimeout(() => { timedOut = true; controller.abort(); }, PRIVATE_UPLOAD_TIMEOUT_MS);
   try {
     const signed = await commercePost('/uploads/sign', {
-      purpose, productId, fieldKey, checkoutKey, orderId, requestKey, templateId, templateVersion, mimeType: file.type, sizeBytes: file.size,
+      purpose, productId, giftBoxId, fieldKey, checkoutKey, orderId, requestKey, templateId, templateVersion, mimeType: file.type, sizeBytes: file.size,
     }, { signal: controller.signal });
     assertAuthGeneration(generation);
     if (!signed.upload?.id || !signed.uploadUrl) throw new Error('Private storage is unavailable. Your file has not been uploaded.');

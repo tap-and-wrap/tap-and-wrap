@@ -37,6 +37,23 @@ export function monetaryParameters(lines, totalPiastres) {
   });
   return { currency: 'EGP', value: total / 100, content_type: 'product', content_ids: contents.map((item) => item.id), contents, num_items: contents.reduce((total, item) => total + item.quantity, 0) };
 }
+/** Orders can contain independent builder inventory. Only ordinary products
+ * have provider catalog identities; private configuration data never reaches
+ * analytics, while the amount remains the complete merchandise amount. */
+export function orderMonetaryParameters(lines, totalPiastres) {
+  const total = checkedMoney(totalPiastres);
+  if (!Array.isArray(lines) || lines.length > 30) throw commerceError(400, 'INVALID_TRACKING_EVENT', 'Unsupported event items.');
+  const products = [];
+  for (const line of lines) {
+    if (!line || typeof line !== 'object' || Array.isArray(line)) throw commerceError(400, 'INVALID_TRACKING_EVENT', 'Unsupported event items.');
+    if (line.kind === undefined || line.kind === 'product') products.push(line);
+    else if (line.kind === 'gift_box_v2') {
+      if (!Number.isSafeInteger(line.quantity) || line.quantity < 1 || line.quantity > 99) throw commerceError(400, 'INVALID_TRACKING_EVENT', 'Unsupported event items.');
+      checkedMoney(line.unitPricePiastres);
+    } else throw commerceError(400, 'INVALID_TRACKING_EVENT', 'Unsupported event items.');
+  }
+  return products.length ? monetaryParameters(products, total) : { currency: 'EGP', value: total / 100 };
+}
 export function trackingReceipt(event) { return event ? { id: event.eventId, name: event.name, parameters: event.parameters } : null; }
 function validEgpAmount(value) {
   const cents = value * 100;
@@ -75,7 +92,7 @@ export async function captureAction(req, name, parameters, options) {
 }
 export async function recordOrderTracking(order, { session } = {}) {
   if (!order.trackingConsentId || !trackingSettings().enabled) return null;
-  const parameters = { ...monetaryParameters(order.lines, order.totals.totalPiastres), payment_method: order.paymentMethod };
+  const parameters = { ...orderMonetaryParameters(order.lines, order.totals.totalPiastres), payment_method: order.paymentMethod };
   const qualifies = order.paymentMethod === 'cod' || order.paymentState === 'paid';
   return recordQualifiedEvent(order.trackingConsentId, qualifies ? 'Purchase' : 'OrderSubmitted', parameters, { sourcePath: '/checkout', dedupKey: String(order._id), session });
 }

@@ -31,13 +31,10 @@ import { CommerceJobRun } from '../models/CommerceJobRun.js';
 import { NotificationEvent } from '../models/NotificationEvent.js';
 import { MetaEvent } from '../models/MetaEvent.js';
 import { Upload } from '../models/Upload.js';
+import { cartItemInput, cartQuantity } from './cart-contract.js';
 
 const id = z.string().regex(/^[a-f0-9]{24}$/i);
 const uuid = z.string().uuid();
-const fields = z.record(z.string().regex(/^[a-z][a-z0-9_-]{0,79}$/), z.union([z.string().max(10000).refine(value => Array.from(value).length <= 5000, 'Text supports at most 5000 characters.'), z.array(id).max(10)])).refine(value => Object.keys(value).length <= 30);
-const customization = z.object({ templateId: id, version: z.number().int().min(1).max(1000000),
-  selections: z.array(z.object({ groupKey: z.string().max(64), optionKey: z.string().max(64), quantity: z.number().int().min(1).max(20) }).strict()).max(100).optional(), fields: fields.optional() }).strict();
-const cartItem = z.object({ operationKey: uuid.optional(), productId: id, variantKey: z.string().max(80).nullable().optional(), quantity: z.number().int().min(1).max(99), personalization: fields.optional(), customization: customization.nullable().optional() }).strict();
 const paymentMethod = z.enum(['cod', 'instapay']);
 const discountCode = z.string().trim().max(40).optional();
 const customer = z.object({ name: z.string().trim().min(2).max(100), email: z.email().max(254), phone: z.string().min(10).max(25),
@@ -101,11 +98,18 @@ async function streamUpload(req, res, uploadId, owner, adminUser) {
   } catch (error) { if (res.headersSent) res.destroy(); else throw error; }
   finally { req.removeListener('aborted', abort); res.removeListener('close', abort); }
 }
+async function optionalPurchaseReceipt(order, req) {
+  try { return await ownedPurchaseReceipt(order, req); }
+  catch { return null; }
+}
 export const commerceRoutes = Router();
 commerceRoutes.use(requireCommerceDatabase, shoppingLimit, commerceOwner, csrfProtection);
 commerceRoutes.get('/cart', async (req, res) => res.json({ ok: true, data: await cartResponse(req.commerceOwner) }));
-commerceRoutes.post('/cart/items', async (req, res) => res.status(201).json({ ok: true, data: await addCartItem(req.commerceOwner, cartItem.parse(req.body), {
+commerceRoutes.post('/cart/items', async (req, res) => res.status(201).json({ ok: true, data: await addCartItem(req.commerceOwner, cartItemInput.parse(req.body), {
   onAdded: async (item) => {
+    // Builder contents/messages/configuration hashes have no approved public
+    // Product tracking identity. Do not construct or dispatch a gift receipt.
+    if (item.kind === 'gift_box_v2') return null;
     const parameters = monetaryParameters([item], item.unitPricePiastres * item.quantity);
     const [product] = await attachProductPaths([{ _id: item.productId, slug: item.slug }]);
     const sourcePath = productHref(product);
@@ -114,7 +118,7 @@ commerceRoutes.post('/cart/items', async (req, res) => res.status(201).json({ ok
     return [event, customized].filter(Boolean);
   },
 }) }));
-commerceRoutes.patch('/cart/items/:id', async (req, res) => res.json({ ok: true, data: await updateCartQuantity(req.commerceOwner, uuid.parse(req.params.id), z.object({ quantity: cartItem.shape.quantity }).strict().parse(req.body).quantity) }));
+commerceRoutes.patch('/cart/items/:id', async (req, res) => res.json({ ok: true, data: await updateCartQuantity(req.commerceOwner, uuid.parse(req.params.id), z.object({ quantity: cartQuantity }).strict().parse(req.body).quantity) }));
 commerceRoutes.delete('/cart/items/:id', async (req, res) => res.json({ ok: true, data: await removeCartItem(req.commerceOwner, uuid.parse(req.params.id)) }));
 commerceRoutes.delete('/cart', async (req, res) => res.json({ ok: true, data: await clearCart(req.commerceOwner) }));
 commerceRoutes.post('/cart/merge', requireAuth, async (req, res) => {
@@ -129,7 +133,7 @@ commerceRoutes.get('/checkout/submissions/:checkoutKey', submissionStatusLimit, 
   z.object({}).strict().parse(req.query);
   const order = await findOwnedCheckoutSubmission(uuid.parse(req.params.checkoutKey), req.commerceOwner);
   res.set('Cache-Control', 'private, no-store');
-  res.json({ ok: true, data: { order: order ? presentOrder(order) : null, tracking: order ? await ownedPurchaseReceipt(order, req) : null } });
+  res.json({ ok: true, data: { order: order ? presentOrder(order) : null, tracking: order ? await optionalPurchaseReceipt(order, req) : null } });
 });
 commerceRoutes.post('/checkout/quote', checkoutLimit, async (req, res) => {
   const input = checkoutSchema.parse(req.body), result = await prepareCheckout(req.commerceOwner, input, req.user?._id);
@@ -140,12 +144,21 @@ commerceRoutes.post('/checkout/quote', checkoutLimit, async (req, res) => {
   res.json({ ok: true, data: { ...result, tracking: tracking.filter(Boolean) } });
 });
 commerceRoutes.post('/orders', checkoutLimit, async (req, res) => {
-  const consent = await currentConsent(req);
+  // An unverified/unavailable optional consent defaults to no tracking; it must
+  // not prevent recovery of an order that already committed under this key.
+  let consent = null;
+  try { consent = await currentConsent(req); } catch { /* Fail closed for tracking only. */ }
   const order = await placeOrder(req.commerceOwner, orderSchema.parse(req.body), req.user?._id, { trackingConsentId: consent?._id || null });
+  let tracking = null, paymentTracking = null;
+  // Everything below order acceptance is optional receipt work. A failed lookup
+  // or adapter must not turn an already committed order into a false failure.
+  try {
     const record = consent ? await getOwnedOrder(order.id, req.commerceOwner) : null;
-    const paymentTracking = record && String(record.trackingConsentId) === String(consent._id)
+    paymentTracking = record && String(record.trackingConsentId) === String(consent._id)
       ? await captureAction(req, 'AddPaymentInfo', { currency: 'EGP', value: record.totals.totalPiastres / 100, payment_method: record.paymentMethod }, { sourcePath: '/checkout', dedupKey: `order:${record._id}` }) : null;
-    res.status(201).json({ ok: true, data: { order, tracking: record ? await ownedPurchaseReceipt(record, req) : null, paymentTracking } });
+    tracking = record ? await optionalPurchaseReceipt(record, req) : null;
+  } catch { /* The order and durable transactional event remain authoritative. */ }
+  res.status(201).json({ ok: true, data: { order, tracking, paymentTracking } });
 });
 commerceRoutes.post('/orders/track', trackingLimit, async (req, res) => {
   const input = z.object({ orderNumber: z.string().regex(/^[1-9][0-9]{5}$/), phone: z.string().min(10).max(25) }).strict().parse(req.body);
@@ -157,7 +170,7 @@ commerceRoutes.post('/orders/track', trackingLimit, async (req, res) => {
 commerceRoutes.get('/orders', requireAuth, async (req, res) => { const query = pageSchema.parse(req.query); res.json({ ok: true, data: await listOrders({ ...orderFilter(query), userId: req.user._id }, query, false) }); });
 commerceRoutes.get('/orders/:id', async (req, res) => {
   const order = await getOwnedOrder(id.parse(req.params.id), req.commerceOwner);
-  res.json({ ok: true, data: { order: { ...presentOrder(order), accounting: await orderAccounting(order) }, tracking: await ownedPurchaseReceipt(order, req) } });
+  res.json({ ok: true, data: { order: { ...presentOrder(order), accounting: await orderAccounting(order) }, tracking: await optionalPurchaseReceipt(order, req) } });
 });
 commerceRoutes.post('/orders/:id/accounting', async (req, res) => { const order = await mutateOrderAccounting(id.parse(req.params.id), req.commerceOwner, accountingInput.parse(req.body), req.user); res.json({ ok: true, data: { order: { ...presentOrder(order), accounting: await orderAccounting(order) } } }); });
 commerceRoutes.post('/orders/:id/cancel', async (req, res) => { const input = z.object({ revision: states.shape.revision, reason: states.shape.reason }).strict().parse(req.body); const record = await getOwnedOrder(id.parse(req.params.id), req.commerceOwner); const order = record.accountingVersion === 1 ? presentOrder(await mutateOrderAccounting(record._id, req.commerceOwner, { ...input, action: 'request_cancel' }, req.user)) : await changeOrderState(record._id, req.commerceOwner, { ...input, fulfillmentState: 'cancelled' }, req.user); res.json({ ok: true, data: { order } }); });
@@ -188,7 +201,20 @@ adminCommerceRoutes.get('/jobs', async (req, res) => {
   res.json({ ok: true, data: { runs, pagination: { page: query.page, limit: query.limit, total, pages: Math.ceil(total / query.limit) }, attention: { notificationDead, notificationUncertain, trackingDead, cleanupReview } } });
 });
 adminCommerceRoutes.get('/orders', async (req, res) => { const query = pageSchema.parse(req.query); res.json({ ok: true, data: await listOrders(orderFilter(query), query, true) }); });
-adminCommerceRoutes.get('/orders/:id', async (req, res) => { const order = await getOwnedOrder(id.parse(req.params.id), null, { admin: true }); const accounting = await orderAccounting(order, { admin: true }); res.json({ ok: true, data: { order: { ...presentOrder(order, { admin: true }), accounting, quotation: whatsappQuotation(order, accounting), inventoryClaims: order.inventoryClaims.map(claim => ({ sourceId: String(claim.id), label: claim.kind === 'product' ? order.lines.find(line => String(line.productId) === String(claim.id))?.name || 'Product requiring source review' : order.lines.flatMap(line => line.customization?.selections || []).find(selection => String(selection.componentId) === String(claim.id))?.componentName || 'Component requiring source review', kind: claim.kind, variantKey: claim.variantKey, quantity: claim.quantity, mode: claim.mode })), files: await orderFiles(order) } } }); });
+function adminInventoryClaims(order) {
+  return (order.inventoryClaims || []).map(claim => {
+    const label = claim.kind === 'product'
+      ? order.lines.find(line => String(line.productId) === String(claim.id))?.name || 'Product requiring source review'
+      : claim.kind === 'gift_box_component'
+        ? order.lines.filter(line => line.kind === 'gift_box_v2').flatMap(line => Array.isArray(line.giftBox?.components) ? line.giftBox.components : []).find(component => component.componentId === claim.id)?.displayName || 'Builder component requiring source review'
+        : claim.kind === 'component'
+          ? order.lines.flatMap(line => line.customization?.selections || []).find(selection => String(selection.componentId) === String(claim.id))?.componentName || 'Component requiring source review'
+          : 'Unknown inventory source requiring review';
+    return { sourceId: String(claim.id), label, kind: claim.kind, variantKey: claim.variantKey,
+      quantity: claim.quantity, mode: claim.mode, ...(claim.consumedQuantity !== undefined ? { consumedQuantity: claim.consumedQuantity } : {}) };
+  });
+}
+adminCommerceRoutes.get('/orders/:id', async (req, res) => { const order = await getOwnedOrder(id.parse(req.params.id), null, { admin: true }); const accounting = await orderAccounting(order, { admin: true }); res.json({ ok: true, data: { order: { ...presentOrder(order, { admin: true }), accounting, quotation: whatsappQuotation(order, accounting), inventoryClaims: adminInventoryClaims(order), files: await orderFiles(order) } } }); });
 adminCommerceRoutes.patch('/orders/:id/state', async (req, res) => res.json({ ok: true, data: { order: await changeOrderState(id.parse(req.params.id), null, states.parse(req.body), req.user) } }));
 adminCommerceRoutes.get('/orders/:id/proof', async (req, res) => {
   const order = await getOwnedOrder(id.parse(req.params.id), null, { admin: true });

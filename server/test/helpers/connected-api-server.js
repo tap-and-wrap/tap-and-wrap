@@ -17,6 +17,7 @@ Object.assign(process.env, {
   CLIENT_ORIGIN: clientOrigin, SESSION_SECRET: 'tap-wrap-connected-isolated-fixture-secret-never-production',
   CHECKOUT_ENABLED: String(enabledCheckout), COMMERCE_LAUNCH_AUTHORIZED: String(enabledCheckout), STORAGE_ENABLED: 'false',
   CUSTOM_REQUESTS_ENABLED: 'true', CUSTOM_REQUESTS_LAUNCH_AUTHORIZED: 'true',
+  GIFT_BOX_BUILDER_BACKEND_ENABLED: 'true',
   EMAIL_ENABLED: 'false', EMAIL_USER: '', EMAIL_APP_PASSWORD: '', EMAIL_SMOKE_TEST_ENABLED: 'false',
   NOTIFICATIONS_ENABLED: 'false', NOTIFICATION_LIVE_DELIVERY_ENABLED: 'false', NOTIFICATION_SAFE_RECIPIENTS: '', RESEND_API_KEY: '',
   META_ENABLED: 'false', META_POLICY_APPROVED: 'false', META_CAPI_ENABLED: 'false', META_PIXEL_ID: '', META_ACCESS_TOKEN: '',
@@ -45,6 +46,10 @@ process.on('message', async message => {
 process.once('disconnect', () => { void stop(); });
 try {
   database = await startTestDatabase({ models: Object.values(mongoose.models), transactions: true });
+  // Explicit schema work only in this executable's fresh disposable replica set.
+  for (const name of ['GiftBoxPhysicalPolicy', 'GiftBoxPolicyPublication']) {
+    await mongoose.models[name].createCollection(); await mongoose.models[name].createIndexes();
+  }
   const category = await Category.create({ name: 'Connected Fixture Category', slug: 'connected-fixture-category', active: true });
   const child = await Category.create({ name: 'Connected Fixture Child', slug: 'connected-fixture-child', parentId: category._id, active: true });
   const template = await CustomizationTemplate.create({ key: 'connected-laser', name: 'Connected approved engraving', kind: 'laser_engraving', status: 'approved', active: true,
@@ -91,11 +96,35 @@ try {
   const passwordHash = await bcrypt.hash('isolated-fixture-password', 4);
   const accounts = {};
   for (const [name, role] of [['admin', 'admin'], ['alice', 'customer'], ['bob', 'customer']]) accounts[name] = await User.create({ name: `Connected ${name}`, email: `${name}@connected.example.test`, role, passwordHash, active: true });
+  // This executable is already restricted to a fresh isolated test replica set.
+  // Install synthetic policies here, never through an application route or flag.
+  const { GiftBoxComponentSetting } = await import('../../src/models/GiftBoxComponentSetting.js');
+  const { giftCartConfiguration, giftCartPolicy, seedGiftCartSettings } = await import('./gift-box-cart-fixtures.js');
+  const { setGiftBoxCheckoutPoliciesForDisposableTest } = await import('../../src/gift-box/checkout-guard.js');
+  await GiftBoxComponentSetting.createCollection(); await GiftBoxComponentSetting.createIndexes();
+  await seedGiftCartSettings(accounts.admin._id);
+  await setGiftBoxCheckoutPoliciesForDisposableTest([giftCartPolicy()]);
   for (const [name, number] of [['alice', '234567'], ['bob', '345678']]) await Order.create({ owner: `user:${accounts[name]._id}`, userId: accounts[name]._id,
     orderNumber: number, checkoutKey: randomUUID(), requestHash: randomUUID(), customer: { name: `Connected ${name}`, email: accounts[name].email, phone: '+201012345678', governorate: 'cairo', address: '10 Synthetic Fixture Street' },
     lines: [{ name: `Private ${name} fixture product`, quantity: 1, unitPricePiastres: 10000, lineTotalPiastres: 10000 }],
     totals: { subtotalPiastres: 10000, shippingPiastres: 9000, discountPiastres: 0, totalPiastres: 19000, applied: [] }, paymentMethod: 'cod', paymentState: 'unpaid',
     history: [{ event: 'order_received', actor: 'customer' }, { event: 'state_changed', actor: `admin:${accounts.admin._id}`, reason: 'PRIVATE_LEGACY_OPERATIONAL_NOTE', internalNote: 'PRIVATE_OPERATIONAL_NOTE', publicReason: 'Approved customer explanation' }] });
+  // Exercise the internal transaction only while composing this fresh fixture.
+  // The HTTP application retains its unconditional gift-checkout fence.
+  const { env } = await import('../../src/config/env.js');
+  const { addCartItem } = await import('../../src/commerce/cart.js');
+  const { prepareGiftBoxCheckoutForDisposableTest, placeGiftBoxOrderForDisposableTest } = await import('../../src/commerce/orders.js');
+  const giftOrderConfiguration = giftCartConfiguration({ message: 'PRIVATE_CONNECTED_GIFT_ORDER_MESSAGE' });
+  const giftOrderOwner = `user:${accounts.alice._id}`, giftOrderKey = randomUUID();
+  let giftOrder;
+  try {
+    env.checkoutEnabled = true;
+    await addCartItem(giftOrderOwner, { productId: String(genericProduct._id), quantity: 1 });
+    await addCartItem(giftOrderOwner, { kind: 'gift_box_v2', configuration: giftOrderConfiguration, quantity: 1, operationKey: randomUUID() });
+    await prepareGiftBoxCheckoutForDisposableTest(giftOrderOwner, { checkoutKey: giftOrderKey, paymentMethod: 'instapay', governorate: 'cairo' }, accounts.alice._id);
+    giftOrder = await placeGiftBoxOrderForDisposableTest(giftOrderOwner, { checkoutKey: giftOrderKey, paymentMethod: 'instapay',
+      customer: { name: 'Connected alice', email: accounts.alice.email, phone: '01012345678', governorate: 'cairo', address: '10 Synthetic Gift Order Street' } }, accounts.alice._id);
+  } finally { env.checkoutEnabled = enabledCheckout; }
   const storage = storageModule.createMemoryStorage();
   const grants = new Map();
   let puts = 0;
@@ -135,6 +164,8 @@ try {
     res.json({ productId: String(product._id), templateId: String(template._id), puts, uploads,
       giftBox: { genericProductId:String(genericProduct._id), genericTemplateId:String(genericTemplate._id), productId: String(giftProduct._id), templateId: String(giftTemplate._id), componentId: String(giftComponents[0]._id),
         componentQuantity: (await ComponentOption.findById(giftComponents[0]._id).select('inventory.quantity').lean()).inventory.quantity },
+      giftBoxV2: { configuration: giftCartConfiguration(), ordinaryProductId: String(genericProduct._id), orderId: giftOrder.id,
+        settingQuantities: await GiftBoxComponentSetting.find().sort('componentId').select('componentId inventoryQuantity inventoryMode').lean() },
       categoryId: String(category._id), childCategoryId: String(child._id),
       requests: await ServiceRequest.find().select('_id requestKey reference owner components').lean(),
       orders: await Order.find().select('_id orderNumber checkoutKey').lean(),

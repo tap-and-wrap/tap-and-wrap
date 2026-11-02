@@ -16,6 +16,7 @@ import { adminConfigurationRoutes } from './commerce/configuration.routes.js';
 import accountRoutes from './routes/account.routes.js';
 import { publicWebsiteRouter, adminWebsiteRouter } from './website/routes.js';
 import trackingRoutes from './tracking/routes.js';
+import { publicGiftBoxRoutes, adminGiftBoxRoutes } from './gift-box/routes.js';
 import { requestContext, forwardingGuard, sanitizedRequestDiagnostic } from './middleware/operations.js';
 
 export const app=express();
@@ -55,6 +56,8 @@ app.use('/api/v1/auth',accountRoutes,authRoutes);
 app.use('/api/v1/public',publicWebsiteRouter);
 app.use('/api/v1/public',catalogRoutes);
 app.use('/api/v1/tracking',trackingRoutes);
+app.use('/api/v1/gift-box', publicGiftBoxRoutes);
+app.use('/api/v1/admin/gift-box', adminGiftBoxRoutes);
 app.use('/api/v1/admin/website',adminWebsiteRouter);
 app.use('/api/v1/commerce', commerceRoutes);
 app.use('/api/v1/admin/commerce', adminCommerceRoutes, adminConfigurationRoutes);

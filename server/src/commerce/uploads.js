@@ -1,6 +1,7 @@
 import { Order } from '../models/Order.js';
 import { assertRequestIntakeOpen } from './request-intake.js';
 import { productPersonalizationFields } from '../../../shared/product-personalization.mjs';
+import { getFixedComponent } from '../../../shared/gift-box/definitions.mjs';
 import mongoose from 'mongoose';
 import { randomUUID } from 'node:crypto';
 import { env } from '../config/env.js';
@@ -56,14 +57,27 @@ export function serializeUpload(upload) {
     mimeType: upload.mimeType, sizeBytes: upload.sizeBytes,
     width: upload.width || null, height: upload.height || null,
     productId: upload.productId ? String(upload.productId) : null,
+    ...(upload.purpose === 'gift_box_photo' ? { giftBoxId: upload.giftBoxId } : {}),
     fieldKey: upload.fieldKey || null, expiresAt: upload.state === 'retained' ? null : upload.expiresAt,
   };
 }
 
 async function policyForUpload(owner, body) {
-  if (!body || !['personalization', 'artwork', 'payment_proof', 'service_reference'].includes(body.purpose)) {
+  if (!body || !['personalization', 'artwork', 'payment_proof', 'service_reference', 'gift_box_photo'].includes(body.purpose)) {
     throw fail('INVALID_UPLOAD_PURPOSE', 'Choose a supported upload purpose.');
   }
+  if (body.purpose === 'gift_box_photo') {
+    // Gift boxes are NOT Products. Never create a dummy product or borrow a
+    // product personalization field to sign an otherwise unowned private file.
+    if (!env.giftBoxBuilderBackendEnabled) throw fail('GIFT_BOX_UPLOAD_DISABLED', 'Gift-box photo uploads are not yet enabled.', 409);
+    if (typeof body.giftBoxId !== 'string' || getFixedComponent(body.giftBoxId)?.category !== 'box'
+        || ['productId', 'fieldKey', 'orderId', 'requestKey', 'templateId', 'templateVersion', 'checkoutKey']
+          .some(field => body[field] !== undefined)) {
+      throw fail('GIFT_BOX_UPLOAD_SCOPE_INVALID', 'Choose a valid gift box before uploading your private photo.');
+    }
+    return { acceptedMimeTypes: UPLOAD_MIME_TYPES, maxBytes: 8 * 1024 * 1024, fieldKey: 'gift_box_photo' };
+  }
+  if (body.giftBoxId !== undefined) throw fail('GIFT_BOX_UPLOAD_SCOPE_INVALID', 'A gift box cannot be attached to another upload purpose.');
   if (body.purpose === 'service_reference') {
     assertRequestIntakeOpen();
     if (!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(body.requestKey || '')) throw fail('REQUEST_KEY_REQUIRED', 'Start a customization request before uploading reference images.');
@@ -136,7 +150,8 @@ export async function signUpload(owner, body) {
       await reserveQuota(owner, body.sizeBytes, { session });
       writeGuard();
       [upload] = await Upload.create([{
-        owner, purpose: body.purpose, productId: body.purpose === 'payment_proof' ? undefined : body.productId,
+        owner, purpose: body.purpose, productId: body.purpose === 'payment_proof' || body.purpose === 'gift_box_photo' ? undefined : body.productId,
+        giftBoxId: body.purpose === 'gift_box_photo' ? body.giftBoxId : undefined,
         fieldKey: policy.fieldKey, requestKey: body.purpose === 'service_reference' ? body.requestKey : undefined, proofOrderId: body.purpose === 'payment_proof' ? body.orderId : undefined,
         mimeType: body.mimeType, sizeBytes: body.sizeBytes, temporaryKey: privateObjectKey(),
         signedExpiresAt: new Date(now + UPLOAD_URL_SECONDS * 1000), expiresAt: new Date(now + TEMPORARY_LIFETIME_MS),
@@ -193,22 +208,37 @@ export async function completeUpload(id, owner) {
   }
 }
 
-export async function validateUploadReferences(ids, owner, { purpose, session, productId, fieldKey, checkoutKey, context } = {}) {
+export async function validateUploadReferences(ids, owner, { purpose, session, productId, giftBoxId, fieldKey, checkoutKey, context } = {}) {
   assertUploadOwner(owner);
   const objectIds = idsForQuery(ids);
   if (!objectIds.length) return [];
   const filter = { _id: { $in: objectIds }, owner, state: 'complete', expiresAt: { $gt: new Date() } };
   if (purpose) filter.purpose = purpose;
   if (productId) filter.productId = productId;
+  if (giftBoxId) filter.giftBoxId = giftBoxId;
   if (fieldKey) filter.fieldKey = fieldKey;
   if (checkoutKey) filter.checkoutKey = checkoutKey;
   const records = context ? (context.owner === owner ? objectIds.map(id => context.uploads.get(String(id))).filter(record => record
     && (!purpose || record.purpose === purpose) && (!productId || String(record.productId) === String(productId))
+    && (!giftBoxId || record.giftBoxId === giftBoxId)
     && (!fieldKey || record.fieldKey === fieldKey) && (!checkoutKey || record.checkoutKey === checkoutKey)
     && record.state === 'complete' && record.expiresAt > new Date()) : []) : await Upload.find(filter).session(session || null).lean().maxTimeMS(3000);
   if (records.length !== objectIds.length) throw fail('INVALID_UPLOAD_REFERENCES', 'An image is missing, expired or belongs to another shopping session.');
   const ordered = new Map(records.map((record) => [String(record._id), record]));
   return objectIds.map((id) => ordered.get(String(id)));
+}
+
+// This verifies ownership, completion, expiry and the exact selected Gift Box.
+// Passing validation is NOT permission to charge or attach to a cart/order;
+// those later operations must use the same transaction as their order write.
+export async function validateGiftBoxPhotoUploadReferences(ids, owner, giftBoxId, { session } = {}) {
+  if (getFixedComponent(giftBoxId)?.category !== 'box') {
+    throw fail('GIFT_BOX_UPLOAD_SCOPE_INVALID', 'Choose a valid gift box.');
+  }
+  const records = await validateUploadReferences(ids, owner, {
+    purpose: 'gift_box_photo', giftBoxId, fieldKey: 'gift_box_photo', session,
+  });
+  return records.map(record => ({ id: String(record._id), width: record.width, height: record.height }));
 }
 
 export async function retainUploads(ids, owner, orderId, { session } = {}) {

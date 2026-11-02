@@ -8,7 +8,7 @@ import { DiscountRedemption } from '../models/DiscountRedemption.js';
 import { Upload } from '../models/Upload.js';
 import { env } from '../config/env.js';
 import { assertDatabaseWriteAllowed } from '../config/database-safety.js';
-import { quoteCart } from './cart.js';
+import { quoteCart, quoteCartForGiftBoxDisposableCheckout } from './cart.js';
 import { fingerprint } from './pricing.js';
 import { calculatePromotions, GOVERNORATES, claimDiscountRedemption } from './promotions.js';
 import { consumeInventory, restockInventory } from './inventory.js';
@@ -18,6 +18,9 @@ import { recordAdminAudit } from './audit.js';
 import { commerceError, checkedMoney } from './errors.js';
 import { recordOrderTracking } from '../tracking/service.js';
 import { presentOrder } from './order-presentation.js';
+import { giftBoxOrderLine } from '../gift-box/order-snapshot.js';
+import { assertGiftBoxCheckoutCapability, createGiftBoxCheckoutCapabilityForDisposableTest,
+  readGiftBoxCheckoutPolicyFences, fenceGiftBoxCheckoutPolicies, runGiftBoxCheckoutTestHook } from '../gift-box/checkout-guard.js';
 export { presentOrder } from './order-presentation.js';
 
 export function normalizePhone(value) {
@@ -30,21 +33,35 @@ export function normalizePhone(value) {
 }
 export function generateOrderNumber() { return String(randomInt(100000, 1000000)); }
 function requireCheckout() { if (!env.checkoutEnabled) throw commerceError(403, 'CHECKOUT_DISABLED', 'Checkout is not enabled. No order has been placed.'); }
-export async function checkoutQuote(owner, input, { session, userId } = {}) {
-  const cart = await quoteCart(owner, { session, strict: true });
+export async function checkoutQuote(owner, input, options = {}) { return checkoutQuoteCore(owner, input, options); }
+async function checkoutQuoteCore(owner, input, { session, userId } = {}, capability = null) {
+  if (capability) assertGiftBoxCheckoutCapability(capability, owner);
+  const cart = capability ? await quoteCartForGiftBoxDisposableCheckout(owner, { session, capability }) : await quoteCart(owner, { session, strict: true });
   if (!cart.items.length) throw commerceError(400, 'CART_EMPTY', 'Add an eligible product before checking out.');
+  const policyFences = await readGiftBoxCheckoutPolicyFences(cart.items, { session });
   const promotions = await calculatePromotions(cart.items, { code: input.discountCode, session, userId });
   if (!GOVERNORATES.some(area => area.id === input.governorate)) throw commerceError(400, 'INVALID_GOVERNORATE', 'Choose a supported governorate.');
   const shipping = pendingShipping();
   const totals = { subtotalPiastres: promotions.subtotalPiastres, discountPiastres: promotions.discountPiastres,
     shippingPiastres: null, totalPiastres: checkedMoney(promotions.totalPiastres), applied: promotions.applied };
-  const digest = fingerprint({ lines: cart.items.map(line => ({ identity: line.identity, quantity: line.quantity, unitPrice: line.unitPricePiastres, customization: line.customizationSnapshot })), totals,
+  const digest = fingerprint({ lines: cart.items.map(line => ({ identity: line.identity, quantity: line.quantity, unitPrice: line.unitPricePiastres, customization: line.customizationSnapshot,
+    ...(line.kind === 'gift_box_v2' ? { kind: line.kind, configuration: line.configuration,
+      components: line.giftComponents.map(component => ({ ...component, priceApprovedAt: new Date(component.priceApprovedAt).toISOString() })),
+      fulfillment: line.giftFulfillment, policyHash: line.giftPolicyHash } : {}) })), totals,
     governorate: input.governorate, paymentMethod: input.paymentMethod, discountCode: input.discountCode?.trim().toUpperCase() || null });
-  return { cart, totals, fingerprint: digest, shipping };
+  return { cart, totals, fingerprint: digest, shipping, policyFences };
 }
 export async function prepareCheckout(owner, input, userId) {
+  return prepareCheckoutCore(owner, input, userId);
+}
+export async function prepareGiftBoxCheckoutForDisposableTest(owner, input, userId) {
+  const capability = await createGiftBoxCheckoutCapabilityForDisposableTest(owner);
+  return prepareCheckoutCore(owner, input, userId, capability);
+}
+async function prepareCheckoutCore(owner, input, userId, capability = null) {
+  if (capability) assertGiftBoxCheckoutCapability(capability, owner);
   requireCheckout();
-  const quote = await checkoutQuote(owner, input, { userId });
+  const quote = await checkoutQuoteCore(owner, input, { userId }, capability);
   const existing = await CheckoutIntent.findOne({ owner, checkoutKey: input.checkoutKey }).lean();
   if (existing?.state === 'consumed') throw commerceError(409, 'CHECKOUT_USED', 'This checkout has already been submitted.');
   const expiresAt = new Date(Date.now() + 10 * 60000);
@@ -54,6 +71,22 @@ export async function prepareCheckout(owner, input, userId) {
   return { ...quote.totals, totals: quote.totals, fingerprint: quote.fingerprint, expiresAt };
 }
 export async function placeOrder(owner, input, userId, { trackingConsentId = null } = {}) {
+  return placeOrderCore(owner, input, userId, { trackingConsentId });
+}
+export async function placeGiftBoxOrderForDisposableTest(owner, input, userId, { trackingConsentId = null } = {}) {
+  const capability = await createGiftBoxCheckoutCapabilityForDisposableTest(owner);
+  return placeOrderCore(owner, input, userId, { trackingConsentId }, capability);
+}
+function snapshotOrderLine(line) {
+  if (line.kind === 'gift_box_v2') return giftBoxOrderLine(line);
+  if (line.kind !== undefined && line.kind !== 'product') throw commerceError(400, 'CART_LINE_KIND_INVALID', 'Unsupported order line kind.');
+  return { kind: 'product', productId: line.productId, name: line.name, slug: line.slug, variantKey: line.variantKey, variantLabel: line.variantLabel,
+    sku: line.sku, description: line.description, categoryId: line.categoryId, subcategoryId: line.subcategoryId, mainImageUrl: line.mainImageUrl,
+    quantity: line.quantity, unitPricePiastres: line.unitPricePiastres, lineTotalPiastres: line.lineTotalPiastres,
+    personalization: line.personalization, personalizationDefinitions: line.personalizationDefinitions, customization: line.customizationSnapshot, uploadIds: line.uploadIds };
+}
+async function placeOrderCore(owner, input, userId, { trackingConsentId = null } = {}, capability = null) {
+  if (capability) assertGiftBoxCheckoutCapability(capability, owner);
   const normalized = { ...input, customer: { ...input.customer, phone: normalizePhone(input.customer.phone) }, discountCode: input.discountCode?.trim().toUpperCase() || null };
   const requestHash = fingerprint(normalized);
   const repeated = async () => {
@@ -76,18 +109,21 @@ export async function placeOrder(owner, input, userId, { trackingConsentId = nul
         }
         const intent = await CheckoutIntent.findOne({ owner, checkoutKey: input.checkoutKey, state: 'open', expiresAt: { $gt: new Date() } }).session(session).lean();
         if (!intent) throw commerceError(409, 'CHECKOUT_QUOTE_REQUIRED', 'Review current checkout totals before placing your order.');
-        const quote = await checkoutQuote(owner, normalized.customer.governorate ? { ...normalized, governorate: normalized.customer.governorate } : normalized, { session, userId });
+        const quote = await checkoutQuoteCore(owner, normalized.customer.governorate ? { ...normalized, governorate: normalized.customer.governorate } : normalized, { session, userId }, capability);
         if (intent.fingerprint !== quote.fingerprint || intent.paymentMethod !== input.paymentMethod) throw commerceError(409, 'CHECKOUT_CHANGED', 'Prices or cart contents changed. Review the updated total before submitting again.');
         if (input.paymentProofId) throw commerceError(400, 'ORDER_FIRST_REQUIRED', 'Create the order before transferring or submitting proof.');
         const uploadIds = [...new Set(quote.cart.items.flatMap(line => line.uploadIds))];
-        const personalized = quote.cart.items.some(line => line.requiresPersonalization || Object.keys(line.personalization || {}).length > 0 || line.customizationSnapshot);
+        const hasGifts = quote.cart.items.some(line => line.kind === 'gift_box_v2');
+        const personalized = hasGifts || quote.cart.items.some(line => line.requiresPersonalization || Object.keys(line.personalization || {}).length > 0 || line.customizationSnapshot);
+        if (hasGifts && input.paymentMethod !== 'instapay') throw commerceError(409, 'GIFT_BOX_PAYMENT_METHOD_UNAVAILABLE', 'Configured gifts currently require InstaPay. No other payment method has been authorized.');
         if (personalized && input.paymentMethod === 'cod') throw commerceError(409, 'QUOTATION_REQUIRED', 'Personalized COD requires an owner-authorized quotation before acceptance. Choose InstaPay or contact the store.');
+        await runGiftBoxCheckoutTestHook(capability, owner, 'beforeInventory', { session, quote });
         const inventoryClaims = await consumeInventory(quote.cart.items, quote.totals.applied, session);
+        await runGiftBoxCheckoutTestHook(capability, owner, 'afterInventory', { session, quote });
+        await runGiftBoxCheckoutTestHook(capability, owner, 'beforePolicyFence', { session, quote });
+        await fenceGiftBoxCheckoutPolicies(quote.policyFences, session);
         const order = new Order({ owner, userId: userId || null, trackingConsentId, checkoutKey: input.checkoutKey, requestHash, orderNumber: generateOrderNumber(), customer: normalized.customer,
-          lines: quote.cart.items.map(line => ({ productId: line.productId, name: line.name, slug: line.slug, variantKey: line.variantKey, variantLabel: line.variantLabel,
-            sku: line.sku, description: line.description, categoryId: line.categoryId, subcategoryId: line.subcategoryId, mainImageUrl: line.mainImageUrl,
-            quantity: line.quantity, unitPricePiastres: line.unitPricePiastres, lineTotalPiastres: line.lineTotalPiastres, personalization: line.personalization, personalizationDefinitions: line.personalizationDefinitions,
-            customization: line.customizationSnapshot, uploadIds: line.uploadIds })), totals: quote.totals, inventoryClaims, uploadIds, accountingVersion: 1, personalized, allowedPaymentMethods: personalized ? ['instapay'] : ['cod', 'instapay'], charges: [pendingShipping()], followUpDueAt: new Date(Date.now() + 12 * 3600000),
+          lines: quote.cart.items.map(snapshotOrderLine), totals: quote.totals, inventoryClaims, uploadIds, accountingVersion: 1, personalized, allowedPaymentMethods: personalized ? ['instapay'] : ['cod', 'instapay'], charges: [pendingShipping()], followUpDueAt: new Date(Date.now() + 12 * 3600000),
           paymentMethod: input.paymentMethod, paymentState: quote.totals.totalPiastres === 0 ? 'paid' : input.paymentMethod === 'instapay' ? 'awaiting_transfer' : 'unpaid',
           history: [{ at: new Date(), event: 'order_received', actor: userId ? 'customer' : 'guest' }] });
         for (const discount of quote.totals.applied.filter(value => value.kind === 'discount')) {
@@ -104,8 +140,10 @@ export async function placeOrder(owner, input, userId, { trackingConsentId = nul
         assertDatabaseWriteAllowed(Cart.db, env); await Cart.deleteOne({ _id: quote.cart.document._id }, { session });
         await enqueueOrderEvent(order, 'order_received', { session, eventVersion: 1 });
         await recordOrderTracking(order, { session });
+        await runGiftBoxCheckoutTestHook(capability, owner, 'beforeCommit', { session, quote, order });
         result = presentOrder(order.toObject());
       }, { readConcern: { level: 'snapshot' }, writeConcern: { w: 'majority' } });
+      await runGiftBoxCheckoutTestHook(capability, owner, 'afterCommit', { order: result });
       return result;
     } catch (error) {
       if (error.code === 11000) {

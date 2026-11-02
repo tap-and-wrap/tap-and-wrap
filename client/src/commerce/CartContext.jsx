@@ -32,9 +32,11 @@ export function CartProvider({ children }) {
       if (generation !== authGeneration()) throw new Error('Your account changed. Please review the current cart.');
       if (result.cart) queryClient.setQueryData(key, (previous) => ({ ...previous, ...result }));
       else await queryClient.invalidateQueries({ queryKey: key });
-      setFeedback({ generation, text: success, opener });
-      emitTracking(result.tracking);
-      if (source) animateToCart(source);
+      setFeedback({ generation, text: typeof success === 'function' ? success(result) : success, opener });
+      // Optional feedback must not turn a successfully saved cart into a failed
+      // mutation or encourage a customer to add the same item a second time.
+      try { emitTracking(result.tracking); } catch { /* The saved cart remains authoritative. */ }
+      try { if (source) animateToCart(source); } catch { /* Accessible status feedback is already present. */ }
       return result;
     } catch (error) {
       if (generation === authGeneration()) setFeedback({ generation, text: commerceError(error), opener });
@@ -47,10 +49,15 @@ export function CartProvider({ children }) {
     checkoutOwnerKey: session.ready && /^[a-f0-9]{64}$/.test(query.data?.checkoutOwnerKey || '') ? query.data.checkoutOwnerKey : null,
     loading: session.phase === 'checking' || session.phase === 'transition' || session.ready && query.isPending, error: session.error || query.error, pending, feedback,
     add: (item, source) => update(() => commercePost('/cart/items', item), 'Added to your cart.', source),
+    // Prepared for future approved builder integration; public builder controls
+    // do not invoke this method while fulfillment and media are unapproved.
+    addGiftBox: (item, source) => update(() => commercePost('/cart/items', { ...item, kind: 'gift_box_v2' }), 'Added to your cart.', source),
     setQuantity: (id, quantity) => update(() => commercePatch(`/cart/items/${id}`, { quantity }), 'Cart updated.'),
     remove: (id) => update(() => commerceDelete(`/cart/items/${id}`), 'Item removed.'),
     clear: () => update(() => commerceDelete('/cart'), 'Cart cleared.'),
-    merge: () => update(() => commercePost('/cart/merge', {}), 'Your eligible guest items have been saved to your account.'),
+    merge: () => update(() => commercePost('/cart/merge', {}), result => Number.isSafeInteger(result.skipped) && result.skipped > 0
+      ? `Your eligible guest items have been saved. ${result.skipped} unavailable guest ${result.skipped === 1 ? 'item could' : 'items could'} not be transferred. Review your cart.`
+      : 'Your eligible guest items have been saved to your account.'),
     refresh: async () => {
       if (sessionSnapshot().phase === 'error') await refreshSession();
       return queryClient.invalidateQueries({ queryKey: privateQueryKey(sessionOwner(), 'cart') });
