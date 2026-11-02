@@ -40,7 +40,19 @@ test('a two-level box can only use separately recognized well regions', () => {
 test('no fitting footprint produces no invented placement', () => {
   assert.equal(findNextRosePosition('box-2', { width: 2, height: 2 }, []), null);
   assert.equal(findNextRosePosition('missing', { width: 0.05, height: 0.05 }, []), null);
-  assert.equal(findNextRosePosition('box-1', { width: 0.05, height: 0.05 }, []), null); // source defect stays blocked
+});
+
+test('corrected Box 1 allows visual rose placement without physical packing approval', () => {
+  const draft = getDraftGeometry('box-1');
+  assert.equal(draft.assetBlocked, true); // Original supplied image remains defective.
+  assert.equal(draft.productionApproved, false); // Visual preview grants no packing approval.
+  const rose = studyFootprint('box-1', 'rose-red');
+  const position = findNextRosePosition('box-1', rose, []);
+  assert.ok(position, 'Corrected Box 1 artwork should permit a draft-only rose placement');
+  assert.equal(position.placementZone, 'inside');
+  const region = draft.regions.find(item => item.id === position.regionId);
+  assert.ok(region);
+  assert.ok(footprintInRegion({ x: position.x, y: position.y, width: rose.width, height: rose.height }, region));
 });
 
 test('chocolates and plush can be moved beside the box in the isolated visual study', () => {

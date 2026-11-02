@@ -60,6 +60,28 @@ beforeEach(async () => {
 });
 after(async () => { if (server) await new Promise((resolve) => server.close(resolve)); await database?.stop(); });
 
+test('overview reports real storefront listing and purchase eligibility, not inherited import status', async () => {
+  await product('unpriced-draft', { status: 'draft', pricePiastres: null, priceApproved: false, inventory: { mode: 'tracked', quantity: 0, approved: false, available: true } });
+  await product('review-hold', { status: 'hold', reviewRequired: true, reviewReasons: ['Isolated source grouping needs review'], pricePiastres: null, priceApproved: false, inventory: { mode: 'tracked', quantity: 0, approved: false, available: true } });
+  await product('normal-purchase');
+  await product('owner-configured-draft', { status: 'draft', purchaseSetup: { version: 1, options: 'single' } });
+  await product('stock-unavailable', { inventory: { mode: 'tracked', quantity: 0, approved: true, available: false } });
+  await product('unresolved-options', { status: 'draft', purchaseSetup: { version: 1, options: 'unresolved' } });
+  await product('hidden-product', { visibility: 'hidden' });
+  const inactive = await Category.create({ name: 'Isolated inactive child', slug: 'isolated-inactive-child', parentId: main._id, active: false });
+  await product('inactive-category-product', { subcategoryId: inactive._id });
+
+  const result = await request('/admin/website/overview');
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.data.products, { listed: 6, enquiries: 4, purchasable: 2, reviewRequired: 1 });
+  assert.equal(result.data.checkoutEnabled, env.checkoutEnabled);
+  assert.equal(result.data.products.draft, undefined);
+  assert.equal(await Product.countDocuments({ status: 'draft' }), 3);
+  assert.equal(await Product.countDocuments({ status: 'hold' }), 1);
+  assert.equal((await Product.findOne({ slug: 'unpriced-draft' }).lean()).pricePiastres, null);
+  assert.equal(await AdminAudit.countDocuments(), 0);
+});
+
 test('website administration rejects anonymous/customer access and invalid CSRF without writes', async () => {
   for (const path of ['overview', 'customers', 'content', 'reviews', 'analytics', 'payment-settings']) {
     assert.equal((await request(`/admin/website/${path}`, { headers: {} })).status, 401);

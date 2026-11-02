@@ -18,7 +18,7 @@ async function websiteFixture(page, { role = 'admin' } = {}) {
     if (role !== 'admin') return reply({ message: 'Admin required' }, role ? 403 : 401);
     const pageNumber = Number(url.searchParams.get('page') || 1);
     const paginate = (values, key) => ({ [key]: values.slice((pageNumber - 1) * 20, pageNumber * 20), pagination: { page: pageNumber, limit: 20, total: values.length, pages: Math.ceil(values.length / 20) } });
-    if (path === 'overview') return reply({ products: { draft: 0, ready: 0, hold: 0 }, customers: 23, pendingOrders: 0, awaitingPayment: 0, draftReviews: 0, checkoutEnabled: false, notifications: { failed: 0, dead: 0, uncertain: 0 } });
+    if (path === 'overview') return reply({ products: { listed: 5, enquiries: 4, purchasable: 1, reviewRequired: 2 }, customers: 23, pendingOrders: 0, awaitingPayment: 0, draftReviews: 0, checkoutEnabled: false, notifications: { failed: 0, dead: 0, uncertain: 0 } });
     if (path === 'customers') return reply(paginate(customers, 'customers'));
     if (path === 'notifications') return reply(paginate([{ _id: '555555555555555555555555', event: 'order_received', state: 'uncertain', attempts: 1, lastErrorCode: 'SMTP_ACCEPTANCE_UNCERTAIN', createdAt: '2026-10-09T12:00:00Z' }], 'events'));
     if (path === 'payment-settings') return reply({ checkoutEnabled: false, editable: false, launchManagedByEnvironment: true, methods: [{ key: 'cod', name: 'Cash on Delivery', verification: 'Manual collection confirmation.' }, { key: 'instapay', name: 'InstaPay', transferNumber: '01060673073', fullPaymentOnly: true, verification: 'Private proof requires manual verification.' }] });
@@ -42,6 +42,18 @@ async function websiteFixture(page, { role = 'admin' } = {}) {
   });
   return { ...existing, writes, content, reviews, categoryRecord };
 }
+
+test('overview uses customer-relevant catalog metrics and truthful admin links', async ({ page }) => {
+  await websiteFixture(page);
+  await page.goto('/admin/website/overview');
+  await expect(page.getByRole('link', { name: /Publicly listed.*5/ })).toHaveAttribute('href', '/admin/products?visibility=public');
+  await expect(page.getByRole('link', { name: /Import reviews outstanding.*2/ })).toHaveAttribute('href', '/admin/products?reviewRequired=true');
+  await expect(page.locator('.website-metric').filter({ hasText: 'Enquiries only' })).toContainText('4');
+  await expect(page.locator('.website-metric').filter({ hasText: 'Online purchase ready' })).toContainText('1');
+  await expect(page.getByText('Draft products')).toHaveCount(0);
+  await expect(page.getByText('Products on hold')).toHaveCount(0);
+  await expect(page.getByText(/Checkout is disabled pending launch approval/)).toBeVisible();
+});
 
 test('admin customer lists request server pages of twenty and expose no customer mutations', async ({ page }) => {
   const fixture = await websiteFixture(page);

@@ -48,9 +48,10 @@ function WebsiteOverview() {
   const query = useQuery({ queryKey: ['admin', 'website', 'overview'], queryFn: ({ signal }) => getWebsiteAdmin('overview', undefined, signal), retry: false, staleTime: 60000 });
   const data = query.data;
   const metrics = data ? [
-    ['Draft products', data.products.draft, '/admin/products?status=draft'],
-    ['Ready products', data.products.ready, '/admin/products?status=ready'],
-    ['Products on hold', data.products.hold, '/admin/products?status=hold'],
+    ['Publicly listed', data.products.listed, '/admin/products?visibility=public'],
+    ['Enquiries only', data.products.enquiries, null],
+    ['Online purchase ready', data.products.purchasable, null],
+    ['Import reviews outstanding', data.products.reviewRequired, '/admin/products?reviewRequired=true'],
     ['Customer accounts', data.customers, '/admin/website/customers'],
     ['Orders to prepare', data.pendingOrders, '/admin/commerce/orders'],
     ['Payments to verify', data.awaitingPayment, '/admin/commerce/orders?paymentState=awaiting_verification'],
@@ -59,7 +60,9 @@ function WebsiteOverview() {
     ['Emails requiring delivery review', data.notifications?.uncertain ?? 0, '/admin/website/notifications?state=uncertain'],
     ['Terminal email failures', data.notifications?.dead ?? 0, '/admin/website/notifications?state=dead'],
   ] : [];
-  return <><QueryState query={query} />{data && <><div className="website-metrics">{metrics.map(([label, value, link]) => <Link className="admin-panel website-metric" key={label} to={link}><span>{label}</span><strong>{value}</strong></Link>)}</div><p className="admin-panel">Checkout is {data.checkoutEnabled ? 'enabled by explicit launch configuration' : 'disabled pending launch approval'}. Publishing a product still requires approved prices, inventory and resolved review flags.</p></>}</>;
+  return <><QueryState query={query} />{data && <><div className="website-metrics">{metrics.map(([label, value, link]) => link
+    ? <Link className="admin-panel website-metric" key={label} to={link}><span>{label}</span><strong>{value}</strong></Link>
+    : <div className="admin-panel website-metric" key={label}><span>{label}</span><strong>{value}</strong></div>)}</div><p className="admin-panel">Public products without confirmed prices remain available for WhatsApp enquiries. Online purchase requires approved prices, inventory and complete product options. Import-review notes stay visible until individually resolved. Checkout is {data.checkoutEnabled ? 'enabled by explicit launch configuration' : 'disabled pending launch approval'}.</p></>}</>;
 }
 function WebsiteAnalytics() {
   const query = useQuery({ queryKey: ['admin', 'website', 'analytics'], queryFn: ({ signal }) => getWebsiteAdmin('analytics', undefined, signal), retry: false, staleTime: 60000 });

@@ -10,7 +10,7 @@ import { NotificationEvent } from '../models/NotificationEvent.js';
 import { Review } from '../models/Review.js';
 import { SiteContent } from '../models/SiteContent.js';
 import BundleRule from '../models/BundleRule.js';
-import { publicProductFilter, orderableProductStockFilter } from '../catalog/product-policy.js';
+import { displayProductFilter, publicProductFilter, orderableProductStockFilter } from '../catalog/product-policy.js';
 import { publicProductCard, inventoryCanOrder } from '../catalog/public-presentation.js';
 import { parseInput } from '../catalog/validation.js';
 import { commerceError, checkedMoney } from '../commerce/errors.js';
@@ -167,14 +167,47 @@ export async function listCustomers(query) {
   return { customers, pagination: paginationFor(page, total) };
 }
 
+// The storefront displays reviewed public identities independently of their
+// historic draft/hold status. Reuse its category graph and checkout eligibility
+// rather than presenting those import statuses as customer availability.
+async function catalogOverview() {
+  const categories = await Category.find({ active: true }).select('_id parentId').lean().maxTimeMS(TIMEOUT);
+  const roots = categories.filter(category => !category.parentId);
+  const rootIds = roots.map(category => category._id);
+  const childrenByRoot = new Map(roots.map(category => [String(category._id), []]));
+  for (const category of categories) {
+    if (category.parentId && childrenByRoot.has(String(category.parentId))) {
+      childrenByRoot.get(String(category.parentId)).push(category._id);
+    }
+  }
+  const allowedCategories = [
+    { categoryId: { $in: rootIds }, subcategoryId: null },
+    ...roots.filter(root => childrenByRoot.get(String(root._id)).length).map(root => ({
+      categoryId: root._id, subcategoryId: { $in: childrenByRoot.get(String(root._id)) },
+    })),
+  ];
+  const visible = { $and: [displayProductFilter(), { $or: allowedCategories }] };
+  const [listed, reviewRequired, candidates] = await Promise.all([
+    Product.countDocuments(visible).maxTimeMS(TIMEOUT),
+    Product.countDocuments({ reviewRequired: true }).maxTimeMS(TIMEOUT),
+    Product.find({ $and: [visible, publicProductFilter(), orderableProductStockFilter()] })
+      .select('visibility status published reviewRequired pricePiastres priceApproved mainImageKey categoryId subcategoryId inventory purchaseSetup variants personalization customization featured bestSeller slug name')
+      .lean().maxTimeMS(TIMEOUT),
+  ]);
+  // Full final gate, exactly as public Product cards use it. The indexed query
+  // limits hydration to potentially purchasable records, not the entire catalog.
+  const purchasable = candidates.filter(product => publicProductCard(product).orderingAvailable).length;
+  return { listed, enquiries: listed - purchasable, purchasable, reviewRequired };
+}
+
 export async function websiteOverview() {
-  const [draftProducts, readyProducts, heldProducts, customers, pendingOrders, awaitingPayment, draftReviews] = await Promise.all([
-    Product.countDocuments({ status: 'draft' }).maxTimeMS(TIMEOUT), Product.countDocuments({ status: 'ready' }).maxTimeMS(TIMEOUT), Product.countDocuments({ status: 'hold' }).maxTimeMS(TIMEOUT),
+  const [products, customers, pendingOrders, awaitingPayment, draftReviews] = await Promise.all([
+    catalogOverview(),
     User.countDocuments({ role: 'customer' }).maxTimeMS(TIMEOUT), Order.countDocuments({ fulfillmentState: { $in: ['received', 'confirmed', 'preparing'] } }).maxTimeMS(TIMEOUT),
     Order.countDocuments({ paymentState: 'awaiting_verification' }).maxTimeMS(TIMEOUT), Review.countDocuments({ status: 'draft' }).maxTimeMS(TIMEOUT),
   ]);
   const states = await NotificationEvent.aggregate([{ $match: { state: { $in: ['failed', 'dead', 'uncertain'] } } }, { $group: { _id: '$state', count: { $sum: 1 } } }]).option({ maxTimeMS: TIMEOUT });
-  return { products: { draft: draftProducts, ready: readyProducts, hold: heldProducts }, customers, pendingOrders, awaitingPayment, draftReviews, checkoutEnabled: env.checkoutEnabled, notifications: { failed: 0, dead: 0, uncertain: 0, ...Object.fromEntries(states.map((state) => [state._id, state.count])) } };
+  return { products, customers, pendingOrders, awaitingPayment, draftReviews, checkoutEnabled: env.checkoutEnabled, notifications: { failed: 0, dead: 0, uncertain: 0, ...Object.fromEntries(states.map((state) => [state._id, state.count])) } };
 }
 
 export async function listNotificationDiagnostics(query) {
