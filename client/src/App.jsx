@@ -28,6 +28,7 @@ const AdminOrderPage = lazy(() => import('./pages/AdminOrderPage.jsx'));
 const ServiceRequestPage = lazy(() => import('./pages/ServiceRequestPage.jsx'));
 const GiftBoxBuilderPage = lazy(() => import('./pages/GiftBoxBuilderPage.jsx'));
 const AdminGiftBoxComponentsPage = lazy(() => import('./pages/AdminGiftBoxComponentsPage.jsx'));
+const AdminGiftBoxVisualPreviewPage = lazy(() => import('./pages/AdminGiftBoxVisualPreviewPage.jsx'));
 const AdminGiftBoxPoliciesPage = lazy(() => import('./pages/AdminGiftBoxPoliciesPage.jsx'));
 const AdminGiftBoxPersonalizationPage = lazy(() => import('./pages/AdminGiftBoxPersonalizationPage.jsx'));
 const GiftBoxGeometryReviewPage = import.meta.env.DEV ? lazy(() => import('./pages/GiftBoxGeometryReviewPage.jsx')) : null;
@@ -55,6 +56,7 @@ export default function App() {
   <Route path="/customize" element={<CustomizePage/>}/>
   <Route path="/customize/gift-box" element={giftBoxV2Enabled ? <GiftBoxBuilderPage/> : <ServiceRequestPage service="gift_box"/>}/>
   <Route path="/admin/gift-box/components" element={<RequireAdmin><AdminGiftBoxComponentsPage/></RequireAdmin>}/>
+  <Route path="/admin/gift-box/visual-preview" element={<RequireAdmin><AdminGiftBoxVisualPreviewPage/></RequireAdmin>}/>
   <Route path="/admin/gift-box/personalization-options" element={<RequireAdmin><AdminGiftBoxPersonalizationPage/></RequireAdmin>}/>
   <Route path="/admin/gift-box/fulfillment-policies" element={<RequireAdmin><AdminGiftBoxPoliciesPage/></RequireAdmin>}/>
   {GiftBoxGeometryReviewPage && <Route path="/dev/gift-box/geometry" element={<GiftBoxGeometryReviewPage/>}/>}
