@@ -54,7 +54,7 @@ export default function App() {
   <Route path="/products/:slug" element={<ProductPage/>}/>
   <Route path="/products/:slug/customize" element={<CustomizationPage/>}/>
   <Route path="/customize" element={<CustomizePage/>}/>
-  <Route path="/customize/gift-box" element={giftBoxV2Enabled ? <GiftBoxBuilderPage/> : <ServiceRequestPage service="gift_box"/>}/>
+  <Route path="/customize/gift-box" element={giftBoxV2Enabled && new URLSearchParams(location.search).get('mode') !== 'request' ? <GiftBoxBuilderPage/> : <ServiceRequestPage service="gift_box"/>}/>
   <Route path="/admin/gift-box/components" element={<RequireAdmin><AdminGiftBoxComponentsPage/></RequireAdmin>}/>
   <Route path="/admin/gift-box/visual-preview" element={<RequireAdmin><AdminGiftBoxVisualPreviewPage/></RequireAdmin>}/>
   <Route path="/admin/gift-box/personalization-options" element={<RequireAdmin><AdminGiftBoxPersonalizationPage/></RequireAdmin>}/>
