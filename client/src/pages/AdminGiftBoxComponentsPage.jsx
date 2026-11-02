@@ -8,6 +8,7 @@ import { commerceError } from '../commerce/api.js';
 import { decimalInput, parseDecimalPiastres } from '../commerce/money-input.js';
 import { getCatalog, getSetting, reorderCategory, updateSetting } from '../gift-box/api.js';
 import { componentLabel } from '../gift-box/state.mjs';
+import { compareOwnerStartingPrices } from '../gift-box/owner-starting-prices.mjs';
 import '../gift-box/gift-box.css';
 
 const categoryNames = { box: 'Boxes', flower: 'Flowers', plush: 'Plush toys', chocolate: 'Chocolates', ribbon: 'Ribbons', gift_card: 'Gift card' };
@@ -80,6 +81,67 @@ function CategoryOrder({ category, components, onSaved }) {
   function move(index, delta) { const next = [...ordered]; [next[index], next[index + delta]] = [next[index + delta], next[index]]; setOrdered(next); mutation.reset(); }
   return <details className="gb-order"><summary>Reorder {categoryNames[category].toLowerCase()}</summary><p>Move options, then save the complete category. Saved revisions protect every row.</p><ol>{ordered.map((item, index) => <li key={item.componentId}><span>{componentLabel(item)}</span><button type="button" disabled={index === 0 || mutation.isPending} aria-label={`Move ${item.componentId} up`} onClick={() => move(index, -1)}>Up</button><button type="button" disabled={index === ordered.length - 1 || mutation.isPending} aria-label={`Move ${item.componentId} down`} onClick={() => move(index, 1)}>Down</button></li>)}</ol><button className="button button-secondary" disabled={mutation.isPending} onClick={() => mutation.mutate()}>Save category order</button>{mutation.isSuccess && <p role="status">Category order saved.</p>}{mutation.error && <p role="alert">{commerceError(mutation.error)}</p>}<EditConflict error={mutation.error} onReload={async () => { const latest = await getCatalog(undefined, true); setOrdered(latest.components.filter(item => item.category === category)); mutation.reset(); }}/></details>;
 }
+function StartingPricesReview({ onSaved }) {
+  const [preview, setPreview] = useState(null);
+  const [confirmed, setConfirmed] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [progress, setProgress] = useState('');
+  const [problem, setProblem] = useState('');
+  const [result, setResult] = useState('');
+  const scan = async () => {
+    if (working) return;
+    setProblem(''); setResult(''); setConfirmed(false);
+    try {
+      const fresh = await getCatalog(undefined, true);
+      setPreview(compareOwnerStartingPrices(fresh.components));
+    } catch (error) { setPreview(null); setProblem(commerceError(error)); }
+  };
+  const apply = async () => {
+    if (!confirmed || !preview || preview.conflicts.length || working) return;
+    setWorking(true); setProblem(''); setResult('');
+    let saved = 0;
+    try {
+      // Recheck all revisions and amounts immediately before beginning. Abort on any drift.
+      const fresh = await getCatalog(undefined, true);
+      const current = compareOwnerStartingPrices(fresh.components);
+      if (JSON.stringify(current) !== JSON.stringify(preview)) throw new Error('Settings changed. Review the price plan again before applying.');
+      for (const { componentId, patch } of current.updates) {
+        setProgress(`Saving ${saved + 1} / ${current.updates.length} — ${componentId}`);
+        await updateSetting(componentId, patch);
+        saved += 1;
+      }
+      setProgress('');
+      setResult(`${saved} component settings saved through the authenticated admin API. No inventory, availability, checkout or packing policy was changed.`);
+      setPreview(null); setConfirmed(false);
+    } catch (error) {
+      setProgress('');
+      setProblem(`Stopped after ${saved} successful saves. ${commerceError(error)} Review again to resume; saved records will be skipped. No automatic retries were made.`);
+      setPreview(null); setConfirmed(false);
+    } finally {
+      setWorking(false);
+      await onSaved();
+    }
+  };
+  return <section className="admin-panel" aria-label="Owner starting prices review">
+    <h2>One-time starting price setup</h2>
+    <p className="gb-help">Review the owner's October 28 prices for 74 fixed Gift Box components. Only currently missing prices and names can be saved. Existing different approved prices are protected. This does not approve inventory, physical packing, availability or gift checkout.</p>
+    <button type="button" className="button button-secondary" onClick={scan} disabled={working}>Review starting prices</button>
+    {preview && <div role="region" aria-label="Starting price change preview">
+      <p><strong>{preview.updates.length}</strong> updates · <strong>{preview.unchanged.length}</strong> already correct · <strong>{preview.conflicts.length}</strong> price conflicts</p>
+      <p className="gb-help">Boxes EGP 200 · Roses EGP 30 · Plush EGP 500 · Chocolates EGP 100 · Ribbons EGP 50 · Gift card EGP 50. Print and engraving option pricing is managed separately.</p>
+      {preview.conflicts.length > 0 && <p role="alert">Existing approved prices differ for: {preview.conflicts.map(item => item.componentId).join(', ')}. The import is blocked; review those settings individually.</p>}
+      {preview.updates.length > 0 && preview.conflicts.length === 0 && <>
+        <label className="gb-check"><input type="checkbox" disabled={working} checked={confirmed} onChange={event => setConfirmed(event.target.checked)}/>I confirm these are the current approved prices to save in production. No stock availability is being approved.</label>
+        <button type="button" className="button button-primary" disabled={!confirmed || working} onClick={apply}>{working ? 'Applying…' : `Save ${preview.updates.length} approved price records`}</button>
+      </>}
+      {preview.updates.length === 0 && preview.conflicts.length === 0 && <p role="status">All 74 starting prices are already saved. No action required.</p>}
+    </div>}
+    {progress && <p role="status">{progress}</p>}
+    {result && <p role="status">{result}</p>}
+    {problem && <p role="alert">{problem}</p>}
+  </section>;
+}
+
 export default function AdminGiftBoxComponentsPage() {
   const session = useSession(), cache = useQueryClient();
   const [category, setCategory] = useState('box');
@@ -88,6 +150,7 @@ export default function AdminGiftBoxComponentsPage() {
   const components = (query.data?.components || []).filter(item => item.category === category);
   async function saved() { await Promise.all([cache.invalidateQueries({ queryKey: key }), cache.invalidateQueries({ queryKey: ['gift-box', 'catalog'] }), cache.invalidateQueries({ queryKey: ['private', session.ownerKey, 'gift-box-estimate'] })]); }
   return <AdminLayout title="Gift Box Components" description="Edit names, order, approved prices and availability for the fixed builder catalog. Identities, artwork, colors and placement rules are code-owned." busy={query.isPending}>
+    {!query.isPending && !query.error && <StartingPricesReview onSaved={saved}/>}
     {query.isPending ? <p role="status">Loading fixed components…</p> : query.error ? <div className="admin-state"><p role="alert">{commerceError(query.error)}</p><button onClick={() => query.refetch()}>Retry components</button></div> : <>
       <label className="gb-category-label">Component category<select value={category} onChange={event => setCategory(event.target.value)}>{Object.entries(categoryNames).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
       {!components.length ? <p className="gb-empty">No approved fixed definitions exist in this category yet.</p> : <><CategoryOrder key={category} category={category} components={components} onSaved={saved}/><div className="gb-settings">{components.map(item => <SettingEditor key={item.componentId} component={item} onSaved={saved}/>)}</div></>}
