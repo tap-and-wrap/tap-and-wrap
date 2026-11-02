@@ -124,7 +124,7 @@ function StartingPricesReview({ onSaved }) {
   };
   return <section className="admin-panel" aria-label="Owner starting prices review">
     <h2>One-time starting price setup</h2>
-    <p className="gb-help">Review the owner's October 28 prices for 74 fixed Gift Box components. Only currently missing prices and names can be saved. Existing different approved prices are protected. This does not approve inventory, physical packing, availability or gift checkout.</p>
+    <p className="gb-help">Review the owner&apos;s October 28 prices for 74 fixed Gift Box components. Only currently missing prices and names can be saved. Existing different approved prices are protected. This does not approve inventory, physical packing, availability or gift checkout.</p>
     <button type="button" className="button button-secondary" onClick={scan} disabled={working}>Review starting prices</button>
     {preview && <div role="region" aria-label="Starting price change preview">
       <p><strong>{preview.updates.length}</strong> updates · <strong>{preview.unchanged.length}</strong> already correct · <strong>{preview.conflicts.length}</strong> price conflicts</p>
