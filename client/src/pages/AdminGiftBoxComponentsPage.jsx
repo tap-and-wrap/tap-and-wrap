@@ -9,6 +9,7 @@ import { decimalInput, parseDecimalPiastres } from '../commerce/money-input.js';
 import { getCatalog, getSetting, reorderCategory, updateSetting } from '../gift-box/api.js';
 import { componentLabel } from '../gift-box/state.mjs';
 import { compareOwnerStartingPrices } from '../gift-box/owner-starting-prices.mjs';
+import { planMadeToOrderActivation } from '../gift-box/made-to-order-activation.mjs';
 import '../gift-box/gift-box.css';
 
 const categoryNames = { box: 'Boxes', flower: 'Flowers', plush: 'Plush toys', chocolate: 'Chocolates', ribbon: 'Ribbons', gift_card: 'Gift card' };
@@ -61,14 +62,13 @@ function SettingEditor({ component, onSaved }) {
       <label>Approved price (EGP)<input name="pricePiastres" type="text" inputMode="decimal" pattern="[0-9]+(?:[.][0-9]{1,2})?" value={price} onChange={event => { setPrice(event.target.value); setComplimentary(false); setValidationError(null); }}/></label>
       <p className="gb-help">Leave blank for unpriced. Enter EGP with at most two decimal places; saving a positive amount approves that price.</p>
       {/^0+(?:\.0{1,2})?$/.test(price) && loaded.pricePiastres !== 0 && <label className="gb-check"><input name="confirmComplimentary" type="checkbox" required checked={complimentary} onChange={event => setComplimentary(event.target.checked)}/>Explicitly approve this component as complimentary</label>}
-      <label className="gb-check"><input name="enabled" type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)}/>Enabled</label>
-      <label className="gb-check"><input name="available" type="checkbox" checked={available} onChange={event => setAvailable(event.target.checked)}/>{ribbon ? 'In stock' : 'Available'}</label>
-      {ribbon ? <p className="gb-help">Ribbon availability uses the In stock toggle. Ribbons have no numeric stock.</p> : <>
+      <label className="gb-check"><input name="available" type="checkbox" checked={enabled && available} onChange={event => { setEnabled(true); setAvailable(event.target.checked); }}/>{ribbon ? 'In stock' : 'Available to make'}</label>
+      {ribbon ? <p className="gb-help">Ribbons have no numeric stock. Use the availability checkbox.</p> : <details><summary>Advanced inventory settings</summary>
         <label>Inventory mode<select name="inventoryMode" value={inventoryMode} onChange={event => { setInventoryMode(event.target.value); setConfirmQuantity(false); }}><option value="" disabled>Not configured</option><option value="tracked">Tracked stock</option><option value="made_to_order">Made to order</option></select></label>
         {inventoryMode === 'tracked' && <label>Stock quantity<input name="inventoryQuantity" type="text" inputMode="numeric" pattern="[0-9]+" required value={quantity} onChange={event => { setQuantity(event.target.value); setConfirmQuantity(false); setValidationError(null); }}/></label>}
         {switchingToTracked && <label className="gb-check"><input name="confirmInventoryQuantity" type="checkbox" required checked={confirmQuantity} onChange={event => setConfirmQuantity(event.target.checked)}/>Confirm this tracked stock quantity</label>}
         {inventoryMode === 'made_to_order' && <p className="gb-help">Made to order uses availability without a numeric stock limit. Any saved stock quantity is preserved.</p>}
-      </>}
+      </details>}
       <button className="button button-primary" type="submit">{mutation.isPending ? 'Saving…' : 'Save component settings'}</button>
     </fieldset>
     {mutation.error && <p role="alert">{commerceError(mutation.error)}</p>}{mutation.isSuccess && <p role="status">Component settings saved.</p>}
@@ -142,6 +142,52 @@ function StartingPricesReview({ onSaved }) {
   </section>;
 }
 
+function MadeToOrderActivation({ onSaved }) {
+  const [preview, setPreview] = useState(null), [confirmed, setConfirmed] = useState(false);
+  const [working, setWorking] = useState(false), [message, setMessage] = useState('');
+  async function scan() {
+    setMessage(''); setConfirmed(false); setPreview(null);
+    try { setPreview(planMadeToOrderActivation((await getCatalog(undefined, true)).components)); }
+    catch (error) { setMessage(commerceError(error)); }
+  }
+  async function apply() {
+    if (!confirmed || !preview || working || preview.conflicts.length) return;
+    setWorking(true); setMessage('');
+    let saved = 0;
+    try {
+      const current = planMadeToOrderActivation((await getCatalog(undefined, true)).components);
+      if (JSON.stringify(current) !== JSON.stringify(preview)) throw new Error('Availability settings changed; review again before saving.');
+      for (const { componentId, patch } of current.updates) {
+        setMessage(`Saving ${saved + 1} / ${current.updates.length} — ${componentId}`);
+        await updateSetting(componentId, patch);
+        saved += 1;
+      }
+      const after = planMadeToOrderActivation((await getCatalog(undefined, true)).components);
+      if (after.updates.length || after.conflicts.length) throw new Error('Some settings still need review.');
+      setMessage(`All 74 components are enabled and available; 53 made to order and 21 status-only ribbons. Saved ${saved} updates. No prices, checkout settings or packing approvals were changed.`);
+      setPreview(null); setConfirmed(false);
+    } catch (error) {
+      setMessage(`Stopped after ${saved} saves: ${commerceError(error)}. Review again to safely resume; no automatic retries.`);
+      setPreview(null); setConfirmed(false);
+    } finally { setWorking(false); await onSaved(); }
+  }
+  return <section className="admin-panel" aria-label="Made to order availability">
+    <h2>Made-to-order availability</h2>
+    <p className="gb-help">All 74 components can be available without numeric stock. Existing prices stay untouched. This does not enable checkout or assert unlimited physical capacity.</p>
+    <button type="button" className="button button-secondary" disabled={working} onClick={scan}>Review all component availability</button>
+    {preview && <div role="region" aria-label="Availability plan">
+      <p>{preview.updates.length} to update · {preview.unchanged.length} already configured · {preview.conflicts.length} conflicts</p>
+      {preview.conflicts.length > 0 && <p role="alert">Cannot apply until resolved: {preview.conflicts.map(x => x.id).join(', ')}</p>}
+      {preview.updates.length > 0 && preview.conflicts.length === 0 && <>
+        <label className="gb-check"><input type="checkbox" checked={confirmed} disabled={working} onChange={e => setConfirmed(e.target.checked)}/>I confirm all 74 components are available and the non-ribbon items are made to order. Packing and checkout are separate.</label>
+        <button type="button" className="button button-primary" disabled={!confirmed || working} onClick={apply}>{working ? 'Applying…' : `Save ${preview.updates.length} availability updates`}</button>
+      </>}
+      {preview.updates.length === 0 && preview.conflicts.length === 0 && <p role="status">All 74 are already available and configured.</p>}
+    </div>}
+    {message && <p role="status">{message}</p>}
+  </section>;
+}
+
 export default function AdminGiftBoxComponentsPage() {
   const session = useSession(), cache = useQueryClient();
   const [category, setCategory] = useState('box');
@@ -150,7 +196,8 @@ export default function AdminGiftBoxComponentsPage() {
   const components = (query.data?.components || []).filter(item => item.category === category);
   async function saved() { await Promise.all([cache.invalidateQueries({ queryKey: key }), cache.invalidateQueries({ queryKey: ['gift-box', 'catalog'] }), cache.invalidateQueries({ queryKey: ['private', session.ownerKey, 'gift-box-estimate'] })]); }
   return <AdminLayout title="Gift Box Components" description="Edit names, order, approved prices and availability for the fixed builder catalog. Identities, artwork, colors and placement rules are code-owned." busy={query.isPending}>
-    {!query.isPending && !query.error && <StartingPricesReview onSaved={saved}/>}
+    {!query.isPending && !query.error && (query.data?.components?.length === 74 && query.data.components.every(item => item.pricing === "paid" && Number.isSafeInteger(item.pricePiastres) && item.pricePiastres > 0) ? <section className="admin-panel"><p role="status">All 74 component prices are saved and approved. No price import needed.</p></section> : <StartingPricesReview onSaved={saved}/>)}
+    {!query.isPending && !query.error && <MadeToOrderActivation onSaved={saved}/> }
     {query.isPending ? <p role="status">Loading fixed components…</p> : query.error ? <div className="admin-state"><p role="alert">{commerceError(query.error)}</p><button onClick={() => query.refetch()}>Retry components</button></div> : <>
       <label className="gb-category-label">Component category<select value={category} onChange={event => setCategory(event.target.value)}>{Object.entries(categoryNames).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
       {!components.length ? <p className="gb-empty">No approved fixed definitions exist in this category yet.</p> : <><CategoryOrder key={category} category={category} components={components} onSaved={saved}/><div className="gb-settings">{components.map(item => <SettingEditor key={item.componentId} component={item} onSaved={saved}/>)}</div></>}

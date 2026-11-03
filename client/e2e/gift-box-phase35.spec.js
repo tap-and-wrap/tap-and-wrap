@@ -54,7 +54,7 @@ test('mixed draft proportions, layering, drag, remove and undo preserve server p
   for(const color of ['yellow','black'])await page.getByRole('button',{name:`Add Fixture rose-${color}`,exact:true}).click();
   await page.locator('.gb-steps button').nth(2).click();await page.getByRole('button',{name:'Add Fixture plush-1',exact:true}).click();
   await page.locator('.gb-steps button').nth(3).click();await page.getByRole('button',{name:/Load More/}).click();await page.getByRole('button',{name:'Add Fixture chocolate-20',exact:true}).click();
-  await expect(page.locator('.gb-price-summary strong')).toContainText('60.00');
+  await expect(page.locator('.gb-price-summary strong')).toContainText('Price on request');
   const toy=page.locator('.gb-placed[aria-label^="Move Fixture plush-1"]');
   const toyBounds=await toy.boundingBox(),roseBounds=await rose.boundingBox();expect(toyBounds.height).toBeGreaterThan(roseBounds.height*2);
   await top(page);await capture(page,info,'desktop-mixed-arrangement-after.png',{fullPage:true});
@@ -69,7 +69,7 @@ test('Step 6 keeps solid ribbon choices and a plain Unicode gift-card message',a
   await page.getByLabel('Your personal message').fill('A little something, chosen just for you.\nSynthetic review message.');
   await top(page);await capture(page,info,'step-5-finishing-touches.png',{fullPage:true});
   await page.getByLabel('Your personal message').fill('💐'.repeat(500));await expect(page.getByText('500 / 500 characters')).toBeVisible();await page.getByLabel('Your personal message').press('x');await expect(page.getByLabel('Your personal message')).toHaveValue('💐'.repeat(500));
-  await expect(page.locator('.gb-options-ribbon button')).toHaveCount(12);await expect(page.locator('.gb-price-summary strong')).toContainText('20.00');
+  await expect(page.locator('.gb-options-ribbon button')).toHaveCount(12);await expect(page.locator('.gb-price-summary strong')).toContainText('Price on request');
 });
 test('restricted admin review exposes fixed fields and explicit price approval only',async({page},info)=>{
   await giftBoxFixture(page,{role:'admin'});await page.goto('/admin/gift-box/components');await page.getByLabel('Component category').selectOption('chocolate');
@@ -86,7 +86,7 @@ test('box 11 review starts with two circular floor proposals and unchanged submi
 test.describe('touch and reduced motion',()=>{
   test.use({hasTouch:true,isMobile:true,viewport:{width:390,height:844},reducedMotion:'reduce'});
   test('touch drag, keyboard alternatives and state changes make no pointer pricing requests',async({page,context})=>{
-    const fixture=await giftBoxFixture(page);await beginGiftBox(page);await page.locator('.gb-steps button').nth(1).click();await page.getByRole('button',{name:'Add Fixture rose-red',exact:true}).tap();await expect(page.locator('.gb-price-summary strong')).toContainText('20.00');
+    const fixture=await giftBoxFixture(page);await beginGiftBox(page);await page.locator('.gb-steps button').nth(1).click();await page.getByRole('button',{name:'Add Fixture rose-red',exact:true}).tap();await expect(page.locator('.gb-price-summary strong')).toContainText('Price on request');
     const item=page.locator('.gb-placed');await item.scrollIntoViewIfNeeded();const before=await item.getAttribute('style'),rect=await item.boundingBox(),calls=fixture.estimates.length;
     const cdp=await context.newCDPSession(page),point={x:rect.x+rect.width/2,y:rect.y+rect.height/2};
     await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{...point,id:1}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:point.x+30,y:point.y+18,id:1}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await cdp.detach();
