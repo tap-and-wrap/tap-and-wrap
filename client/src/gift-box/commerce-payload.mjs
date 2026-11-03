@@ -5,13 +5,14 @@ import { estimateSelection } from './state.mjs';
 
 const uuid = value => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value);
 const unit = value => Number.isFinite(value) && value >= 0 && value <= 1;
-const fail = () => { throw new Error('Choose a box and ribbon and arrange every selected item before cart review.'); };
+const fail = () => { throw new Error('Choose a box and arrange every selected item before cart review.'); };
 
 // This is a browser proposal only, with no prices, stock or approval assertions.
 // The server validates it again and derives the permanent canonical identity.
 export function prepareGiftBoxCommerceConfiguration(state, { cardId } = {}) {
   if (!state || !Array.isArray(state.instances) || state.instances.length > 200
-    || getFixedComponent(state.boxId)?.category !== 'box' || getFixedComponent(state.ribbonId)?.category !== 'ribbon') fail();
+    || getFixedComponent(state.boxId)?.category !== 'box'
+    || (state.ribbonId !== null && getFixedComponent(state.ribbonId)?.category !== 'ribbon')) fail();
   const selection = estimateSelection(state, cardId);
   if (!selection || selection.items.some(item => item.quantity > 100)
     || selection.giftCard && getFixedComponent(selection.giftCard.componentId)?.category !== 'gift_card') fail();

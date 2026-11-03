@@ -29,7 +29,7 @@ function personalizationDefinitions(value) {
 }
 function giftBox(value, { admin }) {
   if (!value || !['gift-box-order-v1','gift-box-order-v2'].includes(value.snapshotVersion) || !Array.isArray(value.components)
-    || value.components.length < 2 || value.components.length > 103
+    || value.components.length < 1 || value.components.length > 103
     || !value.components.every(component => component && typeof component === 'object' && typeof component.componentId === 'string'
       && typeof component.displayName === 'string' && ['box', 'flower', 'plush', 'chocolate', 'ribbon', 'gift_card'].includes(component.category)
       && ['quantityPerBox', 'quantityForLine'].every(key => Number.isSafeInteger(component[key]) && component[key] > 0)
@@ -37,7 +37,7 @@ function giftBox(value, { admin }) {
       && component.inventory?.owner === 'GiftBoxComponentSetting' && ['tracked', 'made_to_order', 'status_only'].includes(component.inventory.mode)
       && ['requiredQuantity', 'trackedDemand'].every(key => Number.isSafeInteger(component.inventory[key]) && component.inventory[key] >= 0))
     || value.components.filter(component => component.category === 'box').length !== 1
-    || value.components.filter(component => component.category === 'ribbon').length !== 1
+    || value.components.filter(component => component.category === 'ribbon').length > 1
     || !value.configuration || typeof value.configuration !== 'object' || !value.configuration.selection
     || !Array.isArray(value.configuration.selection.items) || !Array.isArray(value.configuration.placements)
     || !value.configuration.placements.every(item => item && typeof item.componentId === 'string' && typeof item.instanceId === 'string'
@@ -48,10 +48,11 @@ function giftBox(value, { admin }) {
   const selected = component => pick(component, ['componentId', 'category', 'displayName', 'quantityPerBox', 'quantityForLine']);
   const configuration = value.configuration || {}, selection = configuration.selection || {};
   const ribbon = components.find(component => component.category === 'ribbon');
+  if (Boolean(selection.ribbonId) !== Boolean(ribbon) || (ribbon && ribbon.componentId !== selection.ribbonId)) return null;
   const result = { snapshotVersion: value.snapshotVersion,
     box: selected(components.find(component => component.category === 'box')),
     items: components.filter(component => ['flower', 'plush', 'chocolate'].includes(component.category)).map(selected),
-    ribbon: { ...selected(ribbon), ...pick(ribbon, ['colorHex']) },
+    ribbon: ribbon ? { ...selected(ribbon), ...pick(ribbon, ['colorHex']) } : null,
     giftCard: { selected: Boolean(selection.giftCard), ...(selection.giftCard ? pick(selection.giftCard, ['message']) : {}) },
     components: components.map(component => ({ ...pick(component, ['componentId', 'category', 'displayName', 'unit', 'quantityPerBox', 'quantityForLine', 'unitPricePiastres', 'perBoxSubtotalPiastres', 'lineSubtotalPiastres']),
       ...(admin ? { ...pick(component, ['priceApproval', 'priceApprovedBy', 'priceApprovedAt', 'settingsRevision']),

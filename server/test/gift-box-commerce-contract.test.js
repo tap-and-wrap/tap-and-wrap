@@ -20,14 +20,17 @@ function input() {
 const identify = value => identifyGiftBoxConfiguration(value).configurationId;
 const invalid = value => assert.equal(giftBoxV2CommerceInput.safeParse(value).success, false);
 
-test('direct commerce is versioned separately from the request contract and requires a ribbon', () => {
+test('direct commerce is versioned separately from requests and supports an optional ribbon', () => {
   const raw = input();
   assert.equal(giftBoxV2CommerceInput.safeParse(raw).success, true);
   assert.equal(giftBoxV2RequestInput.safeParse(raw).success, false);
   invalid({ ...raw, kind: 'gift-box-v2' });
   invalid({ ...raw, requestKey: randomUUID() });
   invalid({ ...raw, customer: { name: 'Not part of configuration' } });
-  invalid({ ...raw, selection: { ...raw.selection, ribbonId: null } });
+  const withoutRibbon = { ...raw, selection: { ...raw.selection, ribbonId: null } };
+  assert.equal(giftBoxV2CommerceInput.safeParse(withoutRibbon).success, true);
+  assert.equal(canonicalizeGiftBoxConfiguration(withoutRibbon).selection.ribbonId, null);
+  assert.notEqual(identify(raw), identify(withoutRibbon));
   const missing = input(); delete missing.selection.ribbonId; invalid(missing);
   for (const field of ['contractVersion', 'catalogVersion', 'assetVersion', 'geometryVersion', 'draftGeometryVersion', 'coordinateSystem']) invalid({ ...raw, [field]: 'unsupported-version' });
 });

@@ -44,9 +44,9 @@ export const giftBoxOrderLineInput = z.object({
     snapshotVersion: z.enum([GIFT_BOX_ORDER_SNAPSHOT_VERSION, PERSONAL_GIFT_BOX_ORDER_SNAPSHOT_VERSION]),
     configuration: giftBoxV2CommerceInput,
     configurationId: z.string().regex(/^gift-box-configuration-v1:[a-f0-9]{64}$/),
-    components: z.array(component).min(2).max(103),
+    components: z.array(component).min(1).max(103),
     fulfillment: z.object({ directCommerceEligible: z.literal(true), physicalFitCertifiedByGeometry: z.literal(false), policyReference }).strict(),
-    inventoryClaims: z.array(claim).min(2).max(103),
+    inventoryClaims: z.array(claim).min(1).max(103),
     artwork: z.object({ status: z.literal('unavailable') }).strict(),
     personalization: personalizedSnapshot.optional(),
   }).strict(),
@@ -59,7 +59,8 @@ export const giftBoxOrderLineInput = z.object({
   if (identity.configurationId !== saved.configurationId || JSON.stringify(identity.configuration) !== JSON.stringify(saved.configuration)) fail('Save the server-derived canonical configuration and identity.');
   const selection = saved.configuration.selection;
   const expected = new Map([{ componentId: selection.boxId, quantity: 1 }, ...selection.items,
-    { componentId: selection.ribbonId, quantity: 1 }, ...(selection.giftCard ? [{ componentId: selection.giftCard.componentId, quantity: 1 }] : [])]
+    ...(selection.ribbonId ? [{ componentId: selection.ribbonId, quantity: 1 }] : []),
+    ...(selection.giftCard ? [{ componentId: selection.giftCard.componentId, quantity: 1 }] : [])]
     .map(item => [item.componentId, item.quantity]));
   if (new Set(saved.components.map(item => item.componentId)).size !== saved.components.length || saved.components.length !== expected.size) fail('Snapshot every selected component exactly once.');
   if (new Set(saved.inventoryClaims.map(item => item.id)).size !== saved.inventoryClaims.length || saved.inventoryClaims.length !== expected.size) fail('Save one explicit inventory source per component.');

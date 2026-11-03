@@ -21,7 +21,7 @@ export default function GiftBoxOrderDetails({ giftBox, admin = false }) {
         const items = components.filter(item => item.category === category);
         return <div key={category}><dt>{label}</dt><dd>{items.length ? <ul>{items.map(item => <li key={item.componentId}>{item.displayName} × {item.quantityPerBox}</li>)}</ul> : 'None selected'}</dd></div>;
       })}
-      <div><dt>Ribbon</dt><dd className="commerce-gift-ribbon">{ribbonColor && <span aria-hidden="true" className="commerce-gift-swatch" style={{ backgroundColor: ribbonColor }} />}{giftBox.ribbon?.displayName || 'Saved ribbon details unavailable'}</dd></div>
+      <div><dt>Ribbon</dt><dd className="commerce-gift-ribbon">{ribbonColor && <span aria-hidden="true" className="commerce-gift-swatch" style={{ backgroundColor: ribbonColor }} />}{giftBox.ribbon ? (giftBox.ribbon.displayName || 'Saved ribbon details unavailable') : 'No ribbon selected'}</dd></div>
       <div><dt>Gift card</dt><dd>{giftBox.giftCard?.selected ? 'Selected' : 'Not selected'}</dd></div>
     </dl>
     {giftBox.giftCard?.selected && (message ? <details className="commerce-gift-message"><summary>View gift-card message</summary><p>{message}</p></details> : <p className="commerce-muted">Gift card without a message.</p>)}

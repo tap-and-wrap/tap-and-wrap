@@ -87,7 +87,8 @@ export function assertGiftBoxFulfillment(rawConfiguration, rawPolicy) {
   if (policy.status !== 'approved') throw builderError(409, 'GIFT_BOX_FULFILLMENT_UNAPPROVED', 'This box requires an approved physical fulfillment policy.');
   if (policy.boxId !== configuration.selection.boxId) throw builderError(409, 'GIFT_BOX_FULFILLMENT_POLICY_MISMATCH', 'Use the current policy for the selected box.');
   const rules = new Map(policy.componentRules.map(rule => [rule.componentId, rule]));
-  const selection = [...configuration.selection.items, { componentId: configuration.selection.ribbonId, quantity: 1 },
+  const selection = [...configuration.selection.items,
+    ...(configuration.selection.ribbonId ? [{ componentId: configuration.selection.ribbonId, quantity: 1 }] : []),
     ...(configuration.selection.giftCard ? [{ componentId: configuration.selection.giftCard.componentId, quantity: 1 }] : [])];
   for (const item of selection) {
     const rule = rules.get(item.componentId);

@@ -14,7 +14,7 @@ const coordinate = z.number().finite().min(0).max(1).transform(value => value ==
 const selection = z.object({
   boxId: recognizedId(['box']),
   items: z.array(z.object({ componentId: recognizedId(['flower', 'plush', 'chocolate']), quantity: z.number().int().min(1).max(MAX_ITEM_QUANTITY) }).strict()).max(100).default([]),
-  ribbonId: recognizedId(['ribbon']),
+  ribbonId: recognizedId(['ribbon']).nullable(),
   giftCard: z.object({ componentId: recognizedId(['gift_card']), message: giftCardMessage.default('') }).strict().nullable().default(null),
 }).strict().superRefine((input, context) => {
   if (new Set(input.items.map(item => item.componentId)).size !== input.items.length) context.addIssue({ code: 'custom', path: ['items'], message: 'Each component must occur in one quantity line.' });

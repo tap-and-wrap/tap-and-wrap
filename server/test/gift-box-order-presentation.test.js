@@ -24,6 +24,31 @@ const orderRecord = (gift = line()) => ({ _id: '507f1f77bcf86cd799439012', owner
   orderNumber: '123456', customer: { name: 'Fixture buyer' }, lines: [gift], totals: { subtotalPiastres: gift.lineTotalPiastres, totalPiastres: gift.lineTotalPiastres, shippingPiastres: null, discountPiastres: 0 },
   paymentMethod: 'instapay', paymentState: 'awaiting_transfer', accountingVersion: 1, personalized: true, allowedPaymentMethods: ['instapay'], history: [] });
 
+test('a box-only gift without a ribbon produces one valid immutable priced component', () => {
+  const bare = giftCartConfiguration({ roses: 0, plush: false, chocolate: false, card: false });
+  bare.selection.ribbonId = null;
+  const saved = line({ configuration: bare });
+  assert.equal(saved.giftBox.components.length, 1);
+  assert.equal(saved.giftBox.components[0].componentId, 'box-2');
+  assert.equal(saved.unitPricePiastres, 20000);
+  assert.equal(giftBoxOrderLineInput.safeParse(saved).success, true);
+  assert.equal(presentOrder(orderRecord(saved)).lines[0].giftBox.ribbon, null);
+});
+
+test('optional No ribbon gift snapshots preserve correct pricing and customer/admin visibility', () => {
+  const noRibbon = giftCartConfiguration();
+  noRibbon.selection.ribbonId = null;
+  const saved = line({ configuration: noRibbon });
+  assert.equal(giftBoxOrderLineInput.safeParse(saved).success, true);
+  assert.equal(saved.giftBox.components.some(component => component.category === 'ribbon'), false);
+  const customer = presentOrder(orderRecord(saved));
+  assert.equal(customer.lines[0].giftBox.ribbon, null);
+  assert.equal(customer.lines[0].lineTotalPiastres, saved.lineTotalPiastres);
+  const admin = presentOrder(orderRecord(saved), { admin: true });
+  assert.equal(admin.lines[0].giftBox.ribbon, null);
+  assert.equal(admin.lines[0].giftBox.configuration.selection.ribbonId, null);
+});
+
 test('gift order snapshot preserves complete canonical arrangement, per-box/line prices and explicit inventory sources', () => {
   const gift = line();
   assert.equal(gift.kind, 'gift_box_v2');

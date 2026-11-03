@@ -55,6 +55,14 @@ test('every real box remains physically unapproved and absence never infers a po
   }
 });
 
+test('a valid optional No ribbon selection remains compatible without inventing a charge', () => {
+  const noRibbon = configuration();
+  noRibbon.selection.ribbonId = null;
+  assert.equal(assertGiftBoxFulfillment(noRibbon, policy()).directCommerceEligible, true);
+  const malformed = configuration(); malformed.selection.ribbonId = 'rose-red';
+  assert.throws(() => assertGiftBoxFulfillment(malformed, policy()));
+});
+
 test('approved isolated policy validates explicit compatibility and returns a frozen versioned reference', () => {
   const input = configuration(), rules = policy(), before = structuredClone({ input, rules });
   const result = assertGiftBoxFulfillment(input, rules);

@@ -102,7 +102,7 @@ export function giftBoxCartSummary(configuration, savedSettings = []) {
   const { selection } = parsed.data;
   return { box: { componentId: selection.boxId, displayName: name(selection.boxId) },
     items: selection.items.map(item => ({ componentId: item.componentId, category: getFixedComponent(item.componentId).category, displayName: name(item.componentId), quantity: item.quantity })),
-    ribbon: { componentId: selection.ribbonId, displayName: name(selection.ribbonId), colorHex: getFixedComponent(selection.ribbonId).approvedColorHex },
+    ribbon: selection.ribbonId ? { componentId: selection.ribbonId, displayName: name(selection.ribbonId), colorHex: getFixedComponent(selection.ribbonId).approvedColorHex } : null,
     giftCard: selection.giftCard ? { selected: true, message: selection.giftCard.message } : { selected: false },
     artwork: { status: 'unavailable' } };
 }
