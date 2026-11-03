@@ -8,7 +8,8 @@ import GiftBoxCartSummary from '../commerce/GiftBoxCartSummary.jsx';
 export default function CartPage() {
   const { cart, checkoutEnabled, loading, error, pending, setQuantity, remove, clear, refresh } = useCart();
   const invalid = cart.items.some((item) => !item.valid);
-  const giftCheckoutBlocked = cart.items.some((item) => item.kind === 'gift_box_v2');
+  // The server calculates checkout eligibility from current prices, settings
+  // and launch authorization. A gift is not categorically non-checkoutable.
   if (loading) return <main className="commerce-page"><p role="status">Loading your cart…</p></main>;
   if (error) return <main className="commerce-page"><h1>Your Cart</h1><p role="alert">{commerceError(error)}</p><div className="button-group"><button type="button" className="button button-dark" onClick={() => refresh()}>Try again</button><Link className="button button-secondary" to="/shop">Return to shop</Link></div></main>;
   return <main className="commerce-page"><div className="commerce-heading"><div><p className="eyebrow">Thoughtful gifts, ready for you</p><h1>Your Cart</h1></div>{cart.items.length > 0 && <button className="commerce-link-button" disabled={pending} onClick={() => clear().catch(() => {})}>Clear cart</button>}</div>
@@ -38,8 +39,8 @@ export default function CartPage() {
       </article>; })}</section>
       <aside className="commerce-summary"><h2>Order Summary</h2><dl><div><dt>Subtotal</dt><dd>{money(cart.subtotalPiastres)}</dd></div></dl><p className="commerce-muted">Eligible discounts are verified at checkout. Delivery is separate and Pending Confirmation; the owner will contact you on WhatsApp within 12 hours. Availability and approved prices are checked again before ordering.</p>
         {invalid && <p className="form-error">Review unavailable items before checkout.</p>}
-        {giftCheckoutBlocked && <p className="commerce-muted">Gift-box checkout is unavailable while fulfillment and artwork approvals are pending. You can update or remove your saved gift boxes.</p>}
-        {checkoutEnabled && !invalid && !giftCheckoutBlocked ? <Link className="button button-primary" to="/checkout">Proceed to Checkout</Link> : <><button className="button button-primary" disabled>Checkout unavailable</button>{!checkoutEnabled && !giftCheckoutBlocked && <p className="commerce-muted">Ordering has not been enabled yet.</p>}</>}
+
+        {checkoutEnabled && !invalid ? <Link className="button button-primary" to="/checkout">Proceed to Checkout</Link> : <><button className="button button-primary" disabled>Checkout unavailable</button>{!checkoutEnabled && !invalid && <p className="commerce-muted">Ordering is not available for the current cart yet.</p>}</>}
         <Link to="/shop" className="commerce-continue">Continue shopping</Link>
       </aside>
     </div>}

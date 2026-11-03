@@ -20,11 +20,19 @@ const component = z.object({
     requiredQuantity: quantity, trackedDemand: integer }).strict(),
   colorHex: z.string().regex(/^#[a-f0-9]{6}$/i).optional(),
 }).strict();
-const policyReference = z.object({
+const legacyPolicyReference = z.object({
   contractVersion: z.literal('gift-box-fulfillment-policy-v1'), policyId: text, policyVersion: text,
   boxId: text, approvedBy: text, approvedAt: timestamp, catalogVersion: text, assetVersion: text,
   geometryVersion: text, draftGeometryVersion: text,
 }).strict();
+const madeToOrderPolicyReference = z.object({
+  contractVersion: z.literal('gift-box-made-to-order-v1'),
+  policyId: z.literal('merchant-made-to-order'), policyVersion: z.literal('v1'),
+  boxId: text, catalogVersion: text, assetVersion: text,
+  geometryVersion: text, draftGeometryVersion: text,
+}).strict();
+const policyReference = z.discriminatedUnion('contractVersion',
+  [legacyPolicyReference, madeToOrderPolicyReference]);
 const personalizedPhoto = z.object({ uploadId: z.string().regex(/^[a-f0-9]{24}$/), printOptionId: text, zone: z.enum(['inside','beside']),
   x: z.number().min(0).max(1), y: z.number().min(0).max(1), pricePiastres: integer, optionRevision: integer, priceApprovedAt: timestamp }).strict();
 const personalizedEngraving = z.object({ text: z.string().min(1).max(500), styleId: text, colorId: text, surfaceOptionId: text,

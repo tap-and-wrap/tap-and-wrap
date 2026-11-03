@@ -77,6 +77,18 @@ export const giftBoxFulfillmentPolicyInput = z.object({
   }
 });
 
+// Separate owner-authorized business model. This is not a physical-fit
+// certification and does not impersonate the legacy packing-test audit.
+export const GIFT_BOX_FLEXIBLE_POLICY_CONTRACT_VERSION = 'gift-box-made-to-order-v1';
+export function flexibleMadeToOrderFulfillment(rawConfiguration) {
+  const configuration = giftBoxV2CommerceInput.parse(rawConfiguration);
+  return deepFreeze({ directCommerceEligible: true, physicalFitCertifiedByGeometry: false,
+    policyReference: { contractVersion: GIFT_BOX_FLEXIBLE_POLICY_CONTRACT_VERSION,
+      policyId: 'merchant-made-to-order', policyVersion: 'v1', boxId: configuration.selection.boxId,
+      catalogVersion: configuration.catalogVersion, assetVersion: configuration.assetVersion,
+      geometryVersion: configuration.geometryVersion, draftGeometryVersion: configuration.draftGeometryVersion } });
+}
+
 export function assertGiftBoxFulfillment(rawConfiguration, rawPolicy) {
   const configuration = giftBoxV2CommerceInput.parse(rawConfiguration);
   if (!rawPolicy) throw builderError(409, 'GIFT_BOX_FULFILLMENT_UNAPPROVED', 'This box requires a reviewed physical fulfillment policy before direct commerce.');

@@ -6,3 +6,10 @@ export function giftBoxRuntimeCommerceOpen(settings) {
     && settings?.giftBoxBuilderBackendEnabled === true
     && settings?.checkoutEnabled === true;
 }
+
+// New merchant fulfillment uses a separate independent opt-in. It must never
+// disable the existing published physical-policy checkout path.
+export function giftBoxFlexibleMadeToOrderOpen(settings) {
+  return giftBoxRuntimeCommerceOpen(settings)
+    && settings?.giftBoxFlexibleMadeToOrderEnabled === true;
+}

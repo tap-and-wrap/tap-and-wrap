@@ -21,6 +21,9 @@ export const env = {
   // OFF by default. Operational enablement is not a substitute for validated
   // component settings, published physical policies, and private artwork.
   giftBoxDirectCommerceEnabled: process.env.GIFT_BOX_DIRECT_COMMERCE_ENABLED === 'true',
+  // Independent merchant authorization for flexible, fully priced made-to-order gifts.
+  // Never infer this from inventory, imported product state or a public request.
+  giftBoxFlexibleMadeToOrderEnabled: process.env.GIFT_BOX_FLEXIBLE_MADE_TO_ORDER_ENABLED === 'true',
   giftBoxPersonalizationOptionsEnabled: process.env.GIFT_BOX_PERSONALIZATION_OPTIONS_ENABLED === 'true',
   // Explicitly OFF until account merge, file retention and end-to-end personalized checkout pass.
   giftBoxPersonalizedCheckoutEnabled: process.env.GIFT_BOX_PERSONALIZED_CHECKOUT_ENABLED === 'true',

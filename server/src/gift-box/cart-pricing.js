@@ -13,7 +13,7 @@ import { assertInventory } from './inventory.js';
 import { builderError } from './validation.js';
 import { fingerprint } from '../commerce/pricing.js';
 import { loadPublishedGiftBoxPolicies } from './policy-store.js';
-import { giftBoxRuntimeCommerceOpen } from './runtime-commerce.js';
+import { giftBoxRuntimeCommerceOpen, giftBoxFlexibleMadeToOrderOpen } from './runtime-commerce.js';
 import { Upload } from '../models/Upload.js';
 import { GiftBoxPersonalizationOption } from '../models/GiftBoxPersonalizationOption.js';
 import { priceGiftBoxPersonalization } from './personalization-pricing.mjs';
@@ -85,7 +85,7 @@ export async function createGiftBoxCartPricingContext(lines, { session, owner = 
   const giftOptions = optionIds.size ? await GiftBoxPersonalizationOption.find({ optionId: { $in: [...optionIds] } })
     .session(session || null).lean().maxTimeMS(3000) : [];
   const savedSettings = componentIds.size ? await GiftBoxComponentSetting.find({ componentId: { $in: [...componentIds] } }).session(session || null).lean().maxTimeMS(3000) : [];
-  const policies = await loadPublishedGiftBoxPolicies([...boxIds], { session });
+  const policies = giftBoxFlexibleMadeToOrderOpen(env) ? new Map() : await loadPublishedGiftBoxPolicies([...boxIds], { session });
   return { savedSettings, settings: new Map(savedSettings.map(setting => [setting.componentId, setting])), policies,
     giftUploads: new Map(giftUploads.map(upload => [String(upload._id), upload])),
     giftOptions: new Map(giftOptions.map(option => [option.optionId, option])), owner, cartId, personalizationError };
@@ -115,15 +115,17 @@ export function quoteGiftBoxCartLine(line, context, { stored = true } = {}) {
     if (stored && (!z.uuid().safeParse(line.id).success || line.configurationId !== configurationId || line.identity !== configurationId)) {
       throw builderError(409, 'GIFT_BOX_CONFIGURATION_STALE', 'This saved gift configuration needs review. Remove it and create it again.');
     }
-    const policy = trustedPolicy(configuration.selection.boxId, context);
-    const quote = prepareGiftBoxV2CommerceQuote({ configuration, quantity: line.quantity }, context?.savedSettings || [], { fulfillmentPolicy: policy });
+    const flexibleMadeToOrder = giftBoxFlexibleMadeToOrderOpen(env);
+    const policy = flexibleMadeToOrder ? null : trustedPolicy(configuration.selection.boxId, context);
+    const quote = prepareGiftBoxV2CommerceQuote({ configuration, quantity: line.quantity }, context?.savedSettings || [],
+      { fulfillmentPolicy: policy, flexibleMadeToOrder });
     // An owner attestation publishes compatibility, not a commerce launch. A
     // valid persisted policy still cannot open public gift cart additions.
     // Positive integration remains the existing exact-target test composition.
     if (!stored) {
       const synthetic = disposablePolicies?.client === GiftBoxComponentSetting.db.getClient();
       if (synthetic) assertDisposablePoliciesOnly();
-      else if (!giftBoxRuntimeCommerceOpen(env) || context?.policies?.get(configuration.selection.boxId) !== policy) {
+      else if (!giftBoxRuntimeCommerceOpen(env) || !flexibleMadeToOrder && context?.policies?.get(configuration.selection.boxId) !== policy) {
         throw builderError(409, 'GIFT_BOX_CART_LAUNCH_DISABLED', 'Gift-box ordering is not ready for this box. No cart item was added.');
       }
     }
@@ -145,7 +147,8 @@ export function quoteGiftBoxCartLine(line, context, { stored = true } = {}) {
     return { id: line.id, kind: 'gift_box_v2', identity: configurationId, configurationId, configuration,
       name: 'Build Your Gift Box', quantity: quote.quantity, unitPricePiastres, lineTotalPiastres,
       giftBox: giftBoxCartSummary(configuration, context.savedSettings), giftComponents,
-      giftFulfillment: quote.fulfillment, giftPolicyHash: fingerprint(giftBoxFulfillmentPolicyInput.parse(policy)),
+      giftFulfillment: quote.fulfillment, giftPolicyHash: flexibleMadeToOrder
+        ? fingerprint(quote.fulfillment.policyReference) : fingerprint(giftBoxFulfillmentPolicyInput.parse(policy)),
       giftPersonalization: personal, uploadIds: personal?.uploadIds || [], inventoryClaims: [], valid: true,
       checkoutAllowed: giftBoxRuntimeCommerceOpen(env) && (!personal || env.giftBoxPersonalizedCheckoutEnabled), promotionsEligible: false };
   } catch (error) { throw giftCartError(error); }

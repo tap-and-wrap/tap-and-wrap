@@ -5,7 +5,8 @@ import { assertDatabaseWriteAllowed } from '../config/database-safety.js';
 import { assertUploadOwner } from '../commerce/uploads.js';
 import { fingerprint } from '../commerce/pricing.js';
 import { commerceError } from '../commerce/errors.js';
-import { giftBoxFulfillmentPolicyInput } from './fulfillment-policy.js';
+import { giftBoxFulfillmentPolicyInput, GIFT_BOX_FLEXIBLE_POLICY_CONTRACT_VERSION, flexibleMadeToOrderFulfillment } from './fulfillment-policy.js';
+import { giftBoxFlexibleMadeToOrderOpen } from './runtime-commerce.js';
 import { setGiftBoxCartPoliciesForDisposableTest } from './cart-pricing.js';
 
 const capabilities = new WeakMap();
@@ -80,12 +81,25 @@ export async function runGiftBoxCheckoutTestHook(capability, owner, phase, value
 export async function readGiftBoxCheckoutPolicyFences(lines, { session } = {}) {
   const gifts = lines.filter(line => line.kind === 'gift_box_v2');
   if (!gifts.length) return [];
+  const flexible = [], legacy = [];
+  for (const line of gifts) {
+    if (line.giftFulfillment?.policyReference?.contractVersion !== GIFT_BOX_FLEXIBLE_POLICY_CONTRACT_VERSION) {
+      legacy.push(line); continue;
+    }
+    if (!giftBoxFlexibleMadeToOrderOpen(env)) throw commerceError(409, 'GIFT_BOX_CHECKOUT_DISABLED', 'Gift-box ordering is not currently enabled.');
+    const reference = flexibleMadeToOrderFulfillment(line.configuration).policyReference;
+    if (JSON.stringify(reference) !== JSON.stringify(line.giftFulfillment.policyReference)
+      || line.giftPolicyHash !== fingerprint(reference))
+      throw commerceError(409, 'GIFT_BOX_FULFILLMENT_CHANGED', 'Gift-box fulfillment terms changed. Review your order.');
+    if (!flexible.some(item => item.boxId === reference.boxId)) flexible.push({ flexible: true, boxId: reference.boxId, reference, policyHash: fingerprint(reference) });
+  }
+  if (!legacy.length) return flexible;
   const { verifyDatabaseSchema } = await import('../config/schema.js');
   await verifyDatabaseSchema(env, { models: [GiftBoxFulfillmentPolicyFence], timeoutMs: 3000 });
-  const records = await GiftBoxFulfillmentPolicyFence.find({ boxId: { $in: [...new Set(gifts.map(line => line.configuration.selection.boxId))] } }).session(session || null).lean().maxTimeMS(3000);
+  const records = await GiftBoxFulfillmentPolicyFence.find({ boxId: { $in: [...new Set(legacy.map(line => line.configuration.selection.boxId))] } }).session(session || null).lean().maxTimeMS(3000);
   const byBox = new Map(records.map(record => [record.boxId, record]));
-  const result = [];
-  for (const line of gifts) {
+  const result = [...flexible];
+  for (const line of legacy) {
     const record = byBox.get(line.configuration.selection.boxId);
     if (!record || record.status !== 'approved' || record.policyHash !== line.giftPolicyHash
       || record.policyId !== line.giftFulfillment.policyReference.policyId || record.policyVersion !== line.giftFulfillment.policyReference.policyVersion
@@ -99,6 +113,13 @@ export async function readGiftBoxCheckoutPolicyFences(lines, { session } = {}) {
 export async function fenceGiftBoxCheckoutPolicies(records, session) {
   if (!session?.inTransaction()) throw commerceError(503, 'CHECKOUT_TRANSACTION_REQUIRED', 'Policy fences require the order transaction.');
   for (const record of records) {
+    if (record.flexible === true) {
+      if (!giftBoxFlexibleMadeToOrderOpen(env)
+        || record.policyHash !== fingerprint(record.reference)
+        || record.reference.contractVersion !== GIFT_BOX_FLEXIBLE_POLICY_CONTRACT_VERSION)
+        throw commerceError(409, 'GIFT_BOX_FULFILLMENT_CHANGED', 'Gift-box fulfillment terms changed before order acceptance.');
+      continue; // Operational mode has no fictitious packing-test record to update.
+    }
     assertDatabaseWriteAllowed(GiftBoxFulfillmentPolicyFence.db, env);
     const result = await GiftBoxFulfillmentPolicyFence.updateOne({ _id: record._id, boxId: record.boxId, status: 'approved',
       policyId: record.policyId, policyVersion: record.policyVersion, policyHash: record.policyHash, __v: record.__v }, { $inc: { __v: 1 } }, { session });

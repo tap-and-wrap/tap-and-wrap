@@ -21,7 +21,7 @@ export function componentCanSupply(component, quantity = 1) {
   if (component.inventoryMode === 'made_to_order') return true;
   return component.inventoryMode === 'tracked' && Number.isSafeInteger(component.inventoryQuantity) && component.inventoryQuantity >= quantity;
 }
-export function canAdd(state, id, component, publishedBoxLimits, { study = false } = {}) {
+export function canAdd(state, id, component, publishedBoxLimits, { study = false, flexible = false } = {}) {
   const category = getFixedComponent(id)?.category;
   const quantity = counts(state.instances)[id] || 0;
   const categoryCounts = countBuilderCategories(state.instances, item => getFixedComponent(item.componentId)?.category);
@@ -33,19 +33,21 @@ export function canAdd(state, id, component, publishedBoxLimits, { study = false
     && quantity < 100 && state.instances.length < 200 && (component === undefined || componentCanSupply(component, quantity + 1)));
   if (!allowed || !study || category !== 'flower') return allowed;
   const footprint = studyFootprint(state.boxId, id);
-  return Boolean(footprint && findNextRosePosition(state.boxId, { ...footprint, componentId: id }, state.instances));
+  return Boolean(footprint && (findNextRosePosition(state.boxId, { ...footprint, componentId: id }, state.instances)
+    || flexible && initialStudyPosition(state.boxId, { ...footprint, componentId: id }, categoryCounts.flower)));
 }
 export function changeArrangement(state, action) {
   switch (action.type) {
     case 'box': return action.id !== state.boxId && getFixedComponent(action.id)?.category === 'box' ? { ...state, boxId: action.id,
       instances: state.instances.map(item => ({ ...item, ...studyFootprint(action.id,item.componentId), x: null, y: null, placementZone:null, regionId:null, layerBase:null, zone: 'unplaced' })) } : state;
     case 'add': {
-      if (!canAdd(state, action.id, action.component, action.boxLimits, { study: action.study }) || state.instances.some(item => item.id === action.instanceId)) return state;
+      if (!canAdd(state, action.id, action.component, action.boxLimits, { study: action.study, flexible: action.flexible }) || state.instances.some(item => item.id === action.instanceId)) return state;
       const footprint=studyFootprint(state.boxId,action.id,action.reviewSize);
       const item={id:action.instanceId,componentId:action.id,...footprint};
       const existingCount=state.instances.filter(entry=>getFixedComponent(entry.componentId).category===getFixedComponent(action.id).category).length;
       const position = action.study && getFixedComponent(action.id)?.category === 'flower'
-        ? findNextRosePosition(state.boxId, item, state.instances)
+        ? (findNextRosePosition(state.boxId, item, state.instances)
+          || (action.flexible ? initialStudyPosition(state.boxId, item, existingCount) : null))
         : action.study ? initialStudyPosition(state.boxId,item,existingCount) : {x:null,y:null};
       if (action.study && !position) return state;
       return { ...state, instances: [...state.instances, {...item,...position,zone:action.study?'layout-study':'unplaced' }] };

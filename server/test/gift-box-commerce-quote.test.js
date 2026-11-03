@@ -39,6 +39,26 @@ const policy = () => ({ contractVersion: 'gift-box-fulfillment-policy-v1', polic
 const quote = (config = configuration(), snapshot = settings(), quantity = 1, fulfillmentPolicy = policy()) =>
   prepareGiftBoxV2CommerceQuote({ configuration: config, quantity }, snapshot, { fulfillmentPolicy });
 
+test('owner-authorized flexible made-to-order pricing charges every selected component without capacity limits', () => {
+  const config = configuration();
+  config.selection.ribbonId = null;
+  config.selection.items.find(item => item.componentId === 'rose-red').quantity = 40;
+  const placements = Array.from({ length: 40 }, (_, index) => ({ ...config.placements[0],
+    instanceId: `20000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+    componentId: 'rose-red', x: .3, y: .4, layer: index }));
+  config.placements = [...placements, ...config.placements.slice(2)];
+  const saved = settings().map(setting => setting.componentId.startsWith('ribbon-') ? setting :
+    { ...setting, inventoryMode: 'made_to_order', inventoryQuantity: null });
+  const result = prepareGiftBoxV2CommerceQuote({ configuration: config, quantity: 2 }, saved, { flexibleMadeToOrder: true });
+  assert.equal(result.unitPricePiastres, 20000 + 40 * 3000 + 50000 + 10000 + 5000);
+  assert.equal(result.lineTotalPiastres, result.unitPricePiastres * 2);
+  assert.equal(result.components.some(component => component.category === 'ribbon'), false);
+  assert.equal(result.fulfillment.policyReference.contractVersion, 'gift-box-made-to-order-v1');
+  assert.equal(result.physicalFitCertified, false);
+  assert.equal(result.checkoutAllowed, true);
+  assert.ok(result.components.every(component => component.inventory.trackedDemand === 0));
+});
+
 test('pure commerce quote itemizes one completed box and multiplies every component for the cart line', () => {
   const result = quote(configuration(), settings(), 2);
   assert.equal(result.unitPricePiastres, 96000);

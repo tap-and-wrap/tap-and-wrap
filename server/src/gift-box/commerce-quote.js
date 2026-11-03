@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { deepFreeze } from '../../../shared/gift-box/definitions.mjs';
 import { giftBoxV2CommerceInput, identifyGiftBoxConfiguration } from './commerce-contract.js';
-import { assertGiftBoxFulfillment } from './fulfillment-policy.js';
+import { assertGiftBoxFulfillment, flexibleMadeToOrderFulfillment } from './fulfillment-policy.js';
 import { assertInventory } from './inventory.js';
 import { calculateEstimate, multiplyPiastres, requireComponent } from './pricing.js';
 import { builderError } from './validation.js';
@@ -16,7 +16,7 @@ export const giftBoxV2CommerceQuoteInput = z.object({
 // The caller supplies one coherent, saved business-settings snapshot and a policy
 // from trusted server configuration. Neither is accepted in the customer envelope.
 // This module imports no models and performs no reads, writes or provider actions.
-export function prepareGiftBoxV2CommerceQuote(raw, savedSettings, { fulfillmentPolicy = null } = {}) {
+export function prepareGiftBoxV2CommerceQuote(raw, savedSettings, { fulfillmentPolicy = null, flexibleMadeToOrder = false } = {}) {
   const input = giftBoxV2CommerceQuoteInput.parse(raw);
   const { configuration, configurationId } = identifyGiftBoxConfiguration(input.configuration);
   if (!Array.isArray(savedSettings) || savedSettings.some(setting => !setting || typeof setting.componentId !== 'string')
@@ -51,7 +51,8 @@ export function prepareGiftBoxV2CommerceQuote(raw, savedSettings, { fulfillmentP
     };
   });
   const lineTotalPiastres = multiplyPiastres(estimate.componentSubtotalPiastres, input.quantity);
-  const fulfillment = assertGiftBoxFulfillment(configuration, fulfillmentPolicy);
+  const fulfillment = flexibleMadeToOrder
+    ? flexibleMadeToOrderFulfillment(configuration) : assertGiftBoxFulfillment(configuration, fulfillmentPolicy);
   const quoted = {
     quoteVersion: GIFT_BOX_COMMERCE_QUOTE_VERSION, kind: 'gift_box_v2', currency: 'EGP',
     configurationId, configuration, quantity: input.quantity, components,
@@ -60,9 +61,9 @@ export function prepareGiftBoxV2CommerceQuote(raw, savedSettings, { fulfillmentP
     promotions: { eligible: false, reason: 'reviewed_builder_discount_policy_required' },
     // Policy compatibility is only one prerequisite. Artwork/geometry and launch
     // authorization remain independent, closed gates during this foundation phase.
-    directCommerceEligible: false, addToCartAllowed: false, checkoutAllowed: false,
+    directCommerceEligible: flexibleMadeToOrder, addToCartAllowed: flexibleMadeToOrder, checkoutAllowed: flexibleMadeToOrder,
     physicalFitCertified: false, inventoryReserved: false, inventoryDeducted: false,
-    blockers: [...new Set([...estimate.blockers, 'GIFT_BOX_V2_DIRECT_COMMERCE_DISABLED'])],
+    blockers: flexibleMadeToOrder ? [] : [...new Set([...estimate.blockers, 'GIFT_BOX_V2_DIRECT_COMMERCE_DISABLED'])],
   };
   // Current quote identity is deliberately separate from permanent configuration
   // identity. Price/revision/policy/quantity changes require fresh quote review.

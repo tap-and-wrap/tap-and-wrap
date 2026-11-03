@@ -10,7 +10,7 @@ import { approvedPrice, calculateEstimate, requireComponent, selectionLines } fr
 import { builderError, catalogQuery, reorderInput, settingPatch } from './validation.js';
 import { applyInventoryPatch, inventoryEligibility } from './inventory.js';
 import { publishedBoxSelectionLimits, assertBoxSelectionLimits } from './limits.js';
-import { giftBoxRuntimeCommerceOpen } from './runtime-commerce.js';
+import { giftBoxRuntimeCommerceOpen, giftBoxFlexibleMadeToOrderOpen } from './runtime-commerce.js';
 
 export async function ensureBuilderBackend() {
   if (!env.giftBoxBuilderBackendEnabled) throw builderError(404, 'GIFT_BOX_BACKEND_DISABLED', 'The builder backend is not enabled.');
@@ -41,7 +41,8 @@ export async function listBuilderComponents(rawQuery, { admin = false } = {}) {
   const definitions = FIXED_COMPONENTS.filter(item => !input.category || item.category === input.category);
   const settings = await GiftBoxComponentSetting.find({ componentId: { $in: definitions.map(item => item.id) } }).lean().maxTimeMS(3000);
   const byId = new Map(settings.map(item => [item.componentId, item]));
-  const boxLimits = await publishedBoxSelectionLimits();
+  const flexibleMadeToOrder = giftBoxFlexibleMadeToOrderOpen(env);
+  const boxLimits = flexibleMadeToOrder ? {} : await publishedBoxSelectionLimits();
   const categories = ['box', 'flower', 'plush', 'chocolate', 'ribbon', 'gift_card'];
   const ordered = [...definitions].sort((a, b) => categories.indexOf(a.category) - categories.indexOf(b.category)
     || (byId.get(a.id)?.displayOrder ?? a.initialDisplayOrder) - (byId.get(b.id)?.displayOrder ?? b.initialDisplayOrder)
@@ -50,7 +51,11 @@ export async function listBuilderComponents(rawQuery, { admin = false } = {}) {
     pagination: { page: input.page, limit: input.limit, total: ordered.length, pages: Math.ceil(ordered.length / input.limit) },
     pendingCategories: Object.keys(PENDING_CATEGORIES).filter(key => !FIXED_COMPONENTS.some(item => item.category === key)),
     arrangementApproved: false, submissionAllowed: false, orderConversionAllowed: false,
-    directCommerceEnabled: giftBoxRuntimeCommerceOpen(env), orderableBoxIds: giftBoxRuntimeCommerceOpen(env) ? Object.keys(boxLimits) : [] };
+    directCommerceEnabled: giftBoxRuntimeCommerceOpen(env), orderableBoxIds: flexibleMadeToOrder
+      ? ordered.filter(def => def.category === 'box' && byId.get(def.id)?.enabled === true
+        && approvedPrice(byId.get(def.id)) !== null && inventoryEligibility(def, byId.get(def.id)).eligible)
+        .map(def => def.id)
+      : giftBoxRuntimeCommerceOpen(env) ? Object.keys(boxLimits) : [] };
 }
 export async function getBuilderSetting(id) {
   await ensureBuilderBackend();

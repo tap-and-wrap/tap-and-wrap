@@ -2,6 +2,8 @@ import { DEFAULT_BOX_CATEGORY_LIMITS, countBuilderCategories, resolveBoxCategory
 import { getFixedComponent } from '../../../shared/gift-box/definitions.mjs';
 import { loadPublishedGiftBoxPolicies } from './policy-store.js';
 import { builderError } from './validation.js';
+import { env } from '../config/env.js';
+import { giftBoxFlexibleMadeToOrderOpen } from './runtime-commerce.js';
 
 const boxIds = Array.from({ length: 12 }, (_, index) => `box-${index + 1}`);
 
@@ -9,6 +11,7 @@ const boxIds = Array.from({ length: 12 }, (_, index) => `box-${index + 1}`);
 // unprepared and withdrawn policies impose no invented count limits; this never
 // grants physical fit, placement approval, stock availability or direct commerce.
 export async function publishedBoxSelectionLimits(requestedBoxIds = boxIds, { session } = {}) {
+  if (giftBoxFlexibleMadeToOrderOpen(env)) return {}; // Only the separately authorized flexible model omits physical capacity caps.
   const policies = await loadPublishedGiftBoxPolicies(requestedBoxIds, { session });
   const limits = {};
   for (const boxId of requestedBoxIds) {

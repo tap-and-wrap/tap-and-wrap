@@ -18,7 +18,7 @@ import { MetaEvent } from '../src/models/MetaEvent.js';
 import { Upload } from '../src/models/Upload.js';
 import DiscountCode from '../src/models/DiscountCode.js';
 import { DiscountRedemption } from '../src/models/DiscountRedemption.js';
-import { addCartItem } from '../src/commerce/cart.js';
+import { addCartItem, cartResponse } from '../src/commerce/cart.js';
 import { prepareCheckout, placeOrder, prepareGiftBoxCheckoutForDisposableTest, placeGiftBoxOrderForDisposableTest, getOwnedOrder } from '../src/commerce/orders.js';
 import { setGiftBoxCheckoutPoliciesForDisposableTest, withdrawGiftBoxCheckoutPolicyForDisposableTest, setGiftBoxCheckoutHooksForDisposableTest,
   createGiftBoxCheckoutCapabilityForDisposableTest, assertGiftBoxCheckoutCapability } from '../src/gift-box/checkout-guard.js';
@@ -34,7 +34,8 @@ import { giftCartConfiguration, giftCartInput, giftCartPolicy, seedGiftCartSetti
 const owner = `guest:${'a'.repeat(64)}`, other = `guest:${'b'.repeat(64)}`;
 const customer = { name: 'Synthetic gift customer', email: 'gift-order@example.test', phone: '01012345678', governorate: 'cairo', address: '10 Isolated Test Street, Cairo' };
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWO4NbsXAARVAgOYIL6CAAAAAElFTkSuQmCC', 'base64');
-const original = { backend: env.giftBoxBuilderBackendEnabled, checkout: env.checkoutEnabled };
+const original = { backend: env.giftBoxBuilderBackendEnabled, checkout: env.checkoutEnabled,
+  direct: env.giftBoxDirectCommerceEnabled, flexible: env.giftBoxFlexibleMadeToOrderEnabled };
 const trackingSettings = { META_ENABLED: 'true', META_POLICY_APPROVED: 'true', META_PIXEL_ID: '123456789', META_CONSENT_POLICY_VERSION: 'isolated-gift-checkout-v1', SITE_ORIGIN: 'https://merchant.example.test', META_CAPI_ENABLED: 'false', META_ACCESS_TOKEN: '' };
 const originalTracking = Object.fromEntries(Object.keys(trackingSettings).map(key => [key, process.env[key]]));
 let database, admin, product;
@@ -45,7 +46,9 @@ before(async () => {
 beforeEach(async () => {
   for (const Model of Object.values(mongoose.models)) await Model.deleteMany({});
   process.env.META_ENABLED = 'false';
-  env.giftBoxBuilderBackendEnabled = true; env.checkoutEnabled = true; setGiftBoxCheckoutHooksForDisposableTest();
+  env.giftBoxBuilderBackendEnabled = true; env.checkoutEnabled = true;
+  env.giftBoxDirectCommerceEnabled = false; env.giftBoxFlexibleMadeToOrderEnabled = false;
+  setGiftBoxCheckoutHooksForDisposableTest();
   admin = await User.create({ name: 'Synthetic order admin', email: 'gift-admin@example.test', role: 'admin', passwordHash: 'fixture' });
   const category = await Category.create({ name: 'Synthetic order category', slug: 'synthetic-order-category', active: true });
   product = await Product.create({ name: 'Synthetic ordinary chocolate-1', slug: 'synthetic-order-chocolate', categoryId: category._id,
@@ -56,7 +59,9 @@ beforeEach(async () => {
 });
 after(async () => {
   if (database) { setGiftBoxCheckoutHooksForDisposableTest(); await setGiftBoxCheckoutPoliciesForDisposableTest([]); }
-  env.giftBoxBuilderBackendEnabled = original.backend; env.checkoutEnabled = original.checkout; await database?.stop();
+  env.giftBoxBuilderBackendEnabled = original.backend; env.checkoutEnabled = original.checkout;
+  env.giftBoxDirectCommerceEnabled = original.direct; env.giftBoxFlexibleMadeToOrderEnabled = original.flexible;
+  await database?.stop();
   for (const [key, value] of Object.entries(originalTracking)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
 });
 const setting = id => GiftBoxComponentSetting.findOne({ componentId: id }).lean();
@@ -254,6 +259,33 @@ test('personalized payment and order-first proof restrictions also apply to conf
   await assert.rejects(placeGiftBoxOrderForDisposableTest(owner, cod.input), { code: 'GIFT_BOX_PAYMENT_METHOD_UNAVAILABLE' });
   const { input } = await review(); await assert.rejects(placeGiftBoxOrderForDisposableTest(owner, { ...input, paymentProofId: new mongoose.Types.ObjectId().toString() }), { code: 'ORDER_FIRST_REQUIRED' });
   assert.equal(await Order.countDocuments(), 0); assert.equal((await setting('rose-red')).inventoryQuantity, 20);
+});
+
+test('public made-to-order checkout prices high-quantity gifts and saves InstaPay orders once', async () => {
+  env.giftBoxDirectCommerceEnabled = true; env.giftBoxFlexibleMadeToOrderEnabled = true;
+  const config = giftCartConfiguration({ roses: 40, plush: false, chocolate: false, card: false });
+  config.selection.ribbonId = null;
+  config.placements = config.placements.map((place, index) => ({ ...place, x: .3 + index % 5 * .01, layer: index }));
+  for (const id of ['box-2', 'rose-red']) await adminEdit(id, { inventoryMode: 'made_to_order', inventoryQuantity: null });
+  await addGift(owner, config);
+  const cartView = await cartResponse(owner);
+  assert.equal(cartView.checkoutEnabled, true);
+  assert.equal(cartView.cart.items[0].valid, true);
+  assert.equal(cartView.cart.items[0].checkoutAllowed, true);
+  const checkoutKey = randomUUID();
+  const prepared = await prepareCheckout(owner, { checkoutKey, paymentMethod: 'instapay', governorate: 'cairo' });
+  assert.equal(prepared.totalPiastres, 140000);
+  const placed = await placeOrder(owner, { checkoutKey, paymentMethod: 'instapay', customer });
+  const saved = await Order.findById(placed.id).lean();
+  assert.equal(saved.lines[0].giftBox.configuration.selection.items[0].quantity, 40);
+  assert.equal(saved.lines[0].giftBox.fulfillment.policyReference.contractVersion, 'gift-box-made-to-order-v1');
+  assert.equal(saved.lines[0].lineTotalPiastres, 140000);
+  assert.equal(saved.paymentState, 'awaiting_transfer');
+  assert.equal((await setting('rose-red')).inventoryQuantity, null);
+  assert.equal((await CheckoutIntent.findOne().lean()).state, 'consumed');
+  const again = await placeOrder(owner, { checkoutKey, paymentMethod: 'instapay', customer });
+  assert.equal(again.id, placed.id);
+  assert.equal(await Order.countDocuments(), 1);
 });
 
 test('runtime checkout always rejects gift-only and mixed carts even with synthetic approval and global checkout enabled', async () => {
