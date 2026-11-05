@@ -25,7 +25,8 @@ export default function GiftBoxOrderDetails({ giftBox, admin = false }) {
       <div><dt>Gift card</dt><dd>{giftBox.giftCard?.selected ? 'Selected' : 'Not selected'}</dd></div>
     </dl>
     {giftBox.giftCard?.selected && (message ? <details className="commerce-gift-message"><summary>View gift-card message</summary><p>{message}</p></details> : <p className="commerce-muted">Gift card without a message.</p>)}
-    {personalized && <details className="commerce-gift-order-disclosure"><summary>Photo prints and engraving at purchase</summary>
+    {personalized?.sticker && <section><h4>Personalized sticker</h4><p dir="auto">{personalized.sticker.text}</p><p>Apply to exterior front - {money(personalized.sticker.pricePiastres)}</p></section>}
+    {personalized && <details className="commerce-gift-order-disclosure"><summary>Personal touches at purchase</summary>
       <p>Photo prints: {Number.isSafeInteger(personalized.photoCount) ? personalized.photoCount : photos.length} · Engravings: {engravings.length}</p>
       {Number.isSafeInteger(personalized.unitAdjustmentPiastres) && <p>Saved personalization adjustment per box: {money(personalized.unitAdjustmentPiastres)}</p>}
       {engravings.length > 0 && <ol>{engravings.map((item,index)=><li key={index}>

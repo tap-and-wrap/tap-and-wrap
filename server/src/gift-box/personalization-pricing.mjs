@@ -57,7 +57,16 @@ export function priceGiftBoxPersonalization({ intent: raw, boxId, owner, uploads
     return { ...line, pricePiastres:option.pricePiastres, optionRevision:option.__v,
       priceApprovedAt:option.priceApprovedAt.toISOString() };
   });
-  return Object.freeze({ version:intent.version, photoPrints:Object.freeze(photoPrints),engravings:Object.freeze(engravings),
+  let sticker = null;
+  if (intent.sticker) {
+    const line = intent.sticker, option = byOption.get(line.optionId);
+    if (option?.kind !== 'box_sticker' || !goodPrice(option) || !option.boxIds?.includes(boxId)
+      || option.fontLicensesConfirmed !== true || !option.approvedStyleIds?.includes(line.styleId)
+      || !option.approvedColorIds?.includes(line.colorId)) reject('GIFT_BOX_STICKER_PRICE_PENDING');
+    amount = addMoney(amount, option.pricePiastres);
+    sticker = { ...line, pricePiastres: option.pricePiastres, optionRevision: option.__v, priceApprovedAt: option.priceApprovedAt.toISOString() };
+  }
+  return Object.freeze({ ...(intent.version === 'gift-box-personalization-intent-v2' ? { sticker } : {}), version:intent.version, photoPrints:Object.freeze(photoPrints),engravings:Object.freeze(engravings),
     uploadIds:Object.freeze(photoPrints.map(photo=>photo.uploadId)), unitAdjustmentPiastres:amount,
     // The caller still must verify policy/fit and actual prices before placing an order.
     physicallyApproved:false, checkoutAuthorized:false });

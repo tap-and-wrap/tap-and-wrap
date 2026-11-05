@@ -1,3 +1,4 @@
+import { STICKER_STYLES } from '../../../shared/gift-box/sticker-styles.mjs';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../admin/AdminLayout.jsx';
@@ -11,7 +12,7 @@ import { giftBoxOptionDraft, giftBoxOptionEditorPayload, newGiftBoxOption } from
 import '../gift-box/personalization-admin.css';
 
 const boxes = FIXED_COMPONENTS.filter(item => item.category === 'box');
-const kinds = { photo_print: 'Photo print', engraving_surface: 'Engraving surface' };
+const kinds = { photo_print: 'Photo print', engraving_surface: 'Engraving surface', box_sticker: 'Personalized box sticker' };
 function MultiChoice({ legend, items, selected, onChange }) {
   return <fieldset className="gb-opt-choices"><legend>{legend}</legend><div className="gb-opt-choice-grid">{items.map(item => <label key={item.id}>
     <input type="checkbox" checked={selected.includes(item.id)} onChange={event => onChange(event.target.checked ? [...selected, item.id] : selected.filter(id => id !== item.id))}/>
@@ -45,9 +46,9 @@ function Editor({ initial, onSaved }) {
       {/^0+(?:\.0{1,2})?$/.test(draft.price) && record.configuredPricePiastres !== 0 &&
         <label className="gb-opt-check"><input type="checkbox" checked={draft.confirmComplimentary} onChange={event=>change('confirmComplimentary',event.target.checked)}/>Explicitly approve this option as complimentary</label>}
       <MultiChoice legend="Boxes where this option is permitted" items={boxes.map(box=>({id:box.id,label:`Box ${box.sourceNumber}`}))} selected={draft.boxIds} onChange={value=>change('boxIds',value)}/>
-      {record.kind === 'engraving_surface' && <>
-        <MultiChoice legend="Approved lettering styles" items={LETTERING_STYLES.map(style=>({id:style.id,label:style.customerLabel}))} selected={draft.approvedStyleIds} onChange={value=>change('approvedStyleIds',value)}/>
-        <MultiChoice legend="Approved engraving colors" items={ENGRAVING_COLORS.map(color=>({id:color.id,label:color.label}))} selected={draft.approvedColorIds} onChange={value=>change('approvedColorIds',value)}/>
+      {['engraving_surface','box_sticker'].includes(record.kind) && <>
+        <MultiChoice legend="Approved lettering styles" items={(record.kind === 'box_sticker' ? STICKER_STYLES.map(style => ({ ...style,customerLabel:style.label })) : LETTERING_STYLES).map(style=>({id:style.id,label:style.customerLabel}))} selected={draft.approvedStyleIds} onChange={value=>change('approvedStyleIds',value)}/>
+        <MultiChoice legend="Approved lettering colors" items={ENGRAVING_COLORS.map(color=>({id:color.id,label:color.label}))} selected={draft.approvedColorIds} onChange={value=>change('approvedColorIds',value)}/>
         <label className="gb-opt-check"><input type="checkbox" checked={draft.fontLicensesConfirmed} onChange={event=>change('fontLicensesConfirmed',event.target.checked)}/>
           I have independently confirmed permission to use every selected lettering style for customer orders</label>
         <p className="gb-opt-note">Style IDs are previews, not evidence of font licensing. Only confirm after checking actual commercial usage rights.</p>
@@ -55,7 +56,7 @@ function Editor({ initial, onSaved }) {
       <div className="gb-opt-choice-grid"><label className="gb-opt-check"><input type="checkbox" checked={draft.enabled} onChange={event=>change('enabled',event.target.checked)}/>Enabled</label>
         <label className="gb-opt-check"><input type="checkbox" checked={draft.available} onChange={event=>change('available',event.target.checked)}/>Available</label></div>
       <p className="gb-opt-note">An option requires approved pricing, at least one box and (for engraving) licensed styles and colors before it can be both enabled and available. These settings do not enable Gift Box checkout.</p>
-      <div className="gb-opt-actions"><button className="button button-primary" type="submit" disabled={mutation.isPending}>{mutation.isPending ? 'Saving…' : record.isDraftNew ? 'Create pending option' : 'Save option'}</button>
+      <div className="gb-opt-actions"><button className="button button-primary" type="submit" disabled={mutation.isPending}>{mutation.isPending ? 'Saving…' : record.isDraftNew ? record.suggestedPricePiastres ? 'Save reviewed option' : 'Create pending option' : 'Save option'}</button>
         <button type="button" className="button button-secondary" disabled={mutation.isPending} onClick={()=>{setDraft(giftBoxOptionDraft(record));setLocalError('');mutation.reset();}}>Discard unsaved edits</button></div>
     </fieldset>
     {localError && <p className="form-error" role="alert">{localError}</p>}
@@ -73,10 +74,10 @@ function Creator({ existing, onCreate }) {
       onCreate(newGiftBoxOption(id,kind));
     } catch(problem) { setError(problem.message); }
   }
-  return <form className="admin-panel gb-opt-create" onSubmit={start}><h2>Prepare a new option</h2>
+  return <form className="admin-panel gb-opt-create" onSubmit={start}><h2>Prepare a new option</h2><div className="gb-opt-actions">{[['standard-photo-print','photo_print','Photo print'],['exterior-box-sticker','box_sticker','Personalized box sticker']].filter(([optionId]) => !existing.some(option => option.optionId === optionId)).map(([optionId,type,label]) => <button key={optionId} type="button" className="button button-secondary" onClick={() => onCreate({ ...newGiftBoxOption(optionId,type), displayName: label, suggestedPricePiastres: 2000, ...(type === 'box_sticker' ? { approvedStyleIds: STICKER_STYLES.map(style => style.id), approvedColorIds: ENGRAVING_COLORS.map(color => color.id) } : {}) })}>Prepare {label} - EGP 20</button>)}</div>
     <p>Choose a permanent option ID. New options begin disabled and unavailable. No default price or license approval is inferred.</p>
     <label>Option ID<input type="text" maxLength={80} pattern="[a-z][a-z0-9-]*" required value={id} placeholder="small-photo-print" onChange={event=>setId(event.target.value)}/></label>
-    <label>Type<select value={kind} onChange={event=>setKind(event.target.value)}><option value="photo_print">Photo print</option><option value="engraving_surface">Engraving surface</option></select></label>
+    <label>Type<select value={kind} onChange={event=>setKind(event.target.value)}><option value="photo_print">Photo print</option><option value="engraving_surface">Engraving surface (legacy)</option><option value="box_sticker">Personalized box sticker</option></select></label>
     <button type="submit" className="button button-secondary">Prepare new option</button>
     {error && <p role="alert" className="form-error">{error}</p>}
   </form>;
@@ -91,7 +92,7 @@ export default function AdminGiftBoxPersonalizationPage() {
     cache.invalidateQueries({queryKey:['private',session.ownerKey,'gift-box-personalization-options']})
   ]);}
   const records=query.data?.options || [];
-  return <AdminLayout title="Gift Box Personalization" description="Manage reviewed photo-print prices, engraving surfaces, eligible boxes and lettering permissions. This editor does not authorize physical packing or checkout." busy={query.isPending}>
+  return <AdminLayout title="Gift Box Personalization" description="Manage photo prints, exterior box stickers and legacy engraving options. This editor does not authorize physical packing or checkout." busy={query.isPending}>
     {query.isPending ? <p role="status">Loading personalization options…</p> : query.error ? <section className="admin-panel"><p role="alert">The personalization registry is unavailable. The backend feature and guarded MongoDB schema must be ready before this editor works. {commerceError(query.error)}</p><button className="button button-secondary" type="button" onClick={()=>query.refetch()}>Retry options</button></section> : <>
       <section className="admin-panel"><h2>Availability and approval</h2><p>{records.length} configured option{records.length===1?'':'s'}. Public choices include only enabled, available, correctly priced and approved options. This screen does not turn on customer checkout.</p><p>Font permission and box compatibility require real merchant review. Do not enable a surface using only the visual preview as proof of a license or physical fit.</p></section>
       {!newRecord ? <Creator existing={records} onCreate={setNewRecord}/> : <section><div className="gb-opt-actions"><button className="button button-secondary" type="button" onClick={()=>setNewRecord(null)}>Cancel new option</button></div><Editor key={'new:'+newRecord.optionId} initial={newRecord} onSaved={saved}/></section>}

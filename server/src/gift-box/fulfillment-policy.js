@@ -91,6 +91,7 @@ export function flexibleMadeToOrderFulfillment(rawConfiguration) {
 
 export function assertGiftBoxFulfillment(rawConfiguration, rawPolicy) {
   const configuration = giftBoxV2CommerceInput.parse(rawConfiguration);
+  if (configuration.contractVersion === 'gift-box-commerce-v2') throw builderError(409, 'GIFT_BOX_FREE_PLACEMENT_REQUIRES_FLEXIBLE', 'This arrangement requires made-to-order authorization.');
   if (!rawPolicy) throw builderError(409, 'GIFT_BOX_FULFILLMENT_UNAPPROVED', 'This box requires a reviewed physical fulfillment policy before direct commerce.');
   const parsed = giftBoxFulfillmentPolicyInput.safeParse(rawPolicy);
   if (!parsed.success) throw builderError(409, 'GIFT_BOX_FULFILLMENT_POLICY_INVALID', 'The fulfillment policy is invalid or uses unsupported versions.');

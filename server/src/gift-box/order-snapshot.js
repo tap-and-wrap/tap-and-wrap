@@ -37,7 +37,8 @@ const personalizedPhoto = z.object({ uploadId: z.string().regex(/^[a-f0-9]{24}$/
   x: z.number().min(0).max(1), y: z.number().min(0).max(1), pricePiastres: integer, optionRevision: integer, priceApprovedAt: timestamp }).strict();
 const personalizedEngraving = z.object({ text: z.string().min(1).max(500), styleId: text, colorId: text, surfaceOptionId: text,
   pricePiastres: integer, optionRevision: integer, priceApprovedAt: timestamp }).strict();
-const personalizedSnapshot = z.object({ version: z.literal('gift-box-personalization-intent-v1'),
+const personalizedSticker = z.object({ text: z.string().min(1).max(500), styleId: text, colorId: text, optionId: text, application: z.literal('exterior-front'), pricePiastres: integer, optionRevision: integer, priceApprovedAt: timestamp }).strict();
+const personalizedSnapshot = z.object({ version: z.enum(['gift-box-personalization-intent-v1','gift-box-personalization-intent-v2']), sticker: personalizedSticker.nullable().optional(),
   photoPrints: z.array(personalizedPhoto).max(48), engravings: z.array(personalizedEngraving).max(24),
   unitAdjustmentPiastres: integer }).strict();
 const claim = z.object({ kind: z.literal('gift_box_component'), id: text, mode, quantity,
@@ -99,8 +100,9 @@ export const giftBoxOrderLineInput = z.object({
       if (personal.photoPrints.length !== intent.photoPrints.length || personal.engravings.length !== intent.engravings.length
         || personal.photoPrints.some((photo, index) => ['uploadId','printOptionId','zone','x','y'].some(key => photo[key] !== intent.photoPrints[index]?.[key]))
         || personal.engravings.some((entry, index) => ['text','styleId','colorId','surfaceOptionId'].some(key => entry[key] !== intent.engravings[index]?.[key]))) fail('Order attachments and engraving choices must match the selected Gift Box.');
+      if (personal.version !== intent.version || JSON.stringify(personal.sticker && Object.fromEntries(['text','styleId','colorId','optionId','application'].map(key => [key,personal.sticker[key]])) || null) !== JSON.stringify(intent.sticker || null)) fail('Save the exact sticker selection and application.');
       let personalTotal = 0;
-      for (const entry of [...personal.photoPrints, ...personal.engravings]) personalTotal = addPiastres(personalTotal, entry.pricePiastres);
+      for (const entry of [...personal.photoPrints, ...personal.engravings, ...(personal.sticker ? [personal.sticker] : [])]) personalTotal = addPiastres(personalTotal, entry.pricePiastres);
       if (personalTotal !== personal.unitAdjustmentPiastres) fail('Charge each print and engraving exactly once.');
       unitTotal = addPiastres(unitTotal, personalTotal);
     }
@@ -120,6 +122,7 @@ export function giftBoxOrderLine(quoted) {
     giftBox: { snapshotVersion: quoted.giftPersonalization ? PERSONAL_GIFT_BOX_ORDER_SNAPSHOT_VERSION : GIFT_BOX_ORDER_SNAPSHOT_VERSION,
       configuration: quoted.configuration, configurationId: quoted.configurationId, components,
       ...(quoted.giftPersonalization ? { personalization: { version: quoted.giftPersonalization.version,
+        ...(quoted.giftPersonalization.version === 'gift-box-personalization-intent-v2' ? { sticker: quoted.giftPersonalization.sticker } : {}),
         photoPrints: quoted.giftPersonalization.photoPrints, engravings: quoted.giftPersonalization.engravings,
         unitAdjustmentPiastres: quoted.giftPersonalization.unitAdjustmentPiastres } } : {}),
       fulfillment: quoted.giftFulfillment,

@@ -17,18 +17,18 @@ export function prepareGiftBoxPersonalizationHandoff({ boxId, personal, uploaded
   }
   const photoPrints=personal.photos.map((photo,index) => {
     const uploadId=receipts.get(photo.id), printOptionId=printOptionsByPhoto?.[photo.id];
-    const position=photoPrintPosition(boxId,index,personal.photoPositions?.[photo.id]);
+    const position=personal.freePlacement ? { x: .72, y: .22 + index % 4 * .13, placementZone: 'beside', ...personal.photoPositions?.[photo.id] } : photoPrintPosition(boxId,index,personal.photoPositions?.[photo.id]);
     if (!uploadId || !printOptionId || !position) throw new Error('Choose a print option and position for every verified photo.');
     // The visual study includes an extended beside-box scene. Convert to the
     // shared normalized-scene coordinates rather than dropping beside photos.
-    const x=(position.x-GIFT_BOX_COMMERCE_SCENE.x)/GIFT_BOX_COMMERCE_SCENE.width;
-    const y=(position.y-GIFT_BOX_COMMERCE_SCENE.y)/GIFT_BOX_COMMERCE_SCENE.height;
+    const x=personal.freePlacement ? position.x : (position.x-GIFT_BOX_COMMERCE_SCENE.x)/GIFT_BOX_COMMERCE_SCENE.width;
+    const y=personal.freePlacement ? position.y : (position.y-GIFT_BOX_COMMERCE_SCENE.y)/GIFT_BOX_COMMERCE_SCENE.height;
     return { uploadId,printOptionId,zone:position.placementZone,x,y };
   });
-  const engravings=personal.engravings.filter(line=>line.text?.trim()).map(line => {
+  const engravings=(personal.freePlacement ? [] : personal.engravings).filter(line=>line.text?.trim()).map(line => {
     const surfaceOptionId=surfaceOptionsByEngraving?.[line.id];
     if (!surfaceOptionId || !line.styleId) throw new Error('Choose a surface and lettering style for every engraving.');
     return { text:line.text,styleId:line.styleId,colorId:line.colorId,surfaceOptionId };
   });
-  return parseGiftBoxPersonalizationIntent({version:GIFT_BOX_PERSONALIZATION_INTENT_VERSION,photoPrints,engravings});
+  return parseGiftBoxPersonalizationIntent({version: personal.freePlacement ? 'gift-box-personalization-intent-v2' : GIFT_BOX_PERSONALIZATION_INTENT_VERSION,photoPrints,engravings, ...(personal.freePlacement ? { sticker: personal.sticker?.enabled ? { text: personal.sticker.text, styleId: personal.sticker.styleId, colorId: personal.sticker.colorId, optionId: personal.sticker.optionId, application: 'exterior-front' } : null } : {})});
 }

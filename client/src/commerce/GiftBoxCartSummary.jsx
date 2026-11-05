@@ -1,3 +1,4 @@
+import { money } from './api.js';
 const groups = [['flower', 'Flowers'], ['plush', 'Plush toys'], ['chocolate', 'Chocolates']];
 
 export default function GiftBoxCartSummary({ giftBox }) {
@@ -19,5 +20,8 @@ export default function GiftBoxCartSummary({ giftBox }) {
     </dl>
     {cardSelected && (message ? <details className="commerce-gift-message"><summary>View gift-card message</summary><p>{message}</p></details> : <p className="commerce-muted">Gift card without a message.</p>)}
     <p className="commerce-muted">Quantities above are for one completed gift box. Gift boxes are excluded from discounts.</p>
+    {giftBox.personalization?.photoCount > 0 && <p>Photo prints: {giftBox.personalization.photoCount}</p>}
+    {giftBox.personalization && <p>Personal touches per box: {money(giftBox.personalization.unitAdjustmentPiastres)}</p>}
+    {giftBox.personalization?.sticker && <p>Personalized sticker: <bdi>{giftBox.personalization.sticker.text}</bdi> - Apply to exterior front</p>}
   </div>;
 }

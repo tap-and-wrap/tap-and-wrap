@@ -10,18 +10,19 @@ export function eligibleGiftBoxOptions(options, boxId, kind, engraving = null) {
   return options.filter(option => option?.kind === kind && option.enabled === true && option.available === true
     && Number.isSafeInteger(option.pricePiastres) && option.pricePiastres >= 0
     && Array.isArray(option.boxIds) && option.boxIds.includes(boxId)
-    && (kind !== 'engraving_surface' || (option.approvedStyleIds?.includes(engraving?.styleId)
+    && (!['engraving_surface','box_sticker'].includes(kind) || (option.approvedStyleIds?.includes(engraving?.styleId)
       && option.approvedColorIds?.includes(engraving?.colorId))));
 }
 
 // A display-only estimate from approved public options; never sent as an order
 // amount. The server independently recalculates after verified private upload.
 export function estimateGiftBoxPersonalizationChoices({ boxId, personal, options, printOptionsByPhoto, surfaceOptionsByEngraving }) {
-  if (!personal.hasContent || !Array.isArray(options)) return null;
+  if (!personal.hasContent) return 0;
+  if (!Array.isArray(options)) return null;
   let total = 0;
   const selected = [
     ...personal.photos.map(photo => [printOptionsByPhoto[photo.id], 'photo_print', null]),
-    ...personal.engravings.filter(line => line.text.trim()).map(line => [surfaceOptionsByEngraving[line.id], 'engraving_surface', line]),
+    ...(personal.freePlacement ? (personal.sticker?.enabled ? [[personal.sticker.optionId, 'box_sticker', personal.sticker]] : []) : personal.engravings.filter(line => line.text.trim()).map(line => [surfaceOptionsByEngraving[line.id], 'engraving_surface', line])),
   ];
   for (const [optionId, kind, engraving] of selected) {
     if (kind === 'engraving_surface' && !engraving.styleId) return null;
@@ -43,6 +44,7 @@ export function assertGiftBoxPersonalizationPriceUnchanged(quoted, expectedPiast
 export function giftBoxPersonalDraftSignature(boxId, personal, printOptionsByPhoto, surfaceOptionsByEngraving) {
   return JSON.stringify({ boxId,
     photos: personal.photos.map(photo => [photo.id, photo.fileKey, personal.photoPositions?.[photo.id] || null, printOptionsByPhoto[photo.id] || null]),
+    sticker: personal.freePlacement ? personal.sticker : null,
     engravings: personal.engravings.map(line => [line.id, line.text, line.styleId, line.colorId, surfaceOptionsByEngraving[line.id] || null]),
   });
 }
@@ -64,7 +66,8 @@ export async function verifyGiftBoxPersonalDraft({ boxId, personal, ownerKey, op
     if (!eligibleGiftBoxOptions(options, boxId, 'photo_print').some(option => option.optionId === chosen))
       throw new Error('Select an available, priced print option for each photo.');
   }
-  for (const line of personal.engravings.filter(item => item.text.trim())) {
+  if (personal.freePlacement && personal.sticker?.enabled && (!personal.sticker.text.trim() || !eligibleGiftBoxOptions(options, boxId, 'box_sticker', personal.sticker).some(option => option.optionId === personal.sticker.optionId))) throw new Error('Choose available sticker text, style and color.');
+  for (const line of personal.freePlacement ? [] : personal.engravings.filter(item => item.text.trim())) {
     const chosen = surfaceOptionsByEngraving[line.id];
     if (!line.styleId || !eligibleGiftBoxOptions(options, boxId, 'engraving_surface', line).some(option => option.optionId === chosen))
       throw new Error('Choose an approved lettering style, color and surface for each engraving.');
@@ -77,7 +80,7 @@ export async function verifyGiftBoxPersonalDraft({ boxId, personal, ownerKey, op
   if (!ownerIsCurrent() || !draftIsCurrent()) throw new Error('Your session or Gift Box changed during pricing. Review it again.');
   if (!result || !Number.isSafeInteger(result.unitAdjustmentPiastres) || result.unitAdjustmentPiastres < 0
     || result.checkoutAuthorized !== false || result.physicallyApproved !== false
-    || result.photoPrints?.length !== intent.photoPrints.length || result.engravings?.length !== intent.engravings.length)
+    || result.photoPrints?.length !== intent.photoPrints.length || result.engravings?.length !== intent.engravings.length || Boolean(result.sticker) !== Boolean(intent.sticker))
     throw new Error('Personalization prices could not be verified. Try again.');
   return { intent, quote: result };
 }

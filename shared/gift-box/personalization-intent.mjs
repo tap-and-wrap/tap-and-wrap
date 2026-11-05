@@ -1,3 +1,4 @@
+import { stickerStyle, STICKER_APPLICATION } from './sticker-styles.mjs';
 import { ENGRAVING_COLORS, LETTERING_STYLES, MAX_ENGRAVING_CODEPOINTS, MAX_ENGRAVING_LINES, MAX_GIFT_PHOTOS, validateDraftEngraving } from './lettering-styles.mjs';
 import { deepFreeze } from './definitions.mjs';
 
@@ -18,7 +19,8 @@ const acceptedStyles = new Set(LETTERING_STYLES.map(style => style.id));
 const acceptedColors = new Set(ENGRAVING_COLORS.map(color => color.id));
 
 export function parseGiftBoxPersonalizationIntent(raw) {
-  if (!exact(raw, ['version', 'photoPrints', 'engravings']) || raw.version !== GIFT_BOX_PERSONALIZATION_INTENT_VERSION
+  const v2 = raw?.version === 'gift-box-personalization-intent-v2';
+  if (!exact(raw, v2 ? ['version','photoPrints','engravings','sticker'] : ['version', 'photoPrints', 'engravings']) || !v2 && raw.version !== GIFT_BOX_PERSONALIZATION_INTENT_VERSION
     || !Array.isArray(raw.photoPrints) || raw.photoPrints.length > MAX_GIFT_PHOTOS
     || !Array.isArray(raw.engravings) || raw.engravings.length > MAX_ENGRAVING_LINES) fail();
   const seen = new Set();
@@ -26,6 +28,7 @@ export function parseGiftBoxPersonalizationIntent(raw) {
     if (!exact(photo, ['uploadId', 'printOptionId', 'zone', 'x', 'y'])
       || !uploadId(photo.uploadId) || seen.has(photo.uploadId) || !slug(photo.printOptionId)
       || !['inside', 'beside'].includes(photo.zone) || !unit(photo.x) || !unit(photo.y)) fail();
+    if (v2 && (photo.x > .880001 || photo.y > .840001)) fail();
     seen.add(photo.uploadId);
     // Array position is intentional print order; no browser UUID, object URL,
     // filename, R2 storage key or raw File can cross this boundary.
@@ -42,5 +45,15 @@ export function parseGiftBoxPersonalizationIntent(raw) {
     return { text: engraving.text, styleId: engraving.styleId, colorId: engraving.colorId,
       surfaceOptionId: engraving.surfaceOptionId };
   });
-  return deepFreeze({ version: GIFT_BOX_PERSONALIZATION_INTENT_VERSION, photoPrints, engravings });
+  let sticker = null;
+  if (v2) {
+    if (engravings.length) fail();
+    const line = raw.sticker;
+    if (line !== null) {
+      if (!exact(line, ['text','styleId','colorId','optionId','application']) || !validateDraftEngraving(line.text) || !line.text.trim()
+        || !stickerStyle(line.styleId) || !acceptedColors.has(line.colorId) || !slug(line.optionId) || line.application !== STICKER_APPLICATION) fail();
+      sticker = { text: line.text, styleId: line.styleId, colorId: line.colorId, optionId: line.optionId, application: STICKER_APPLICATION };
+    }
+  }
+  return deepFreeze({ version: raw.version, photoPrints, engravings, ...(v2 ? { sticker } : {}) });
 }

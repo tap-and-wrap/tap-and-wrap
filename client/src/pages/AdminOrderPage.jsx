@@ -1,3 +1,4 @@
+import CustomerGiftDesign from '../commerce/CustomerGiftDesign.jsx';
 import { AdminOrderAccounting } from '../commerce/OrderFinancials.jsx';
 import AdminForm, { hasAdminFieldErrors } from '../admin/AdminForm.jsx';
 import { useEffect, useState } from 'react';
@@ -63,6 +64,7 @@ export default function AdminOrderPage() {
   }
   return <AdminLayout title="Order details" busy={query.isPending} actions={<Link className="admin-button admin-button-secondary" to="/admin/commerce/orders">Back to orders</Link>}>
     {query.isPending ? <p className="admin-state" role="status">Loading order…</p> : query.error ? <div className="admin-state"><p role="alert">{commerceError(query.error)}</p><button className="admin-button admin-button-secondary" onClick={() => query.refetch()}>Try again</button></div> : order && <>
+      {(order.lines || []).filter(line => line.kind === 'gift_box_v2').map((line,index) => <CustomerGiftDesign key={`${id}:${index}`} giftBox={line.giftBox} orderId={id}/>)}
       <OrderRecord order={order} headingLevel={2} admin />
       {order.serviceRequestId && <Link className="admin-button admin-button-secondary" to={`/admin/requests/${order.serviceRequestId}`}>Review source request and accepted quotation</Link>}
       <ContactDetails customer={order.customer} /><AdminOrderAccounting key={id} order={order} refresh={() => invalidateAdminDependencies(queryClient, 'orders')} />

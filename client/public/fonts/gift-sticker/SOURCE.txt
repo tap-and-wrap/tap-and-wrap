@@ -1,0 +1,1 @@
+Unmodified fonts and licenses from https://github.com/google/fonts/tree/bbda7253fc363238b05d97515ca71f8ae49c4fa9 . Each font retains its accompanying license and copyright notice.

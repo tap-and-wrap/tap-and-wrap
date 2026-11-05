@@ -51,7 +51,7 @@ export async function listBuilderComponents(rawQuery, { admin = false } = {}) {
     pagination: { page: input.page, limit: input.limit, total: ordered.length, pages: Math.ceil(ordered.length / input.limit) },
     pendingCategories: Object.keys(PENDING_CATEGORIES).filter(key => !FIXED_COMPONENTS.some(item => item.category === key)),
     arrangementApproved: false, submissionAllowed: false, orderConversionAllowed: false,
-    directCommerceEnabled: giftBoxRuntimeCommerceOpen(env), orderableBoxIds: flexibleMadeToOrder
+    directCommerceEnabled: giftBoxRuntimeCommerceOpen(env), freePlacementCommerceEnabled: flexibleMadeToOrder, orderableBoxIds: flexibleMadeToOrder
       ? ordered.filter(def => def.category === 'box' && byId.get(def.id)?.enabled === true
         && approvedPrice(byId.get(def.id)) !== null && inventoryEligibility(def, byId.get(def.id)).eligible)
         .map(def => def.id)

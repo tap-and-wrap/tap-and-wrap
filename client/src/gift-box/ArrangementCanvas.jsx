@@ -1,3 +1,4 @@
+import FreeArrangementCanvas from './FreeArrangementCanvas.jsx';
 import { useRef, useState } from 'react';
 import Artwork from './Artwork.jsx';
 import RibbonOnBox from './RibbonOnBox.jsx';
@@ -8,7 +9,7 @@ import { getDraftGeometry } from '../../../shared/gift-box/geometry-drafts.mjs';
 import { getFixedComponent } from '../../../shared/gift-box/definitions.mjs';
 import { getStudyScene, positionStudyItem, studyAnchor, dropZoneForStudyItem } from './placement-study.mjs';
 
-export default function ArrangementCanvas({ state, components, dispatch, study = false, overlay, onTrace, extendedScene = false, personal = null }) {
+function LegacyArrangementCanvas({ state, components, dispatch, study = false, overlay, onTrace, extendedScene = false, personal = null }) {
   const canvas = useRef(null), drag = useRef(null);
   const [selected, setSelected] = useState(null), [draftPosition, setDraftPosition] = useState(null);
   const [selectedPhotoId, setSelectedPhotoId] = useState(null);
@@ -83,3 +84,5 @@ export default function ArrangementCanvas({ state, components, dispatch, study =
     {state.instances.some(item => item.x === null) && <div className="gb-unplaced"><p>Items waiting for placement</p>{state.instances.filter(item => item.x === null).map(item => <div key={item.id}><span>{label(item.componentId)}</span>{study && <button type="button" onClick={() => { setSelected(item.id); move(item, 0, 0); }}>Place in layout study</button>}<button type="button" onClick={() => dispatch({ type: 'remove', id: item.id })}>Remove</button></div>)}</div>}
   </div>;
 }
+
+export default function ArrangementCanvas(props) { return props.state.freePlacement ? <FreeArrangementCanvas {...props}/> : <LegacyArrangementCanvas {...props}/>; }

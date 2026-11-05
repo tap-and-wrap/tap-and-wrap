@@ -1,3 +1,4 @@
+import { fenceGiftBoxPersonalization } from '../gift-box/personalization-options.js';
 import { pendingShipping, orderAccounting, accountingSummary } from './order-accounting.js';
 import { randomInt } from 'node:crypto';
 import mongoose from 'mongoose';
@@ -47,7 +48,7 @@ async function checkoutQuoteCore(owner, input, { session, userId } = {}, capabil
   const digest = fingerprint({ lines: cart.items.map(line => ({ identity: line.identity, quantity: line.quantity, unitPrice: line.unitPricePiastres, customization: line.customizationSnapshot,
     ...(line.kind === 'gift_box_v2' ? { kind: line.kind, configuration: line.configuration,
       components: line.giftComponents.map(component => ({ ...component, priceApprovedAt: new Date(component.priceApprovedAt).toISOString() })),
-      fulfillment: line.giftFulfillment, policyHash: line.giftPolicyHash } : {}) })), totals,
+      personalization: line.giftPersonalization, fulfillment: line.giftFulfillment, policyHash: line.giftPolicyHash } : {}) })), totals,
     governorate: input.governorate, paymentMethod: input.paymentMethod, discountCode: input.discountCode?.trim().toUpperCase() || null });
   return { cart, totals, fingerprint: digest, shipping, policyFences };
 }
@@ -122,6 +123,7 @@ async function placeOrderCore(owner, input, userId, { trackingConsentId = null }
         await runGiftBoxCheckoutTestHook(capability, owner, 'afterInventory', { session, quote });
         await runGiftBoxCheckoutTestHook(capability, owner, 'beforePolicyFence', { session, quote });
         await fenceGiftBoxCheckoutPolicies(quote.policyFences, session);
+        await fenceGiftBoxPersonalization(quote.cart.items, session);
         const order = new Order({ owner, userId: userId || null, trackingConsentId, checkoutKey: input.checkoutKey, requestHash, orderNumber: generateOrderNumber(), customer: normalized.customer,
           lines: quote.cart.items.map(snapshotOrderLine), totals: quote.totals, inventoryClaims, uploadIds, accountingVersion: 1, personalized, allowedPaymentMethods: personalized ? ['instapay'] : ['cod', 'instapay'], charges: [pendingShipping()], followUpDueAt: new Date(Date.now() + 12 * 3600000),
           paymentMethod: input.paymentMethod, paymentState: quote.totals.totalPiastres === 0 ? 'paid' : input.paymentMethod === 'instapay' ? 'awaiting_transfer' : 'unpaid',

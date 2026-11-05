@@ -1,3 +1,5 @@
+import { ARTWORK_METRICS } from './artwork-metrics.mjs';
+import { boundFreePlacement } from '../../../shared/gift-box/commerce-contract.mjs';
 import { getFixedComponent } from '../../../shared/gift-box/definitions.mjs';
 import { countBuilderCategories, resolveBoxCategoryLimits } from '../../../shared/gift-box/selection-limits.mjs';
 import { initialStudyPosition, positionStudyItem, studyFootprint } from './placement-study.mjs';
@@ -31,6 +33,7 @@ export function canAdd(state, id, component, publishedBoxLimits, { study = false
   const allowed = Boolean(state.boxId && ['flower', 'plush', 'chocolate'].includes(category)
     && (!limits || categoryCounts[category] < limits[category])
     && quantity < 100 && state.instances.length < 200 && (component === undefined || componentCanSupply(component, quantity + 1)));
+  if (state.freePlacement) return allowed;
   if (!allowed || !study || category !== 'flower') return allowed;
   const footprint = studyFootprint(state.boxId, id);
   return Boolean(footprint && (findNextRosePosition(state.boxId, { ...footprint, componentId: id }, state.instances)
@@ -38,11 +41,17 @@ export function canAdd(state, id, component, publishedBoxLimits, { study = false
 }
 export function changeArrangement(state, action) {
   switch (action.type) {
-    case 'box': return action.id !== state.boxId && getFixedComponent(action.id)?.category === 'box' ? { ...state, boxId: action.id,
+    case 'box': if (state.freePlacement) return { ...state, boxId: action.id }; return action.id !== state.boxId && getFixedComponent(action.id)?.category === 'box' ? { ...state, boxId: action.id,
       instances: state.instances.map(item => ({ ...item, ...studyFootprint(action.id,item.componentId), x: null, y: null, placementZone:null, regionId:null, layerBase:null, zone: 'unplaced' })) } : state;
     case 'add': {
       if (!canAdd(state, action.id, action.component, action.boxLimits, { study: action.study, flexible: action.flexible }) || state.instances.some(item => item.id === action.instanceId)) return state;
       const footprint=studyFootprint(state.boxId,action.id,action.reviewSize);
+      if (state.freePlacement) {
+        const size = freeFootprint(state.boxId, action.id);
+        return { ...state, instances: [...state.instances, { id: action.instanceId, componentId: action.id, ...size,
+          ...boundFreePlacement({ x: .30 + state.instances.length % 5 * .045, y: .30 + Math.floor(state.instances.length / 5) % 5 * .045 }, size),
+          placementZone: 'inside', regionId: 'workspace', layerBase: 20, anchorOffsetY: .5 }] };
+      }
       const item={id:action.instanceId,componentId:action.id,...footprint};
       const existingCount=state.instances.filter(entry=>getFixedComponent(entry.componentId).category===getFixedComponent(action.id).category).length;
       const position = action.study && getFixedComponent(action.id)?.category === 'flower'
@@ -54,16 +63,21 @@ export function changeArrangement(state, action) {
     }
     case 'move': return { ...state, instances: state.instances.map(item => {
       if (item.id !== action.id || !action.study) return item;
+      if (state.freePlacement) return { ...item, ...boundFreePlacement(action.position, item), placementZone: action.zone || item.placementZone };
       const category = getFixedComponent(item.componentId)?.category;
       const zone = ['plush', 'chocolate'].includes(category) && ['inside', 'beside'].includes(action.zone)
         ? action.zone : (item.placementZone || 'inside');
       return { ...item, ...positionStudyItem(state.boxId, item, action.position, zone), zone: 'layout-study' };
     }) };
-    case 'study-zone': return !action.study ? state : {...state,instances:state.instances.map(item=>item.id===action.id&&['plush','chocolate'].includes(getFixedComponent(item.componentId)?.category)
+    case 'photo-remove': return { ...state, hiddenPhotoIds: [...new Set([...(state.hiddenPhotoIds || []), action.id])] };
+    case 'photo-restore': return { ...state, hiddenPhotoIds: (state.hiddenPhotoIds || []).filter(id => id !== action.id) };
+    case 'photo-move': return { ...state, photoPositions: { ...state.photoPositions, [action.id]: { ...boundFreePlacement(action.position, { width:.12,height:.16 }), placementZone:action.position.placementZone } } };
+    case 'ribbon-move': return { ...state, ribbonPosition: { ...boundFreePlacement(action.position, { width: .23, height: .16 }), zone: action.zone || state.ribbonPosition?.zone || 'inside' } };
+    case 'study-zone': if (state.freePlacement) return { ...state, instances: state.instances.map(item => item.id === action.id ? { ...item, placementZone: action.zone } : item) }; return !action.study ? state : {...state,instances:state.instances.map(item=>item.id===action.id&&['plush','chocolate'].includes(getFixedComponent(item.componentId)?.category)
       ? {...item,...initialStudyPosition(state.boxId,item,0,action.zone==='beside'?'beside':'inside'),zone:'layout-study'} :item)};
     case 'remove': return { ...state, instances: state.instances.filter(item => item.id !== action.id) };
     case 'clear': return { ...state, instances: [] };
-    case 'ribbon': return { ...state, ribbonId: action.id };
+    case 'ribbon': return { ...state, ribbonId: action.id, ...(state.freePlacement ? { ribbonPosition: state.ribbonPosition || { x: .32, y: .65, zone: 'inside' } } : {}) };
     case 'card': return { ...state, cardEnabled: action.enabled };
     case 'message': return { ...state, message: action.message };
     default: return state;
@@ -82,4 +96,12 @@ export function estimateSelection(state, cardId) {
   if (!state.boxId || (state.cardEnabled && (!cardId || !validMessage(state.message)))) return null;
   return { boxId: state.boxId, items: Object.entries(counts(state.instances)).sort(([a], [b]) => a.localeCompare(b)).map(([componentId, quantity]) => ({ componentId, quantity })),
     ribbonId: state.ribbonId, giftCard: state.cardEnabled ? { componentId: cardId, message: state.message } : null };
+}
+
+export function freeFootprint(_boxId, componentId) {
+  const category = getFixedComponent(componentId)?.category;
+  const bounds = ARTWORK_METRICS[componentId]?.visibleBounds || [0,0,1,1];
+  const width = bounds[2] - bounds[0] + 1, height = bounds[3] - bounds[1] + 1;
+  const longSide = { flower:.14, plush:.32, chocolate:.22 }[category] || .18;
+  return { width:longSide * width / Math.max(width,height), height:longSide * height / Math.max(width,height) };
 }

@@ -12,15 +12,15 @@ import { useSession } from '../auth/SessionProvider.jsx';
 import { useCart } from '../commerce/CartContext.jsx';
 import { prepareGiftBoxCommerceConfiguration } from '../gift-box/commerce-payload.mjs';
 import { giftBoxPersonalDraftSignature, giftBoxConfigurationWithPersonalization, estimateGiftBoxPersonalizationChoices, assertGiftBoxPersonalizationPriceUnchanged, verifyGiftBoxPersonalDraft } from '../gift-box/personalization-submission.mjs';
-import PersonalizationOptions from '../gift-box/PersonalizationOptions.jsx';
+
 import { usePersonalDraft } from '../gift-box/usePersonalDraft.js';
-import { summarizeGiftBoxPersonalDraft } from '../gift-box/personalization-review.mjs';
-import PersonalTouches, { PersonalPreview } from '../gift-box/PersonalTouches.jsx';
+import PersonalizationEditor from '../gift-box/PersonalizationEditor.jsx';
+
 import '../gift-box/gift-box.css';
 
 const categories = ['box', 'flower', 'plush', 'chocolate', null, 'ribbon'];
 const LAST_STEP = BUILDER_STEPS.length - 1;
-const descriptions = ['The beginning of something lovely. Choose the box that feels just right.', 'A little color, one rose at a time. Mix your favorites.', 'Make room for a soft-hearted companion.', 'A sweet finishing layer. Each tap adds one complete pictured retail unit.', 'Your favorite pictures and words, together in one thoughtful gift.', 'A ribbon, a few words, and a gift that feels personal.'];
+
 export default function GiftBoxBuilderPage() {
   const session = useSession();
   const cart = useCart();
@@ -28,26 +28,27 @@ export default function GiftBoxBuilderPage() {
   const [addingGift, setAddingGift] = useState(false);
   const pendingGiftOperation = useRef(null);
   const catalog = useQuery({ queryKey: ['gift-box', 'catalog'], queryFn: ({ signal }) => getCatalog(signal), retry: false, staleTime: 0 });
-  const [history, dispatch] = useReducer(arrangementReducer, null, () => ({ present: initialArrangement(), past: [] }));
+  const [history, dispatch] = useReducer(arrangementReducer, null, () => ({ present: { ...initialArrangement(), freePlacement: true }, past: [] }));
   const [step, setStep] = useState(0), [revealed, setRevealed] = useState({}), [review, setReview] = useState(false);
   const [notice, setNotice] = useState('');
-  const personal = usePersonalDraft();
+  const personal = usePersonalDraft({ freePlacement: true, arrangementPositions: history.present.photoPositions || {}, onPosition: (id,position) => dispatch({ type:'photo-move',id,position }), hiddenPhotoIds: history.present.hiddenPhotoIds || [], onRemovePhoto: id => dispatch({ type:'photo-remove',id }), onRestorePhoto: id => dispatch({ type:'photo-restore',id }) });
+  const [expanded, setExpanded] = useState(false);
   const [printOptionsByPhoto, setPrintOptionsByPhoto] = useState({});
-  const [surfaceOptionsByEngraving, setSurfaceOptionsByEngraving] = useState({});
+  const [surfaceOptionsByEngraving] = useState({});
   const uploadCache = useRef(new Map());
   const uploadIds = useRef([]);
   const ownerRef = useRef(session.ownerKey);
   const personalizationOptions = useQuery({
     queryKey: ['private', session.ownerKey, 'gift-box-personalization-options'],
     queryFn: ({ signal }) => getGiftBoxPersonalizationOptions(signal),
-    enabled: Boolean(session.ready && catalog.data?.directCommerceEnabled),
+    enabled: Boolean(session.ready && catalog.isSuccess),
     retry: false, staleTime: 30_000, gcTime: 0,
   });
 
   const state = history.present, components = catalog.data?.components || [];
   // Only the server can authorize Gift Box commerce. Without its approval, selections are browser-local visual drafts.
-  const draftMode = !catalog.data?.directCommerceEnabled;
-  const personalSummary = summarizeGiftBoxPersonalDraft(personal, state.boxId);
+  const draftMode = false;
+
   const draftSignature = giftBoxPersonalDraftSignature(state.boxId, personal, printOptionsByPhoto, surfaceOptionsByEngraving);
   const latest = useRef({ ownerKey: session.ownerKey, draftSignature });
   latest.current = { ownerKey: session.ownerKey, draftSignature, arrangementSignature: JSON.stringify(state) };
@@ -72,20 +73,20 @@ export default function GiftBoxBuilderPage() {
   const personalPriceEstimate = estimateGiftBoxPersonalizationChoices({ boxId: state.boxId, personal,
     options: personalizationOptions.data?.options, printOptionsByPhoto, surfaceOptionsByEngraving });
   const cartConfigurationReady = useMemo(() => {
-    if (!review || categoryOverLimit.length || (personal.hasContent && personalPriceEstimate === null)) return false;
+    if (!review || categoryOverLimit.length || personal.sticker.enabled && !personal.sticker.text.trim() || (personal.hasContent && personalPriceEstimate === null)) return false;
     try { return Boolean(prepareGiftBoxCommerceConfiguration(state, { cardId: card?.componentId })); }
     catch { return false; }
-  }, [review, state, card?.componentId, categoryOverLimit.length, personal.hasContent, personalPriceEstimate]);
+  }, [review, state, card?.componentId, categoryOverLimit.length, personal.hasContent, personalPriceEstimate, personal.sticker.enabled, personal.sticker.text]);
   const selectionKey = JSON.stringify(estimateSelection(state, card?.componentId));
   // Position changes leave this key unchanged: no requests are made for dragging.
   const selection = useMemo(() => JSON.parse(selectionKey), [selectionKey]);
   const selectedLines = selection ? [{ componentId: selection.boxId, quantity: 1 }, ...selection.items, ...(selection.ribbonId ? [{ componentId: selection.ribbonId, quantity: 1 }] : []), ...(selection.giftCard ? [{ componentId: selection.giftCard.componentId, quantity: 1 }] : [])] : [];
   const unavailableSelection = !draftMode && selectedLines.some(line => !componentCanSupply(components.find(item => item.componentId === line.componentId), line.quantity));
-  const estimate = useQuery({ queryKey: ['private', session.ownerKey, 'gift-box-estimate', selection], queryFn: ({ signal }) => getEstimate(selection, signal), enabled: !draftMode && Boolean(selection) && !unavailableSelection, retry: false, staleTime: 0, gcTime: 0 });
+  const estimate = useQuery({ queryKey: ['private', session.ownerKey, 'gift-box-estimate', selection], queryFn: ({ signal }) => getEstimate(selection, signal), enabled: Boolean(selection) && !unavailableSelection, retry: false, staleTime: 0, gcTime: 0 });
   const currentEstimate = selection && !unavailableSelection && estimate.isSuccess && !estimate.isFetching ? estimate.data : null;
   const combinedPiastres = currentEstimate && personalPriceEstimate !== null
     ? currentEstimate.componentSubtotalPiastres + personalPriceEstimate : null;
-  const priceText = draftMode ? 'Price on request' : Number.isSafeInteger(combinedPiastres) ? money(combinedPiastres)
+  const priceText = personal.hasContent && personalPriceEstimate === null ? 'Review personal touches' : Number.isSafeInteger(combinedPiastres) ? money(combinedPiastres)
     : currentEstimate ? money(currentEstimate.componentSubtotalPiastres)
       : unavailableSelection ? 'Selection unavailable' : selection && estimate.isFetching ? 'Calculating…' : 'Awaiting estimate';
   useEffect(() => {
@@ -97,8 +98,8 @@ export default function GiftBoxBuilderPage() {
   useEffect(() => { if (shouldFocus.current) { titleRef.current?.focus({ preventScroll: true }); titleRef.current?.scrollIntoView({ block: 'start', behavior: 'instant' }); shouldFocus.current = false; } }, [step, review]);
   function navigate(next, showReview = false) { shouldFocus.current = true; setStep(next); setReview(showReview); }
   async function addConfiguredGiftToCart() {
-    if (addingGift || !cartConfigurationReady || !currentEstimate || !catalog.data?.directCommerceEnabled
-      || !catalog.data.orderableBoxIds?.includes(state.boxId)) return;
+    if (addingGift || !cartConfigurationReady || !currentEstimate || !catalog.data?.freePlacementCommerceEnabled
+      || !catalog.data.orderableBoxIds?.includes(state.boxId) || personal.hasContent && !personalizationOptions.data?.personalizationCheckoutEnabled) return;
     setAddingGift(true);
     setNotice('Verifying your gift box and current prices…');
     try {
@@ -136,67 +137,62 @@ export default function GiftBoxBuilderPage() {
     if (item.category === 'box') {
       if (id !== state.boxId) personal.resetPhotoPositions();
       dispatch({ type: 'box', id });
-      setNotice(state.instances.length ? 'Box changed. Existing items are kept in the placement tray; arrange them again after reviewing the new box.' : 'Box selected.');
+      setNotice('');
     } else if (item.category === 'ribbon') dispatch({ type: 'ribbon', id });
-    else if (canAdd(state, id, draftMode ? undefined : item, publishedBoxLimits, { study, flexible: !draftMode })) { dispatch({ type: 'add', id, instanceId: crypto.randomUUID(), study, flexible: !draftMode, component: draftMode ? undefined : item, boxLimits: publishedBoxLimits }); setNotice(`${componentLabel(item)} added.`); }
-    else setNotice(!draftMode ? 'This selection is unavailable or the technical editor limit has been reached. You can adjust your items or create another gift box.' : item.category === 'flower' && study ? 'No free space for another rose in this approximate layout, or available stock or a reviewed policy limit was reached. Rearrange or choose another box.' : 'Available stock, a reviewed physical policy, or the safe editor size has been reached. Remove an item before adding another.');
+    else if (canAdd(state, id, draftMode ? undefined : item, publishedBoxLimits, { study, flexible: !draftMode })) { dispatch({ type: 'add', id, instanceId: crypto.randomUUID(), study, flexible: !draftMode, component: draftMode ? undefined : item, boxLimits: publishedBoxLimits }); setNotice(''); }
+    else setNotice('This item is unavailable. Reduce the quantity or choose another item.');
   }
   const category = categories[step], options = components.filter(item => item.category === category);
   const label = id => componentLabel(components.find(item => item.componentId === id) || { componentId: id, category: 'item' });
-  return <main className="gb-page" ref={pageRef} aria-busy={catalog.isPending}>
-    <header className="gb-heading"><p className="gb-eyebrow">Made personal, by you</p><h1>Build your gift box</h1><p>A box full of little things. A gesture that means everything.</p></header>
-    <div className="gb-development-note">{catalog.data?.directCommerceEnabled
-      ? 'Choose your components and order your made-to-order gift box. Selected components are priced individually; delivery is quoted separately.'
-      : 'Explore and arrange your gift. Prices, stock and physical fit need confirmation before ordering. Checkout is unavailable for this draft.'}{import.meta.env.DEV && <> <Link to="/dev/gift-box/geometry">Geometry review</Link></>}</div>
-    {categoryOverLimit.length > 0 && <p role="alert" className="gb-feedback">This box has more {categoryOverLimit.join(' / ')} items than its current reviewed limit. Remove the extra items before cart review.</p>}
-    {catalog.isPending ? <p role="status">Loading your choices…</p> : catalog.error ? <div className="gb-empty"><p role="alert">{commerceError(catalog.error)}</p><button className="button button-secondary" onClick={() => catalog.refetch()}>Retry choices</button></div> : <>
-      <nav className="gb-steps" ref={stepsRef} aria-label="Gift builder steps">{BUILDER_STEPS.map((item, index) => <button key={item.id} type="button" aria-current={step === index && !review ? 'step' : undefined} disabled={index > 0 && !state.boxId} onClick={() => navigate(index)}><span>{index + 1}</span><span>{item.title}</span></button>)}</nav>
-      <div className="gb-mobile-summary"><span>{state.instances.length} items{state.boxId ? ' + box' : ''}</span><strong>{priceText}</strong></div>
+  const approvedOptions = personalizationOptions.data?.options || [];
+  const printOptions = approvedOptions.filter(option => option.kind === 'photo_print' && option.boxIds?.includes(state.boxId));
+  const defaultPrint = printOptions.length === 1 ? printOptions[0] : null;
+  const photoPrices = personal.photos.map(photo => printOptions.find(option => option.optionId === printOptionsByPhoto[photo.id])?.pricePiastres);
+  const photoSubtotal = photoPrices.every(Number.isSafeInteger) ? photoPrices.reduce((sum,price) => sum + price,0) : null;
+  useEffect(() => {
+    if (!defaultPrint) return;
+    setPrintOptionsByPhoto(current => {
+      const next = { ...current }; let changed = false;
+      for (const photo of personal.photos) if (!next[photo.id]) { next[photo.id] = defaultPrint.optionId; changed = true; }
+      return changed ? next : current;
+    });
+  }, [defaultPrint, personal.photos]);
+  const canPurchase = catalog.data?.freePlacementCommerceEnabled && catalog.data.orderableBoxIds?.includes(state.boxId)
+    && (!personal.hasContent || personalizationOptions.data?.personalizationCheckoutEnabled);
+  return <main className="gb-page gb-shopping" ref={pageRef} aria-busy={catalog.isPending}>
+    <h1 className="sr-only">Build your gift box</h1>
+    {catalog.isPending ? <p role="status">Loading your choices...</p> : catalog.error ? <div className="gb-empty"><p role="alert">{commerceError(catalog.error)}</p><button className="button button-secondary" onClick={() => catalog.refetch()}>Retry choices</button></div> : <>
+      <nav className="gb-progress" ref={stepsRef} aria-label="Gift builder steps">{BUILDER_STEPS.map((item,index) => <button key={item.id} type="button" aria-label={item.title} title={item.title} aria-current={step === index && !review ? 'step' : undefined} disabled={index > 0 && !state.boxId} onClick={() => navigate(index)}><span className={index <= step ? 'is-complete' : ''}/><span className="sr-only">{item.title}</span></button>)}</nav>
       <div className="gb-workspace">
-        <section className="gb-preview" aria-label="Your gift box"><div className="gb-preview-heading"><h2>Your arrangement</h2><span>{state.instances.length} {state.instances.length === 1 ? 'item' : 'items'}{state.boxId ? ' + box' : ''}</span></div>
-          <ArrangementCanvas state={state} components={components} dispatch={dispatch} study={study} personal={personal}/>
-          <PersonalPreview personal={personal} showPhotoStack={!study || !state.boxId}/>
-          <div className="gb-tools"><button type="button" onClick={() => dispatch({ type: 'undo' })} disabled={!history.past.length}>Undo</button><button type="button" onClick={() => dispatch({ type: 'clear' })} disabled={!state.instances.length}>Clear items</button></div>
-          {study && state.boxId && <p className="gb-help">Drag chocolates and plush between the box and beside area, or use Inside/Beside buttons. Arrange flowers in the preview.</p>}
-          <div className="gb-price-summary" aria-live="polite"><span>{draftMode ? 'Pricing' : 'Component estimate'}</span><strong>{priceText}</strong><small>{draftMode ? 'Browser-only design draft; no price, stock or physical-fit approval is implied.' : <>Delivery quoted separately. Prices are checked by Tap &amp; Wrap.{personal.hasContent ? personalPriceEstimate === null ? ' Choose approved options to include personalization charges.' : ' Includes selected option estimates; final prices are verified on Add to Cart.' : ''}</>}</small></div>
-          {estimate.error && <div className="gb-feedback"><p role="alert">{commerceError(estimate.error)}</p><button type="button" onClick={() => estimate.refetch()}>Retry estimate</button><button type="button" onClick={() => catalog.refetch()}>Refresh choices</button></div>}
-          {unavailableSelection && <p className="gb-feedback" role="alert">A selected component is unavailable or exceeds current stock. Reduce its quantity, remove it, or choose an available replacement.</p>}
-          {(state.boxId || state.instances.length > 0) && <ul className="gb-item-list">{state.boxId && <li><span>{label(state.boxId)} × 1</span><span>{currentEstimate?.items?.find(item => item.componentId === state.boxId) ? money(currentEstimate.items.find(item => item.componentId === state.boxId).lineSubtotalPiastres) : 'Pending'}</span></li>}
-            {Object.entries(quantities).map(([id, quantity]) => <li key={id}><span>{label(id)} × {quantity}</span><div><button type="button" aria-label={`Remove one ${label(id)}`} onClick={() => dispatch({ type: 'remove', id: state.instances.findLast(item => item.componentId === id).id })}>−</button><button type="button" aria-label={`Add one ${label(id)}`} disabled={!canAdd(state, id, draftMode ? undefined : (components.find(item => item.componentId === id) ?? null), publishedBoxLimits, { study, flexible: !draftMode })} onClick={() => choose(id)}>+</button></div><span>{currentEstimate ? money(currentEstimate.items.find(item => item.componentId === id)?.lineSubtotalPiastres) : 'Pending'}</span></li>)}
-            {state.ribbonId && <li><span>{label(state.ribbonId)} × 1</span><span>{currentEstimate ? money(currentEstimate.items.find(item => item.componentId === state.ribbonId)?.lineSubtotalPiastres) : 'Pending'}</span></li>}{state.cardEnabled && <li><span>{card ? componentLabel(card) : 'Gift card'} × 1</span><span>{currentEstimate ? money(currentEstimate.items.find(item => item.componentId === card?.componentId)?.lineSubtotalPiastres) : 'Pending'}</span></li>}
-          </ul>}
+        <section className={`gb-preview ${expanded ? 'is-expanded' : ''}`} aria-label="Your gift box"><div className="gb-preview-heading"><h2>Your arrangement</h2><button className="gb-expand" type="button" aria-label={expanded ? 'Compact preview' : 'Expand preview'} aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>{expanded ? 'Collapse' : 'Expand'}</button></div>
+          <ArrangementCanvas state={state} components={components} dispatch={dispatch} personal={personal} undo={() => dispatch({ type: 'undo' })} canUndo={history.past.length > 0}/>
+          <p className="gb-scale-note">An assembly reference; proportions may vary.</p>
         </section>
-        <section className="gb-choices" aria-label="Build your gift"><header className="gb-step-intro"><p className="gb-eyebrow">{review ? 'Your gift, considered' : `Step ${step + 1} of ${BUILDER_STEPS.length} · ${step === 0 ? 'Required' : 'Optional'}`}</p><h2 ref={titleRef} tabIndex={-1}>{review ? 'Review your gift' : BUILDER_STEPS[step].title}</h2>{step > 0 && step < 4 && !review && <p className="gb-help" role="status">{categoryCounts[categories[step]]} {categories[step] === 'flower' ? 'flowers' : categories[step] === 'plush' ? 'plush toys' : 'chocolates'} selected.{activeLimits ? ` Reviewed policy ceiling: ${activeLimits[categories[step]]}.` : ' No fixed business quantity limit; placement is an approximate visual study.'}</p>}<p>{review ? (draftMode ? 'Review your visual design and request a quote if you like it.' : 'Review your selections. If this box is ready for online ordering, you can add it to your cart.') : descriptions[step]}</p></header>
-          {review ? <div className="gb-review"><section className="gb-review-components" aria-label="Gift components"><h3>Included components</h3><p>{state.boxId ? label(state.boxId) : 'Choose a box'}</p>{Object.entries(quantities).map(([id, quantity]) => <p key={id}>{label(id)} × {quantity}</p>)}{state.ribbonId && <p>Ribbon: {label(state.ribbonId)}</p>}{state.cardEnabled && <><p>{card ? componentLabel(card) : 'Gift card'} × 1</p>{state.message && <><h3>Your message</h3><p className="gb-message">{state.message}</p></>}</>}</section><div className="gb-review-estimate" role="group" aria-label="Component estimate">
-              <span>{draftMode ? 'Pricing pending' : personal.hasContent && personalPriceEstimate !== null ? 'Components + personalization estimate' : 'Estimated components only'}</span>
-              <strong>{priceText}</strong>
-              <p>{draftMode ? 'This arrangement is a visual draft. All prices, stock and delivery are pending confirmation.' : <>Delivery is quoted separately. {personal.hasContent && personalPriceEstimate === null ? 'Photo prints and engravings are not included until approved options are selected.' : 'All prices are rechecked by the server when adding to cart.'}</>}</p>
-            </div>
-            {personal.hasContent && <section className="gb-review-drafts" aria-label="Local personalization drafts">
-              <h3>Personal touches</h3>
-              <p>{personal.photos.length} selected photo(s); {personal.engravings.filter(line => line.text.trim()).length} engraving(s). Not uploaded or priced.</p>
-              <p role="status">Photo layout draft: {personalSummary.inside} inside, {personalSummary.beside} beside, {personalSummary.unpositioned} awaiting placement. {personalSummary.missingStyle} engraving(s) without a lettering style.</p>
-              {personal.engravings.filter(line => line.text.trim()).map(line => <p key={line.id} className="gb-message" dir="auto">{line.text}</p>)}
-              <p aria-live="polite">{personalPriceEstimate === null
-                ? 'Choose approved print types, engraving surfaces and lettering styles on Step 5.'
-                : `Selected personalization option estimate: ${money(personalPriceEstimate)}. Your photos will be securely uploaded only when you choose Add to Cart.`}</p>
-            </section>}
-            <p className="gb-review-restriction">{draftMode ? 'This is a browser-only draft. No order or payment has been created. The request form does not automatically attach your selections.' : personal.hasContent && personalPriceEstimate === null
-              ? 'Choose approved options before adding this personalized gift to your cart.'
-              : catalog.data?.directCommerceEnabled && catalog.data?.orderableBoxIds?.includes(state.boxId)
-                ? 'Your selected component prices and availability are checked again before adding to cart. Delivery is quoted separately.'
-                : 'Online ordering for this arrangement is not yet configured. No order or payment has been created.'}</p>
-            <>{draftMode ? <Link className="button button-primary" to="/customize/gift-box?mode=request">Request a quote</Link> : <button className="button button-primary" type="button"
-              disabled={addingGift || !cartConfigurationReady || !currentEstimate || !catalog.data?.directCommerceEnabled || !catalog.data?.orderableBoxIds?.includes(state.boxId)}
-              onClick={addConfiguredGiftToCart}>{addingGift ? 'Verifying your gift…' : 'Add completed gift to cart'}</button>}</></div> : <>
-            {category && <Options draftMode={draftMode} category={category} components={options} revealed={revealed[category] || 12} onReveal={() => setRevealed(current => ({ ...current, [category]: (current[category] || 12) + 12 }))} onChoose={choose} selectedId={category === 'box' ? state.boxId : state.ribbonId} quantities={quantities} boxSelected={Boolean(state.boxId)} canAddItem={item => canAdd(state, item.componentId, draftMode ? undefined : item, publishedBoxLimits, { study, flexible: !draftMode })}/>}
-            {step === 4 && <><PersonalTouches personal={personal}/><PersonalizationOptions boxId={state.boxId} personal={personal} options={personalizationOptions.data?.options || []} printSelections={printOptionsByPhoto} onPrintSelection={(id, value) => setPrintOptionsByPhoto(old => ({ ...old, [id]: value }))} engravingSelections={surfaceOptionsByEngraving} onEngravingSelection={(id, value) => setSurfaceOptionsByEngraving(old => ({ ...old, [id]: value }))} loading={personalizationOptions.isPending} error={personalizationOptions.error} enabled={Boolean(catalog.data?.directCommerceEnabled)}/></>}
-            {step === LAST_STEP && <div className="gb-finishing">{state.ribbonId && <button type="button" className="button button-secondary" onClick={() => dispatch({ type: 'ribbon', id: null })}>No ribbon</button>}<label className="gb-card-toggle"><input type="checkbox" checked={state.cardEnabled} disabled={!draftMode && !componentCanSupply(card) && !state.cardEnabled} aria-describedby="gb-card-policy" onChange={event => dispatch({ type: 'card', enabled: event.target.checked })}/>Add a gift card{card?.displayName ? ` · ${card.displayName}` : ''}</label><p id="gb-card-policy">{draftMode ? 'Gift card preview · price on request. Your message is optional, up to 500 characters.' : componentCanSupply(card) ? `${money(card.pricePiastres)} for one card, with or without a message. Your message is optional, up to 500 characters.` : 'Gift card unavailable · price, availability, or stock needs approval.'}</p>{state.cardEnabled && <><label htmlFor="gb-card-message">Your personal message (optional)</label><textarea id="gb-card-message" value={state.message} rows={5} aria-describedby="gb-card-count gb-card-policy" aria-invalid={!validMessage(state.message)} onChange={event => { const text = event.target.value; if (codePointCount(text) <= 500) dispatch({ type: 'message', message: text }); }}/><span id="gb-card-count">{codePointCount(state.message)} / 500 characters</span>{!validMessage(state.message) && <p role="alert">Use text without unsupported control characters.</p>}</>}</div>}
+        <section className="gb-choices" aria-label="Build your gift"><header className="gb-step-intro"><p className="gb-progress-message">{review ? 'Ready for a final look' : `${step + 1} of ${BUILDER_STEPS.length}${step > 0 ? ' - Optional' : ''}`}</p><h2 ref={titleRef} tabIndex={-1}>{review ? 'Review your gift' : BUILDER_STEPS[step].title}</h2></header>
+          {review ? <div className="gb-review">
+            {personal.hasContent && personalPriceEstimate === null && <p role="alert">Personalization is unavailable or incomplete. Review your photos and sticker before adding to cart.</p>}
+            {!canPurchase && <p className="gb-purchase-unavailable">Online ordering for this gift is currently unavailable.</p>}
+            <button className="button button-primary" type="button" disabled={addingGift || !canPurchase || !cartConfigurationReady || !currentEstimate} onClick={addConfiguredGiftToCart}>{addingGift ? 'Adding...' : 'Add to Cart'}</button>
+          </div> : <>
+            {category && <Options draftMode={draftMode} category={category} components={options} revealed={revealed[category] || 6} onReveal={() => setRevealed(current => ({ ...current, [category]: (current[category] || 6) + 6 }))} onChoose={choose} selectedId={category === 'box' ? state.boxId : state.ribbonId} quantities={quantities} boxSelected={Boolean(state.boxId)} canAddItem={item => canAdd(state,item.componentId,item,publishedBoxLimits,{study,flexible:true})}/>}
+            {step === 4 && <PersonalizationEditor boxId={state.boxId} personal={personal} options={approvedOptions} printSelections={printOptionsByPhoto} onPrintSelection={(id,value) => setPrintOptionsByPhoto(current => ({ ...current,[id]:value }))}/>}
+            {step === LAST_STEP && <div className="gb-finishing">{state.ribbonId && <button type="button" className="button button-secondary" onClick={() => dispatch({ type: 'ribbon',id:null })}>No ribbon</button>}<label className="gb-card-toggle"><input type="checkbox" checked={state.cardEnabled} disabled={!componentCanSupply(card) && !state.cardEnabled} onChange={event => dispatch({ type:'card',enabled:event.target.checked })}/>Add a gift card {componentCanSupply(card) ? ` - ${money(card.pricePiastres)}` : ' - Unavailable'}</label>{state.cardEnabled && <><label htmlFor="gb-card-message">Your message (optional)</label><textarea id="gb-card-message" value={state.message} rows={3} aria-invalid={!validMessage(state.message)} onChange={event => { if (codePointCount(event.target.value) <= 500) dispatch({ type:'message',message:event.target.value }); }}/>{!validMessage(state.message) && <p role="alert">Use up to 500 characters without unsupported control characters.</p>}</>}</div>}
           </>}
-          <p className="gb-announcement" role="status">{notice}</p>
-          <div className="gb-navigation">{step === 0 ? <Link className="button button-secondary" to="/customize">Back</Link> : <button type="button" className="button button-secondary" onClick={() => navigate(review ? LAST_STEP : step - 1)}>Back</button>}
-            {!review && <><button type="button" className="button button-primary" disabled={!state.boxId} onClick={() => navigate(Math.min(LAST_STEP, step + 1), step === LAST_STEP)}>{step === LAST_STEP ? 'Next: Review' : 'Next'}</button>{step > 0 && <button type="button" className="gb-skip" onClick={() => navigate(Math.min(LAST_STEP, step + 1), step === LAST_STEP)}>Skip this step</button>}</>}
-          </div>
+          <details className="gb-your-gift"><summary>Your Gift <span>{state.instances.length} items{state.boxId ? ' + box' : ''}</span></summary><ul className="gb-item-list">{state.boxId && <li><span>{label(state.boxId)}</span><span>{currentEstimate ? money(currentEstimate.items?.find(item => item.componentId === state.boxId)?.lineSubtotalPiastres) : 'Pending'}</span></li>}
+            {Object.entries(quantities).map(([id,quantity]) => <li key={id}><span>{label(id)} × {quantity}</span><div><button type="button" aria-label={`Remove one ${label(id)}`} onClick={() => dispatch({ type:'remove',id:state.instances.findLast(item => item.componentId === id).id })}>−</button><button type="button" aria-label={`Add one ${label(id)}`} disabled={!canAdd(state,id,components.find(item => item.componentId === id),publishedBoxLimits,{study,flexible:true})} onClick={() => choose(id)}>+</button></div><span>{currentEstimate ? money(currentEstimate.items?.find(item => item.componentId === id)?.lineSubtotalPiastres) : 'Pending'}</span></li>)}
+            {state.ribbonId && <li><span>{label(state.ribbonId)}</span><span>{money(components.find(item => item.componentId === state.ribbonId)?.pricePiastres)}</span></li>}
+            {state.cardEnabled && <li><span>Gift card</span><span>{money(card?.pricePiastres)}</span></li>}
+            {personal.photos.length > 0 && <li><span>{personal.photos.length} photo prints</span><span>{photoSubtotal === null ? 'Choose print types' : money(photoSubtotal)}</span></li>}
+            {personal.sticker.enabled && <li><span>Personalized sticker: <bdi>{personal.sticker.text}</bdi></span><span>{money(approvedOptions.find(option => option.optionId === personal.sticker.optionId)?.pricePiastres)}</span></li>}
+          </ul></details>
+          {categoryOverLimit.length > 0 && <p role="alert">Reduce the selected {categoryOverLimit.join(' / ')} quantity to continue.</p>}
+          {estimate.error && <div className="gb-feedback"><p role="alert">{commerceError(estimate.error)}</p><button type="button" onClick={() => estimate.refetch()}>Retry total</button></div>}
+          {unavailableSelection && <p role="alert">A selected item is unavailable. Remove it or choose a replacement.</p>}
+          {notice && <p className="gb-announcement" role="status">{notice}</p>}
+          <footer className="gb-purchase-bar"><div className="gb-live-total" aria-live="polite"><span>Your total</span><strong>{priceText}</strong><small>Delivery priced separately</small></div><div className="gb-navigation">
+            {step === 0 ? <Link className="button button-secondary" to="/customize">Back</Link> : <button type="button" className="button button-secondary" onClick={() => navigate(review ? LAST_STEP : step - 1)}>Back</button>}
+            {!review && <button type="button" className="button button-primary" disabled={!state.boxId} onClick={() => navigate(Math.min(LAST_STEP,step+1),step === LAST_STEP)}>{step === LAST_STEP ? 'Next: Review' : 'Next'}</button>}
+          </div></footer>
         </section>
       </div>
     </>}

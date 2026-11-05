@@ -25,7 +25,7 @@ function display(option, admin = false) {
   const base = { optionId: option.optionId, kind: option.kind, displayName: option.displayName,
     boxIds: option.boxIds, enabled: option.enabled === true, available: option.available === true,
     pricePiastres: readyForOrder ? option.pricePiastres : null,
-    ...(option.kind === 'engraving_surface' ? { approvedStyleIds: option.approvedStyleIds,
+    ...(['engraving_surface','box_sticker'].includes(option.kind) ? { approvedStyleIds: option.approvedStyleIds,
       approvedColorIds: option.approvedColorIds } : {}) };
   if (!admin) return base;
   return { ...base, configuredPricePiastres: option.pricePiastres, pricing: option.priceApproval,
@@ -37,7 +37,7 @@ export async function listGiftBoxPersonalizationOptions({ admin = false } = {}) 
   const records = await GiftBoxPersonalizationOption.find({}).sort({ kind: 1, optionId: 1 }).limit(100).lean().maxTimeMS(3000);
   const options = admin ? records : records.filter(giftBoxOptionIsOrderPriced);
   return { options: options.map(record => display(record, admin)),
-    personalizationCheckoutEnabled: false };
+    personalizationCheckoutEnabled: env.giftBoxPersonalizedCheckoutEnabled === true };
 }
 export async function updateGiftBoxPersonalizationOption(optionId, raw, actor) {
   actorCheck(actor); await ready();
@@ -97,7 +97,7 @@ export async function quoteGiftBoxPersonalizationPreview(owner, raw) {
   try { intent = parseGiftBoxPersonalizationIntent(raw.intent); }
   catch { throw builderError(400,'GIFT_BOX_PERSONALIZATION_INVALID','Review your photo and engraving selections.'); }
   const ids = intent.photoPrints.map(photo => photo.uploadId);
-  const optionIds = [...new Set([...intent.photoPrints.map(p=>p.printOptionId), ...intent.engravings.map(e=>e.surfaceOptionId)])];
+  const optionIds = [...new Set([...intent.photoPrints.map(p=>p.printOptionId), ...intent.engravings.map(e=>e.surfaceOptionId), ...(intent.sticker ? [intent.sticker.optionId] : [])])];
   const session = await mongoose.startSession();
   try {
     let result;
@@ -111,4 +111,28 @@ export async function quoteGiftBoxPersonalizationPreview(owner, raw) {
     }, { readConcern: { level: 'snapshot' } });
     return { personalization: result, checkoutAllowed: false };
   } finally { await session.endSession(); }
+}
+
+// Serialize merchant edits against order acceptance; a snapshot read alone does
+// not prevent a concurrent disable or repricing from committing first.
+export async function fenceGiftBoxPersonalization(lines, session) {
+  const entries = new Map();
+  for (const line of lines) {
+    const personal = line.giftPersonalization;
+    if (!personal) continue;
+    for (const entry of [...personal.photoPrints, ...personal.engravings, ...(personal.sticker ? [personal.sticker] : [])]) {
+      const id = entry.printOptionId || entry.surfaceOptionId || entry.optionId;
+      const previous = entries.get(id);
+      if (previous && (previous.optionRevision !== entry.optionRevision || previous.pricePiastres !== entry.pricePiastres)) throw builderError(409,'GIFT_BOX_PERSONALIZATION_CHANGED','Review updated personalization prices.');
+      entries.set(id, entry);
+    }
+  }
+  if (!entries.size) return;
+  if (!session?.inTransaction()) throw builderError(503,'TRANSACTIONS_REQUIRED','Personalized ordering requires a transaction.');
+  assertDatabaseWriteAllowed(GiftBoxPersonalizationOption.db, env);
+  for (const [optionId, entry] of entries) {
+    const result = await GiftBoxPersonalizationOption.updateOne({ optionId, __v:entry.optionRevision,
+      enabled:true, available:true, pricePiastres:entry.pricePiastres, priceApprovedAt:new Date(entry.priceApprovedAt) }, { $inc:{ __v:1 } }, { session });
+    if (result.matchedCount !== 1) throw builderError(409,'GIFT_BOX_PERSONALIZATION_CHANGED','Personalization changed. Review your cart before ordering.');
+  }
 }

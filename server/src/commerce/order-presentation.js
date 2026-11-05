@@ -60,7 +60,9 @@ function giftBox(value, { admin }) {
     artwork: { status: 'unavailable' },
     ...(value.snapshotVersion === 'gift-box-order-v2' && value.personalization && Array.isArray(value.personalization.photoPrints)
       && Array.isArray(value.personalization.engravings) ? { personalization: {
+        version: value.personalization.version,
         photoCount: value.personalization.photoPrints.length,
+        ...(value.personalization.sticker ? { sticker: pick(value.personalization.sticker, ['text','styleId','colorId','optionId','application','pricePiastres']) } : {}),
         unitAdjustmentPiastres: value.personalization.unitAdjustmentPiastres,
         engravings: value.personalization.engravings.map(item => pick(item, ['text','styleId','colorId','surfaceOptionId','pricePiastres'])),
         ...(admin ? { photoPrints: value.personalization.photoPrints.map(item => pick(item, ['uploadId','printOptionId','zone','x','y','pricePiastres'])) } : {}),
@@ -69,9 +71,10 @@ function giftBox(value, { admin }) {
   if (admin) {
     result.configurationId = value.configurationId;
     result.configuration = { ...pick(configuration, ['kind', 'contractVersion', 'catalogVersion', 'assetVersion', 'geometryVersion', 'draftGeometryVersion', 'coordinateSystem']),
+      ...(configuration.contractVersion === 'gift-box-commerce-v2' ? { ribbonPlacement: configuration.ribbonPlacement ? pick(configuration.ribbonPlacement, ['x','y','width','height','zone','layer']) : null } : {}),
       selection: { ...pick(selection, ['boxId', 'ribbonId']), items: (selection.items || []).map(item => pick(item, ['componentId', 'quantity'])),
         giftCard: selection.giftCard ? pick(selection.giftCard, ['componentId', 'message']) : null },
-      placements: configuration.placements.map(item => pick(item, ['instanceId', 'componentId', 'x', 'y', 'zone', 'regionId', 'layer'])) };
+      placements: configuration.placements.map(item => pick(item, ['instanceId', 'componentId', 'x', 'y', 'zone', 'regionId', 'layer', 'width', 'height'])) };
     result.fulfillment = { physicalFitCertifiedByGeometry: false,
       policyReference: pick(value.fulfillment?.policyReference, ['contractVersion', 'policyId', 'policyVersion', 'boxId', 'approvedBy', 'approvedAt', 'catalogVersion', 'assetVersion', 'geometryVersion', 'draftGeometryVersion']) };
     result.inventoryClaims = (value.inventoryClaims || []).map(claim => pick(claim, ['kind', 'id', 'mode', 'quantity', 'consumedQuantity', 'settingsRevision']));

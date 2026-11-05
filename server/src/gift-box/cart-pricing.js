@@ -79,6 +79,7 @@ export async function createGiftBoxCartPricingContext(lines, { session, owner = 
     catch { continue; /* repricer will report this corrupt line as removable/unavailable */ }
     intent.photoPrints.forEach(photo => { uploadIds.add(photo.uploadId); optionIds.add(photo.printOptionId); });
     intent.engravings.forEach(entry => optionIds.add(entry.surfaceOptionId));
+    if (intent.sticker) optionIds.add(intent.sticker.optionId);
   }
   const giftUploads = uploadIds.size ? await Upload.find({ _id: { $in: [...uploadIds] }, owner })
     .select('_id owner purpose giftBoxId fieldKey state expiresAt cartId').session(session || null).lean().maxTimeMS(3000) : [];
@@ -133,7 +134,7 @@ export function quoteGiftBoxCartLine(line, context, { stored = true } = {}) {
     if (intent && context?.personalizationError) throw context.personalizationError;
     const personal = intent ? priceGiftBoxPersonalization({ intent, boxId: configuration.selection.boxId,
       owner: context?.owner, uploads: intent.photoPrints.map(photo => context?.giftUploads?.get(photo.uploadId)),
-      options: [...new Set([...intent.photoPrints.map(photo => photo.printOptionId), ...intent.engravings.map(entry => entry.surfaceOptionId)])]
+      options: [...new Set([...intent.photoPrints.map(photo => photo.printOptionId), ...intent.engravings.map(entry => entry.surfaceOptionId), ...(intent.sticker ? [intent.sticker.optionId] : [])])]
         .map(id => context?.giftOptions?.get(id)), cartId: context?.cartId }) : null;
     const personalUnit = personal?.unitAdjustmentPiastres || 0;
     const unitPricePiastres = addPiastres(quote.unitPricePiastres, personalUnit);
@@ -187,6 +188,7 @@ export function publicGiftBoxCartLine(quote) {
     unitPricePiastres: quote.valid ? quote.unitPricePiastres : null, lineTotalPiastres: quote.valid ? quote.lineTotalPiastres : null,
     giftBox: quote.giftBox ? { ...quote.giftBox, ...(quote.giftPersonalization ? { personalization: {
       photoCount: quote.giftPersonalization.photoPrints.length,
+      ...(quote.giftPersonalization.sticker ? { sticker: { text:quote.giftPersonalization.sticker.text, styleId:quote.giftPersonalization.sticker.styleId, colorId:quote.giftPersonalization.sticker.colorId, application:quote.giftPersonalization.sticker.application, pricePiastres:quote.giftPersonalization.sticker.pricePiastres } } : {}),
       engravings: quote.giftPersonalization.engravings.map(entry => ({ text: entry.text, styleId: entry.styleId, colorId: entry.colorId })),
       unitAdjustmentPiastres: quote.giftPersonalization.unitAdjustmentPiastres } } : {}) } : null,
     checkoutAllowed: quote.checkoutAllowed === true, promotionsEligible: false };

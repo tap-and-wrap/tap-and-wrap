@@ -129,8 +129,8 @@ test('customer order hides private upload references while admin sees read-only 
   await mockCommerce(page, { role: 'customer', order: guestGiftOrder });
   await page.goto(`/orders/${commerceOrder.id}`);
   const gift = page.getByRole('article', { name: 'Build Your Gift Box', exact: true });
-  await expect(gift.getByText('Photo prints and engraving at purchase')).toBeVisible();
-  await gift.getByText('Photo prints and engraving at purchase').click();
+  await expect(gift.getByText('Personal touches at purchase')).toBeVisible();
+  await gift.getByText('Personal touches at purchase').click();
   await expect(gift.getByText(`Engraving 1: ${privateEngraving}`, { exact: true })).toBeVisible();
   await expect(gift.getByText('Private print instructions')).toHaveCount(0);
   await expect(gift.locator('img')).toHaveCount(0);
@@ -141,11 +141,22 @@ test('admin order displays saved print placement and engraving instructions with
   const fixture = await mockCommerce(page, { role: 'admin', order: guestGiftOrder });
   await page.goto(`/admin/commerce/orders/${commerceOrder.id}`);
   const gift = page.getByRole('article', { name: 'Build Your Gift Box', exact: true });
-  await expect(gift.getByText('Photo prints and engraving at purchase')).toBeVisible();
-  await gift.getByText('Photo prints and engraving at purchase').click();
+  await expect(gift.getByText('Personal touches at purchase')).toBeVisible();
+  await gift.getByText('Personal touches at purchase').click();
   await expect(gift.getByText('Private print instructions')).toBeVisible();
   await expect(gift.getByText('Photo 1: synthetic-small-print · inside · x 0.2, y 0.4 · EGP 25.00')).toBeVisible();
   await expect(gift.getByText(`Engraving 1: ${privateEngraving}`, { exact: true })).toBeVisible();
   await expect(gift).not.toContainText('7a7a7a7a7a7a7a7a7a7a7a7a');
   expect(fixture.calls.filter(call => /\/files\//.test(call.path))).toHaveLength(0);
+});
+
+for (const type of ['Photo print','Personalized box sticker']) test(`admin explicitly saves owner-confirmed ${type} price and availability`,async({page})=>{
+ await mockCommerce(page,{role:'admin'});const fixture=await mockPersonalizationAdmin(page);await page.goto('/admin/gift-box/personalization-options');
+ await page.getByRole('button',{name:`Prepare ${type} - EGP 20`,exact:true}).click();
+ const editor=page.locator('form.gb-opt-editor');await expect(editor.getByLabel('Price (EGP)')).toHaveValue('20');
+ await editor.getByLabel('Box 2',{exact:true}).check();await editor.getByLabel('Enabled',{exact:true}).check();await editor.getByLabel('Available',{exact:true}).check();
+ if(type === 'Personalized box sticker') await editor.getByLabel(/I have independently confirmed/).check();
+ await editor.getByRole('button',{name:'Save reviewed option'}).click();await expect.poll(()=>fixture.writes.length).toBe(1);
+ expect(fixture.writes[0].payload).toMatchObject({expectedRevision:0,pricePiastres:2000,enabled:true,available:true,boxIds:['box-2']});
+ if(type === 'Personalized box sticker') expect(fixture.writes[0].payload.approvedStyleIds).toHaveLength(12);
 });

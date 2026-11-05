@@ -32,6 +32,6 @@ export default function Options({ draftMode = false, category, components, revea
         {(selectedId === item.componentId || quantities[item.componentId]) && <span className="gb-option-check">{selectedId === item.componentId ? '✓ Selected' : `${quantities[item.componentId]} added`}</span>}
       </button>;
     })}
-  </div>{revealed < components.length && <button className="button button-secondary gb-load-more" type="button" onClick={onReveal}>Load More <span>({Math.min(12, components.length - revealed)} more)</span></button>}
+  </div>{revealed < components.length && <button className="button button-secondary gb-load-more" type="button" onClick={onReveal}>Show 6 more</button>}
   {!components.length && <p className="gb-empty">{category === 'ribbon' ? 'Ribbon colors are awaiting approval.' : 'This collection is awaiting approval.'}</p>}</>;
 }

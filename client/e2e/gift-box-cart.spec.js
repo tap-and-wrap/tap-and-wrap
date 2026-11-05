@@ -19,7 +19,7 @@ test.afterEach(({ page }) => expect(errors.get(page)).toEqual([]));
 
 for (const width of [320, 390, 768, 1440]) test(`mixed cart presents one configured gift and protects its message at ${width}px`, async ({ page }, info) => {
   await page.setViewportSize({ width, height: 1000 });
-  await mockCommerce(page, { cart: mixedCart(), checkoutEnabled: true });
+  await mockCommerce(page, { cart: mixedCart(), checkoutEnabled: false });
   await page.goto('/cart');
   const gift = page.getByRole('article', { name: 'Build Your Gift Box', exact: true });
   await expect(gift.getByRole('heading', { name: 'Build Your Gift Box' })).toBeVisible();
@@ -103,8 +103,8 @@ test('builder review stays closed and does not invoke cart APIs when selections 
   await page.getByRole('button', { name: 'Choose Fixture ribbon-cream-ivory', exact: true }).click();
   await page.getByRole('button', { name: 'Next: Review', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Review your gift', exact: true })).toBeVisible();
-  await expect(page.getByText('Online ordering for this arrangement is not yet configured.', { exact: false })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Add completed gift to cart', exact: true })).toBeDisabled();
+  await expect(page.getByText('Online ordering for this gift is currently unavailable.', { exact: false })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add to Cart', exact: true })).toBeDisabled();
   expect(fixture.calls.filter(call => call.path.endsWith('/requests'))).toHaveLength(0);
   expect(fixture.state.cart.items).toHaveLength(0);
 });
@@ -143,8 +143,8 @@ test('builder serializer reuses selections and individual placement associations
   expect(Object.isFrozen(payload.configuration.placements[0])).toBe(true);
 });
 
-test('builder serializer rejects unfinished arrangements, absent ribbons, malformed Unicode and invalid retry envelopes', () => {
-  for (const patch of [{ ribbonId: null }, { boxId: 'plush-1' }, { message: '🌹'.repeat(501) }]) expect(() => prepareGiftBoxCommerceConfiguration({ ...arrangement(), ...patch }, { cardId: 'gift-card-1' })).toThrow();
+test('builder serializer rejects unfinished arrangements, malformed ribbons, malformed Unicode and invalid retry envelopes', () => {
+  for (const patch of [{ ribbonId: 'unknown' }, { boxId: 'plush-1' }, { message: '🌹'.repeat(501) }]) expect(() => prepareGiftBoxCommerceConfiguration({ ...arrangement(), ...patch }, { cardId: 'gift-card-1' })).toThrow();
   const unplaced = arrangement(); unplaced.instances[0].x = null;
   expect(() => prepareGiftBoxCommerceConfiguration(unplaced, { cardId: 'gift-card-1' })).toThrow();
   const duplicate = arrangement(); duplicate.instances.push({ ...duplicate.instances[0] });
@@ -169,7 +169,7 @@ test('ready gift-box review adds a complete configuration with one operation key
   await page.getByRole('button', { name: 'Finishing Touches', exact: false }).click();
   await page.getByRole('button', { name: 'Choose Fixture ribbon-cream-ivory', exact: true }).click();
   await page.getByRole('button', { name: 'Next: Review', exact: true }).click();
-  const button = page.getByRole('button', { name: 'Add completed gift to cart', exact: true });
+  const button = page.getByRole('button', { name: 'Add to Cart', exact: true });
   await expect(button).toBeEnabled();
   await button.click();
   await expect.poll(() => sent?.kind).toBe('gift_box_v2');

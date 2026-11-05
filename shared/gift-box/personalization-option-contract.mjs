@@ -1,8 +1,9 @@
+import { STICKER_STYLES } from './sticker-styles.mjs';
 import { getFixedComponent } from './definitions.mjs';
 import { LETTERING_STYLES, ENGRAVING_COLORS } from './lettering-styles.mjs';
 
-export const GIFT_BOX_OPTION_KINDS = Object.freeze(['photo_print','engraving_surface']);
-const styleIds = new Set(LETTERING_STYLES.map(v => v.id));
+export const GIFT_BOX_OPTION_KINDS = Object.freeze(['photo_print','engraving_surface','box_sticker']);
+const styleIds = new Set([...LETTERING_STYLES, ...STICKER_STYLES].map(v => v.id));
 const colorIds = new Set(ENGRAVING_COLORS.map(v => v.id));
 const text = v => typeof v === 'string' && v.isWellFormed() && v.trim() === v && v.length > 0 && v.length <= 120 && !/[\u0000-\u001f\u007f]/u.test(v);
 const slug = v => typeof v === 'string' && /^[a-z][a-z0-9-]{0,79}$/.test(v);
@@ -31,6 +32,8 @@ export function parseGiftBoxPersonalizationOptionPatch(raw, { optionId, existing
   if (raw.boxIds !== undefined && (!array(raw.boxIds,12, v => getFixedComponent(v)?.category === 'box') || raw.boxIds.length === 0)) fail();
   if (raw.approvedStyleIds !== undefined && !array(raw.approvedStyleIds,12,v => styleIds.has(v))) fail();
   if (raw.approvedColorIds !== undefined && !array(raw.approvedColorIds,5,v => colorIds.has(v))) fail();
+  if (kind === 'box_sticker' && raw.approvedStyleIds?.some(id => !STICKER_STYLES.some(style => style.id === id))) fail();
+  if (kind === 'engraving_surface' && raw.approvedStyleIds?.some(id => !LETTERING_STYLES.some(style => style.id === id))) fail();
   if (raw.fontLicensesConfirmed !== undefined && typeof raw.fontLicensesConfirmed !== 'boolean') fail();
   if (kind === 'photo_print' && ['approvedStyleIds','approvedColorIds','fontLicensesConfirmed']
     .some(key => Object.hasOwn(raw,key))) fail();
@@ -46,8 +49,9 @@ export function giftBoxOptionIsOrderPriced(option) {
     || (option.pricePiastres === 0 ? option.priceApproval !== 'complimentary' : option.priceApproval !== 'paid')
     || !option.priceApprovedBy || !(option.priceApprovedAt instanceof Date) || Number.isNaN(option.priceApprovedAt.getTime())
     || !array(option.boxIds,12,v => getFixedComponent(v)?.category === 'box') || !option.boxIds.length) return false;
-  if (option.kind === 'engraving_surface' && (option.fontLicensesConfirmed !== true
+  if (['engraving_surface','box_sticker'].includes(option.kind) && (option.fontLicensesConfirmed !== true
     || !array(option.approvedStyleIds,12,v => styleIds.has(v)) || !option.approvedStyleIds.length
     || !array(option.approvedColorIds,5,v => colorIds.has(v)) || !option.approvedColorIds.length)) return false;
+  if (option.kind === 'box_sticker' && option.approvedStyleIds.some(id => !STICKER_STYLES.some(style => style.id === id))) return false;
   return true;
 }

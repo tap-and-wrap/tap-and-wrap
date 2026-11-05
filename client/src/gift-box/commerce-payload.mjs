@@ -1,5 +1,5 @@
 import { ASSET_VERSION, CATALOG_VERSION, GEOMETRY_VERSION, deepFreeze, getFixedComponent } from '../../../shared/gift-box/definitions.mjs';
-import { GIFT_BOX_COMMERCE_KIND, GIFT_BOX_COMMERCE_CONTRACT_VERSION, GIFT_BOX_COMMERCE_COORDINATE_SYSTEM,
+import { GIFT_BOX_FREE_PLACEMENT_VERSION, GIFT_BOX_COMMERCE_KIND, GIFT_BOX_COMMERCE_CONTRACT_VERSION, GIFT_BOX_COMMERCE_COORDINATE_SYSTEM,
   GIFT_BOX_COMMERCE_DRAFT_REFERENCE_VERSION, GIFT_BOX_COMMERCE_SCENE } from '../../../shared/gift-box/commerce-contract.mjs';
 import { estimateSelection } from './state.mjs';
 
@@ -21,6 +21,13 @@ export function prepareGiftBoxCommerceConfiguration(state, { cardId } = {}) {
   const placements = state.instances.map(item => {
     const category = getFixedComponent(item.componentId)?.category;
     const zone = item.placementZone;
+    if (state.freePlacement) {
+      if (!uuid(item.id) || instanceIds.has(item.id) || !['flower','plush','chocolate'].includes(category) || !['inside','beside'].includes(zone)
+        || ![item.x,item.y,item.width,item.height].every(unit) || item.width <= 0 || item.height <= 0 || item.x + item.width > 1.000001 || item.y + item.height > 1.000001) fail();
+      instanceIds.add(item.id);
+      return { instanceId: item.id, componentId: item.componentId, x: item.x, y: item.y, zone, regionId: 'workspace',
+        layer: 20 + Math.round(item.y * 60), width: item.width, height: item.height };
+    }
     if (!uuid(item.id) || instanceIds.has(item.id.toLowerCase()) || !['flower', 'plush', 'chocolate'].includes(category)
       || !['inside', 'beside'].includes(zone) || zone === 'beside' && !['plush', 'chocolate'].includes(category)
       || !/^[a-z][a-z0-9-]{0,79}$/.test(item.regionId || '')
@@ -32,10 +39,10 @@ export function prepareGiftBoxCommerceConfiguration(state, { cardId } = {}) {
     if (!unit(x) || !unit(y) || !Number.isSafeInteger(layer) || layer < 0 || layer > 1000) fail();
     return { instanceId: item.id, componentId: item.componentId, x, y, zone, regionId: item.regionId, layer };
   });
-  return deepFreeze({ kind: GIFT_BOX_COMMERCE_KIND, contractVersion: GIFT_BOX_COMMERCE_CONTRACT_VERSION,
+  return deepFreeze({ kind: GIFT_BOX_COMMERCE_KIND, contractVersion: state.freePlacement ? GIFT_BOX_FREE_PLACEMENT_VERSION : GIFT_BOX_COMMERCE_CONTRACT_VERSION,
     catalogVersion: CATALOG_VERSION, assetVersion: ASSET_VERSION, geometryVersion: GEOMETRY_VERSION,
     draftGeometryVersion: GIFT_BOX_COMMERCE_DRAFT_REFERENCE_VERSION, coordinateSystem: GIFT_BOX_COMMERCE_COORDINATE_SYSTEM,
-    selection, placements });
+    selection, placements, ...(state.freePlacement ? { ribbonPlacement: state.ribbonId ? { x: state.ribbonPosition?.x ?? .32, y: state.ribbonPosition?.y ?? .65, width: .23, height: .16, zone: state.ribbonPosition?.zone || 'inside', layer: 110 } : null } : {}) });
 }
 
 export function prepareGiftBoxCartPayload(state, { cardId, operationKey, quantity = 1 } = {}) {

@@ -9,3 +9,12 @@ export const GIFT_BOX_COMMERCE_COORDINATE_SYSTEM = 'normalized-scene';
 // are imported into commerce by declaring this metadata version.
 export const GIFT_BOX_COMMERCE_DRAFT_REFERENCE_VERSION = 'gift-box-photo-study-2026-10-28.1';
 export const GIFT_BOX_COMMERCE_SCENE = deepFreeze({ x: -.05, y: -.03, width: 1.5, height: 1.12 });
+
+// New purchases use explicit visible footprints and a persisted ribbon pose.
+// v1 coordinates/region semantics remain unchanged for historical records.
+export const GIFT_BOX_FREE_PLACEMENT_VERSION = 'gift-box-commerce-v2';
+export const FREE_WORKSPACE = Object.freeze({ x: 0, y: 0, width: 1, height: 1 });
+export function boundFreePlacement(position, size) {
+  return { x: Math.max(0, Math.min(1 - size.width, position.x)),
+    y: Math.max(0, Math.min(1 - size.height, position.y)) };
+}
