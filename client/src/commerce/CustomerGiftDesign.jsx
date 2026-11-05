@@ -7,7 +7,6 @@ import { sessionSnapshot } from '../auth/session.js';
 import { commerceError, getPrivateAdminFile, money } from './api.js';
 import FreeArrangementCanvas from '../gift-box/FreeArrangementCanvas.jsx';
 import '../gift-box/gift-box.css';
-import '../gift-box/sticker-fonts.css';
 
 export default function CustomerGiftDesign({ giftBox, orderId }) {
   const [urls,setUrls] = useState({}), [loading,setLoading] = useState(false), [error,setError] = useState('');

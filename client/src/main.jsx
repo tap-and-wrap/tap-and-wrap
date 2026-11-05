@@ -14,6 +14,7 @@ import './commerce/commerce.css';
 import './website.css';
 import './storefront.css';
 import './accessibility.css';
+import './gift-box/sticker-fonts.css';
 
 const queryClient = new QueryClient({
   defaultOptions: {

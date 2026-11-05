@@ -4,7 +4,6 @@ import { STICKER_STYLES, stickerStyle } from '../../../shared/gift-box/sticker-s
 import { ENGRAVING_COLORS, getEngravingColor } from '../../../shared/gift-box/lettering-styles.mjs';
 import { eligibleGiftBoxOptions } from './personalization-submission.mjs';
 import { money } from '../commerce/api.js';
-import './sticker-fonts.css';
 
 export default function PersonalizationEditor({ personal, boxId, options, printSelections, onPrintSelection }) {
   const [stylesShown, setStylesShown] = useState(6);
