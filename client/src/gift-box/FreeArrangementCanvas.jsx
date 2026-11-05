@@ -3,28 +3,34 @@ import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Trash2 } from 'lucide-react'
 import { boundFreePlacement } from '../../../shared/gift-box/commerce-contract.mjs';
 import Artwork from './Artwork.jsx';
 import RibbonBow from './RibbonBow.jsx';
-import { photoPrintFootprint } from '../../../shared/gift-box/photo-presentation.mjs';
-import { FREE_PRESENTATION, freePresentation, freeForegroundMasks, freePlacementZone } from './free-presentation.mjs';
+import { photoPrintFootprint,defaultPhotoPosition } from '../../../shared/gift-box/photo-presentation.mjs';
+import { isFreePresentation,sceneY,ribbonFootprint } from '../../../shared/gift-box/presentation.mjs';
+import { customerGiftComponentName } from '../../../shared/gift-box/customer-label.mjs';
+import { freePresentation, freeForegroundMasks, freePlacementZone } from './free-presentation.mjs';
 
 export default function FreeArrangementCanvas({ state, components, dispatch, personal, undo, canUndo, readOnly = false, photoUrls = {}, selectedId, onSelect }) {
-  const canvas = useRef(null), drag = useRef(null);
+  const canvas = useRef(null),root=useRef(null), drag = useRef(null);
   const [localSelected, setLocalSelected] = useState(null), [moving, setMoving] = useState(null);
   const selected = onSelect ? selectedId : localSelected;
   const setSelected = onSelect || setLocalSelected;
-  const presentation = state.presentationVersion === FREE_PRESENTATION ? freePresentation(state.boxId) : null;
+  const presentation = isFreePresentation(state.presentationVersion) ? freePresentation(state.boxId,state.presentationVersion) : null;
   const frame = presentation?.box;
   const boxStyle = frame ? { left:`${frame.x*100}%`,top:`${frame.y*100}%`,width:`${frame.width*100}%`,height:`${frame.height*100}%` } : undefined;
-  const name = id => components.find(item => item.componentId === id)?.displayName || id;
+  const name = id => customerGiftComponentName(components.find(item=>item.componentId === id) || {componentId:id}) || id;
   const objects = [...state.instances.map(item => ({ ...item, zone: item.placementZone, label: name(item.componentId) })),
-    ...(state.ribbonId ? [{ id: 'ribbon', componentId: state.ribbonId, label: name(state.ribbonId), width: .23, height: .16,
-      x: .32, y: .65, zone: 'inside', ...state.ribbonPosition }] : []),
-    ...(personal?.photos || []).map((photo, index) => ({ id: photo.id, photo: true, label: `Photo ${index + 1}`, ...photoPrintFootprint(personal.photoAspectRatios === false ? undefined : photo.aspectRatio,presentation?.aspect || 1),
-      x: .72, y: .22 + index % 4 * .13, ...personal.photoPositions?.[photo.id], zone: personal.photoPositions?.[photo.id]?.placementZone || 'beside', url: photo.url || photoUrls[photo.id] }))].map(item=>{const position=readOnly ? item : boundFreePlacement(item,item);return {...item,...position,zone:readOnly ? item.zone : freePlacementZone(state.boxId,item,position,state.presentationVersion)};});
+    ...(state.ribbonId ? [{ id: 'ribbon', componentId: state.ribbonId, label: name(state.ribbonId), ...ribbonFootprint(state.presentationVersion),
+      x: state.presentationVersion ? .385 : .32, y: sceneY(state.presentationVersion ? .67 : .65,state.presentationVersion), zone: 'inside', ...state.ribbonPosition }] : []),
+    ...(personal?.photos || []).map((photo, index) => ({ id: photo.id, photo: true, label: `Photo ${index + 1}`, ...photoPrintFootprint(personal.photoAspectRatios === false ? undefined : photo.aspectRatio,presentation?.aspect || 1,state.presentationVersion),
+      ...defaultPhotoPosition(index,state.presentationVersion), ...personal.photoPositions?.[photo.id], zone: personal.photoPositions?.[photo.id]?.placementZone || 'beside', url: photo.url || photoUrls[photo.id] }))].map(item=>{const position=readOnly ? item : boundFreePlacement(item,item);return {...item,...position,zone:readOnly ? item.zone : freePlacementZone(state.boxId,item,position,state.presentationVersion)};});
   useEffect(() => {
     if (readOnly || !selected) return undefined;
     const deselect = event => { if (event.key === 'Escape') { setSelected(null); drag.current = null; setMoving(null); } };
+    const outside=event=>{
+      if (!drag.current && !root.current?.contains(event.target) && !event.target.closest?.('[data-gb-preview-control]')) { setSelected(null);setMoving(null); }
+    };
+    document.addEventListener('pointerdown',outside);
     window.addEventListener('keydown',deselect);
-    return () => window.removeEventListener('keydown',deselect);
+    return () => { document.removeEventListener('pointerdown',outside);window.removeEventListener('keydown',deselect); };
   },[readOnly,selected,setSelected]);
   const active = objects.find(item => item.id === selected);
   function save(item, target) {
@@ -48,7 +54,7 @@ export default function FreeArrangementCanvas({ state, components, dispatch, per
     setMoving(null);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   }
-  return <div className="gb-free-preview" onKeyDown={event => { if (event.key === 'Escape') { setSelected(null); drag.current = null; setMoving(null); } }}>
+  return <div ref={root} className="gb-free-preview" style={presentation ? {'--gb-scene-aspect':presentation.aspect} : undefined} onKeyDown={event => { if (event.key === 'Escape') { setSelected(null); drag.current = null; setMoving(null); } }}>
     <div ref={canvas} className="gb-canvas gb-free-canvas" style={presentation ? { aspectRatio:presentation.aspect } : undefined} role="group" aria-label="Gift arrangement preview"
       onPointerDown={event => { if (!event.target.closest('button')) setSelected(null); }}>
       {state.boxId ? <div className="gb-box-art gb-free-box" style={boxStyle}><Artwork key={state.boxId} componentId={state.boxId} role="placement" alt="Selected open box" normalize={Boolean(presentation)}/></div>

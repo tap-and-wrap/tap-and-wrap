@@ -1,3 +1,4 @@
+import { GiftBoxDraftProvider } from './gift-box/GiftBoxDraftProvider.jsx';
 import { lazy, Suspense } from 'react';
 import { Route, Routes, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
@@ -46,7 +47,7 @@ export default function App() {
  const session = useSession();
  const location = useLocation();
  const privateRoute = /^\/(?:admin|orders|my-orders|cart|checkout|track-order)(?:\/|$)/.test(location.pathname) || /^\/products\/[^/]+(?:\/customize)?$/.test(location.pathname) || /^\/customize\/(?:gift-box|laser-engraving)$/.test(location.pathname);
- return <CartProvider><a href="#main-content" className="skip-navigation" onClick={focusMainContent}>Skip to main content</a><RouteMetadata/><Header/><div id="main-content" className="route-content" tabIndex={-1}><RouteFocus/><PageErrorBoundary key={`${location.pathname}:${privateRoute ? session.ownerKey : 'public'}`}><Suspense key={privateRoute ? session.ownerKey : 'public'} fallback={<main className="page-shell" role="status">Loading…</main>}><Routes>
+ return <CartProvider><GiftBoxDraftProvider ownerKey={session.ownerKey}><a href="#main-content" className="skip-navigation" onClick={focusMainContent}>Skip to main content</a><RouteMetadata/><Header/><div id="main-content" className="route-content" tabIndex={-1}><RouteFocus/><PageErrorBoundary key={`${location.pathname}:${privateRoute ? session.ownerKey : 'public'}`}><Suspense key={privateRoute ? session.ownerKey : 'public'} fallback={<main className="page-shell" role="status">Loading…</main>}><Routes>
   <Route path="/" element={<HomePage/>}/>
   <Route path="/shop" element={<ShopPage/>}/>
   <Route path="/categories/:slug" element={<CategoryPage/>}/>
@@ -92,5 +93,5 @@ export default function App() {
   <Route path="/admin/commerce/orders/:id" element={<RequireAdmin><AdminOrderPage/></RequireAdmin>}/>
   <Route path="/home" element={<Navigate to="/" replace/>}/>
   <Route path="*" element={<StaticPage page="notfound"/>}/>
- </Routes></Suspense></PageErrorBoundary></div><Footer/><TrackingConsent/><Toaster position="top-right" offset="calc(var(--site-header-height, 84px) + 16px)" mobileOffset="calc(var(--site-header-height, 76px) + 12px)" richColors/></CartProvider>;
+ </Routes></Suspense></PageErrorBoundary></div><Footer/><TrackingConsent/><Toaster position="top-right" offset="calc(var(--site-header-height, 84px) + 16px)" mobileOffset="calc(var(--site-header-height, 76px) + 12px)" richColors/></GiftBoxDraftProvider></CartProvider>;
 }

@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Maximize2, X } from 'lucide-react';
 import useModalDialog from '../components/useModalDialog.js';
-import { FREE_PRESENTATION } from '../gift-box/free-presentation.mjs';
+import { FREE_PRESENTATION,LEGACY_FREE_PRESENTATION } from '../gift-box/free-presentation.mjs';
 import { BUILDER_STEPS, getFixedComponent } from '../../../shared/gift-box/definitions.mjs';
 import { countBuilderCategories, exceedingBuilderCategories, resolveBoxCategoryLimits } from '../../../shared/gift-box/selection-limits.mjs';
-import { arrangementReducer, canAdd, codePointCount, componentCanSupply, componentLabel, counts, estimateSelection, initialArrangement, validMessage } from '../gift-box/state.mjs';
+import { canAdd, codePointCount, componentCanSupply, componentLabel, counts, estimateSelection, validMessage } from '../gift-box/state.mjs';
 import { getCatalog, getEstimate, getGiftBoxPersonalizationOptions, getGiftBoxPersonalizationQuote } from '../gift-box/api.js';
 import { commerceError, money, uploadPrivateFile } from '../commerce/api.js';
 import ArrangementCanvas from '../gift-box/ArrangementCanvas.jsx';
@@ -17,7 +17,7 @@ import { useCart } from '../commerce/CartContext.jsx';
 import { prepareGiftBoxCommerceConfiguration } from '../gift-box/commerce-payload.mjs';
 import { giftBoxPersonalDraftSignature, giftBoxConfigurationWithPersonalization, estimateGiftBoxPersonalizationChoices, assertGiftBoxPersonalizationPriceUnchanged, verifyGiftBoxPersonalDraft } from '../gift-box/personalization-submission.mjs';
 
-import { usePersonalDraft } from '../gift-box/usePersonalDraft.js';
+import { useGiftBoxDraft } from '../gift-box/GiftBoxDraftProvider.jsx';
 import PersonalizationEditor from '../gift-box/PersonalizationEditor.jsx';
 
 import '../gift-box/gift-box.css';
@@ -27,28 +27,26 @@ const LAST_STEP = BUILDER_STEPS.length - 1;
 
 function ExpandedArrangement({ onClose, children }) {
   const { dialogRef, dialogProps } = useModalDialog({ onClose });
-  return createPortal(<dialog ref={dialogRef} {...dialogProps} className="gb-arrangement-dialog" aria-labelledby="gb-expanded-title"><header><h2 id="gb-expanded-title">Your arrangement</h2><button type="button" aria-label="Close expanded preview" onClick={onClose}><X size={22}/></button></header>{children}</dialog>,document.body);
+  return createPortal(<dialog ref={dialogRef} {...dialogProps} className="gb-arrangement-dialog" aria-labelledby="gb-expanded-title"><header><h2 id="gb-expanded-title">Your arrangement</h2><button type="button" data-gb-preview-control aria-label="Close expanded preview" onClick={onClose}><X size={22}/></button></header>{children}</dialog>,document.body);
+}
+
+function ResetGiftDialog({onClose,onReset}) {
+  const {dialogRef,dialogProps}=useModalDialog({onClose});
+  return createPortal(<dialog ref={dialogRef} {...dialogProps} className="gb-reset-dialog" aria-labelledby="gb-reset-title"><h2 id="gb-reset-title">Start a new gift?</h2><p>This clears your unfinished design and selected photos. Your cart stays saved.</p><div><button type="button" className="button button-secondary" onClick={onClose}>Keep editing</button><button type="button" className="button button-primary" onClick={onReset}>Start new gift</button></div></dialog>,document.body);
 }
 
 export default function GiftBoxBuilderPage() {
   const session = useSession();
   const cart = useCart();
   const navigateCart = useNavigate();
-  const [addingGift, setAddingGift] = useState(false);
-  const pendingGiftOperation = useRef(null);
+  const draft=useGiftBoxDraft();
+  const {history,dispatch,personal,step,setStep,review,setReview,revealed,setRevealed,cardOpen,setCardOpen,selectedId,setSelectedId,
+    printOptionsByPhoto,setPrintOptionsByPhoto,surfaceOptionsByEngraving,addingGift,setAddingGift,uploadCache,uploadIds,pendingGiftOperation,latest,setPhotoAspectRatios}=draft;
   const catalog = useQuery({ queryKey: ['gift-box', 'catalog'], queryFn: ({ signal }) => getCatalog(signal), retry: false, staleTime: 0 });
-  const [history, dispatch] = useReducer(arrangementReducer, null, () => ({ present: { ...initialArrangement(), freePlacement: true }, past: [] }));
-  const [step, setStep] = useState(0), [revealed, setRevealed] = useState({}), [review, setReview] = useState(false);
-  const [notice, setNotice] = useState('');
-  const personal = usePersonalDraft({ freePlacement: true, photoAspectRatios:catalog.data?.photoAspectRatios === true,presentationVersion:history.present.presentationVersion, arrangementPositions: history.present.photoPositions || {}, onPosition: (id,position) => dispatch({ type:'photo-move',id,position }), hiddenPhotoIds: history.present.hiddenPhotoIds || [], onRemovePhoto: id => dispatch({ type:'photo-remove',id }), onRestorePhoto: id => dispatch({ type:'photo-restore',id }) });
-  const [expanded, setExpanded] = useState(false);
-  const [cardOpen,setCardOpen]=useState(false);
-  const [selectedId, setSelectedId] = useState(null);
-  const [printOptionsByPhoto, setPrintOptionsByPhoto] = useState({});
-  const [surfaceOptionsByEngraving] = useState({});
-  const uploadCache = useRef(new Map());
-  const uploadIds = useRef([]);
-  const ownerRef = useRef(session.ownerKey);
+  const [notice,setNotice]=useState(''),[expanded,setExpanded]=useState(false),[resetOpen,setResetOpen]=useState(false);
+  const mounted=useRef(false);
+  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
+  useEffect(()=>{setPhotoAspectRatios(catalog.data?.photoAspectRatios === true);},[catalog.data?.photoAspectRatios,setPhotoAspectRatios]);
   const personalizationOptions = useQuery({
     queryKey: ['private', session.ownerKey, 'gift-box-personalization-options'],
     queryFn: ({ signal }) => getGiftBoxPersonalizationOptions(signal),
@@ -61,17 +59,6 @@ export default function GiftBoxBuilderPage() {
   const draftMode = false;
 
   const draftSignature = giftBoxPersonalDraftSignature(state.boxId, personal, printOptionsByPhoto, surfaceOptionsByEngraving);
-  const latest = useRef({ ownerKey: session.ownerKey, draftSignature });
-  latest.current = { ownerKey: session.ownerKey, draftSignature, arrangementSignature: JSON.stringify(state) };
-  useEffect(() => {
-    // Never reuse a private upload receipt or pending operation after a verified
-    // account/guest session change. Abandoned receipts expire via backend TTL.
-    if (ownerRef.current === session.ownerKey) return;
-    ownerRef.current = session.ownerKey;
-    uploadCache.current.clear(); uploadIds.current = [];
-    pendingGiftOperation.current = null;
-  }, [session.ownerKey]);
-
   // Draft placement is safe in the browser; order conversion remains separately server-authorized.
   const study = true;
   const titleRef = useRef(null), shouldFocus = useRef(false), stepsRef = useRef(null), pageRef = useRef(null);
@@ -109,6 +96,12 @@ export default function GiftBoxBuilderPage() {
   }, [catalog.isSuccess]);
   useEffect(() => { if (shouldFocus.current) { titleRef.current?.focus({ preventScroll: true }); titleRef.current?.scrollIntoView({ block: 'start', behavior: 'instant' }); shouldFocus.current = false; } }, [step, review]);
   function navigate(next, showReview = false) { shouldFocus.current = true; setStep(next); setReview(showReview); }
+  function finishAdded(signature) {
+    if (!draft.isCurrent()) return;
+    if (latest.current.sourceSignature === signature) draft.resetDraft();
+    else { uploadCache.current.clear();pendingGiftOperation.current=null; }
+    if (mounted.current) navigateCart('/cart');
+  }
   async function addConfiguredGiftToCart() {
     if (addingGift || !cartConfigurationReady || !currentEstimate || !catalog.data?.freePlacementCommerceEnabled
       || !catalog.data.orderableBoxIds?.includes(state.boxId) || personal.hasContent && !personalizationOptions.data?.personalizationCheckoutEnabled) return;
@@ -120,8 +113,7 @@ export default function GiftBoxBuilderPage() {
         // The previous response may have been lost after the server attached
         // the photos. Replay the immutable add, not its pre-attachment quote.
         await cart.addGiftBox(pendingGiftOperation.current.payload);
-        pendingGiftOperation.current = null;
-        navigateCart('/cart');
+        finishAdded(sourceSignature);
         return;
       }
       if (pendingGiftOperation.current) {
@@ -137,8 +129,8 @@ export default function GiftBoxBuilderPage() {
           options: personalizationOptions.data?.options, printOptionsByPhoto, surfaceOptionsByEngraving,
           uploadFile: uploadPrivateFile, quote: getGiftBoxPersonalizationQuote,
           cache: uploadCache.current, uploadedIds: uploadIds.current,
-          ownerIsCurrent: () => latest.current.ownerKey === ownerKey,
-          draftIsCurrent: () => latest.current.draftSignature === signatureBefore
+          ownerIsCurrent: () => draft.isCurrent() && latest.current.ownerKey === ownerKey,
+          draftIsCurrent: () => mounted.current && latest.current.draftSignature === signatureBefore
             && latest.current.arrangementSignature === arrangementBefore,
           onProgress: message => setNotice(message),
         });
@@ -153,9 +145,8 @@ export default function GiftBoxBuilderPage() {
           payload: { kind: 'gift_box_v2', operationKey: crypto.randomUUID(), quantity: 1, configuration } };
       }
       await cart.addGiftBox(pendingGiftOperation.current.payload);
-      pendingGiftOperation.current = null;
-      navigateCart('/cart');
-    } catch (error) { setNotice(commerceError(error)); }
+      finishAdded(sourceSignature);
+    } catch (error) { if (mounted.current && draft.isCurrent()) setNotice(commerceError(error)); }
     finally { setAddingGift(false); }
   }
   function choose(id) {
@@ -163,7 +154,7 @@ export default function GiftBoxBuilderPage() {
     if (!item || (!draftMode && !componentCanSupply(item))) return;
     if (item.category === 'box') {
       if (id !== state.boxId) personal.resetPhotoPositions();
-      dispatch({ type: 'box', id, presentationVersion:catalog.data?.presentationVersion === FREE_PRESENTATION ? FREE_PRESENTATION : undefined });
+      dispatch({ type: 'box', id, presentationVersion:state.presentationVersion || (catalog.data?.supportedPresentationVersions?.includes(FREE_PRESENTATION) ? FREE_PRESENTATION : catalog.data?.presentationVersion === LEGACY_FREE_PRESENTATION ? LEGACY_FREE_PRESENTATION : undefined) });
       setNotice('');
     } else if (item.category === 'ribbon') dispatch({ type: 'ribbon', id:state.ribbonId === id ? null : id });
     else if (canAdd(state, id, draftMode ? undefined : item, publishedBoxLimits, { study, flexible: !draftMode })) { dispatch({ type: 'add', id, instanceId: crypto.randomUUID(), study, flexible: !draftMode, component: draftMode ? undefined : item, boxLimits: publishedBoxLimits }); setNotice(''); }
@@ -183,16 +174,18 @@ export default function GiftBoxBuilderPage() {
       for (const photo of personal.photos) if (!next[photo.id]) { next[photo.id] = defaultPrint.optionId; changed = true; }
       return changed ? next : current;
     });
-  }, [defaultPrint, personal.photos]);
+  }, [defaultPrint, personal.photos,setPrintOptionsByPhoto]);
   const canPurchase = catalog.data?.freePlacementCommerceEnabled && catalog.data.orderableBoxIds?.includes(state.boxId)
     && (!personal.hasContent || personalizationOptions.data?.personalizationCheckoutEnabled);
   const canvasProps = {state,components,dispatch,personal,undo:()=>dispatch({type:'undo'}),canUndo:history.past.length > 0,selectedId,onSelect:setSelectedId};
   return <main className={`gb-page gb-shopping ${review ? 'gb-final-review' : ''}`} ref={pageRef} aria-busy={catalog.isPending}>
     <h1 className="sr-only">Build your gift box</h1>
+    {state.boxId && <button type="button" className="gb-new-gift" disabled={addingGift} onClick={()=>setResetOpen(true)}>Start a new gift</button>}
+    {resetOpen && <ResetGiftDialog onClose={()=>setResetOpen(false)} onReset={()=>{draft.resetDraft();setNotice('');setResetOpen(false);}}/>}
     {catalog.isPending ? <p role="status">Loading your choices...</p> : catalog.error ? <div className="gb-empty"><p role="alert">{commerceError(catalog.error)}</p><button className="button button-secondary" onClick={() => catalog.refetch()}>Retry choices</button></div> : <>
       <nav className="gb-progress" ref={stepsRef} aria-label="Gift builder steps">{BUILDER_STEPS.map((item,index) => <button key={item.id} type="button" aria-label={item.title} title={item.title} aria-current={step === index && !review ? 'step' : undefined} disabled={index > 0 && !state.boxId} onClick={() => navigate(index)}><span className={index <= step ? 'is-complete' : ''}/><span className="sr-only">{item.title}</span></button>)}</nav>
       <div className="gb-workspace">
-        <section className="gb-preview" aria-label="Your gift box"><div className="gb-preview-heading"><h2>{review ? 'Made by you' : 'Your arrangement'}</h2><button className="gb-expand" type="button" aria-label="Expand preview" aria-haspopup="dialog" aria-expanded={expanded} onClick={() => setExpanded(true)}><Maximize2 size={19} aria-hidden="true"/></button></div>
+        <section className="gb-preview" aria-label="Your gift box"><div className="gb-preview-heading"><h2>{review ? 'Made by you' : 'Your arrangement'}</h2><button className="gb-expand" type="button" data-gb-preview-control aria-label="Expand preview" aria-haspopup="dialog" aria-expanded={expanded} onClick={() => setExpanded(true)}><Maximize2 size={19} aria-hidden="true"/></button></div>
           {!expanded && <ArrangementCanvas {...canvasProps}/>}
           {expanded && <ExpandedArrangement onClose={()=>setExpanded(false)}><ArrangementCanvas {...canvasProps}/></ExpandedArrangement>}
         </section>

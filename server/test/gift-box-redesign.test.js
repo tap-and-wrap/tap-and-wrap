@@ -129,12 +129,12 @@ test('two different personalized gifts survive sequential adds and checkout', as
   assert.equal((await placeOrder(owner,input)).id,result.id);
 });
 
-test('portrait, landscape and square private prints retain their shape through cart, checkout and admin snapshots',async()=>{
+test('v1 and v2 portrait, landscape and square private prints retain shape through cart, checkout and admin snapshots',async()=>{
   const ratios=[];
-  for(const [width,height] of [[80,120],[120,80],[100,100]]) {
+  for(const version of ['gift-box-presentation-v1','gift-box-presentation-v2']) for(const [width,height] of [[80,120],[120,80],[100,100]]) {
     const photoBytes=await sharp({create:{width,height,channels:3,background:'#915b50'}}).png().toBuffer();
     const design=await personalized({photoBytes});
-    design.presentationVersion='gift-box-presentation-v1';
+    design.presentationVersion=version;
     design.personalizationIntent.photoPrints[0].aspectRatio=width/height;
     ratios.push(width/height);
     await addCartItem(owner,giftCartInput(design));
@@ -145,7 +145,7 @@ test('portrait, landscape and square private prints retain their shape through c
   const {input}=await checkout();const result=await placeOrder(owner,input);
   const order=await Order.findById(result.id).lean();
   const admin=presentOrder(order,{admin:true});
-  assert.ok(admin.lines.every(line=>line.giftBox.configuration.presentationVersion==='gift-box-presentation-v1'));
+  assert.deepEqual(admin.lines.map(line=>line.giftBox.configuration.presentationVersion),[...Array(3).fill('gift-box-presentation-v1'),...Array(3).fill('gift-box-presentation-v2')]);
   assert.deepEqual(admin.lines.map(line=>line.giftBox.personalization.photoPrints[0].aspectRatio),ratios);
   assert.deepEqual(order.lines.map(line=>line.giftBox.configuration.personalizationIntent.photoPrints[0].aspectRatio),ratios);
 });
@@ -193,6 +193,30 @@ test('new presentation frames round-trip without altering historical configurati
   assert.equal(identifyGiftBoxConfiguration(current.configuration).configurationId,current.configurationId);
   assert.equal(old.configuration.presentationVersion,undefined);
   assert.ok(!giftBoxV2CommerceInput.safeParse({...giftCartConfiguration(),presentationVersion:'gift-box-presentation-v1'}).success);
+});
+
+test('expanded scenes preserve version, photo aspects and exact poses through private mixed-gift checkout and admin reconstruction',async()=>{
+  const old=configuration();old.presentationVersion='gift-box-presentation-v1';
+  const historical=identifyGiftBoxConfiguration(old);
+  const photoBytes=await sharp({create:{width:80,height:40,channels:3,background:'#abc'}}).png().toBuffer();
+  const current=await personalized({photoBytes});current.presentationVersion='gift-box-presentation-v2';
+  current.ribbonPlacement={...current.ribbonPlacement,y:.72,height:.16/1.2};
+  current.personalizationIntent.photoPrints[0].aspectRatio=2;
+  await addCartItem(owner,giftCartInput(old));await addCartItem(owner,giftCartInput(current));
+  const cart=await cartResponse(owner);
+  assert.equal(cart.cart.items.length,2);
+  assert.equal(cart.cart.items[0].giftBox.design.presentationVersion,'gift-box-presentation-v1');
+  assert.equal(cart.cart.items[1].giftBox.design.presentationVersion,'gift-box-presentation-v2');
+  const {input}=await checkout();const result=await placeOrder(owner,input);
+  const saved=await Order.findById(result.id).lean(),dto=presentOrder(saved,{admin:true});
+  assert.equal(identifyGiftBoxConfiguration(saved.lines[0].giftBox.configuration).configurationId,historical.configurationId);
+  const gift=dto.lines[1].giftBox;
+  assert.equal(gift.configuration.presentationVersion,'gift-box-presentation-v2');
+  assert.deepEqual(gift.configuration.ribbonPlacement,current.ribbonPlacement);
+  assert.equal(gift.personalization.photoPrints[0].aspectRatio,2);
+  assert.equal(gift.personalization.photoPrints[0].x,.8);
+  assert.ok(!JSON.stringify(cart).includes(current.personalizationIntent.photoPrints[0].uploadId));
+  assert.equal((await placeOrder(owner,input)).id,result.id);
 });
 test('saved repricing and disabling invalidate checkout without changing component prices',async () => {
   await addCartItem(owner,giftCartInput(await personalized())); const {input} = await checkout();

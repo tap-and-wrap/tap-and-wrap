@@ -114,5 +114,11 @@ export function usePersonalDraft({ freePlacement = false, photoAspectRatios = fa
   }
   const visiblePhotos = photos.filter(photo => !hiddenPhotoIds.includes(photo.id));
   const hasContent = visiblePhotos.length > 0 || (freePlacement ? sticker.enabled : engravings.some(line => line.text.trim().length > 0));
-  return { freePlacement, photoAspectRatios, presentationVersion, sticker, updateSticker, photos: visiblePhotos, engravings, notice, hasContent, photoPositions: arrangementPositions || photoPositions, placePhoto, resetPhotoPositions, addPhotos, removePhoto, movePhoto, updateEngraving, addEngraving, removeEngraving };
+  function reset() {
+    for (const url of objectUrls.current) URL.revokeObjectURL(url);
+    objectUrls.current.clear();photosRef.current=[];setPhotos([]);setPhotoPositions({});setNotice('');
+    setSticker({enabled:false,text:'',styleId:'sticker-rochester-v1',colorId:'black',optionId:null});
+    setEngravings([{id:'line-1',text:'',styleId:null,colorId:DEFAULT_ENGRAVING_COLOR}]);
+  }
+  return { freePlacement, photoAspectRatios, presentationVersion, sticker, updateSticker, photos: visiblePhotos, engravings, notice, hasContent, photoPositions: arrangementPositions || photoPositions, placePhoto, resetPhotoPositions, addPhotos, removePhoto, movePhoto, updateEngraving, addEngraving, removeEngraving,reset };
 }

@@ -1,3 +1,4 @@
+import { customerGiftComponentName } from '../../../shared/gift-box/customer-label.mjs';
 import { money } from './api.js';
 const groups = [['flower', 'Flowers'], ['plush', 'Soft Toys'], ['chocolate', 'Chocolates']];
 
@@ -9,14 +10,14 @@ export default function GiftBoxCartSummary({ giftBox }) {
   const cardSelected = giftBox.giftCard?.selected === true;
   const message = typeof giftBox.giftCard?.message === 'string' ? giftBox.giftCard.message : '';
   return <div className="commerce-gift-summary">
-    <p className="commerce-gift-description">{items.length ? items.map(item=>`${item.quantity} ${item.displayName || item.category}`).join(' · ') : giftBox.box?.displayName || 'Your chosen box'}</p>
+    <p className="commerce-gift-description">{items.length ? items.map(item=>`${item.quantity} ${customerGiftComponentName(item) || item.category}`).join(' · ') : giftBox.box?.displayName || 'Your chosen box'}</p>
     <div className="commerce-gift-indicators">{ribbon && <span>Ribbon</span>}{cardSelected && <span>Gift card</span>}{giftBox.personalization?.photoCount > 0 && <span>{giftBox.personalization.photoCount} photos</span>}{giftBox.personalization?.sticker && <span>Personalized sticker</span>}</div>
     <details className="commerce-design-details"><summary>View design and details</summary>
     <dl>
       <div><dt>Box</dt><dd>{giftBox.box?.displayName || 'Saved box details unavailable'}</dd></div>
       {groups.map(([category, label]) => {
         const selected = items.filter(item => item?.category === category && Number.isSafeInteger(item.quantity) && item.quantity > 0);
-        return <div key={category}><dt>{label}</dt><dd>{selected.length ? <ul>{selected.map(item => <li key={item.componentId}>{item.displayName || 'Component details unavailable'} × {item.quantity}</li>)}</ul> : 'None selected'}</dd></div>;
+        return <div key={category}><dt>{label}</dt><dd>{selected.length ? <ul>{selected.map(item => <li key={item.componentId}>{customerGiftComponentName(item) || 'Component details unavailable'} × {item.quantity}</li>)}</ul> : 'None selected'}</dd></div>;
       })}
       <div><dt>Ribbon</dt><dd className="commerce-gift-ribbon">{ribbonColor && <span aria-hidden="true" className="commerce-gift-swatch" style={{ backgroundColor: ribbonColor }} />}{ribbon ? (ribbon.displayName || 'Saved ribbon details unavailable') : 'No ribbon selected'}</dd></div>
       <div><dt>Gift card</dt><dd>{cardSelected ? 'Selected' : 'Not selected'}</dd></div>

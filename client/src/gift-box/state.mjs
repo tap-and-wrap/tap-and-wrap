@@ -1,5 +1,7 @@
+import { isFreePresentation,verticalSceneScale,sceneY,ribbonFootprint } from '../../../shared/gift-box/presentation.mjs';
+import { customerGiftComponentName } from '../../../shared/gift-box/customer-label.mjs';
 import { ARTWORK_METRICS } from './artwork-metrics.mjs';
-import { FREE_PRESENTATION, freePresentation, freePlacementZone, freeInteriorPosition } from './free-presentation.mjs';
+import { FREE_PRESENTATION, freePresentation, freePlacementZone, freeInteriorPosition,initialFreePosition } from './free-presentation.mjs';
 import { boundFreePlacement } from '../../../shared/gift-box/commerce-contract.mjs';
 import { getFixedComponent } from '../../../shared/gift-box/definitions.mjs';
 import { countBuilderCategories, resolveBoxCategoryLimits } from '../../../shared/gift-box/selection-limits.mjs';
@@ -8,7 +10,7 @@ import { findNextRosePosition } from './rose-packing.mjs';
 export { STUDY_SIZES } from './placement-study.mjs';
 
 export const initialArrangement = () => ({ boxId: null, instances: [], ribbonId: null, cardEnabled: false, message: '' });
-export const componentLabel = item => item.displayName || `${item.category === 'flower' ? 'Rose' : item.category[0].toUpperCase() + item.category.slice(1)} ${item.componentId.replace(/^[^-]+-/, '')} · name pending`;
+export const componentLabel = item => customerGiftComponentName(item) || `${item.category === 'flower' ? 'Rose' : item.category === 'plush' ? 'Soft Toy' : item.category[0].toUpperCase() + item.category.slice(1)} ${item.componentId.replace(/^[^-]+-/, '')} · name pending`;
 export const counts = instances => instances.reduce((result, item) => ({ ...result, [item.componentId]: (result[item.componentId] || 0) + 1 }), {});
 export const codePointCount = text => Array.from(text).length;
 export function validMessage(text) {
@@ -43,9 +45,9 @@ export function canAdd(state, id, component, publishedBoxLimits, { study = false
 export function changeArrangement(state, action) {
   switch (action.type) {
     case 'box': if (state.freePlacement) {
-      const version=action.presentationVersion === FREE_PRESENTATION ? FREE_PRESENTATION : state.presentationVersion;
-      const before=state.presentationVersion ? freePresentation(state.boxId).aspect : 1;
-      const after=version ? freePresentation(action.id).aspect : 1;
+      const version=isFreePresentation(action.presentationVersion) ? action.presentationVersion : state.presentationVersion;
+      const before=state.presentationVersion ? freePresentation(state.boxId,state.presentationVersion).aspect : 1;
+      const after=version ? freePresentation(action.id,version).aspect : 1;
       return {...state,boxId:action.id,...(version ? {presentationVersion:version} : {}),instances:state.instances.map(item=>{
         const size={width:item.width,height:item.height*after/before};
         return {...item,...size,...boundFreePlacement(item,size)};
@@ -57,8 +59,12 @@ export function changeArrangement(state, action) {
       const footprint=studyFootprint(state.boxId,action.id,action.reviewSize);
       if (state.freePlacement) {
         const size = freeFootprint(state.boxId, action.id, state.presentationVersion);
+        if(state.presentationVersion===FREE_PRESENTATION) {
+          const item={id:action.instanceId,componentId:action.id,...size};
+          return {...state,instances:[...state.instances,{...item,...initialFreePosition(state.boxId,item,state.instances,state.presentationVersion),regionId:'workspace',layerBase:20,anchorOffsetY:.5}]};
+        }
         return { ...state, instances: [...state.instances, { id: action.instanceId, componentId: action.id, ...size,
-          ...boundFreePlacement(getFixedComponent(action.id)?.category === 'plush' ? freeInteriorPosition(state.boxId,size,state.presentationVersion) : { x: (state.presentationVersion ? .5 - size.width / 2 : .30) + state.instances.length % 5 * .035, y: .36 + Math.floor(state.instances.length / 5) % 5 * .04 }, size),
+          ...boundFreePlacement(getFixedComponent(action.id)?.category === 'plush' ? freeInteriorPosition(state.boxId,size,state.presentationVersion) : { x: (state.presentationVersion ? .5 - size.width / 2 : .30) + state.instances.length % 5 * .035, y: sceneY(.36 + Math.floor(state.instances.length / 5) % 5 * .04,state.presentationVersion) }, size),
           placementZone: 'inside', regionId: 'workspace', layerBase: 20, anchorOffsetY: .5 }] };
       }
       const item={id:action.instanceId,componentId:action.id,...footprint};
@@ -81,12 +87,12 @@ export function changeArrangement(state, action) {
     case 'photo-remove': return { ...state, hiddenPhotoIds: [...new Set([...(state.hiddenPhotoIds || []), action.id])] };
     case 'photo-restore': return { ...state, hiddenPhotoIds: (state.hiddenPhotoIds || []).filter(id => id !== action.id) };
     case 'photo-move': return { ...state, photoPositions: { ...state.photoPositions, [action.id]: { ...boundFreePlacement(action.position, { width:action.position.width ?? .12,height:action.position.height ?? .16 }), placementZone:action.position.placementZone } } };
-    case 'ribbon-move': return { ...state, ribbonPosition: { ...boundFreePlacement(action.position, { width: .23, height: .16 }), zone: action.zone || state.ribbonPosition?.zone || 'inside' } };
+    case 'ribbon-move': return { ...state, ribbonPosition: { ...boundFreePlacement(action.position, ribbonFootprint(state.presentationVersion)), zone: action.zone || state.ribbonPosition?.zone || 'inside' } };
     case 'study-zone': if (state.freePlacement) return { ...state, instances: state.instances.map(item => item.id === action.id ? { ...item, placementZone: action.zone } : item) }; return !action.study ? state : {...state,instances:state.instances.map(item=>item.id===action.id&&['plush','chocolate'].includes(getFixedComponent(item.componentId)?.category)
       ? {...item,...initialStudyPosition(state.boxId,item,0,action.zone==='beside'?'beside':'inside'),zone:'layout-study'} :item)};
     case 'remove': return { ...state, instances: state.instances.filter(item => item.id !== action.id) };
     case 'clear': return { ...state, instances: [] };
-    case 'ribbon': return { ...state, ribbonId: action.id, ...(state.freePlacement ? { ribbonPosition: state.ribbonPosition || { x: state.presentationVersion ? .385 : .32, y: state.presentationVersion ? .67 : .65, zone: 'inside' } } : {}) };
+    case 'ribbon': return { ...state, ribbonId: action.id, ...(state.freePlacement ? { ribbonPosition: state.ribbonPosition || { x: state.presentationVersion ? .385 : .32, y: sceneY(state.presentationVersion ? .67 : .65,state.presentationVersion), zone: 'inside' } } : {}) };
     case 'card': return { ...state, cardEnabled: action.enabled };
     case 'message': return { ...state, message: action.message };
     default: return state;
@@ -112,7 +118,19 @@ export function freeFootprint(boxId, componentId, presentationVersion) {
   const bounds = ARTWORK_METRICS[componentId]?.visibleBounds || [0,0,1,1];
   const width = bounds[2] - bounds[0] + 1, height = bounds[3] - bounds[1] + 1;
   if (presentationVersion === FREE_PRESENTATION) {
-    const {box,aspect} = freePresentation(boxId);
+    const {box,aspect}=freePresentation(boxId,presentationVersion),scale=verticalSceneScale(presentationVersion);
+    const ratio=width/height;
+    if (category === 'chocolate') {
+      const visualWidth=Math.min(box.width*.25,box.width*.30*ratio);
+      return {width:visualWidth,height:visualWidth/ratio*aspect};
+    }
+    const visualWidth=box.width*(category === 'flower' ? .19*.845 : category === 'plush' ? .55 : .25);
+    const visualHeight=visualWidth/ratio*aspect;
+    const fit=Math.min(1,(.6/scale)/visualHeight)*(category === 'plush' ? .8 : 1);
+    return {width:visualWidth*fit,height:visualHeight*fit};
+  }
+  if (isFreePresentation(presentationVersion)) {
+    const {box,aspect} = freePresentation(boxId,presentationVersion);
     const visualWidth = box.width * ({flower:.19,plush:.55,chocolate:.29}[category] || .25);
     const visualHeight=visualWidth * height / width * aspect;
     if (category !== 'plush') return {width:visualWidth,height:Math.min(.6,visualHeight)};

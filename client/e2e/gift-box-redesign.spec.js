@@ -5,6 +5,7 @@ import { fillCheckout,isolatedImageFile } from './commerce-fixtures.js';
 import { freePresentation,freeForegroundMasks,freePlacementZone,sourcePointInWorkspace,FREE_PRESENTATION } from '../src/gift-box/free-presentation.mjs';
 import { getDraftGeometry } from '../../shared/gift-box/geometry-drafts.mjs';
 import { freeFootprint } from '../src/gift-box/state.mjs';
+import { sceneY,verticalSceneScale } from '../../shared/gift-box/presentation.mjs';
 import { ARTWORK_METRICS } from '../src/gift-box/artwork-metrics.mjs';
 
 const errors = new WeakMap();
@@ -54,7 +55,7 @@ test('ribbon pose persists in cart proposal and does not change workspace framin
   await page.getByRole('button',{name:'Finishing Touches',exact:true}).click(); while (!await page.getByRole('button',{name:'Choose Fixture ribbon-navy',exact:true}).count()) await page.getByRole('button',{name:'Show 6 more'}).click(); await page.getByRole('button',{name:'Choose Fixture ribbon-navy',exact:true}).click();
   const ribbon=page.getByRole('button',{name:'Move Fixture ribbon-navy',exact:true}); await ribbon.focus(); await ribbon.press('ArrowRight'); await ribbon.press('ArrowDown');
   await page.getByRole('button',{name:'Next: Review'}).click(); await page.getByRole('button',{name:'Add Your Gift to Cart'}).click();
-  await expect(page).toHaveURL(/\/cart$/); expect(['inside','beside']).toContain(audit.adds[0].configuration.ribbonPlacement.zone); expect(audit.adds[0].configuration.ribbonPlacement.x).toBeCloseTo(.405); expect(audit.adds[0].configuration.ribbonPlacement.y).toBeCloseTo(.69);
+  await expect(page).toHaveURL(/\/cart$/); expect(['inside','beside']).toContain(audit.adds[0].configuration.ribbonPlacement.zone); expect(audit.adds[0].configuration.ribbonPlacement.x).toBeCloseTo(.405); expect(audit.adds[0].configuration.ribbonPlacement.y).toBeCloseTo(sceneY(.67,FREE_PRESENTATION)+.02);
   expect(before.width).toBeGreaterThan(0);
 });
 
@@ -72,11 +73,11 @@ test('photos stay local until Add; distinct licensed sticker styles, price, priv
   await photo.press('ArrowDown'); await page.getByRole('button',{name:'Undo',exact:true}).click();
   await expect(page.locator('.gb-zone-toggle')).toHaveCount(0);
   await sticker.locator('summary').click();
-  await page.getByLabel('Name or message').fill('With love');
+  await page.getByLabel('Write a name, special date, or heartfelt message').fill('With love');
   await expect(page.locator('.gb-sticker-style-list button')).toHaveCount(6);
   const families=await page.locator('.gb-sticker-style-list button span').evaluateAll(els=>els.map(el=>getComputedStyle(el).fontFamily)); expect(new Set(families).size).toBe(6);
   await page.getByRole('button',{name:'Show 6 more'}).click(); await expect(page.locator('.gb-sticker-style-list button')).toHaveCount(12);
-  await page.getByRole('button',{name:/Amiri/}).click(); await page.getByLabel('Name or message').fill('\u0623\u062d\u0645\u062f'); await page.getByRole('radio',{name:'Gold',exact:true}).check();
+  await page.getByRole('button',{name:/Amiri/}).click(); await page.getByLabel('Write a name, special date, or heartfelt message').fill('\u0623\u062d\u0645\u062f'); await page.getByRole('radio',{name:'Gold',exact:true}).check();
   await page.evaluate(()=>document.fonts.ready); expect(await page.evaluate(()=>document.fonts.check('20px "Gift-amiri"'))).toBe(true);
   await expect(page.locator('.gb-live-total strong')).toContainText('50.00');
   await page.screenshot({path:info.outputPath('personalization.png'),fullPage:true});
@@ -116,8 +117,8 @@ test('all twelve depth masks and descriptive zones preserve free coordinates; to
     const baselineWidth=freePresentation(boxId).box.width*.55,baselineHeight=baselineWidth*ratio*freePresentation(boxId).aspect;
     const fit=Math.min(1,.6/baselineHeight);
     expect(plush.width).toBeCloseTo(baselineWidth*fit*.8);
-    expect(plush.height).toBeCloseTo(baselineHeight*fit*.8);
-    expect(plush.height/plush.width/freePresentation(boxId).aspect).toBeCloseTo(ratio);
+    expect(plush.height*verticalSceneScale(FREE_PRESENTATION)).toBeCloseTo(baselineHeight*fit*.8);
+    expect(plush.height/plush.width/freePresentation(boxId,FREE_PRESENTATION).aspect).toBeCloseTo(ratio);
   }
 });
 
@@ -127,11 +128,11 @@ test('sticker and gift-card disclosures activate only the intended purchases and
   const sticker=page.locator('.gb-personal-section').last();await sticker.locator('summary').click();
   await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
   await expect(page.getByRole('checkbox')).toHaveCount(0);
-  await page.getByLabel('Name or message').fill('  ');await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
-  await page.getByLabel('Name or message').fill('Nour');await expect(page.locator('.gb-live-total strong')).toContainText('30.00');
-  const proof=await page.locator('.gb-sticker-proof').boundingBox(),input=await page.getByLabel('Name or message').boundingBox();expect(proof.y+proof.height).toBeLessThan(input.y);
+  await page.getByLabel('Write a name, special date, or heartfelt message').fill('  ');await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
+  await page.getByLabel('Write a name, special date, or heartfelt message').fill('Nour');await expect(page.locator('.gb-live-total strong')).toContainText('30.00');
+  const proof=await page.locator('.gb-sticker-proof').boundingBox(),input=await page.getByLabel('Write a name, special date, or heartfelt message').boundingBox();expect(proof.y+proof.height).toBeLessThan(input.y);
   await page.getByRole('radio',{name:'Gold',exact:true}).check();await sticker.locator('summary').click();await sticker.locator('summary').click();
-  await expect(page.getByLabel('Name or message')).toHaveValue('Nour');await expect(page.getByRole('radio',{name:'Gold',exact:true})).toBeChecked();
+  await expect(page.getByLabel('Write a name, special date, or heartfelt message')).toHaveValue('Nour');await expect(page.getByRole('radio',{name:'Gold',exact:true})).toBeChecked();
   await page.getByRole('button',{name:'Remove sticker',exact:true}).click();await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
   await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();
   await page.locator('.gb-finishing summary').click();await expect(page.locator('.gb-live-total strong')).toContainText('20.00');
@@ -207,7 +208,7 @@ for(const width of [320,390,1440]) test(`polished arrangement, review, cart and 
   await page.getByRole('button',{name:'Make It Personal',exact:true}).click();
   await page.locator('.gb-personal-section').last().locator('summary').click();
 
-  await page.getByLabel('Name or message').fill('For Nour');
+  await page.getByLabel('Write a name, special date, or heartfelt message').fill('For Nour');
   await expect(page.locator('.gb-sticker-style-list button span')).toHaveText(Array(6).fill('For Nour'));
   await expect(page.locator('.gb-sticker-style-list small')).toHaveCount(0);
   await page.getByRole('radio',{name:'Gold',exact:true}).focus(); await page.keyboard.press('Space');

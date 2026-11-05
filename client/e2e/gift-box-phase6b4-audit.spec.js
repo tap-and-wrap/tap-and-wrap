@@ -25,7 +25,7 @@ for(const width of [320,390,768,1440]) test(`six shopping stages keep prices vis
 for(const width of [320,768,1440]) test(`personalization reflows with 200 percent text at ${width}px`,async({page})=>{
  await page.setViewportSize({width,height:1000});await localCheckoutFixture(page,{personalized:true});await beginGiftBox(page);await page.getByRole('button',{name:'Make It Personal',exact:true}).click();
  await page.evaluate(()=>{document.documentElement.style.fontSize='200%';});await page.locator('.gb-personal-section summary').last().click();
- await page.getByLabel('Name or message').fill('Literal text');
+ await page.getByLabel('Write a name, special date, or heartfelt message').fill('Literal text');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await expect(page.locator('.gb-sticker-style-list button')).toHaveCount(6);
 });

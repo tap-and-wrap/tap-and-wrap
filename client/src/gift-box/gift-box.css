@@ -370,3 +370,9 @@
 .gb-sticker-editor .gb-sticker-proof{margin:0 0 4px}
 .gb-sticker-editor .gb-edit-gift{justify-self:start}
 .gb-finishing textarea{width:100%;min-width:0;padding:12px;border:1px solid var(--tw-border);border-radius:7px;background:#fff;color:inherit;font:inherit}
+.gb-personal-body .gb-sticker-editor>input[type=text]{display:block;width:100%;min-width:0;min-height:44px;padding:12px;border:1px solid var(--tw-control-border,#A58276);border-radius:7px;background:var(--tw-bg,#FFFCFB);color:var(--tw-ink,#62483F);font:inherit}
+.gb-personal-body .gb-sticker-editor>input[type=text]:focus-visible{outline:2px solid var(--tw-button,#795045);outline-offset:3px}
+.gb-new-gift{display:block;margin:0 0 12px auto;min-height:44px;padding:8px 0;background:transparent;border:0;color:var(--tw-ink);text-decoration:underline;text-underline-offset:4px;font:inherit;font-size:.82rem;cursor:pointer}
+.gb-reset-dialog{width:min(460px,calc(100% - 28px));padding:24px;border:1px solid var(--tw-border);border-radius:12px;background:var(--tw-bg);color:var(--tw-ink)}
+.gb-reset-dialog::backdrop{background:#39292280}.gb-reset-dialog h2{font-family:var(--tw-font-display);font-size:2rem;margin:0 0 12px}.gb-reset-dialog p{line-height:1.6}.gb-reset-dialog>div{display:flex;flex-wrap:wrap;gap:12px;margin-top:20px}
+.gb-arrangement-dialog .gb-free-preview{max-width:min(100%,calc((100dvh - 240px)*var(--gb-scene-aspect,1)))}

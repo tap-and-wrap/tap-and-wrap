@@ -1,3 +1,4 @@
+import { customerGiftComponentName } from '../../../shared/gift-box/customer-label.mjs';
 import { useEffect, useRef, useState } from 'react';
 import { ASSET_VERSION } from '../../../shared/gift-box/definitions.mjs';
 import { stickerStyle } from '../../../shared/gift-box/sticker-styles.mjs';
@@ -46,7 +47,7 @@ export default function CustomerGiftDesign({ giftBox, orderId }) {
       <p className="gb-scale-note">Saved customer arrangement - proportions are an assembly reference.</p>
       {photos.length > 0 && <button type="button" className="button button-secondary" disabled={loading || photos.every(photo => urls[photo.uploadId])} onClick={showPhotos}>{loading ? 'Loading private photos...' : 'View private photos in design'}</button>}
       {error && <p role="alert">{error}</p>}
-      <ul>{config.placements.map(item => <li key={item.instanceId}>{giftBox.components.find(component => component.componentId === item.componentId)?.displayName || item.componentId} - {item.zone}</li>)}{config.ribbonPlacement && <li>Ribbon - {config.ribbonPlacement.zone}</li>}{photos.map((photo,index) => <li key={photo.uploadId}>Photo {index+1} - {photo.zone} - {money(photo.pricePiastres)}</li>)}</ul>
+      <ul>{config.placements.map(item => <li key={item.instanceId}>{customerGiftComponentName(giftBox.components.find(component => component.componentId === item.componentId)) || item.componentId} - {item.zone}</li>)}{config.ribbonPlacement && <li>Ribbon - {config.ribbonPlacement.zone}</li>}{photos.map((photo,index) => <li key={photo.uploadId}>Photo {index+1} - {photo.zone} - {money(photo.pricePiastres)}</li>)}</ul>
     </> : <p>This historical order does not contain a complete supported visual design. Use the saved component and placement instructions below.</p>}
     {sticker && <div className="gb-saved-sticker"><h3>Personalized sticker</h3><p>Apply to exterior front</p><p dir="auto" style={{ fontFamily:`"${stickerStyle(sticker.styleId)?.fontFamily}"`, color:getEngravingColor(sticker.colorId).hex, background:getEngravingColor(sticker.colorId).contrast === 'dark' ? '#62483f' : '#fff', fontSize:'2rem',padding:'12px' }}>{sticker.text}</p><p>{stickerStyle(sticker.styleId)?.label || sticker.styleId} - {getEngravingColor(sticker.colorId).label} - {money(sticker.pricePiastres)}</p></div>}
   </section>;

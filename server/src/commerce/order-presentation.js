@@ -1,3 +1,4 @@
+import { isFreePresentation } from '../../../shared/gift-box/presentation.mjs';
 // Order snapshots contain Mixed fields for immutable historical records. Customer
 // responses must explicitly select their public contract, never spread a record.
 function pick(value, keys) {
@@ -71,7 +72,7 @@ function giftBox(value, { admin }) {
   if (admin) {
     result.configurationId = value.configurationId;
     result.configuration = { ...pick(configuration, ['kind', 'contractVersion', 'catalogVersion', 'assetVersion', 'geometryVersion', 'draftGeometryVersion', 'coordinateSystem']),
-      ...(configuration.presentationVersion === 'gift-box-presentation-v1' ? {presentationVersion:configuration.presentationVersion} : {}),
+      ...(isFreePresentation(configuration.presentationVersion) ? {presentationVersion:configuration.presentationVersion} : {}),
       ...(configuration.contractVersion === 'gift-box-commerce-v2' ? { ribbonPlacement: configuration.ribbonPlacement ? pick(configuration.ribbonPlacement, ['x','y','width','height','zone','layer']) : null } : {}),
       selection: { ...pick(selection, ['boxId', 'ribbonId']), items: (selection.items || []).map(item => pick(item, ['componentId', 'quantity'])),
         giftCard: selection.giftCard ? pick(selection.giftCard, ['componentId', 'message']) : null },

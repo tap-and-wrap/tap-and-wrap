@@ -1,3 +1,4 @@
+import { FREE_PRESENTATIONS } from '../../../shared/gift-box/presentation.mjs';
 import mongoose from 'mongoose';
 import { FIXED_COMPONENTS, CATALOG_VERSION, PENDING_CATEGORIES } from '../../../shared/gift-box/definitions.mjs';
 import { GiftBoxComponentSetting } from '../models/GiftBoxComponentSetting.js';
@@ -47,7 +48,7 @@ export async function listBuilderComponents(rawQuery, { admin = false } = {}) {
   const ordered = [...definitions].sort((a, b) => categories.indexOf(a.category) - categories.indexOf(b.category)
     || (byId.get(a.id)?.displayOrder ?? a.initialDisplayOrder) - (byId.get(b.id)?.displayOrder ?? b.initialDisplayOrder)
     || a.initialDisplayOrder - b.initialDisplayOrder || a.id.localeCompare(b.id));
-  return { catalogVersion: CATALOG_VERSION, photoAspectRatios:true, presentationVersion:'gift-box-presentation-v1', boxLimits, components: ordered.slice((input.page - 1) * input.limit, input.page * input.limit).map(item => present(item, byId.get(item.id), admin)),
+  return { catalogVersion: CATALOG_VERSION, photoAspectRatios:true, presentationVersion:'gift-box-presentation-v1',supportedPresentationVersions:FREE_PRESENTATIONS, boxLimits, components: ordered.slice((input.page - 1) * input.limit, input.page * input.limit).map(item => present(item, byId.get(item.id), admin)),
     pagination: { page: input.page, limit: input.limit, total: ordered.length, pages: Math.ceil(ordered.length / input.limit) },
     pendingCategories: Object.keys(PENDING_CATEGORIES).filter(key => !FIXED_COMPONENTS.some(item => item.category === key)),
     arrangementApproved: false, submissionAllowed: false, orderConversionAllowed: false,

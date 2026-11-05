@@ -1,3 +1,4 @@
+import { customerGiftComponentName } from '../../../shared/gift-box/customer-label.mjs';
 import { money } from './api';
 import { LETTERING_STYLES, ENGRAVING_COLORS } from '../../../shared/gift-box/lettering-styles.mjs';
 
@@ -19,7 +20,7 @@ export default function GiftBoxOrderDetails({ giftBox, admin = false }) {
       <div><dt>Box</dt><dd>{giftBox.box?.displayName || 'Saved box details unavailable'}</dd></div>
       {groups.map(([category, label]) => {
         const items = components.filter(item => item.category === category);
-        return <div key={category}><dt>{label}</dt><dd>{items.length ? <ul>{items.map(item => <li key={item.componentId}>{item.displayName} × {item.quantityPerBox}</li>)}</ul> : 'None selected'}</dd></div>;
+        return <div key={category}><dt>{label}</dt><dd>{items.length ? <ul>{items.map(item => <li key={item.componentId}>{customerGiftComponentName(item)} × {item.quantityPerBox}</li>)}</ul> : 'None selected'}</dd></div>;
       })}
       <div><dt>Ribbon</dt><dd className="commerce-gift-ribbon">{ribbonColor && <span aria-hidden="true" className="commerce-gift-swatch" style={{ backgroundColor: ribbonColor }} />}{giftBox.ribbon ? (giftBox.ribbon.displayName || 'Saved ribbon details unavailable') : 'No ribbon selected'}</dd></div>
       <div><dt>Gift card</dt><dd>{giftBox.giftCard?.selected ? 'Selected' : 'Not selected'}</dd></div>
@@ -38,7 +39,7 @@ export default function GiftBoxOrderDetails({ giftBox, admin = false }) {
     <details className="commerce-gift-order-disclosure"><summary>Component prices at purchase</summary>
       <p className="commerce-muted">Selections above are per completed gift box. Prices below are saved purchase amounts.</p>
       <ul className="commerce-gift-order-prices">{components.map(item => <li key={item.componentId}>
-        <span>{item.displayName}</span><span>{item.quantityPerBox} × {money(item.unitPricePiastres)} = {money(item.perBoxSubtotalPiastres)} per box</span>
+        <span>{customerGiftComponentName(item)}</span><span>{item.quantityPerBox} × {money(item.unitPricePiastres)} = {money(item.perBoxSubtotalPiastres)} per box</span>
         <strong>{item.quantityForLine} units · {money(item.lineSubtotalPiastres)} for this order line</strong>
         {admin && <span>Inventory: {item.inventory?.owner || 'Source unavailable'} · {modeName[item.inventory?.mode] || 'Mode unavailable'} · {item.inventory?.requiredQuantity} required{item.inventory?.mode === 'tracked' ? ` · ${item.inventory.trackedDemand} consumed` : ' · no numeric stock consumed'}</span>}
         {admin && <span>Price approval: {item.priceApproval} · settings revision {item.settingsRevision}{item.priceApprovedAt ? ` · ${item.priceApprovedAt}` : ''}</span>}

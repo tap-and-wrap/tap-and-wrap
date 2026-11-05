@@ -1,6 +1,7 @@
 import { ASSET_VERSION, CATALOG_VERSION, GEOMETRY_VERSION, deepFreeze, getFixedComponent } from '../../../shared/gift-box/definitions.mjs';
 import { GIFT_BOX_FREE_PLACEMENT_VERSION, GIFT_BOX_COMMERCE_KIND, GIFT_BOX_COMMERCE_CONTRACT_VERSION, GIFT_BOX_COMMERCE_COORDINATE_SYSTEM,
   GIFT_BOX_COMMERCE_DRAFT_REFERENCE_VERSION, GIFT_BOX_COMMERCE_SCENE } from '../../../shared/gift-box/commerce-contract.mjs';
+import { sceneY,ribbonFootprint } from '../../../shared/gift-box/presentation.mjs';
 import { freePlacementZone } from './free-presentation.mjs';
 import { estimateSelection } from './state.mjs';
 
@@ -44,7 +45,7 @@ export function prepareGiftBoxCommerceConfiguration(state, { cardId } = {}) {
     catalogVersion: CATALOG_VERSION, assetVersion: ASSET_VERSION, geometryVersion: GEOMETRY_VERSION,
     draftGeometryVersion: GIFT_BOX_COMMERCE_DRAFT_REFERENCE_VERSION, coordinateSystem: GIFT_BOX_COMMERCE_COORDINATE_SYSTEM,
     ...(state.presentationVersion ? { presentationVersion: state.presentationVersion } : {}),
-    selection, placements, ...(state.freePlacement ? { ribbonPlacement: state.ribbonId ? { x: state.ribbonPosition?.x ?? .32, y: state.ribbonPosition?.y ?? .65, width: .23, height: .16, zone:freePlacementZone(state.boxId,{width:.23,height:.16},state.ribbonPosition || {x:.32,y:.65},state.presentationVersion), layer:190 } : null } : {}) });
+    selection, placements, ...(state.freePlacement ? { ribbonPlacement: state.ribbonId ? { x: state.ribbonPosition?.x ?? .32, y: state.ribbonPosition?.y ?? sceneY(state.presentationVersion ? .67 : .65,state.presentationVersion), ...ribbonFootprint(state.presentationVersion), zone:freePlacementZone(state.boxId,ribbonFootprint(state.presentationVersion),state.ribbonPosition || {x:.32,y:.65},state.presentationVersion), layer:190 } : null } : {}) });
 }
 
 export function prepareGiftBoxCartPayload(state, { cardId, operationKey, quantity = 1 } = {}) {

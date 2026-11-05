@@ -2,7 +2,7 @@
 // into the already versioned Gift Box intent. No Files, blobs, previews, names,
 // prices, claims of fit, or client-selected R2 keys leave this boundary.
 import { parseGiftBoxPersonalizationIntent, GIFT_BOX_PERSONALIZATION_INTENT_VERSION } from '../../../shared/gift-box/personalization-intent.mjs';
-import { photoPrintFootprint } from '../../../shared/gift-box/photo-presentation.mjs';
+import { photoPrintFootprint,defaultPhotoPosition } from '../../../shared/gift-box/photo-presentation.mjs';
 import { boundFreePlacement } from '../../../shared/gift-box/commerce-contract.mjs';
 import { freePresentation,freePlacementZone } from './free-presentation.mjs';
 import { photoPrintPosition } from './photo-print-study.mjs';
@@ -20,7 +20,7 @@ export function prepareGiftBoxPersonalizationHandoff({ boxId, personal, uploaded
   }
   const photoPrints=personal.photos.map((photo,index) => {
     const uploadId=receipts.get(photo.id), printOptionId=printOptionsByPhoto?.[photo.id];
-    const position=personal.freePlacement ? { x: .72, y: .22 + index % 4 * .13, placementZone: 'beside', ...personal.photoPositions?.[photo.id] } : photoPrintPosition(boxId,index,personal.photoPositions?.[photo.id]);
+    const position=personal.freePlacement ? { ...defaultPhotoPosition(index,personal.presentationVersion), ...personal.photoPositions?.[photo.id] } : photoPrintPosition(boxId,index,personal.photoPositions?.[photo.id]);
     if (!uploadId || !printOptionId || !position) throw new Error('Choose a print option and position for every verified photo.');
     // The visual study includes an extended beside-box scene. Convert to the
     // shared normalized-scene coordinates rather than dropping beside photos.
@@ -28,7 +28,7 @@ export function prepareGiftBoxPersonalizationHandoff({ boxId, personal, uploaded
     const y=personal.freePlacement ? position.y : (position.y-GIFT_BOX_COMMERCE_SCENE.y)/GIFT_BOX_COMMERCE_SCENE.height;
     if (personal.freePlacement && personal.photoAspectRatios) {
       if (photo.dimensionsPending || !Number.isFinite(photo.aspectRatio)) throw new Error('Wait for your photos to finish opening.');
-      const size=photoPrintFootprint(photo.aspectRatio,personal.presentationVersion ? freePresentation(boxId).aspect : 1);
+      const size=photoPrintFootprint(photo.aspectRatio,personal.presentationVersion ? freePresentation(boxId,personal.presentationVersion).aspect : 1,personal.presentationVersion);
       const bounded=boundFreePlacement({x,y},size);
       return {uploadId,printOptionId,...bounded,aspectRatio:photo.aspectRatio,zone:freePlacementZone(boxId,size,bounded,personal.presentationVersion)};
     }

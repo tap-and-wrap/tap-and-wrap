@@ -94,6 +94,8 @@ test('a lost add response retries the same personalized operation without anothe
   await page.getByRole('button',{name:/^Add (?:Your Gift to Cart|to Cart)$/}).click();
   await expect(page.locator('.gb-announcement')).not.toBeEmpty();
   await expect.poll(async()=> (await cart(context)).items.length).toBe(1);
+  await page.getByRole('banner').getByRole('link',{name:'Tap and Wrap home',exact:true}).click();
+  await page.goBack();
   await add(page);
   const result = await cart(context); expect(result.items).toHaveLength(1); expect(result.items[0].quantity).toBe(1);
 });
