@@ -141,3 +141,20 @@ test('noindex product shell uses its own canonical and cannot inherit conditiona
   const r=await handleSeoRequest(new Request('https://shop.example/products/draft',{headers:{Cookie:'synthetic-private-cookie',Range:'bytes=0-10','If-None-Match':'old'}}),f.env);
   assert.equal(r.status,200);assert.match(await r.text(),/rel="canonical" href="https:\/\/shop.example\/products\/draft"/);for(const name of ['content-length','etag','content-encoding'])assert.equal(r.headers.get(name),null);assert.match(r.headers.get('x-robots-tag'),/noindex/);
 });
+
+
+test('bundled sticker fonts and license notices bypass document routing while missing and unrelated files stay closed',async()=>{
+  const f=fixture();f.assets.delete('/seo-manifest.json');
+  for(const path of ['/fonts/gift-sticker/amiri.ttf','/fonts/gift-sticker/amiri-LICENSE.txt','/fonts/gift-sticker/SOURCE.txt']){
+    f.assets.set(path,'synthetic-static-font-or-notice');f.seen.length=0;f.calls.length=0;
+    const response=await f.get(path);assert.equal(response.status,200,path);
+    assert.equal(await response.text(),'synthetic-static-font-or-notice');
+    assert.deepEqual(f.seen,[path]);assert.equal(f.calls.length,0);
+    assert.equal((await f.get(path,'HEAD')).status,200);
+  }
+  assert.equal((await f.get('/fonts/gift-sticker/missing.ttf')).status,404);
+  f.assets.set('/fonts/gift-sticker/private.env','never-publish');
+  const denied=await f.get('/fonts/gift-sticker/private.env');assert.equal(denied.status,404);
+  assert.doesNotMatch(await denied.text(),/never-publish|React shell/);
+  const privateDocument=await f.get('/admin/private.ttf');assert.equal(privateDocument.headers.get('cache-control'),'private, no-store');
+});

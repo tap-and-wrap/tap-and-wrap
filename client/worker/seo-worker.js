@@ -87,7 +87,8 @@ async function routeRequest(request, env) {
   if (!env.ASSETS?.fetch) throw new Error('Missing assets');
   if (!['GET', 'HEAD'].includes(request.method)) return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' } });
   const url = new URL(request.url), pathname = url.pathname;
-  if (pathname.startsWith('/assets/') || /\.(?:webp|png|jpe?g|svg|ico|woff2?|mp4|webm|css|js)$/i.test(pathname)) return env.ASSETS.fetch(request);
+  if (pathname.startsWith('/assets/') || /\.(?:webp|png|jpe?g|svg|ico|woff2?|mp4|webm|css|js)$/i.test(pathname)
+    || /^\/fonts\/gift-sticker\/(?:[a-z]+(?:\.ttf|-LICENSE\.txt)|SOURCE\.txt)$/.test(pathname)) return env.ASSETS.fetch(request);
   const manifest = await manifestFor(env.ASSETS, request);
   const path = pathname === '/' ? '/' : pathname.replace(/\/+$/, '');
   const withdrawn = withdrawalPaths(env.SEO_WITHDRAWN_PATHS);
