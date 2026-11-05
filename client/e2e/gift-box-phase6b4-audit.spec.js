@@ -16,7 +16,7 @@ for(const width of [320,390,768,1440]) test(`six shopping stages keep prices vis
  await page.locator('.gb-personal-section summary').first().click();await page.getByLabel('Choose your photos').setInputFiles(isolatedImageFile('local.png'));
  await expect(page.locator('.gb-photo-thumbnails img')).toHaveCount(1);expect(fixture.uploads).toHaveLength(0);
  await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();await page.getByLabel('Add a gift card').check();await page.getByLabel('Your message').fill('Literal customer message');
- await page.getByRole('button',{name:'Next: Review'}).click();await expect(page.getByRole('button',{name:'Add to Cart',exact:true})).toBeDisabled();
+ await page.getByRole('button',{name:'Next: Review'}).click();await expect(page.getByRole('button',{name:'Add Your Gift to Cart',exact:true})).toBeDisabled();
  expect(fixture.calls.filter(call=>/cart\/items|orders|uploads/.test(call.path))).toHaveLength(0);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.screenshot({path:info.outputPath(`shopping-audit-${width}.png`),fullPage:true});

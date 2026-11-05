@@ -24,6 +24,7 @@ for (const width of [320, 390, 768, 1440]) test(`mixed cart presents one configu
   const gift = page.getByRole('article', { name: 'Build Your Gift Box', exact: true });
   await expect(gift.getByRole('heading', { name: 'Build Your Gift Box' })).toBeVisible();
   await expect(page.getByRole('heading', { name: commerceProduct.name, exact: true })).toBeVisible();
+  await gift.getByText('View design and details', {exact:true}).click();
   for (const text of ['Fixture Box Two', 'Fixture Red Rose × 3', 'Fixture Plush One × 1', 'Fixture Chocolate One × 2', 'Fixture Navy Ribbon', 'Selected']) await expect(gift.getByText(text, { exact: true })).toBeVisible();
   await expect(gift.getByText(message, { exact: true })).toBeHidden();
   const disclosure = gift.getByText('View gift-card message', { exact: true });
@@ -32,12 +33,12 @@ for (const width of [320, 390, 768, 1440]) test(`mixed cart presents one configu
   await expect(gift.locator('b')).toHaveCount(0);
   await page.keyboard.press('Enter');
   await expect(gift.getByText(message, { exact: true })).toBeHidden();
-  await expect(gift.getByText('Gift box preview unavailable', { exact: true })).toBeVisible();
-  await expect(gift.locator('img')).toHaveCount(0);
+  await expect(gift.getByText('Gift box preview unavailable', { exact: true })).toHaveCount(0);
+  await expect(gift.locator('img')).toHaveCount(1);
   await expect(gift.getByRole('combobox', { name: 'Quantity for Build Your Gift Box' })).toHaveValue('1');
   await expect(page.getByRole('link', { name: 'Proceed to Checkout', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Checkout unavailable', exact: true })).toBeDisabled();
-  await expect(page.getByText('Gift boxes are excluded from discounts.', { exact: false })).toBeVisible();
+  await expect(gift.getByText('View design and details')).toBeVisible();
   await expect(page.locator('.commerce-summary')).toContainText('1,210.00');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.evaluate(() => window.scrollTo(0, 0));
@@ -104,7 +105,7 @@ test('builder review stays closed and does not invoke cart APIs when selections 
   await page.getByRole('button', { name: 'Next: Review', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Review your gift', exact: true })).toBeVisible();
   await expect(page.getByText('Online ordering for this gift is currently unavailable.', { exact: false })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Add to Cart', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Add Your Gift to Cart', exact: true })).toBeDisabled();
   expect(fixture.calls.filter(call => call.path.endsWith('/requests'))).toHaveLength(0);
   expect(fixture.state.cart.items).toHaveLength(0);
 });
@@ -169,7 +170,7 @@ test('ready gift-box review adds a complete configuration with one operation key
   await page.getByRole('button', { name: 'Finishing Touches', exact: false }).click();
   await page.getByRole('button', { name: 'Choose Fixture ribbon-cream-ivory', exact: true }).click();
   await page.getByRole('button', { name: 'Next: Review', exact: true }).click();
-  const button = page.getByRole('button', { name: 'Add to Cart', exact: true });
+  const button = page.getByRole('button', { name: 'Add Your Gift to Cart', exact: true });
   await expect(button).toBeEnabled();
   await button.click();
   await expect.poll(() => sent?.kind).toBe('gift_box_v2');

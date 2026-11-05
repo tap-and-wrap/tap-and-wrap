@@ -3,10 +3,16 @@ import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Trash2 } from 'lucide-react'
 import { boundFreePlacement } from '../../../shared/gift-box/commerce-contract.mjs';
 import Artwork from './Artwork.jsx';
 import RibbonBow from './RibbonBow.jsx';
+import { FREE_PRESENTATION, freePresentation } from './free-presentation.mjs';
 
-export default function FreeArrangementCanvas({ state, components, dispatch, personal, undo, canUndo, readOnly = false, photoUrls = {} }) {
+export default function FreeArrangementCanvas({ state, components, dispatch, personal, undo, canUndo, readOnly = false, photoUrls = {}, selectedId, onSelect }) {
   const canvas = useRef(null), drag = useRef(null);
-  const [selected, setSelected] = useState(null), [moving, setMoving] = useState(null);
+  const [localSelected, setLocalSelected] = useState(null), [moving, setMoving] = useState(null);
+  const selected = onSelect ? selectedId : localSelected;
+  const setSelected = onSelect || setLocalSelected;
+  const presentation = state.presentationVersion === FREE_PRESENTATION ? freePresentation(state.boxId) : null;
+  const frame = presentation?.box;
+  const boxStyle = frame ? { left:`${frame.x*100}%`,top:`${frame.y*100}%`,width:`${frame.width*100}%`,height:`${frame.height*100}%` } : undefined;
   const name = id => components.find(item => item.componentId === id)?.displayName || id;
   const objects = [...state.instances.map(item => ({ ...item, zone: item.placementZone, label: name(item.componentId) })),
     ...(state.ribbonId ? [{ id: 'ribbon', componentId: state.ribbonId, label: name(state.ribbonId), width: .23, height: .16,
@@ -18,7 +24,7 @@ export default function FreeArrangementCanvas({ state, components, dispatch, per
     const deselect = event => { if (event.key === 'Escape') { setSelected(null); drag.current = null; setMoving(null); } };
     window.addEventListener('keydown',deselect);
     return () => window.removeEventListener('keydown',deselect);
-  },[readOnly,selected]);
+  },[readOnly,selected,setSelected]);
   const active = objects.find(item => item.id === selected);
   function save(item, target, zone = item.zone) {
     const position = boundFreePlacement(target, item);
@@ -41,9 +47,9 @@ export default function FreeArrangementCanvas({ state, components, dispatch, per
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   }
   return <div className="gb-free-preview" onKeyDown={event => { if (event.key === 'Escape') { setSelected(null); drag.current = null; setMoving(null); } }}>
-    <div ref={canvas} className="gb-canvas gb-free-canvas" role="group" aria-label="Gift arrangement preview"
+    <div ref={canvas} className="gb-canvas gb-free-canvas" style={presentation ? { aspectRatio:presentation.aspect } : undefined} role="group" aria-label="Gift arrangement preview"
       onPointerDown={event => { if (!event.target.closest('button')) setSelected(null); }}>
-      {state.boxId ? <div className="gb-box-art gb-free-box"><Artwork componentId={state.boxId} role="placement" alt="Selected open box"/></div>
+      {state.boxId ? <div className="gb-box-art gb-free-box" style={boxStyle}><Artwork key={state.boxId} componentId={state.boxId} role="placement" alt="Selected open box" normalize={Boolean(presentation)}/></div>
         : <div className="gb-preview-empty"><p>A gift, made by you.</p><span>Choose your box</span></div>}
       {objects.map(item => {
         const position = moving?.id === item.id ? moving : item;

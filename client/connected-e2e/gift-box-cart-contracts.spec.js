@@ -44,7 +44,7 @@ test('real mixed cart persists one configured gift, updates quantities and keeps
   await expect(gift.getByRole('heading', { name: 'Build Your Gift Box' })).toBeVisible();
   await expect(gift.getByText(/Synthetic rose-red/)).toBeVisible();
   await expect(gift.getByText(/Synthetic chocolate-1/)).toBeVisible();
-  await expect(gift.getByText('Gift box preview unavailable')).toBeVisible();
+  await expect(gift.locator('img')).toHaveCount(1);
   await expect(gift.getByText('Private fixture message', { exact: true })).toBeHidden();
   await gift.getByText('View gift-card message', { exact: true }).click();
   await expect(gift.getByText('Private fixture message', { exact: true })).toBeVisible();

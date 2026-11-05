@@ -9,6 +9,9 @@ export default function GiftBoxCartSummary({ giftBox }) {
   const cardSelected = giftBox.giftCard?.selected === true;
   const message = typeof giftBox.giftCard?.message === 'string' ? giftBox.giftCard.message : '';
   return <div className="commerce-gift-summary">
+    <p className="commerce-gift-description">{items.length ? items.map(item=>`${item.quantity} ${item.displayName || item.category}`).join(' · ') : giftBox.box?.displayName || 'Your chosen box'}</p>
+    <div className="commerce-gift-indicators">{ribbon && <span>Ribbon</span>}{cardSelected && <span>Gift card</span>}{giftBox.personalization?.photoCount > 0 && <span>{giftBox.personalization.photoCount} photos</span>}{giftBox.personalization?.sticker && <span>Personalized sticker</span>}</div>
+    <details className="commerce-design-details"><summary>View design and details</summary>
     <dl>
       <div><dt>Box</dt><dd>{giftBox.box?.displayName || 'Saved box details unavailable'}</dd></div>
       {groups.map(([category, label]) => {
@@ -19,9 +22,9 @@ export default function GiftBoxCartSummary({ giftBox }) {
       <div><dt>Gift card</dt><dd>{cardSelected ? 'Selected' : 'Not selected'}</dd></div>
     </dl>
     {cardSelected && (message ? <details className="commerce-gift-message"><summary>View gift-card message</summary><p>{message}</p></details> : <p className="commerce-muted">Gift card without a message.</p>)}
-    <p className="commerce-muted">Quantities above are for one completed gift box. Gift boxes are excluded from discounts.</p>
     {giftBox.personalization?.photoCount > 0 && <p>Photo prints: {giftBox.personalization.photoCount}</p>}
     {giftBox.personalization && <p>Personal touches per box: {money(giftBox.personalization.unitAdjustmentPiastres)}</p>}
     {giftBox.personalization?.sticker && <p>Personalized sticker: <bdi>{giftBox.personalization.sticker.text}</bdi> - Apply to exterior front</p>}
+    </details>
   </div>;
 }

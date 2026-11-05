@@ -7,7 +7,7 @@ async function review(page) {
   await page.getByRole('button', { name: 'Finishing Touches', exact: false }).click();
   await page.getByRole('button', { name: 'Next: Review', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Review your gift' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Add to Cart' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Add Your Gift to Cart' })).toBeEnabled();
 }
 
 const errors = new WeakMap();
@@ -25,9 +25,10 @@ test('priced flexible gift with roses, chocolate and no ribbon goes from builder
   await page.getByRole('button', { name: 'Add Fixture chocolate-1', exact: true }).click();
   await review(page);
   await expect(page.locator('.gb-live-total strong')).toContainText('40.00');
-  await page.getByRole('button', { name: 'Add to Cart' }).click();
+  await page.getByRole('button', { name: 'Add Your Gift to Cart' }).click();
   await expect(page).toHaveURL(/\/cart$/);
   const gift = page.getByRole('article', { name: 'Build Your Gift Box' });
+  await gift.getByText('View design and details', {exact:true}).click();
   await expect(gift).toContainText('Fixture rose-red × 2');
   await expect(gift).toContainText('Fixture chocolate-1 × 1');
   await expect(gift).toContainText('No ribbon selected');
@@ -38,7 +39,7 @@ test('priced flexible gift with roses, chocolate and no ribbon goes from builder
   await page.getByRole('link', { name: 'Proceed to Checkout' }).click();
   await fillCheckout(page);
   await expect(page.getByRole('radio', { name: /InstaPay/ })).toBeChecked();
-  await expect(page.getByRole('radio', { name: /Cash on Delivery/ })).toBeDisabled();
+  await expect(page.getByRole('radio', { name: /Cash on Delivery/ })).toHaveCount(0);
   await expect(page.locator('.commerce-summary')).toContainText('40.00');
   await page.getByRole('button', { name: 'Place Order' }).click();
   await expect(page).toHaveURL(/\/orders\/710000000000000000000040$/);
@@ -61,7 +62,7 @@ test('box-only no-ribbon gift can check out alongside an ordinary priced product
   const { audit, savedOrder } = await localCheckoutFixture(page, { initialCart: cartWithProduct() });
   await beginGiftBox(page);
   await review(page);
-  await page.getByRole('button', { name: 'Add to Cart' }).click();
+  await page.getByRole('button', { name: 'Add Your Gift to Cart' }).click();
   await expect(page).toHaveURL(/\/cart$/);
   await expect(page.getByRole('article', { name: 'Build Your Gift Box' })).toContainText('10.00');
   await expect(page.getByRole('heading', { name: 'Isolated Commerce Gift' })).toBeVisible();
@@ -80,7 +81,7 @@ test('rejected server cart pricing leaves the customer on review without creatin
   const { audit, fixture } = await localCheckoutFixture(page, { rejectAdd: true });
   await beginGiftBox(page);
   await review(page);
-  await page.getByRole('button', { name: 'Add to Cart' }).click();
+  await page.getByRole('button', { name: 'Add Your Gift to Cart' }).click();
   await expect(page).toHaveURL(/\/customize\/gift-box$/);
   await expect(page.locator('.gb-announcement')).toContainText('no longer available');
   expect(audit.adds).toHaveLength(1);

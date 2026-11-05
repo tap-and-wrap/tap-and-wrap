@@ -47,7 +47,7 @@ export async function listBuilderComponents(rawQuery, { admin = false } = {}) {
   const ordered = [...definitions].sort((a, b) => categories.indexOf(a.category) - categories.indexOf(b.category)
     || (byId.get(a.id)?.displayOrder ?? a.initialDisplayOrder) - (byId.get(b.id)?.displayOrder ?? b.initialDisplayOrder)
     || a.initialDisplayOrder - b.initialDisplayOrder || a.id.localeCompare(b.id));
-  return { catalogVersion: CATALOG_VERSION, boxLimits, components: ordered.slice((input.page - 1) * input.limit, input.page * input.limit).map(item => present(item, byId.get(item.id), admin)),
+  return { catalogVersion: CATALOG_VERSION, presentationVersion:'gift-box-presentation-v1', boxLimits, components: ordered.slice((input.page - 1) * input.limit, input.page * input.limit).map(item => present(item, byId.get(item.id), admin)),
     pagination: { page: input.page, limit: input.limit, total: ordered.length, pages: Math.ceil(ordered.length / input.limit) },
     pendingCategories: Object.keys(PENDING_CATEGORIES).filter(key => !FIXED_COMPONENTS.some(item => item.category === key)),
     arrangementApproved: false, submissionAllowed: false, orderConversionAllowed: false,

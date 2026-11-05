@@ -4,6 +4,7 @@ import { productHref } from '../../../shared/product-paths.mjs';
 import { useCart } from '../commerce/CartContext';
 import { commerceError, money } from '../commerce/api';
 import GiftBoxCartSummary from '../commerce/GiftBoxCartSummary.jsx';
+import GiftBoxPreview from '../commerce/GiftBoxPreview.jsx';
 
 export default function CartPage() {
   const { cart, checkoutEnabled, loading, error, pending, setQuantity, remove, clear, refresh } = useCart();
@@ -17,7 +18,7 @@ export default function CartPage() {
       <section aria-label="Cart items" className="commerce-cart-items">{cart.items.map((item) => {
         const gift = item.kind === 'gift_box_v2';
         if (gift) return <article key={item.id} className="commerce-cart-item commerce-gift-cart-item" aria-label={item.name || 'Build Your Gift Box'}>
-          <div className="commerce-cart-photo commerce-gift-photo"><span>Gift box preview unavailable</span></div>
+          <div className="commerce-cart-photo commerce-gift-photo"><GiftBoxPreview giftBox={item.giftBox}/></div>
           <div className="commerce-cart-item-content"><h2>{item.name || 'Build Your Gift Box'}</h2>
             <GiftBoxCartSummary giftBox={item.giftBox} />
             {item.valid ? <p>{money(item.unitPricePiastres)} per completed gift box</p> : <p className="form-error" role="alert">{item.error || 'This configured gift is currently unavailable. Remove it and review the builder choices.'}</p>}
@@ -37,11 +38,12 @@ export default function CartPage() {
           <div className="commerce-cart-controls"><label>Quantity<select value={item.quantity} disabled={pending || !item.valid} onChange={(event) => setQuantity(item.id, Number(event.target.value)).catch(() => {})}>{Array.from({ length: 99 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label><button className="commerce-link-button" disabled={pending} onClick={() => remove(item.id).catch(() => {})}>Remove {item.name}</button></div>
         </div><strong className="commerce-cart-line-total">{item.valid ? money(item.lineTotalPiastres) : 'Unavailable'}</strong>
       </article>; })}</section>
-      <aside className="commerce-summary"><h2>Order Summary</h2><dl><div><dt>Subtotal</dt><dd>{money(cart.subtotalPiastres)}</dd></div></dl><p className="commerce-muted">Eligible discounts are verified at checkout. Delivery is separate and Pending Confirmation; the owner will contact you on WhatsApp within 12 hours. Availability and approved prices are checked again before ordering.</p>
+      <aside className="commerce-summary"><h2>Order Summary</h2><dl><div><dt>Subtotal</dt><dd>{money(cart.subtotalPiastres)}</dd></div><div><dt>Delivery</dt><dd>Confirmed separately</dd></div></dl><p className="commerce-muted">Eligible discounts are applied at checkout.</p>
         {invalid && <p className="form-error">Review unavailable items before checkout.</p>}
 
         {checkoutEnabled && !invalid ? <Link className="button button-primary" to="/checkout">Proceed to Checkout</Link> : <><button className="button button-primary" disabled>Checkout unavailable</button>{!checkoutEnabled && !invalid && <p className="commerce-muted">Ordering is not available for the current cart yet.</p>}</>}
         <Link to="/shop" className="commerce-continue">Continue shopping</Link>
+        <Link to="/customize/gift-box" className="commerce-continue">Build another Gift Box</Link>
       </aside>
     </div>}
   </main>;

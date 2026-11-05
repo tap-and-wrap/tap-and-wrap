@@ -105,7 +105,15 @@ export function giftBoxCartSummary(configuration, savedSettings = []) {
     items: selection.items.map(item => ({ componentId: item.componentId, category: getFixedComponent(item.componentId).category, displayName: name(item.componentId), quantity: item.quantity })),
     ribbon: selection.ribbonId ? { componentId: selection.ribbonId, displayName: name(selection.ribbonId), colorHex: getFixedComponent(selection.ribbonId).approvedColorHex } : null,
     giftCard: selection.giftCard ? { selected: true, message: selection.giftCard.message } : { selected: false },
-    artwork: { status: 'unavailable' } };
+    // Allowlisted display geometry only. Private photo identities, contents and
+    // storage capabilities never enter the customer cart DTO.
+    artwork: { status: 'available', assetVersion:parsed.data.assetVersion },
+    ...(parsed.data.contractVersion === 'gift-box-commerce-v2' ? { design: {
+      presentationVersion:parsed.data.presentationVersion,
+      placements:parsed.data.placements.map(({componentId,x,y,width,height,zone,layer}) => ({componentId,x,y,width,height,zone,layer})),
+      ribbonPlacement:parsed.data.ribbonPlacement,
+      photos:(parsed.data.personalizationIntent?.photoPrints || []).map(({x,y,zone})=>({x,y,zone})),
+    } } : {}) };
 }
 
 export function quoteGiftBoxCartLine(line, context, { stored = true } = {}) {

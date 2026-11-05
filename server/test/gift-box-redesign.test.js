@@ -14,7 +14,7 @@ import { GiftBoxPersonalizationOption } from '../src/models/GiftBoxPersonalizati
 import { startTestDatabase } from './helpers/database.js';
 import { giftCartConfiguration, giftCartInput, seedGiftCartSettings } from './helpers/gift-box-cart-fixtures.js';
 import { identifyGiftBoxConfiguration, giftBoxV2CommerceInput } from '../src/gift-box/commerce-contract.js';
-import { addCartItem, cartResponse } from '../src/commerce/cart.js';
+import { addCartItem, cartResponse, readCart } from '../src/commerce/cart.js';
 import { prepareCheckout, placeOrder, presentOrder } from '../src/commerce/orders.js';
 import { updateGiftBoxPersonalizationOption } from '../src/gift-box/personalization-options.js';
 import { signUpload, completeUpload } from '../src/commerce/uploads.js';
@@ -94,6 +94,63 @@ test('foreign and expired photos fail closed without orders',async () => {
   await assert.rejects(addCartItem(owner,giftCartInput(await personalized({photoOwner:other}))),error => error.code === 'GIFT_BOX_UPLOAD_INVALID');
   const design = await personalized(); await Upload.updateOne({_id:design.personalizationIntent.photoPrints[0].uploadId},{$set:{expiresAt:new Date(0)}});
   await assert.rejects(addCartItem(owner,giftCartInput(design)),error => error.code === 'GIFT_BOX_UPLOAD_INVALID'); assert.equal(await Order.countDocuments(),0);
+});
+
+test('two different personalized gifts survive sequential adds and checkout', async () => {
+  const first = await personalized(), second = await personalized();
+  first.presentationVersion = 'gift-box-presentation-v1';
+  second.presentationVersion = 'gift-box-presentation-v1';
+  second.ribbonPlacement.x = .5;
+  second.personalizationIntent.sticker.text = 'Second gift';
+  await addCartItem(owner, giftCartInput(first));
+  await addCartItem(owner, giftCartInput(second));
+  const cart = await cartResponse(owner);
+  assert.equal(cart.cart.items.length, 2);
+  assert.ok(cart.cart.items.every(line => line.valid));
+  assert.equal(cart.cart.subtotalPiastres, 84000);
+  assert.equal(cart.cart.items[0].giftBox.design.photos.length, 1);
+  assert.equal(cart.cart.items[0].giftBox.design.ribbonPlacement.x, .74);
+  for (const design of [first,second]) {
+    const id = design.personalizationIntent.photoPrints[0].uploadId;
+    assert.ok(!JSON.stringify(cart).includes(id));
+    const upload = await Upload.findById(id);
+    assert.equal(upload.owner,owner); assert.equal(String(upload.cartId),String((await readCart(owner))._id));
+  }
+  const { input } = await checkout();
+  const result = await placeOrder(owner, input);
+  const saved = await Order.findById(result.id).lean();
+  assert.equal(saved.lines.length, 2);
+  assert.equal(saved.lines[0].giftBox.configuration.ribbonPlacement.x, .74);
+  assert.equal(saved.lines[1].giftBox.configuration.ribbonPlacement.x, .5);
+  assert.equal(saved.lines[0].giftBox.configuration.presentationVersion,'gift-box-presentation-v1');
+  assert.notEqual(saved.lines[0].giftBox.personalization.photoPrints[0].uploadId,saved.lines[1].giftBox.personalization.photoPrints[0].uploadId);
+  assert.equal(presentOrder(saved,{admin:true}).lines.length,2);
+  assert.equal((await placeOrder(owner,input)).id,result.id);
+});
+
+test('photo then plain gift, identical intentional adds, exact retries and rejected second adds preserve the cart',async()=>{
+  const first = await personalized(); await addCartItem(owner,giftCartInput(first));
+  const second = configuration(); second.ribbonPlacement.x = .4;
+  const operation = giftCartInput(second);
+  await addCartItem(owner,operation); await addCartItem(owner,operation);
+  let cart = await cartResponse(owner);
+  assert.deepEqual(cart.cart.items.map(line=>line.quantity),[1,1]);
+  await addCartItem(owner,giftCartInput(second));
+  cart = await cartResponse(owner); assert.deepEqual(cart.cart.items.map(line=>line.quantity),[1,2]);
+  assert.equal(cart.cart.items[0].giftBox.personalization.photoCount,1);
+  const before = JSON.stringify(await readCart(owner));
+  await assert.rejects(addCartItem(owner,{...operation,configuration:first}),error=>error.code==='CART_OPERATION_CONFLICT');
+  await assert.rejects(addCartItem(owner,giftCartInput(await personalized({photoOwner:other}))),error=>error.code==='GIFT_BOX_UPLOAD_INVALID');
+  assert.equal(JSON.stringify(await readCart(owner)),before);
+});
+
+test('new presentation frames round-trip without altering historical configuration identities',()=>{
+  const old = identifyGiftBoxConfiguration(configuration());
+  const current = identifyGiftBoxConfiguration({...configuration(),presentationVersion:'gift-box-presentation-v1'});
+  assert.equal(identifyGiftBoxConfiguration(old.configuration).configurationId,old.configurationId);
+  assert.equal(identifyGiftBoxConfiguration(current.configuration).configurationId,current.configurationId);
+  assert.equal(old.configuration.presentationVersion,undefined);
+  assert.ok(!giftBoxV2CommerceInput.safeParse({...giftCartConfiguration(),presentationVersion:'gift-box-presentation-v1'}).success);
 });
 test('saved repricing and disabling invalidate checkout without changing component prices',async () => {
   await addCartItem(owner,giftCartInput(await personalized())); const {input} = await checkout();

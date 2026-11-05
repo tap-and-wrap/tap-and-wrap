@@ -68,7 +68,9 @@ export async function localCheckoutFixture(page, { initialCart, rejectAdd = fals
         colorHex: lookup(selection.ribbonId).approvedColorHex } : null,
       giftCard: selection.giftCard ? { selected: true, message: selection.giftCard.message } : { selected: false },
       ...(intent ? {personalization:{photoCount:intent.photoPrints.length,sticker:intent.sticker ? {...intent.sticker,pricePiastres:2000} : null,engravings:[],unitAdjustmentPiastres:extra}} : {}),
-      artwork: { status: 'unavailable' },
+      artwork: { status: 'available',assetVersion:body.configuration.assetVersion },
+      design:{presentationVersion:body.configuration.presentationVersion,placements:body.configuration.placements.map(({componentId,x,y,width,height,zone,layer})=>({componentId,x,y,width,height,zone,layer})),ribbonPlacement:body.configuration.ribbonPlacement,
+        photos:(intent?.photoPrints || []).map(({x,y,zone})=>({x,y,zone}))},
     };
     const line = { id: '10000000-0000-4000-8000-000000000099', kind: 'gift_box_v2',
       name: 'Build Your Gift Box', quantity: 1, valid: true, checkoutAllowed: true,

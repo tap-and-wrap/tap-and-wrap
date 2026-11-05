@@ -125,6 +125,27 @@ try {
     giftOrder = await placeGiftBoxOrderForDisposableTest(giftOrderOwner, { checkoutKey: giftOrderKey, paymentMethod: 'instapay',
       customer: { name: 'Connected alice', email: accounts.alice.email, phone: '01012345678', governorate: 'cairo', address: '10 Synthetic Gift Order Street' } }, accounts.alice._id);
   } finally { env.checkoutEnabled = enabledCheckout; }
+  if (process.env.TAP_WRAP_CONTRACT_GIFT_SHOPPING === 'true') {
+    // This launcher has already created a fresh loopback replica set. No runtime
+    // endpoint or merchant settings can opt into these synthetic approvals.
+    env.giftBoxDirectCommerceEnabled = true;
+    env.giftBoxFlexibleMadeToOrderEnabled = true;
+    env.giftBoxPersonalizationOptionsEnabled = true;
+    env.giftBoxPersonalizedCheckoutEnabled = true;
+    const { GiftBoxPersonalizationOption } = await import('../../src/models/GiftBoxPersonalizationOption.js');
+    const { updateGiftBoxPersonalizationOption } = await import('../../src/gift-box/personalization-options.js');
+    const { STICKER_STYLES } = await import('../../../shared/gift-box/sticker-styles.mjs');
+    await GiftBoxPersonalizationOption.createCollection(); await GiftBoxPersonalizationOption.createIndexes();
+    const base = await GiftBoxComponentSetting.findOne({ componentId:'box-2' }).lean();
+    const { _id, __v, ...setting } = base;
+    await GiftBoxComponentSetting.create({ ...setting,componentId:'box-3',displayName:'Synthetic box-3' });
+    await GiftBoxComponentSetting.updateMany({},{$set:{inventoryMode:'made_to_order',inventoryQuantity:null}});
+    await GiftBoxComponentSetting.updateMany({componentId:/^ribbon-/},{$set:{inventoryMode:'status_only'}});
+    for (const [optionId,kind] of [['standard-photo-print','photo_print'],['exterior-box-sticker','box_sticker']]) {
+      await updateGiftBoxPersonalizationOption(optionId,{ expectedRevision:0,kind,displayName:kind,boxIds:['box-2','box-3'],pricePiastres:2000,enabled:true,available:true,
+        ...(kind === 'box_sticker' ? {fontLicensesConfirmed:true,approvedStyleIds:STICKER_STYLES.map(style=>style.id),approvedColorIds:['black','gold']} : {}) },accounts.admin);
+    }
+  }
   const storage = storageModule.createMemoryStorage();
   const grants = new Map();
   let puts = 0;

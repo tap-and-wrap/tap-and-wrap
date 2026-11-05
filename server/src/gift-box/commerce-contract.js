@@ -28,6 +28,7 @@ export const giftBoxV2CommerceInput = z.object({
   geometryVersion: z.literal(GEOMETRY_VERSION),
   draftGeometryVersion: z.literal(GIFT_BOX_COMMERCE_DRAFT_REFERENCE_VERSION),
   coordinateSystem: z.literal(GIFT_BOX_COMMERCE_COORDINATE_SYSTEM),
+  presentationVersion: z.literal('gift-box-presentation-v1').optional(),
   selection,
   personalizationIntent: z.custom(value => { try {
     const intent = parseGiftBoxPersonalizationIntent(value);
@@ -43,6 +44,7 @@ export const giftBoxV2CommerceInput = z.object({
   }).strict()).max(MAX_ADDITIONAL_ITEMS),
 }).strict().superRefine((input, context) => {
   const free = input.contractVersion === GIFT_BOX_FREE_PLACEMENT_VERSION;
+  if (!free && input.presentationVersion) context.addIssue({ code:'custom',message:'Presentation revision requires free placement.' });
   if (input.personalizationIntent && (input.personalizationIntent.version === 'gift-box-personalization-intent-v2') !== free) context.addIssue({ code:'custom',message:'Personalization coordinates must match the placement contract version.' });
   const issue = message => context.addIssue({ code: 'custom', message });
   const visible = item => item && item.width > 0 && item.height > 0 && item.x + item.width <= 1.000001 && item.y + item.height <= 1.000001;
@@ -77,6 +79,7 @@ export function canonicalizeGiftBoxConfiguration(raw) {
     catalogVersion: input.catalogVersion, assetVersion: input.assetVersion,
     geometryVersion: input.geometryVersion, draftGeometryVersion: input.draftGeometryVersion,
     coordinateSystem: input.coordinateSystem,
+    ...(input.presentationVersion ? { presentationVersion: input.presentationVersion } : {}),
     selection: { boxId: input.selection.boxId,
       items: [...input.selection.items].sort((a, b) => compareText(a.componentId, b.componentId)),
       ribbonId: input.selection.ribbonId, giftCard: input.selection.giftCard },

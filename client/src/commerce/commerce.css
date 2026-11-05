@@ -181,3 +181,46 @@
 .commerce-personalization-summary>div{display:block;padding:4px 0;overflow-wrap:anywhere}
 .commerce-personalization-summary dt{font-weight:600}
 .commerce-personalization-summary dd{margin:2px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+
+/* Gift cards and checkout share the builder's quiet, white-led surfaces. */
+.commerce-gift-cart-item{grid-template-columns:180px minmax(0,1fr) auto;padding:24px;border:1px solid var(--tw-border);border-radius:14px;background:#fff;align-items:start;gap:24px}
+.commerce-gift-cart-item .commerce-gift-photo{width:100%;height:auto;aspect-ratio:auto;display:block;background:var(--tw-bg);border-radius:10px;overflow:hidden}
+.commerce-gift-photo>.gb-free-preview{width:100%;margin:0}
+.commerce-gift-photo .gb-canvas{border:0;border-radius:0}
+.commerce-gift-photo>img{width:100%;height:180px;object-fit:contain}
+.commerce-gift-photo .gb-photo-placeholder{font-size:.35rem;padding:0}
+.commerce-gift-description{margin:6px 0 12px;line-height:1.6;font-size:.88rem}
+.commerce-gift-indicators{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 16px}
+.commerce-gift-indicators>span{font-size:.7rem;padding:4px 8px;background:var(--tw-bg);border:1px solid var(--tw-border);border-radius:20px}
+.commerce-design-details>summary,.commerce-discount>summary,.commerce-order-notes>summary{cursor:pointer;padding:12px 0;min-height:44px;font-size:.85rem;color:var(--tw-rose-dark)}
+.commerce-design-details{border-top:1px solid var(--tw-border);margin-top:12px;font-size:.85rem}
+.commerce-gift-summary .commerce-design-details dl{margin:8px 0}
+.commerce-gift-summary .commerce-design-details p{overflow-wrap:anywhere}
+.commerce-page .commerce-summary{border:1px solid var(--tw-border);border-radius:14px;background:white;box-shadow:0 8px 32px #62483f06}
+.commerce-summary .button-primary{min-height:52px}
+.commerce-checkout-details{border:1px solid var(--tw-border);border-radius:14px;padding:28px;background:#fff;min-width:0}
+.commerce-checkout-details>h2{font-size:1.9rem;margin:0 0 22px}
+.commerce-checkout-details>.commerce-fields+h2{border-top:1px solid var(--tw-border);padding-top:28px;margin-top:28px}
+.commerce-checkout-details .commerce-fields{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.commerce-checkout-details .commerce-field{margin:0}
+.commerce-checkout-details .commerce-fields>.commerce-field:has(textarea),.commerce-order-notes{grid-column:1/-1}
+.commerce-contact-fields>.commerce-field:first-child{grid-column:1/-1}
+.commerce-checkout-details :is(input,select,textarea){background:var(--tw-bg);border-color:var(--tw-border);border-radius:7px;min-height:48px}
+.commerce-delivery-policy{font-size:.85rem;line-height:1.7;margin:22px 0;color:var(--tw-ink)}
+.commerce-delivery-policy small{display:block;color:var(--tw-rose-dark);margin-top:4px}
+.commerce-checkout-details .commerce-payment{border:0;border-top:1px solid var(--tw-border);border-radius:0;padding:24px 0 0;margin:24px 0 0}
+.commerce-payment legend{font-family:var(--tw-font-display);font-size:1.9rem}
+.commerce-payment>label{border:1px solid var(--tw-border);border-radius:8px;padding:14px;margin-top:10px;background:var(--tw-bg);min-height:48px}
+.commerce-payment-instructions{font-size:.82rem;line-height:1.7;margin:16px 0 0}
+.commerce-discount{margin:16px 0;border-block:1px solid var(--tw-border)}
+.commerce-discount .button{margin-bottom:14px}
+@media(max-width:600px){
+ .commerce-gift-cart-item{grid-template-columns:100px minmax(0,1fr);padding:16px;gap:14px}
+ .commerce-gift-cart-item .commerce-gift-photo{width:100%}
+ .commerce-gift-cart-item .commerce-cart-line-total{grid-column:2}
+ .commerce-gift-cart-item h2{font-size:1.5rem}
+ .commerce-gift-cart-item .commerce-cart-controls{flex-wrap:wrap;gap:12px}
+ .commerce-checkout-details{padding:18px}
+ .commerce-checkout-details .commerce-fields{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:360px){.commerce-gift-cart-item{grid-template-columns:minmax(0,1fr)}.commerce-gift-cart-item .commerce-gift-photo{max-width:180px;margin:auto}.commerce-gift-cart-item .commerce-cart-line-total{grid-column:1}}

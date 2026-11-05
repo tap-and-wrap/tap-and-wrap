@@ -15,7 +15,9 @@ test('saved option order is retained and media loads only the current category a
   expect(f.media.filter(path => path.includes('/1200/')).every(path => /\/1200\/boxes\/box-(?:[1-9]|1[0-2])-open-top\.webp$/.test(path))).toBe(true);
   expect(f.media.some(path => path.endsWith('/1200/boxes/box-2-open-top.webp'))).toBe(true);
   await page.locator('.gb-progress button').nth(2).click(); await expect(page.locator('.gb-options-plush .gb-option').first()).toContainText('Fixture plush-17');
-  expect(f.media.some(path => path.includes('/1200/toys/'))).toBe(false);
+  // Visible option cards use the same transparent builder artwork as placement.
+  await expect.poll(() => f.media.some(path => path.endsWith('/1200/toys/plush-17-builder.webp'))).toBe(true);
+  expect(f.media.some(path => /\/1200\/(?:flowers|chocolate)\//.test(path))).toBe(false);
   await page.getByRole('button', { name: 'Add Fixture plush-17', exact: true }).click(); await expect.poll(() => f.media.some(path => path.endsWith('/1200/toys/plush-17-builder.webp'))).toBe(true);
 });
 test('local media rejects references, defective artwork, unexpected paths and cross-origin reads', async ({ page, request }) => {

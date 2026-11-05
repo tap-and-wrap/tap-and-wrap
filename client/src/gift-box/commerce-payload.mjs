@@ -42,6 +42,7 @@ export function prepareGiftBoxCommerceConfiguration(state, { cardId } = {}) {
   return deepFreeze({ kind: GIFT_BOX_COMMERCE_KIND, contractVersion: state.freePlacement ? GIFT_BOX_FREE_PLACEMENT_VERSION : GIFT_BOX_COMMERCE_CONTRACT_VERSION,
     catalogVersion: CATALOG_VERSION, assetVersion: ASSET_VERSION, geometryVersion: GEOMETRY_VERSION,
     draftGeometryVersion: GIFT_BOX_COMMERCE_DRAFT_REFERENCE_VERSION, coordinateSystem: GIFT_BOX_COMMERCE_COORDINATE_SYSTEM,
+    ...(state.presentationVersion ? { presentationVersion: state.presentationVersion } : {}),
     selection, placements, ...(state.freePlacement ? { ribbonPlacement: state.ribbonId ? { x: state.ribbonPosition?.x ?? .32, y: state.ribbonPosition?.y ?? .65, width: .23, height: .16, zone: state.ribbonPosition?.zone || 'inside', layer: 110 } : null } : {}) });
 }
 

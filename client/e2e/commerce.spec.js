@@ -347,6 +347,7 @@ test('COD checkout quotes shipping and discount server-side then confirms one un
   const fixture = await mockCommerce(page, { checkoutEnabled: true, cart: cartWithProduct() });
   await page.goto('/checkout');
   await fillCheckout(page);
+  await page.getByText('Have a discount code?', {exact:true}).click();
   await page.getByLabel('Discount code', { exact: true }).fill('ISOLATED');
   await page.getByRole('button', { name: 'Apply code', exact: true }).click();
   await expect.poll(() => fixture.calls.some((call) => call.path === '/commerce/checkout/quote' && call.body.discountCode === 'ISOLATED')).toBe(true);
@@ -363,7 +364,7 @@ test('InstaPay cannot collect proof or instruct a transfer before order creation
   const fixture = await mockCommerce(page, { checkoutEnabled: true, cart: cartWithProduct() });
   await page.goto('/checkout'); await fillCheckout(page);
   await page.getByLabel('InstaPay — full payment', { exact: true }).check();
-  await expect(page.getByText(/Place your order first/)).toBeVisible();
+  await expect(page.getByText(/Payment instructions appear after your order/)).toBeVisible();
   await expect(page.getByRole('button', { name: /InstaPay payment proof/ })).toHaveCount(0);
   await expect(page.getByText('01060673073', { exact: true })).toHaveCount(0);
   expect(fixture.uploads).toHaveLength(0);

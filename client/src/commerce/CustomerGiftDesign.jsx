@@ -39,7 +39,7 @@ export default function CustomerGiftDesign({ giftBox, orderId }) {
   }
   return <section className="gb-customer-design admin-panel" aria-label="Customer's Gift Design"><h2>Customer&apos;s Gift Design</h2>
     {supported && photoCoordinatesSupported ? <><FreeArrangementCanvas readOnly state={{ freePlacement:true, boxId:config.selection.boxId,
-      ribbonId:config.selection.ribbonId, ribbonPosition:config.ribbonPlacement,
+      ribbonId:config.selection.ribbonId, ribbonPosition:config.ribbonPlacement, presentationVersion:config.presentationVersion,
       instances:config.placements.map(item => ({ ...item,id:item.instanceId,placementZone:item.zone })) }}
       components={giftBox.components} personal={{ photos:photos.map(photo => ({ id:photo.uploadId,url:urls[photo.uploadId] })),
         photoPositions:Object.fromEntries(photos.map(photo => [photo.uploadId,{ x:photo.x,y:photo.y,placementZone:photo.zone }])) }}/>
