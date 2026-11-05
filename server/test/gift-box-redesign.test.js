@@ -1,3 +1,4 @@
+import sharp from 'sharp';
 import test, { before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -45,9 +46,9 @@ function configuration() {
   return { ...legacy,contractVersion:'gift-box-commerce-v2',placements:legacy.placements.map(item => ({...item,regionId:'workspace',width:.12,height:.14,zone:'beside'})),
     ribbonPlacement:{ x:.74,y:.76,width:.23,height:.16,zone:'beside',layer:110 } };
 }
-async function personalized({photoOwner=owner}={}) {
-  const signed = await signUpload(photoOwner,{purpose:'gift_box_photo',giftBoxId:'box-2',mimeType:'image/png',sizeBytes:PNG.length});
-  const upload = await Upload.findById(signed.upload.id).select('+temporaryKey'); storage.put(upload.temporaryKey,PNG); await completeUpload(signed.upload.id,photoOwner);
+async function personalized({photoOwner=owner,photoBytes=PNG,mimeType='image/png'}={}) {
+  const signed = await signUpload(photoOwner,{purpose:'gift_box_photo',giftBoxId:'box-2',mimeType,sizeBytes:photoBytes.length});
+  const upload = await Upload.findById(signed.upload.id).select('+temporaryKey'); storage.put(upload.temporaryKey,photoBytes,mimeType); await completeUpload(signed.upload.id,photoOwner);
   return { ...configuration(),personalizationIntent:{version:'gift-box-personalization-intent-v2',photoPrints:[{uploadId:signed.upload.id,printOptionId:'print',zone:'beside',x:.8,y:.5}],engravings:[],
     sticker:{text:'\u0623\u062d\u0645\u062f With love',styleId:'sticker-amiri-v1',colorId:'gold',optionId:'sticker',application:'exterior-front'} } };
 }
@@ -126,6 +127,47 @@ test('two different personalized gifts survive sequential adds and checkout', as
   assert.notEqual(saved.lines[0].giftBox.personalization.photoPrints[0].uploadId,saved.lines[1].giftBox.personalization.photoPrints[0].uploadId);
   assert.equal(presentOrder(saved,{admin:true}).lines.length,2);
   assert.equal((await placeOrder(owner,input)).id,result.id);
+});
+
+test('portrait, landscape and square private prints retain their shape through cart, checkout and admin snapshots',async()=>{
+  const ratios=[];
+  for(const [width,height] of [[80,120],[120,80],[100,100]]) {
+    const photoBytes=await sharp({create:{width,height,channels:3,background:'#915b50'}}).png().toBuffer();
+    const design=await personalized({photoBytes});
+    design.presentationVersion='gift-box-presentation-v1';
+    design.personalizationIntent.photoPrints[0].aspectRatio=width/height;
+    ratios.push(width/height);
+    await addCartItem(owner,giftCartInput(design));
+  }
+  const cart=await cartResponse(owner);
+  assert.deepEqual(cart.cart.items.map(line=>line.giftBox.design.photos[0].aspectRatio),ratios);
+  assert.ok(!JSON.stringify(cart.cart.items.map(line=>line.giftBox.design)).includes('uploadId'));
+  const {input}=await checkout();const result=await placeOrder(owner,input);
+  const order=await Order.findById(result.id).lean();
+  const admin=presentOrder(order,{admin:true});
+  assert.ok(admin.lines.every(line=>line.giftBox.configuration.presentationVersion==='gift-box-presentation-v1'));
+  assert.deepEqual(admin.lines.map(line=>line.giftBox.personalization.photoPrints[0].aspectRatio),ratios);
+  assert.deepEqual(order.lines.map(line=>line.giftBox.configuration.personalizationIntent.photoPrints[0].aspectRatio),ratios);
+});
+
+test('photo aspect metadata rejects forged ratios, hidden footprints and malformed values without altering the cart',async()=>{
+  const design=await personalized();design.presentationVersion='gift-box-presentation-v1';
+  const photo=design.personalizationIntent.photoPrints[0];photo.aspectRatio=20;
+  await assert.rejects(addCartItem(owner,giftCartInput(design)),error=>error.code==='GIFT_BOX_PHOTO_ASPECT_INVALID');
+  photo.aspectRatio=1;photo.x=.99;
+  assert.ok(!giftBoxV2CommerceInput.safeParse(design).success);
+  photo.x=.7;photo.aspectRatio=NaN;
+  assert.ok(!giftBoxV2CommerceInput.safeParse(design).success);
+  assert.equal((await cartResponse(owner)).cart.items.length,0);
+});
+
+test('EXIF-rotated originals retain their browser display orientation in the immutable snapshot',async()=>{
+  const photoBytes=await sharp({create:{width:80,height:120,channels:3,background:'#915b50'}}).withMetadata({orientation:6}).jpeg().toBuffer();
+  const design=await personalized({photoBytes,mimeType:'image/jpeg'});design.presentationVersion='gift-box-presentation-v1';
+  design.personalizationIntent.photoPrints[0].aspectRatio=1.5;
+  await addCartItem(owner,giftCartInput(design));const {input}=await checkout();const result=await placeOrder(owner,input);
+  const order=await Order.findById(result.id).lean();
+  assert.equal(presentOrder(order,{admin:true}).lines[0].giftBox.personalization.photoPrints[0].aspectRatio,1.5);
 });
 
 test('photo then plain gift, identical intentional adds, exact retries and rejected second adds preserve the cart',async()=>{

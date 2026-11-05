@@ -85,7 +85,7 @@ test('local geometry drafts stay unreviewed, support compartments and keep the s
 });
 for (const width of [320, 390, 768, 1440]) test(`builder and admin fit ${width}px with real local artwork and reduced motion`, async ({ page }, testInfo) => {
   await page.setViewportSize({ width, height: 1000 }); await page.emulateMedia({ reducedMotion: 'reduce' }); await fixture(page, { role: 'admin' }); await begin(page);
-  await expect(page.locator('.gb-box-art img')).toBeVisible(); await expect.poll(() => page.locator('.gb-box-art img').evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true);
+  await expect(page.locator('.gb-canvas > .gb-box-art img')).toBeVisible(); await expect.poll(() => page.locator('.gb-canvas > .gb-box-art img').evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.evaluate(() => { document.activeElement?.blur(); window.scrollTo({ top: 0, left: 0, behavior: 'instant' }); });
   await page.screenshot({ path: testInfo.outputPath(`builder-${width}.png`), fullPage: true });
@@ -96,7 +96,7 @@ test('all twelve source box shapes have local visual review outputs without geom
   for (let n = 1; n <= 12; n++) {
     await page.getByLabel('Review box').selectOption(`box-${n}`);
     await expect(page.getByText(/Current registry: unreviewed/)).toBeVisible();
-    if (n > 1) await expect.poll(() => page.locator('.gb-box-art img').evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true);
+    if (n > 1) await expect.poll(() => page.locator('.gb-canvas > .gb-box-art img').evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true);
     await page.locator('.gb-geometry .gb-workspace>section').first().screenshot({ path: testInfo.outputPath(`geometry-box-${n}.png`) });
   }
 });

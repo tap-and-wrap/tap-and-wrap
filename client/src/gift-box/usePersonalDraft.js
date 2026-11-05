@@ -4,7 +4,7 @@ import { LETTERING_STYLES, ENGRAVING_COLORS, DEFAULT_ENGRAVING_COLOR, MAX_ENGRAV
 
 // This hook holds memory-only preview drafts. Never send File, object URL,
 // customer engraving text, or a candidate style to existing v1 commerce APIs.
-export function usePersonalDraft({ freePlacement = false, arrangementPositions = null, onPosition = null, hiddenPhotoIds = [], onRemovePhoto = null, onRestorePhoto = null } = {}) {
+export function usePersonalDraft({ freePlacement = false, photoAspectRatios = false, presentationVersion, arrangementPositions = null, onPosition = null, hiddenPhotoIds = [], onRemovePhoto = null, onRestorePhoto = null } = {}) {
   const [sticker, setSticker] = useState({ enabled: false, text: '', styleId: 'sticker-rochester-v1', colorId: 'black', optionId: null });
   const [photos, setPhotos] = useState([]);
   const [engravings, setEngravings] = useState([{ id: 'line-1', text: '', styleId: null, colorId: DEFAULT_ENGRAVING_COLOR }]);
@@ -40,7 +40,17 @@ export function usePersonalDraft({ freePlacement = false, arrangementPositions =
     const additions = candidates.map(file => {
       const url = URL.createObjectURL(file);
       objectUrls.current.add(url);
-      return { id: crypto.randomUUID(), file, fileKey: `${file.name}\u0000${file.size}\u0000${file.lastModified}`, name: file.name, url };
+      const photo = { id: crypto.randomUUID(), file, fileKey: `${file.name}\u0000${file.size}\u0000${file.lastModified}`, name:file.name,url,dimensionsPending:true };
+      const image = new Image();
+      image.onload = () => {
+        if (!objectUrls.current.has(url)) return;
+        const aspectRatio=image.naturalWidth/image.naturalHeight;
+        if (!Number.isFinite(aspectRatio) || image.naturalWidth > 12000 || image.naturalHeight > 12000 || image.naturalWidth*image.naturalHeight > 40000000) { setNotice('Choose a smaller supported photograph.'); return; }
+        setPhotos(current=>current.map(item=>item.id === photo.id ? {...item,aspectRatio,dimensionsPending:false} : item));
+      };
+      image.onerror = () => { if (objectUrls.current.has(url)) setNotice('This photo could not be opened. Remove it and choose another image.'); };
+      image.src=url;
+      return photo;
     });
     // Synchronize the ref immediately so two quick file-picker changes cannot
     // bypass the aggregate byte/count budget before useEffect runs.
@@ -104,5 +114,5 @@ export function usePersonalDraft({ freePlacement = false, arrangementPositions =
   }
   const visiblePhotos = photos.filter(photo => !hiddenPhotoIds.includes(photo.id));
   const hasContent = visiblePhotos.length > 0 || (freePlacement ? sticker.enabled : engravings.some(line => line.text.trim().length > 0));
-  return { freePlacement, sticker, updateSticker, photos: visiblePhotos, engravings, notice, hasContent, photoPositions: arrangementPositions || photoPositions, placePhoto, resetPhotoPositions, addPhotos, removePhoto, movePhoto, updateEngraving, addEngraving, removeEngraving };
+  return { freePlacement, photoAspectRatios, presentationVersion, sticker, updateSticker, photos: visiblePhotos, engravings, notice, hasContent, photoPositions: arrangementPositions || photoPositions, placePhoto, resetPhotoPositions, addPhotos, removePhoto, movePhoto, updateEngraving, addEngraving, removeEngraving };
 }

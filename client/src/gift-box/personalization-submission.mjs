@@ -43,7 +43,7 @@ export function assertGiftBoxPersonalizationPriceUnchanged(quoted, expectedPiast
 
 export function giftBoxPersonalDraftSignature(boxId, personal, printOptionsByPhoto, surfaceOptionsByEngraving) {
   return JSON.stringify({ boxId,
-    photos: personal.photos.map(photo => [photo.id, photo.fileKey, personal.photoPositions?.[photo.id] || null, printOptionsByPhoto[photo.id] || null]),
+    photos: personal.photos.map(photo => [photo.id, photo.fileKey, personal.photoAspectRatios ? photo.aspectRatio : null, personal.photoPositions?.[photo.id] || null, printOptionsByPhoto[photo.id] || null]),
     sticker: personal.freePlacement ? personal.sticker : null,
     engravings: personal.engravings.map(line => [line.id, line.text, line.styleId, line.colorId, surfaceOptionsByEngraving[line.id] || null]),
   });

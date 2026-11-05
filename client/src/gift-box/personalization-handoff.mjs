@@ -2,6 +2,9 @@
 // into the already versioned Gift Box intent. No Files, blobs, previews, names,
 // prices, claims of fit, or client-selected R2 keys leave this boundary.
 import { parseGiftBoxPersonalizationIntent, GIFT_BOX_PERSONALIZATION_INTENT_VERSION } from '../../../shared/gift-box/personalization-intent.mjs';
+import { photoPrintFootprint } from '../../../shared/gift-box/photo-presentation.mjs';
+import { boundFreePlacement } from '../../../shared/gift-box/commerce-contract.mjs';
+import { freePresentation,freePlacementZone } from './free-presentation.mjs';
 import { photoPrintPosition } from './photo-print-study.mjs';
 import { GIFT_BOX_COMMERCE_SCENE } from '../../../shared/gift-box/commerce-contract.mjs';
 
@@ -23,6 +26,12 @@ export function prepareGiftBoxPersonalizationHandoff({ boxId, personal, uploaded
     // shared normalized-scene coordinates rather than dropping beside photos.
     const x=personal.freePlacement ? position.x : (position.x-GIFT_BOX_COMMERCE_SCENE.x)/GIFT_BOX_COMMERCE_SCENE.width;
     const y=personal.freePlacement ? position.y : (position.y-GIFT_BOX_COMMERCE_SCENE.y)/GIFT_BOX_COMMERCE_SCENE.height;
+    if (personal.freePlacement && personal.photoAspectRatios) {
+      if (photo.dimensionsPending || !Number.isFinite(photo.aspectRatio)) throw new Error('Wait for your photos to finish opening.');
+      const size=photoPrintFootprint(photo.aspectRatio,personal.presentationVersion ? freePresentation(boxId).aspect : 1);
+      const bounded=boundFreePlacement({x,y},size);
+      return {uploadId,printOptionId,...bounded,aspectRatio:photo.aspectRatio,zone:freePlacementZone(boxId,size,bounded,personal.presentationVersion)};
+    }
     return { uploadId,printOptionId,zone:position.placementZone,x,y };
   });
   const engravings=(personal.freePlacement ? [] : personal.engravings).filter(line=>line.text?.trim()).map(line => {

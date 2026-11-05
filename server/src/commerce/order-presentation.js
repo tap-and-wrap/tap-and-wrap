@@ -65,12 +65,13 @@ function giftBox(value, { admin }) {
         ...(value.personalization.sticker ? { sticker: pick(value.personalization.sticker, ['text','styleId','colorId','optionId','application','pricePiastres']) } : {}),
         unitAdjustmentPiastres: value.personalization.unitAdjustmentPiastres,
         engravings: value.personalization.engravings.map(item => pick(item, ['text','styleId','colorId','surfaceOptionId','pricePiastres'])),
-        ...(admin ? { photoPrints: value.personalization.photoPrints.map(item => pick(item, ['uploadId','printOptionId','zone','x','y','pricePiastres'])) } : {}),
+        ...(admin ? { photoPrints: value.personalization.photoPrints.map(item => pick(item, ['uploadId','printOptionId','zone','x','y','aspectRatio','pricePiastres'])) } : {}),
       } } : {}),
   };
   if (admin) {
     result.configurationId = value.configurationId;
     result.configuration = { ...pick(configuration, ['kind', 'contractVersion', 'catalogVersion', 'assetVersion', 'geometryVersion', 'draftGeometryVersion', 'coordinateSystem']),
+      ...(configuration.presentationVersion === 'gift-box-presentation-v1' ? {presentationVersion:configuration.presentationVersion} : {}),
       ...(configuration.contractVersion === 'gift-box-commerce-v2' ? { ribbonPlacement: configuration.ribbonPlacement ? pick(configuration.ribbonPlacement, ['x','y','width','height','zone','layer']) : null } : {}),
       selection: { ...pick(selection, ['boxId', 'ribbonId']), items: (selection.items || []).map(item => pick(item, ['componentId', 'quantity'])),
         giftCard: selection.giftCard ? pick(selection.giftCard, ['componentId', 'message']) : null },

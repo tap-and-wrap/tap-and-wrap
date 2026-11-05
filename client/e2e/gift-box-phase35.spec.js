@@ -6,7 +6,7 @@ test.afterEach(async({page})=>expect(page.__errors).toEqual([]));
 for (const width of [320,390,768,1024]) test(`200 percent text preserves shopping controls at ${width}px`,async({page})=>{
   await page.setViewportSize({width,height:1000});await giftBoxFixture(page);await beginGiftBox(page);
   await page.evaluate(()=>{document.documentElement.style.fontSize='200%';});
-  await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();await page.getByLabel('Add a gift card').check();await page.getByLabel('Your message').fill('A literal gift message');
+  await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();await page.locator('.gb-finishing summary').click();await page.getByLabel('Your message').fill('A literal gift message');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await expect(page.getByRole('button',{name:'Next: Review'})).toBeVisible();
   expect(await page.locator('.gb-options').evaluate(el=>Boolean(el.compareDocumentPosition(document.querySelector('.gb-navigation')) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);

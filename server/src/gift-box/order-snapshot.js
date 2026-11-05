@@ -34,7 +34,7 @@ const madeToOrderPolicyReference = z.object({
 const policyReference = z.discriminatedUnion('contractVersion',
   [legacyPolicyReference, madeToOrderPolicyReference]);
 const personalizedPhoto = z.object({ uploadId: z.string().regex(/^[a-f0-9]{24}$/), printOptionId: text, zone: z.enum(['inside','beside']),
-  x: z.number().min(0).max(1), y: z.number().min(0).max(1), pricePiastres: integer, optionRevision: integer, priceApprovedAt: timestamp }).strict();
+  x: z.number().min(0).max(1), y: z.number().min(0).max(1), aspectRatio:z.number().finite().min(1/12000).max(12000).optional(), pricePiastres: integer, optionRevision: integer, priceApprovedAt: timestamp }).strict();
 const personalizedEngraving = z.object({ text: z.string().min(1).max(500), styleId: text, colorId: text, surfaceOptionId: text,
   pricePiastres: integer, optionRevision: integer, priceApprovedAt: timestamp }).strict();
 const personalizedSticker = z.object({ text: z.string().min(1).max(500), styleId: text, colorId: text, optionId: text, application: z.literal('exterior-front'), pricePiastres: integer, optionRevision: integer, priceApprovedAt: timestamp }).strict();
@@ -98,7 +98,7 @@ export const giftBoxOrderLineInput = z.object({
     if (personal) {
       const intent = saved.configuration.personalizationIntent;
       if (personal.photoPrints.length !== intent.photoPrints.length || personal.engravings.length !== intent.engravings.length
-        || personal.photoPrints.some((photo, index) => ['uploadId','printOptionId','zone','x','y'].some(key => photo[key] !== intent.photoPrints[index]?.[key]))
+        || personal.photoPrints.some((photo, index) => ['uploadId','printOptionId','zone','x','y','aspectRatio'].some(key => photo[key] !== intent.photoPrints[index]?.[key]))
         || personal.engravings.some((entry, index) => ['text','styleId','colorId','surfaceOptionId'].some(key => entry[key] !== intent.engravings[index]?.[key]))) fail('Order attachments and engraving choices must match the selected Gift Box.');
       if (personal.version !== intent.version || JSON.stringify(personal.sticker && Object.fromEntries(['text','styleId','colorId','optionId','application'].map(key => [key,personal.sticker[key]])) || null) !== JSON.stringify(intent.sticker || null)) fail('Save the exact sticker selection and application.');
       let personalTotal = 0;

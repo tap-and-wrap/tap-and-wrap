@@ -230,8 +230,11 @@
 .gb-expand{display:none}
 .gb-free-canvas{aspect-ratio:1;min-height:0;border-radius:16px;background:radial-gradient(ellipse at center,#fff 48%,#fffcfb 100%)}
 .gb-free-box{left:3.333%;top:2.679%;width:66.667%;height:89.286%}
-.gb-free-photo{border:4px solid white;background:#fff;box-shadow:0 2px 8px #62483f26}
-.gb-free-photo img{object-fit:cover}
+.gb-free-photo{border:1px solid white;box-sizing:border-box;background:#fff;box-shadow:0 2px 8px #62483f26}
+.gb-free-photo img{object-fit:contain;image-orientation:from-image}
+.gb-free-rim{position:absolute;inset:0;z-index:150;pointer-events:none}
+.gb-free-rim .gb-box-art{z-index:auto}
+.gb-free-rim img{pointer-events:none}
 .gb-photo-placeholder{display:grid;place-content:center;height:100%;font-size:.7rem;background:#f4ece8}
 .gb-free-tools{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:12px;min-height:44px}
 .gb-free-tools button{min-width:44px;min-height:44px;display:inline-flex;justify-content:center;align-items:center;border:1px solid var(--tw-border);background:white;border-radius:8px;color:var(--tw-ink);padding:8px 12px;cursor:pointer}
@@ -273,7 +276,7 @@
 .gb-upload-tile:focus-within{outline:3px solid var(--tw-button);outline-offset:3px}
 .gb-photo-thumbnails{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}
 .gb-photo-thumbnails>div{position:relative;min-width:0}
-.gb-photo-thumbnails img{width:100%;aspect-ratio:3/4;object-fit:cover;border:4px solid #fff;box-shadow:0 1px 8px #62483f20}
+.gb-photo-thumbnails img{display:block;width:auto;max-width:100%;height:auto;max-height:180px;margin-inline:auto;object-fit:contain;border:1px solid #fff;box-shadow:0 1px 8px #62483f20}
 .gb-photo-thumbnails button{position:absolute;right:0;top:0;border:1px solid var(--tw-border);background:white;min-height:44px;min-width:44px;border-radius:50%;display:grid;place-items:center}
 .gb-photo-thumbnails label{display:block;font-size:.7rem}
 .gb-photo-thumbnails select{width:100%}
@@ -360,3 +363,10 @@
 @media(max-width:400px){.gb-arrangement-dialog{padding:12px}}
 
 .gb-arrangement-dialog button:focus-visible{outline:3px solid var(--tw-button);outline-offset:3px}
+.gb-sticker-editor{border:0;padding:0;margin:0;min-width:0;display:grid;gap:12px}
+.gb-sticker-editor input{width:100%;min-width:0}
+.gb-sticker-editor fieldset{min-width:0;max-width:100%}
+.gb-sticker-style-list button span{overflow-wrap:anywhere;max-width:100%}
+.gb-sticker-editor .gb-sticker-proof{margin:0 0 4px}
+.gb-sticker-editor .gb-edit-gift{justify-self:start}
+.gb-finishing textarea{width:100%;min-width:0;padding:12px;border:1px solid var(--tw-border);border-radius:7px;background:#fff;color:inherit;font:inherit}

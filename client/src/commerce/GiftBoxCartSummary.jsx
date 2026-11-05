@@ -1,5 +1,5 @@
 import { money } from './api.js';
-const groups = [['flower', 'Flowers'], ['plush', 'Plush toys'], ['chocolate', 'Chocolates']];
+const groups = [['flower', 'Flowers'], ['plush', 'Soft Toys'], ['chocolate', 'Chocolates']];
 
 export default function GiftBoxCartSummary({ giftBox }) {
   if (!giftBox || typeof giftBox !== 'object') return <p className="commerce-muted">Saved gift details are unavailable. Remove this item and build it again.</p>;

@@ -81,13 +81,23 @@ export function FeaturedCategories() {
 }
 
 export function BestSellerProducts() {
-  const selected = useQuery({ queryKey: ['catalog', 'home-owner-picks'], queryFn: ({ signal }) => listProducts({ bestSeller: true, sort: 'best_sellers', limit: 8 }, signal) });
+  const selected = useQuery({ queryKey: ['catalog', 'home-owner-picks'], queryFn: async ({signal}) => {
+    const first=await listProducts({bestSeller:true,sort:'best_sellers',limit:20,page:1},signal);
+    const products=[...first.products];
+    // Respect the catalog's existing 20-item pages and 200-page query bound.
+    // Never fetch the unselected catalog to discover owner selections.
+    for(let page=2;page<=Math.min(first.pagination.pages,200);page++) {
+      const next=await listProducts({bestSeller:true,sort:'best_sellers',limit:20,page},signal);
+      products.push(...next.products);
+    }
+    return {...first,products:[...new Map(products.map(item=>[item._id,item])).values()]};
+  } });
   // Do not start any fallback query until the owner selections are known.
-  const needsFallback = selected.isSuccess && selected.data.products.length < 8;
-  const fallback = useQuery({ queryKey: ['catalog', 'home-starter-picks'], queryFn: ({ signal }) => listProducts({ sort: 'newest', limit: 8 }, signal), enabled: needsFallback });
+  const needsFallback = selected.isSuccess && selected.data.products.length < 4;
+  const fallback = useQuery({ queryKey: ['catalog', 'home-starter-picks'], queryFn: ({ signal }) => listProducts({ sort: 'newest', limit: 4 }, signal), enabled: needsFallback });
   const roots = useQuery({ queryKey: ['catalog', 'home-main-categories'], queryFn: ({ signal }) => listCategories({ parent: 'root', limit: 20 }, signal) });
-  // One bounded request per distinct category rather than sampling 8 from the latest watches.
-  const categoryCandidates = (roots.data?.categories || []).filter(category => category.productCount > 0).slice(0, 8);
+  // One bounded request per distinct category rather than sampling only the latest watches.
+  const categoryCandidates = (roots.data?.categories || []).filter(category => category.productCount > 0).slice(0, 4);
   const picks = useQueries({ queries: categoryCandidates.map(category => ({
     queryKey: ['catalog', 'home-starter-category', category.slug],
     queryFn: ({ signal }) => listProducts({ category: category.slug, sort: 'newest', limit: 1 }, signal),
@@ -107,7 +117,7 @@ export function BestSellerProducts() {
     const score = value => [...value.slug].reduce((acc, letter) => (acc * 31 + letter.charCodeAt(0)) >>> 0, 11939);
     return score(a) - score(b);
   });
-  const products = [...ownerPicks, ...varied, ...starter].slice(0, 8);
+  const products = ownerPicks.length >= 4 ? ownerPicks : [...ownerPicks,...varied,...starter].slice(0,4);
   if (!products.length) return <p className="catalog-state">Find something special in our <Link to="/shop">shop</Link>.</p>;
   return <div className="catalog-grid home-product-grid">{products.map(product => <ProductCard key={product._id} product={product}/>)}</div>;
 }

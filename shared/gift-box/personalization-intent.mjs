@@ -25,15 +25,16 @@ export function parseGiftBoxPersonalizationIntent(raw) {
     || !Array.isArray(raw.engravings) || raw.engravings.length > MAX_ENGRAVING_LINES) fail();
   const seen = new Set();
   const photoPrints = raw.photoPrints.map((photo, index) => {
-    if (!exact(photo, ['uploadId', 'printOptionId', 'zone', 'x', 'y'])
+    if (!exact(photo, v2 && Object.hasOwn(photo,'aspectRatio') ? ['uploadId','printOptionId','zone','x','y','aspectRatio'] : ['uploadId', 'printOptionId', 'zone', 'x', 'y'])
       || !uploadId(photo.uploadId) || seen.has(photo.uploadId) || !slug(photo.printOptionId)
       || !['inside', 'beside'].includes(photo.zone) || !unit(photo.x) || !unit(photo.y)) fail();
-    if (v2 && (photo.x > .880001 || photo.y > .840001)) fail();
+    if (photo.aspectRatio !== undefined && (!v2 || !Number.isFinite(photo.aspectRatio) || photo.aspectRatio < 1/12000 || photo.aspectRatio > 12000)) fail();
+    if (v2 && photo.aspectRatio === undefined && (photo.x > .880001 || photo.y > .840001)) fail();
     seen.add(photo.uploadId);
     // Array position is intentional print order; no browser UUID, object URL,
     // filename, R2 storage key or raw File can cross this boundary.
     return { uploadId: photo.uploadId, printOptionId: photo.printOptionId, zone: photo.zone,
-      x: Object.is(photo.x, -0) ? 0 : photo.x, y: Object.is(photo.y, -0) ? 0 : photo.y };
+      x: Object.is(photo.x, -0) ? 0 : photo.x, y: Object.is(photo.y, -0) ? 0 : photo.y, ...(photo.aspectRatio !== undefined ? {aspectRatio:photo.aspectRatio} : {}) };
   });
   const engravings = raw.engravings.map(engraving => {
     if (!exact(engraving, ['text', 'styleId', 'colorId', 'surfaceOptionId'])

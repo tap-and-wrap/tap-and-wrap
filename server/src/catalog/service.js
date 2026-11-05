@@ -170,7 +170,7 @@ function discoveryOrder(giftCategoryIds) {
 }
 
 export async function listProducts(query, { admin = false } = {}) {
-  const pagination = paginationFor(!admin && query.bestSeller === true ? { ...query, limit: Math.min(query.limit ?? 8, 8) } : query);
+  const pagination = paginationFor(query);
   const filters = await filtersForQuery(query, admin);
   const graph = admin ? null : await activeCategories();
   const visibility = admin ? null : await visibleProductFilter(graph);

@@ -104,7 +104,7 @@ export async function quoteGiftBoxPersonalizationPreview(owner, raw) {
     await session.withTransaction(async () => {
       // MongoDB sessions do not support parallel operations inside one transaction.
       const uploads = ids.length ? await Upload.find({ _id: { $in: ids }, owner })
-        .select('_id owner purpose giftBoxId fieldKey state expiresAt cartId').session(session).lean().maxTimeMS(3000) : [];
+        .select('_id owner purpose giftBoxId fieldKey state expiresAt cartId width height').session(session).lean().maxTimeMS(3000) : [];
       const options = optionIds.length ? await GiftBoxPersonalizationOption.find({ optionId: { $in: optionIds } })
         .session(session).lean().maxTimeMS(3000) : [];
       result = priceGiftBoxPersonalization({ intent, boxId: raw.boxId, owner, uploads, options });

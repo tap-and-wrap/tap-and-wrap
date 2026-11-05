@@ -82,7 +82,7 @@ export async function createGiftBoxCartPricingContext(lines, { session, owner = 
     if (intent.sticker) optionIds.add(intent.sticker.optionId);
   }
   const giftUploads = uploadIds.size ? await Upload.find({ _id: { $in: [...uploadIds] }, owner })
-    .select('_id owner purpose giftBoxId fieldKey state expiresAt cartId').session(session || null).lean().maxTimeMS(3000) : [];
+    .select('_id owner purpose giftBoxId fieldKey state expiresAt cartId width height').session(session || null).lean().maxTimeMS(3000) : [];
   const giftOptions = optionIds.size ? await GiftBoxPersonalizationOption.find({ optionId: { $in: [...optionIds] } })
     .session(session || null).lean().maxTimeMS(3000) : [];
   const savedSettings = componentIds.size ? await GiftBoxComponentSetting.find({ componentId: { $in: [...componentIds] } }).session(session || null).lean().maxTimeMS(3000) : [];
@@ -112,7 +112,7 @@ export function giftBoxCartSummary(configuration, savedSettings = []) {
       presentationVersion:parsed.data.presentationVersion,
       placements:parsed.data.placements.map(({componentId,x,y,width,height,zone,layer}) => ({componentId,x,y,width,height,zone,layer})),
       ribbonPlacement:parsed.data.ribbonPlacement,
-      photos:(parsed.data.personalizationIntent?.photoPrints || []).map(({x,y,zone})=>({x,y,zone})),
+      photos:(parsed.data.personalizationIntent?.photoPrints || []).map(({x,y,zone,aspectRatio})=>({x,y,zone,...(aspectRatio !== undefined ? {aspectRatio} : {})})),
     } } : {}) };
 }
 

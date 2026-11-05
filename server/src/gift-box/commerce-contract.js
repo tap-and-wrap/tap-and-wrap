@@ -8,6 +8,8 @@ import {
 } from '../../../shared/gift-box/commerce-contract.mjs';
 import { componentId, giftCardMessage, MAX_ITEM_QUANTITY, MAX_ADDITIONAL_ITEMS } from './validation.js';
 import { parseGiftBoxPersonalizationIntent } from '../../../shared/gift-box/personalization-intent.mjs';
+import { photoPrintFootprint } from '../../../shared/gift-box/photo-presentation.mjs';
+import { BOX_ARTWORK_DIMENSIONS } from '../../../shared/gift-box/artwork-dimensions.mjs';
 
 const recognizedId = categories => componentId.refine(id => categories.includes(getFixedComponent(id)?.category), 'Choose a recognized component in the required category.');
 const coordinate = z.number().finite().min(0).max(1).transform(value => value === 0 ? 0 : value);
@@ -49,6 +51,9 @@ export const giftBoxV2CommerceInput = z.object({
   const issue = message => context.addIssue({ code: 'custom', message });
   const visible = item => item && item.width > 0 && item.height > 0 && item.x + item.width <= 1.000001 && item.y + item.height <= 1.000001;
   if (free) {
+    const [sourceWidth,sourceHeight]=BOX_ARTWORK_DIMENSIONS[input.selection.boxId];
+    const aspect=input.presentationVersion ? sourceWidth/sourceHeight : 1;
+    if (Array.isArray(input.personalizationIntent?.photoPrints) && input.personalizationIntent.photoPrints.some(photo=>photo.aspectRatio !== undefined && !visible({...photo,...photoPrintFootprint(photo.aspectRatio,aspect)}))) issue('Every photo must remain within the visible workspace.');
     if (input.placements.some(item => !visible(item) || item.regionId !== 'workspace')) issue('Every object needs a visible workspace footprint.');
     if (!Object.hasOwn(input, 'ribbonPlacement') || Boolean(input.ribbonPlacement) !== Boolean(input.selection.ribbonId) || input.ribbonPlacement && !visible(input.ribbonPlacement)) issue('Persist the selected ribbon position.');
   } else if (Object.hasOwn(input, 'ribbonPlacement') || input.placements.some(item => item.width !== undefined || item.height !== undefined)) issue('v1 placement fields cannot be reinterpreted.');

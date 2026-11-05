@@ -34,7 +34,7 @@ test('all 21 bow choices retain API names, prices and six-at-a-time choices, and
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(page.locator('.gb-options-ribbon .gb-option')).toHaveCount(21);
   await expect(ribbon).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: 'No ribbon', exact: true }).click();
+  await ribbon.click();
   await expect(page.getByRole('button', { name: 'Move Fixture final ribbon' })).toHaveCount(0);
   await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
   expect(fixture.media.every(path => !/ribbon|card/.test(path))).toBe(true);
@@ -43,8 +43,8 @@ test('all 21 bow choices retain API names, prices and six-at-a-time choices, and
 test('selected gift card charges the API price with blank or Unicode message and stays out of checkout', async ({ page }) => {
   const fixture = await giftBoxFixture(page, { componentOverrides: { 'gift-card-1': { displayName: 'Fixture keepsake card', pricePiastres: 1875 } } });
   await beginGiftBox(page); await page.locator('.gb-progress button').nth(5).click();
-  const toggle = page.getByLabel('Add a gift card'), message = page.getByLabel('Your message');
-  await expect(toggle).not.toBeChecked(); await toggle.check();
+  const toggle = page.locator('.gb-finishing summary'), message = page.getByLabel('Your message');
+  await toggle.click();
   await expect(message).toHaveValue('');
   await expect(page.locator('.gb-live-total strong')).toContainText('28.75');
   expect(fixture.estimates.at(-1).giftCard).toEqual({ componentId: 'gift-card-1', message: '' });
@@ -53,9 +53,9 @@ test('selected gift card charges the API price with blank or Unicode message and
   await message.fill('💐'.repeat(500));
   await message.press('x'); await expect(message).toHaveValue('💐'.repeat(500));
   await expect.poll(() => fixture.estimates.at(-1)?.giftCard?.message).toBe('💐'.repeat(500));
-  await toggle.uncheck(); await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
+  await page.getByRole('button',{name:'Remove gift card'}).click(); await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
   expect(fixture.estimates.at(-1).giftCard).toBeNull();
-  await toggle.check(); await expect(message).toHaveValue('💐'.repeat(500));
+  await toggle.click(); await expect(message).toHaveValue('💐'.repeat(500));
   await page.getByRole('button', { name: 'Next: Review' }).click();
   await expect(page.getByRole('button', { name: 'Add Your Gift to Cart', exact: true })).toBeDisabled();
   expect(fixture.calls.every(call => !/submit|convert|order/.test(call.path))).toBe(true);
@@ -87,8 +87,8 @@ test('tracked roses stop at stock, while made-to-order plush has no old two-toy 
 test('unavailable finishing settings remain visible and disabled', async ({ page }) => {
   await giftBoxFixture(page, { componentOverrides: { 'gift-card-1': { inventoryQuantity: 0 }, 'ribbon-white': { available: false } } });
   await beginGiftBox(page); await page.locator('.gb-progress button').nth(5).click();
-  await expect(page.getByLabel('Add a gift card')).toBeDisabled();
-  await expect(page.locator('.gb-finishing')).toContainText('Unavailable');
+  await page.locator('.gb-finishing summary').click(); await expect(page.getByLabel('Your message')).toHaveCount(0);
+  await expect(page.locator('.gb-finishing')).toContainText('unavailable');
   await expect(page.getByRole('button', { name: 'Choose Fixture ribbon-white', exact: true })).toBeDisabled();
   await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
 });
@@ -155,7 +155,7 @@ for (const width of [320, 390, 768, 1440]) test(`finishing choices and inventory
   await page.setViewportSize({ width, height: 1000 }); await page.emulateMedia({ reducedMotion: 'reduce' });
   await giftBoxFixture(page, { role: 'admin' }); await beginGiftBox(page); await page.locator('.gb-progress button').nth(5).click();
   for (let i=0;i<3;i++) await page.getByRole('button', { name: /Show 6 more/ }).click(); await page.getByRole('button', { name: 'Choose Fixture ribbon-peach', exact: true }).click();
-  await page.getByLabel('Add a gift card').check(); await page.getByLabel('Your message').fill('Synthetic review message.');
+  await page.locator('.gb-finishing summary').click(); await page.getByLabel('Your message').fill('Synthetic review message.');
   await expect(page.locator('.gb-live-total strong')).toContainText('30.00');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const order = await page.evaluate(() => {

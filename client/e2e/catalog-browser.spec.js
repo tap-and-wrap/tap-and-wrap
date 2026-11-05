@@ -204,8 +204,8 @@ test('admin add form requires a real quantity and shows server validation feedba
 test('homepage requests all active main categories and prioritizes admin featured gifts', async ({ page }) => {
   const fixture = await mockCatalog(page);
   await page.goto('/');
-  await expect(page.locator('.home-product-grid .catalog-card')).toHaveCount(8);
-  expect(fixture.requests.find((item) => item.path === '/public/products').params).toMatchObject({ bestSeller: 'true', sort: 'best_sellers', limit: '8' });
+  await expect(page.locator('.home-product-grid .catalog-card')).toHaveCount(9);
+  expect(fixture.requests.find((item) => item.path === '/public/products').params).toMatchObject({ bestSeller: 'true', sort: 'best_sellers', limit: '20' });
   expect(fixture.requests.find((item) => item.path === '/public/categories').params).toMatchObject({ parent: 'root', limit: '20' });
   expect(fixture.requests.find((item) => item.path === '/public/categories').params.featured).toBeUndefined();
 });

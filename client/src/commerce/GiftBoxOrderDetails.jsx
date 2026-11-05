@@ -1,7 +1,7 @@
 import { money } from './api';
 import { LETTERING_STYLES, ENGRAVING_COLORS } from '../../../shared/gift-box/lettering-styles.mjs';
 
-const groups = [['flower', 'Flowers'], ['plush', 'Plush toys'], ['chocolate', 'Chocolates']];
+const groups = [['flower', 'Flowers'], ['plush', 'Soft Toys'], ['chocolate', 'Chocolates']];
 const modeName = { tracked: 'Tracked', made_to_order: 'Made to Order', status_only: 'Status only' };
 
 export default function GiftBoxOrderDetails({ giftBox, admin = false }) {

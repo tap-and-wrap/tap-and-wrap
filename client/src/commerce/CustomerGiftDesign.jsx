@@ -41,7 +41,7 @@ export default function CustomerGiftDesign({ giftBox, orderId }) {
     {supported && photoCoordinatesSupported ? <><FreeArrangementCanvas readOnly state={{ freePlacement:true, boxId:config.selection.boxId,
       ribbonId:config.selection.ribbonId, ribbonPosition:config.ribbonPlacement, presentationVersion:config.presentationVersion,
       instances:config.placements.map(item => ({ ...item,id:item.instanceId,placementZone:item.zone })) }}
-      components={giftBox.components} personal={{ photos:photos.map(photo => ({ id:photo.uploadId,url:urls[photo.uploadId] })),
+      components={giftBox.components} personal={{ photos:photos.map(photo => ({ id:photo.uploadId,url:urls[photo.uploadId],aspectRatio:photo.aspectRatio })),
         photoPositions:Object.fromEntries(photos.map(photo => [photo.uploadId,{ x:photo.x,y:photo.y,placementZone:photo.zone }])) }}/>
       <p className="gb-scale-note">Saved customer arrangement - proportions are an assembly reference.</p>
       {photos.length > 0 && <button type="button" className="button button-secondary" disabled={loading || photos.every(photo => urls[photo.uploadId])} onClick={showPhotos}>{loading ? 'Loading private photos...' : 'View private photos in design'}</button>}

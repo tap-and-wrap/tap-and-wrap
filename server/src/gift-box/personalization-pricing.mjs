@@ -37,11 +37,17 @@ export function priceGiftBoxPersonalization({ intent: raw, boxId, owner, uploads
     if (!upload || String(upload.owner)!==owner || upload.purpose!=='gift_box_photo' || upload.giftBoxId!==boxId
       || upload.fieldKey!=='gift_box_photo' || upload.state!=='complete' || !(upload.expiresAt instanceof Date)
       || upload.expiresAt<=new Date() || (upload.cartId && (!cartId || String(upload.cartId)!==String(cartId)))) reject('GIFT_BOX_UPLOAD_INVALID');
+    if (photo.aspectRatio !== undefined) {
+      const ratio=upload.width/upload.height;
+      // Existing verified upload records store unrotated decoder dimensions;
+      // browsers honor EXIF rotation. Both orientations describe the same bytes.
+      if (!Number.isFinite(ratio) || Math.min(Math.abs(photo.aspectRatio/ratio-1),Math.abs(photo.aspectRatio*ratio-1)) > .01) reject('GIFT_BOX_PHOTO_ASPECT_INVALID');
+    }
     const option=byOption.get(photo.printOptionId);
     if (option?.kind!=='photo_print' || !goodPrice(option)
       || option.boxIds !== undefined && (!Array.isArray(option.boxIds) || !option.boxIds.includes(boxId))) reject('GIFT_BOX_PRINT_PRICE_PENDING');
     amount=addMoney(amount,option.pricePiastres);
-    return { uploadId:photo.uploadId, printOptionId:option.optionId, zone:photo.zone,x:photo.x,y:photo.y,
+    return { uploadId:photo.uploadId, printOptionId:option.optionId, zone:photo.zone,x:photo.x,y:photo.y,...(photo.aspectRatio !== undefined ? {aspectRatio:photo.aspectRatio} : {}),
       pricePiastres:option.pricePiastres, optionRevision:option.__v,
       priceApprovedAt:option.priceApprovedAt.toISOString() };
   });

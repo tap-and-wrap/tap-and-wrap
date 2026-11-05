@@ -141,17 +141,20 @@ describe('Phase 1B catalog API contracts', { concurrency: false }, () => {
     assert.equal(reversed.status, 400);
   });
 
-  it('caps the selected best-seller homepage feed at eight approved available products', async () => {
-    await Product.create(Array.from({ length: 11 }, (_, index) => ready(`best-${String(index).padStart(2, '0')}`, { bestSeller: true, bestSellerOrder: index })));
+  it('paginates all selected best sellers in approved display order with bounded pages', async () => {
+    await Product.create(Array.from({ length: 25 }, (_, index) => ready(`best-${String(index).padStart(2, '0')}`, { bestSeller: true, bestSellerOrder: index })));
     await Product.create(ready('not-selected'));
     await Product.create(ready('best-draft', { bestSeller: true, status: 'draft', priceApproved: false }));
     await Product.create(ready('best-out', { bestSeller: true, bestSellerOrder: 0, inventory: { mode: 'tracked', quantity: 0, approved: true, available: true } }));
     const response = await request('/public/products?bestSeller=true&availability=available&sort=best_sellers&limit=100');
     assert.equal(response.status, 200);
-    assert.equal(response.body.products.length, 8);
-    assert.equal(response.body.pagination.limit, 8);
-    assert.equal(response.body.pagination.total, 11);
-    assert.deepEqual(response.body.products.map((product) => product.slug), Array.from({ length: 8 }, (_, index) => `best-${String(index).padStart(2, '0')}`));
+    assert.equal(response.body.products.length, 20);
+    assert.equal(response.body.pagination.limit, 20);
+    assert.equal(response.body.pagination.total, 25);
+    assert.equal(response.body.pagination.pages,2);
+    const second=await request('/public/products?bestSeller=true&availability=available&sort=best_sellers&limit=20&page=2');
+    assert.deepEqual(second.body.products.map(product=>product.slug),['best-20','best-21','best-22','best-23','best-24']);
+    assert.deepEqual(response.body.products.map((product) => product.slug), Array.from({ length: 20 }, (_, index) => `best-${String(index).padStart(2, '0')}`));
   });
 
   it('maps image references only through an explicit public HTTPS base and removes private keys', async () => {
