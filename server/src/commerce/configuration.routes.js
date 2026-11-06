@@ -11,9 +11,7 @@ import { Category } from '../models/Category.js';
 import { ComponentOption } from '../models/ComponentOption.js';
 import CustomizationTemplate from '../models/CustomizationTemplate.js';
 import DiscountCode from '../models/DiscountCode.js';
-import BundleRule from '../models/BundleRule.js';
 import ShippingConfig from '../models/ShippingConfig.js';
-import { CommerceControl } from '../models/CommerceControl.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { csrfProtection } from '../middleware/csrf.js';
 import { env } from '../config/env.js';
@@ -64,7 +62,6 @@ function validateRequestPolicy(values) {
   }
   return values;
 }
-const BUNDLE_FIELDS = ['name', 'description', 'active', 'published', 'items', 'discountKind', 'discountValue', 'maxApplications', 'priority', 'startsAt', 'endsAt'];
 const DISCOUNT_FIELDS = ['code', 'name', 'active', 'kind', 'value', 'minimumSubtotalPiastres', 'maximumDiscountPiastres', 'productIds', 'categoryIds', 'authenticatedOnly', 'stackWithBundles', 'startsAt', 'endsAt', 'usageLimit', 'perCustomerLimit'];
 
 export function configurationPagination(query = {}) {
@@ -95,7 +92,6 @@ async function auditedMutation(req, action, resourceId, mutate) {
     });
   } catch (error) {
     if (error.code === 11000 && action === 'shipping.updated') throw configurationError('Shipping settings were created by another editor. Reload them before saving.', 'EDIT_CONFLICT', 409);
-    if (error.code === 11000 && action.startsWith('promotion.bundle.')) throw configurationError('Bundle capacity changed during this save. Reload the list before retrying.', 'EDIT_CONFLICT', 409);
     throw error;
   } finally {
     await session.endSession();
@@ -322,6 +318,7 @@ function addPromotionRoutes(path, Model, fields, listKey, itemKey) {
   adminConfigurationRoutes.get(`${path}/:id`, wrap(async (req, res) => respond(res, { [itemKey]: adminRecord(await findRecord(Model, idParam(req))) })));
   adminConfigurationRoutes.post(path, wrap(async (req, res) => {
     const values = plainBody(req.body, fields);
+    if (itemKey === 'discount' && values.stackWithBundles === true) throw configurationError('Bundle promotions have been retired.');
     const record = await auditedMutation(req, `promotion.${itemKey}.created`, 'new', async (session) => {
       const document = new Model(values);
       await document.validate();
@@ -333,6 +330,7 @@ function addPromotionRoutes(path, Model, fields, listKey, itemKey) {
   adminConfigurationRoutes.patch(`${path}/:id`, wrap(async (req, res) => {
     const id = idParam(req);
     const { values, expectedRevision } = revisionBody(req.body, fields);
+    if (itemKey === 'discount' && values.stackWithBundles === true) throw configurationError('Bundle promotions have been retired.');
     const record = await auditedMutation(req, `promotion.${itemKey}.updated`, id, async (session) => {
       const document = await findRecord(Model, id, session);
       await prepareAdminRevision(document, expectedRevision, { session });
@@ -345,24 +343,14 @@ function addPromotionRoutes(path, Model, fields, listKey, itemKey) {
   }));
 }
 async function validatePromotionReferences(document, kind, session) {
-  const ids = kind === 'bundle' ? [...new Set(document.items.map((item) => String(item.productId)))] : [...new Set(document.productIds.map(String))];
-  const products = await Product.find({ _id: { $in: ids } }).session(session).select('_id variants.key').lean().maxTimeMS(3000);
-  if (products.length !== ids.length) throw configurationError('A promotion product does not exist.');
-  if (kind === 'bundle') {
-    for (const item of document.items) if (item.variantKey && !products.find((product) => String(product._id) === String(item.productId))?.variants.some((variant) => variant.key === item.variantKey)) throw configurationError('A bundle variant does not exist.');
-    if (document.active) {
-      // Count-then-save alone admits two concurrent activations at 99. This
-      // transaction-local fence serializes only bundle-capacity decisions.
-      assertDatabaseWriteAllowed(CommerceControl.db, env);
-      await CommerceControl.findOneAndUpdate({ _id: 'bundle-activation' }, { $inc: { revision: 1 } }, { upsert: true, new: true, session }).maxTimeMS(3000);
-      if (await BundleRule.countDocuments({ active: true, _id: { $ne: document._id } }).session(session).maxTimeMS(3000) >= 100) throw configurationError('At most 100 bundle rules may be active.', 'BUNDLE_CAPACITY', 409);
-    }
-  } else if (document.categoryIds.length) {
+  const ids = [...new Set(document.productIds.map(String))];
+  if (await Product.countDocuments({ _id: { $in: ids } }).session(session).maxTimeMS(3000) !== ids.length) throw configurationError('A promotion product does not exist.');
+  if (document.categoryIds.length) {
     const categoryIds = [...new Set(document.categoryIds.map(String))];
     if (await Category.countDocuments({ _id: { $in: categoryIds } }).session(session).maxTimeMS(3000) !== categoryIds.length) throw configurationError('A discount category does not exist.');
   }
 }
-addPromotionRoutes('/bundles', BundleRule, BUNDLE_FIELDS, 'bundles', 'bundle');
+adminConfigurationRoutes.all(['/bundles', '/bundles/:id'], (req, res) => respond(res, { retired: true, message: 'Bundle management has been retired. Historical orders are retained.' }, 410));
 addPromotionRoutes('/discounts', DiscountCode, DISCOUNT_FIELDS, 'discounts', 'discount');
 
 adminConfigurationRoutes.get('/shipping', wrap(async (req, res) => {

@@ -1,3 +1,4 @@
+import { chooseOption } from './select-option.js';
 import { test, expect } from '@playwright/test';
 import { category, subcategory, detail, mockCatalog } from './catalog-fixtures.js';
 import { ownerFeaturedReviews } from '../src/content/owner-confirmed-reviews.js';
@@ -25,7 +26,7 @@ for (const width of [320, 1440]) {
     await expect(page).toHaveURL(`${category.publicPath}?sort=newest&q=Fixture+Gift+05`);
     await expect(page.locator('.catalog-card')).toHaveCount(1);
     expect(fixture.requests.filter(request => request.path === '/public/products').at(-1).params).toMatchObject({ category: category.slug, q: 'Fixture Gift 05', sort: 'newest' });
-    await browse.selectOption(subcategory.publicPath);
+    await chooseOption(browse, subcategory.publicPath);
     await expect(page).toHaveURL(subcategory.publicPath);
     await expect(page.locator('.catalog-discovery-paired')).toHaveCount(0);
     await page.goto('/shop');

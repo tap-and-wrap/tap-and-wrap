@@ -1,3 +1,4 @@
+import { chooseOption } from '../e2e/select-option.js';
 import { test, expect } from '@playwright/test';
 
 const api = `http://127.0.0.1:${process.env.TAP_WRAP_CONTRACT_API_PORT}/api/v1`;
@@ -59,7 +60,7 @@ for (const [navigation, firstPhoto, secondPhoto] of [
     await page.getByLabel('Full name', {exact:true}).fill('Synthetic gift buyer');
     await page.getByLabel('Email', {exact:true}).fill('gift-buyer@example.test');
     await page.getByLabel('Egyptian mobile number').fill('01012345678');
-    await page.getByLabel('Governorate', {exact:true}).selectOption('cairo');
+    await chooseOption(page.getByLabel('Governorate', {exact:true}), 'cairo');
     await page.getByLabel('Delivery address', {exact:true}).fill('10 Synthetic Gift Test Street');
     await expect(page.getByRole('radio',{name:/Cash on Delivery/})).toHaveCount(0);
     await expect(page.getByRole('button',{name:'Place Order',exact:true})).toBeEnabled();
@@ -146,7 +147,7 @@ test('three photo orientations reconstruct unchanged after real isolated checkou
   expect(await page.locator('.commerce-gift-photo .gb-free-photo').evaluateAll(nodes=>nodes.map(node=>({width:node.style.width,height:node.style.height,left:node.style.left,top:node.style.top})))).toEqual(before);
   await page.getByRole('link',{name:'Proceed to Checkout',exact:true}).click();
   await page.getByLabel('Full name',{exact:true}).fill('Synthetic photo buyer');await page.getByLabel('Email',{exact:true}).fill('photo-buyer@example.test');
-  await page.getByLabel('Egyptian mobile number').fill('01012345678');await page.getByLabel('Governorate',{exact:true}).selectOption('cairo');await page.getByLabel('Delivery address',{exact:true}).fill('10 Synthetic Photo Street');
+  await page.getByLabel('Egyptian mobile number').fill('01012345678');await chooseOption(page.getByLabel('Governorate',{exact:true}), 'cairo');await page.getByLabel('Delivery address',{exact:true}).fill('10 Synthetic Photo Street');
   await expect(page.getByRole('button',{name:'Place Order',exact:true})).toBeEnabled();await page.getByRole('button',{name:'Place Order',exact:true}).click();await expect(page).toHaveURL(/\/orders\/[a-f0-9]{24}$/);
   const id=page.url().split('/').pop();await page.goto('/login');await page.getByLabel('Email Address').fill('admin@connected.example.test');await page.getByLabel('Password',{exact:true}).fill('isolated-fixture-password');await page.getByRole('button',{name:'Log In',exact:true}).click();await expect(page).not.toHaveURL(/\/login/);
   await page.goto(`/admin/commerce/orders/${id}`);const design=page.getByRole('region',{name:"Customer's Gift Design"});

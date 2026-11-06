@@ -55,7 +55,7 @@ export function presentInboxRecord(item) {
     : item.proofReviewRequired || item.paymentState === 'awaiting_verification' ? `Payment review · ${name}`
       : kind === 'request' ? (item.service === 'gift_box' ? 'Gift Box request' : item.service === 'laser_engraving' ? 'Engraving request' : 'Custom request') : 'Order update';
   return { id: `${kind}:${String(item._id)}`, kind, reference, title, unread: item.unread === true, followup,
-    at: item.notificationAt, href: kind === 'request' ? `/admin/requests/${item._id}` : `/admin/commerce/orders/${item._id}`,
+    at: item.notificationAt, href: kind === 'request' ? `/admin/orders/requests/${item._id}` : `/admin/orders/${item._id}`,
     detail: `${name} · ${String(item.state || '').replaceAll('_', ' ')}` };
 }
 

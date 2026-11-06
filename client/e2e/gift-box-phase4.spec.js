@@ -1,3 +1,4 @@
+import { chooseOption } from './select-option.js';
 import { expect, test } from '@playwright/test';
 import { giftBoxFixture, beginGiftBox } from './gift-box-fixtures.js';
 
@@ -118,15 +119,15 @@ test('admin mode transitions preserve made-to-order stock and explicitly confirm
   const fixture = await giftBoxFixture(page, { role: 'admin', componentOverrides: { 'box-2': { inventoryQuantity: 7 } } });
   await page.goto('/admin/gift-box/components');
   const form = editor(page, 'box-2'), mode = form.getByLabel('Inventory mode');
-  await form.getByText('Advanced inventory settings',{exact:true}).click(); await mode.selectOption('made_to_order'); await expect(form.getByLabel('Stock quantity')).toHaveCount(0); await save(form);
+  await form.getByText('Advanced inventory settings',{exact:true}).click(); await chooseOption(mode, 'made_to_order'); await expect(form.getByLabel('Stock quantity')).toHaveCount(0); await save(form);
   await expect(form.getByText('Component settings saved.', { exact: true })).toBeVisible();
   expect(fixture.patches.at(-1).body).toMatchObject({ inventoryMode: 'made_to_order', expectedRevision: 1 });
   expect(fixture.patches.at(-1).body).not.toHaveProperty('inventoryQuantity'); expect(fixture.components.find(item => item.componentId === 'box-2').inventoryQuantity).toBe(7);
-  await mode.selectOption('tracked'); await form.getByLabel('Stock quantity', { exact: true }).fill('3'); await save(form); expect(fixture.patches).toHaveLength(1);
+  await chooseOption(mode, 'tracked'); await form.getByLabel('Stock quantity', { exact: true }).fill('3'); await save(form); expect(fixture.patches).toHaveLength(1);
   await form.getByLabel('Confirm this tracked stock quantity').check(); await save(form);
   await expect.poll(() => fixture.patches.length).toBe(2);
   expect(fixture.patches.at(-1).body).toMatchObject({ expectedRevision: 2, inventoryMode: 'tracked', inventoryQuantity: 3, confirmInventoryQuantity: true });
-  await page.getByLabel('Component category').selectOption('ribbon');
+  await chooseOption(page.getByLabel('Component category'), 'ribbon');
   const ribbon = editor(page, 'ribbon-cream-ivory');
   await expect(ribbon.getByLabel('Inventory mode')).toHaveCount(0); await expect(ribbon.getByLabel('Stock quantity')).toHaveCount(0);
   await ribbon.getByLabel('In stock', { exact: true }).uncheck(); await save(ribbon);

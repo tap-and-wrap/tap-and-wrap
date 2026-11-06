@@ -1,3 +1,4 @@
+import Select from '../components/form/Select.jsx';
 import { eligibleGiftBoxOptions } from './personalization-submission.mjs';
 import { money } from '../commerce/api.js';
 
@@ -15,20 +16,20 @@ export default function PersonalizationOptions({ boxId, personal, options, print
     {personal.photos.map((photo,index) => {
       const choices=eligibleGiftBoxOptions(options,boxId,'photo_print');
       return <label className="gb-personal-option" key={photo.id}>Photo {index+1} · Print type
-        <select value={printSelections[photo.id] || ''} onChange={event=>onPrintSelection(photo.id,event.target.value)}>
+        <Select value={printSelections[photo.id] || ''} onChange={event=>onPrintSelection(photo.id,event.target.value)}>
           <option value="">Choose an approved print type</option>
           {choices.map(choice=><option key={choice.optionId} value={choice.optionId}>{choice.displayName} · {money(choice.pricePiastres)}</option>)}
-        </select>
+        </Select>
         {!choices.length && <small>Print options for this box have not been approved.</small>}
       </label>;
     })}
     {personal.engravings.filter(line=>line.text.trim()).map((line,index)=>{
       const choices=eligibleGiftBoxOptions(options,boxId,'engraving_surface',line);
       return <label className="gb-personal-option" key={line.id}>Engraving {index+1} · Surface
-        <select value={engravingSelections[line.id] || ''} onChange={event=>onEngravingSelection(line.id,event.target.value)}>
+        <Select value={engravingSelections[line.id] || ''} onChange={event=>onEngravingSelection(line.id,event.target.value)}>
           <option value="">Choose an approved surface</option>
           {choices.map(choice=><option key={choice.optionId} value={choice.optionId}>{choice.displayName} · {money(choice.pricePiastres)}</option>)}
-        </select>
+        </Select>
         {!choices.length && <small>Select a licensed lettering style and eligible color, or ask the owner to configure this surface.</small>}
       </label>;
     })}

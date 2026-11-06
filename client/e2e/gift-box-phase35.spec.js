@@ -1,3 +1,4 @@
+import { chooseOption } from './select-option.js';
 import { expect,test } from '@playwright/test';
 import { giftBoxFixture,beginGiftBox } from './gift-box-fixtures.js';
 async function capture(target,info,name,options={}) { await target.screenshot({...options,path:info.outputPath(name)}); }
@@ -12,16 +13,16 @@ for (const width of [320,390,768,1024]) test(`200 percent text preserves shoppin
   expect(await page.locator('.gb-options').evaluate(el=>Boolean(el.compareDocumentPosition(document.querySelector('.gb-navigation')) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
 });
 test('restricted admin review exposes fixed fields and explicit price approval only',async({page},info)=>{
-  await giftBoxFixture(page,{role:'admin'});await page.goto('/admin/gift-box/components');await page.getByLabel('Component category').selectOption('chocolate');
+  await giftBoxFixture(page,{role:'admin'});await page.goto('/admin/gift-box/components');await chooseOption(page.getByLabel('Component category'), 'chocolate');
   const form=page.locator('.gb-setting-editor').first();await expect(form).toContainText('complete pictured retail product');await capture(form,info,'restricted-admin-component-editor.png');
   await expect(form.locator('input[type=file]')).toHaveCount(0);await expect(form.getByRole('button',{name:/Create|Delete|Replace/})).toHaveCount(0);
   await form.getByLabel('Approved price (EGP)').fill('0');await expect(form.getByLabel('Explicitly approve this component as complimentary')).toBeVisible();
 });
 test('box 11 review starts with two circular floor proposals and unchanged submission gate',async({page},info)=>{
-  await giftBoxFixture(page);await page.goto('/dev/gift-box/geometry');await page.getByLabel('Review box').selectOption('box-11');
+  await giftBoxFixture(page);await page.goto('/dev/gift-box/geometry');await chooseOption(page.getByLabel('Review box'), 'box-11');
   const draft=JSON.parse(await page.getByLabel('Geometry review draft JSON').inputValue());expect(draft.regions).toHaveLength(2);expect(draft.foregroundMasks).toHaveLength(3);expect(draft.productionApproved).toBe(false);expect(draft.capacity).toBeNull();
   await capture(page.locator('.gb-geometry .gb-workspace>section').first(),info,'box-11-two-compartments-browser.png');
-  await page.getByLabel('Review box').selectOption('box-1');await expect(page.getByRole('button',{name:'Add draft region',exact:true})).toBeDisabled();await expect(page.locator('.gb-geometry .gb-box-art img')).toBeVisible();
+  await chooseOption(page.getByLabel('Review box'), 'box-1');await expect(page.getByRole('button',{name:'Add draft region',exact:true})).toBeDisabled();await expect(page.locator('.gb-geometry .gb-box-art img')).toBeVisible();
 });
 
 test.describe('touch and reduced motion',()=>{

@@ -1,3 +1,4 @@
+import { chooseOption } from '../e2e/select-option.js';
 import { test, expect } from '@playwright/test';
 
 const api = 'http://127.0.0.1:' + (process.env.TAP_WRAP_CONTRACT_API_PORT || 4092);
@@ -14,6 +15,7 @@ async function restrictNetwork(context) {
 }
 test.beforeEach(async ({ context }) => restrictNetwork(context));
 async function login(page, name = 'admin', destination = path) {
+  destination = destination.replace('/admin/gift-box/fulfillment-policies', '/admin/gift-box?tab=packing');
   await page.goto(`/login?returnTo=${encodeURIComponent(destination)}`);
   await page.getByLabel('Email Address').fill(`${name}@connected.example.test`);
   await page.getByLabel('Password', { exact: true }).fill('isolated-fixture-password');
@@ -44,14 +46,14 @@ async function save(context, boxId, expectedRevision, transportNotes) {
   expect(response.status()).toBe(200); return (await response.json()).data.policy;
 }
 async function fillDraft(page, context, boxId) {
-  await page.getByRole('combobox', { name: 'Box', exact: true }).selectOption(boxId);
+  await chooseOption(page.getByRole('combobox', { name: 'Box', exact: true }), boxId);
   const catalog = (await (await context.request.get(endpoint)).json()).data.components;
   const rose = catalog.find(component => component.componentId === 'rose-red').displayName;
   await page.getByRole('button', { name: 'Add placement region', exact: true }).click();
   await page.getByLabel('Region ID 1', { exact: true }).fill('connected-inside');
   for (const [category, componentId] of [['flower', 'rose-red'], ['ribbon', 'ribbon-navy']]) {
-    await page.getByRole('combobox', { name: 'Component category', exact: true }).selectOption(category);
-    await page.getByRole('combobox', { name: 'Compatible component', exact: true }).selectOption(componentId);
+    await chooseOption(page.getByRole('combobox', { name: 'Component category', exact: true }), category);
+    await chooseOption(page.getByRole('combobox', { name: 'Compatible component', exact: true }), componentId);
     await page.getByRole('button', { name: 'Add compatible component', exact: true }).click();
     if (category === 'flower') {
       await page.getByLabel(`Maximum quantity: ${rose}`, { exact: true }).fill('1');
@@ -62,14 +64,14 @@ async function fillDraft(page, context, boxId) {
     ['Mixed flowers + plush limit', '0'], ['Mixed flowers + chocolates limit', '0'], ['Mixed plush + chocolates limit', '0'], ['Mixed flowers + plush + chocolates limit', '0']]) {
     await page.getByLabel(label, { exact: true }).fill(value);
   }
-  await page.getByRole('combobox', { name: 'Lid requirement', exact: true }).selectOption('must_close');
+  await chooseOption(page.getByRole('combobox', { name: 'Lid requirement', exact: true }), 'must_close');
   await page.getByRole('textbox', { name: /^Lid and clearance instructions/ }).fill(packing().clearanceNotes);
   await page.getByRole('textbox', { name: /^Safe packing and transport instructions/ }).fill(packing().transportNotes);
 }
 
 test('real owner form saves, explicitly approves and withdraws a version while public purchasing remains closed', async ({ page, context }, info) => {
   const errors = []; page.on('pageerror', error => errors.push(error.message));
-  await login(page); await expect(page.getByRole('heading', { name: 'Gift Box Packing Policies', exact: true })).toBeVisible();
+  await login(page); await expect(page.getByRole('heading', { name: 'Gift Box', exact: true, level: 1 })).toBeVisible();
   const before = await state(context, 'box-3'); expect(before.activePublication).toBeNull(); expect(before.revision).toBe(0);
   await fillDraft(page, context, 'box-3');
   await expect(page.getByRole('button', { name: 'Approve saved policy', exact: true })).toBeDisabled();
@@ -81,7 +83,7 @@ test('real owner form saves, explicitly approves and withdraws a version while p
   await page.getByLabel('I checked safe packing and transport', { exact: true }).check();
   await page.getByLabel('I checked lid and clearance requirements', { exact: true }).check();
   await page.getByRole('button', { name: 'Approve saved policy', exact: true }).click();
-  await expect(page.getByText('Reviewed policy version published. Public gift purchasing remains disabled.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Reviewed packing policy published.', { exact: true })).toBeVisible();
   const approved = await state(context, 'box-3'); expect(approved.activePublication.version).toBe(1);
   expect(approved.activePublication.policy.boxId).toBe('box-3'); expect(approved.activePublication.policy.policyVersion).toBe('v1');
   expect(approved.activePublication.policyHash).toMatch(/^[a-f0-9]{64}$/);
@@ -108,7 +110,7 @@ test('real owner form saves, explicitly approves and withdraws a version while p
 
 test('real concurrent policy edit retains the owner draft until deliberate conflict reload', async ({ page, context }) => {
   await login(page); await save(context, 'box-4', 0);
-  await page.getByRole('combobox', { name: 'Box', exact: true }).selectOption('box-4');
+  await chooseOption(page.getByRole('combobox', { name: 'Box', exact: true }), 'box-4');
   const transport = page.getByRole('textbox', { name: /^Safe packing and transport instructions/ });
   await expect(transport).toHaveValue(packing().transportNotes);
   const localDraft = 'Owner local transport draft that must survive a conflict.';

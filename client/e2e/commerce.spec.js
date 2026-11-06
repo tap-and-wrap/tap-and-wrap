@@ -1,3 +1,4 @@
+import { chooseOption, expectOptions } from './select-option.js';
 import { chooseImageFiles } from './media-helpers.js';
 import { expect, test } from '@playwright/test';
 import { cartWithProduct, commerceOrder, commerceProduct, commerceTemplate, fillCheckout, isolatedImageFile, mockCommerce } from './commerce-fixtures';
@@ -40,14 +41,14 @@ test('successful product-card adds update the real cart, survive refresh, and su
   const fixture = await mockCommerce(page);
   await page.goto('/shop');
   await page.getByRole('button', { name: `Add to Cart: ${commerceProduct.name}`, exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Added to your cart.' })).toBeVisible();
+  await expect(page.locator('[data-sonner-toast]').filter({ hasText: 'Added to your cart.' })).toBeVisible();
   await expect.poll(() => fixture.state.cart.quantity).toBe(1);
   await page.getByRole('link', { name: /^Cart(?:,|$)/ }).click();
   await expect(page.getByRole('heading', { name: 'Your Cart', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: commerceProduct.name, exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading', { name: commerceProduct.name, exact: true })).toBeVisible();
-  await page.getByRole('combobox', { name: /^Quantity/ }).selectOption('3');
+  await chooseOption(page.getByRole('combobox', { name: /^Quantity/ }), '3');
   await expect.poll(() => fixture.state.cart.quantity).toBe(3);
   await page.getByRole('button', { name: `Remove ${commerceProduct.name}`, exact: true }).click();
   await expect(page.getByText('Your cart is empty.', { exact: true })).toBeVisible();
@@ -121,18 +122,18 @@ test('engraving requests use only merchant-configured product choices and submit
   const fixture = await mockCommerce(page);
   const requests = await offerIsolatedRequests(page, { products: [eligibleEngravingProduct] });
   await page.goto('/customize/laser-engraving');
-  await page.getByLabel('Product to engrave').selectOption(eligibleEngravingProduct.id);
-  await expect(page.getByLabel('Product to engrave')).toHaveValue(eligibleEngravingProduct.id);
+  await chooseOption(page.getByLabel('Product to engrave'), eligibleEngravingProduct.id);
+  await expect(page.getByRole('combobox', { name: 'Product to engrave' })).toHaveAttribute('data-selected-value', eligibleEngravingProduct.id);
   // A selected eligible product must suppress the manual-reference fallback
   // and reveal exactly the merchant-provided font, placement and material.
   await expect(page.getByLabel('Item description or product reference')).toHaveCount(0);
   await expect(page.getByRole('combobox', { name: /^Font/ })).toBeVisible();
-  await expect(page.getByRole('combobox', { name: /^Font/ }).locator('option')).toContainText(['Choose an approved option', 'Approved style']);
-  await page.getByLabel('Engraving type').selectOption('text');
+  await expectOptions(page.getByRole('combobox', { name: /^Font/ }), ['Choose an approved option', 'Approved style']);
+  await chooseOption(page.getByLabel('Engraving type'), 'text');
   await page.getByLabel('Engraving text').fill('A thoughtful gift');
-  await page.getByRole('combobox', { name: /^Font/ }).selectOption('Approved style');
-  await page.getByLabel('Engraving placement').selectOption('Front');
-  await page.getByLabel('Material').selectOption('Approved material');
+  await chooseOption(page.getByRole('combobox', { name: /^Font/ }), 'Approved style');
+  await chooseOption(page.getByLabel('Engraving placement'), 'Front');
+  await chooseOption(page.getByLabel('Material'), 'Approved material');
   await fillIsolatedRequestContact(page);
   await page.getByRole('button', { name: 'Submit request · No payment now' }).click();
   await expect(page.getByRole('heading', { name: 'TW-TEST-NOPAYMENT' })).toBeVisible();
@@ -151,8 +152,8 @@ test('normalized engraving DTO renders one control and uploads each artwork file
   await expect(page.getByLabel('Engraving artwork', { exact: false })).toHaveCount(1);
   await page.getByRole('radio', { name: 'Name / Text' }).check();
   await page.getByLabel('Name or text to engrave').fill('A thoughtful gift');
-  await page.getByRole('combobox', { name: /^Material/ }).selectOption('metal');
-  await page.getByRole('combobox', { name: /^Font/ }).selectOption('style');
+  await chooseOption(page.getByRole('combobox', { name: /^Material/ }), 'metal');
+  await chooseOption(page.getByRole('combobox', { name: /^Font/ }), 'style');
   await chooseImageFiles(page, page, 'Engraving artwork', [isolatedImageFile('first.png'), isolatedImageFile('second.png')]);
   expect(fixture.uploads).toHaveLength(0);
   await expect(page.getByRole('button', { name: 'Add to Cart', exact: true })).toBeEnabled();
@@ -169,7 +170,7 @@ test('manual engraving Other requires a written explanation and records the requ
   const requests = await offerIsolatedRequests(page);
   await page.goto('/customize/laser-engraving');
   await page.getByLabel('Item description or product reference').fill('Owner must confirm engraving suitability');
-  await page.getByLabel('Engraving type').selectOption('other');
+  await chooseOption(page.getByLabel('Engraving type'), 'other');
   await fillIsolatedRequestContact(page);
   await expect(page.getByLabel('Additional instructions')).toHaveAttribute('required', '');
   await page.getByRole('button', { name: 'Submit request · No payment now' }).click();
@@ -186,7 +187,7 @@ test('manual engraving Design stores private reference images against a request,
   const requests = await offerIsolatedRequests(page);
   await page.goto('/customize/laser-engraving');
   await page.getByLabel('Item description or product reference').fill('Metal plaque with owner-confirmed artwork later');
-  await page.getByLabel('Engraving type').selectOption('design');
+  await chooseOption(page.getByLabel('Engraving type'), 'design');
   await fillIsolatedRequestContact(page);
   await chooseImageFiles(page, page, 'Reference images / artwork', isolatedImageFile('design.png'));
   expect(fixture.uploads).toHaveLength(0);
@@ -212,29 +213,10 @@ test('duplicate upload definitions fail before signing or transferring any file'
   expect(fixture.uploads).toHaveLength(0);
 });
 
-test('stale customization editor retains its draft and reloads only after confirmation', async ({ page }) => {
-  const fixture = await mockCommerce(page, { role: 'admin', template: { ...commerceTemplate, kind: 'generic', status: 'draft', active: false, revision: 0 } });
-  await page.goto('/admin/commerce/templates');
-  await page.getByRole('button', { name: `Edit ${commerceTemplate.name}`, exact: true }).click();
-  await page.getByLabel('Template name', { exact: true }).fill('My unsaved rules');
-  fixture.state.template.name = 'Other editor rules'; fixture.state.template.revision = 1;
-  await page.getByRole('button', { name: 'Save configuration', exact: true }).click();
-  await expect(page.getByText('This record changed after you opened it. Your changes were not saved.', { exact: true })).toBeVisible();
-  await expect(page.getByLabel('Template name', { exact: true })).toHaveValue('My unsaved rules');
-  await page.getByRole('button', { name: 'Reload latest record', exact: true }).click();
-  await page.getByRole('button', { name: 'Confirm reload and discard draft', exact: true }).click();
-  await expect(page.getByLabel('Template name', { exact: true })).toHaveValue('Other editor rules');
-  await page.getByLabel('Template name', { exact: true }).fill('Reviewed configuration');
-  await page.getByRole('button', { name: 'Save configuration', exact: true }).click();
-  await expect(page.getByText('Configuration saved.', { exact: true })).toBeVisible();
-  const calls = fixture.calls.filter((call) => call.method === 'PATCH' && call.path.includes('/templates/'));
-  expect(calls.map((call) => call.body.expectedRevision)).toEqual([0, 1]);
-});
+
 
 for (const [section, field, record, label] of [
-  ['components', 'component', { _id: '710000000000000000000030', name: 'Component revision fixture', revision: 0, categoryId: commerceProduct.category._id, subcategoryId: null, description: '', pricePiastres: 5000, compareAtPiastres: null, priceApproved: false, enabledForCustomization: false, configurationApproved: false, reviewRequired: true, requestPolicy: { enabled: false, services: [], availability: 'unconfirmed', pricing: 'pending', unitPricePiastres: null }, inventory: { mode: 'tracked', quantity: 10, approved: false, available: true } }, 'Component name'],
-  ['bundles', 'bundle', { _id: '710000000000000000000060', name: 'Bundle revision fixture', revision: 0, description: '', active: false, published: false, items: [{ productId: commerceProduct._id, quantity: 1, variantKey: null }, { productId: '710000000000000000000002', quantity: 1, variantKey: null }], discountKind: 'fixed', discountValue: 100, maxApplications: 1, priority: 0, startsAt: null, endsAt: null }, 'Bundle name'],
-  ['discounts', 'discount', { _id: '710000000000000000000060', name: 'Discount revision fixture', revision: 0, code: 'REVISION', active: false, kind: 'fixed', value: 100, minimumSubtotalPiastres: 0, maximumDiscountPiastres: null, productIds: [], categoryIds: [], authenticatedOnly: false, stackWithBundles: false, startsAt: null, endsAt: null, usageLimit: null, perCustomerLimit: null }, 'Discount name'],
+  ['discounts', 'discount', { _id: '710000000000000000000060', name: 'Discount revision fixture', revision: 0, code: 'REVISION', active: false, kind: 'fixed', value: 100, minimumSubtotalPiastres: 0, maximumDiscountPiastres: null, productIds: [], categoryIds: [], authenticatedOnly: false, startsAt: null, endsAt: null, usageLimit: null, perCustomerLimit: null }, 'Discount name'],
 ]) {
   test(`stale ${section} editor retains its merchant draft and submits the latest revision after reload`, async ({ page }) => {
     const fixture = await mockCommerce(page, { role: 'admin', [field]: record });
@@ -242,7 +224,7 @@ for (const [section, field, record, label] of [
     await page.getByRole('button', { name: `Edit ${record.name}`, exact: true }).click();
     await page.getByLabel(label, { exact: true }).fill('My unsaved merchant edit');
     fixture.state[field].name = 'Other editor saved record'; fixture.state[field].revision = 1;
-    await page.getByRole('button', { name: 'Save configuration', exact: true }).click();
+    await page.getByRole('button', { name: 'Save discount', exact: true }).click();
     await expect(page.getByText('This record changed after you opened it. Your changes were not saved.', { exact: true })).toBeVisible();
     await expect(page.getByLabel(label, { exact: true })).toHaveValue('My unsaved merchant edit');
     expect(fixture.state[field].name).toBe('Other editor saved record');
@@ -250,8 +232,8 @@ for (const [section, field, record, label] of [
     await page.getByRole('button', { name: 'Confirm reload and discard draft', exact: true }).click();
     await expect(page.getByLabel(label, { exact: true })).toHaveValue('Other editor saved record');
     await page.getByLabel(label, { exact: true }).fill('Reviewed latest merchant edit');
-    await page.getByRole('button', { name: 'Save configuration', exact: true }).click();
-    await expect(page.getByText('Configuration saved.', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Save discount', exact: true }).click();
+    await expect(page.getByText('Discount saved.', { exact: true })).toBeVisible();
     expect(fixture.calls.filter((call) => call.method === 'PATCH' && call.path.startsWith(`/admin/commerce/${section}/`)).map((call) => call.body.expectedRevision)).toEqual([0, 1]);
   });
 }
@@ -259,9 +241,9 @@ for (const [section, field, record, label] of [
 test('retired global delivery-rate editor cannot silently approve or save charges', async ({ page }) => {
   const fixture = await mockCommerce(page, { role: 'admin' });
   await page.goto('/admin/commerce/shipping');
-  await expect(page.getByRole('heading', { name: 'Delivery is confirmed per order' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Payment', exact: true, level: 1 })).toBeVisible();
   await expect(page.getByLabel('Cairo and Giza shipping (EGP)', { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('link', { name: 'Manage orders and delivery' })).toHaveAttribute('href', '/admin/commerce/orders');
+  await expect(page.getByRole('link', { name: 'Review payments' })).toHaveAttribute('href', '/admin/orders?view=verification');
   expect(fixture.calls.filter(call => call.path === '/admin/commerce/shipping' && call.method === 'PATCH')).toHaveLength(0);
 });
 
@@ -298,29 +280,7 @@ test('personalization controls count Unicode characters and reject overflow with
   expect(fixture.calls.filter((call) => call.path === '/commerce/cart/items')).toHaveLength(1);
 });
 
-test('template editor uses supported option fields and exact configured input boundaries', async ({ page }) => {
-  const template = { ...commerceTemplate, kind: 'laser_engraving', status: 'draft', revision: 0, active: false, engraving: { maxChars: 500, maxCharsPerLine: 500, allowedTextLines: 1, textRequired: true, artworkAllowed: true, artworkRequired: false, artworkMaxFiles: 5, artworkMaxBytes: 12345, artworkAcceptedMimeTypes: ['image/png'], materials: [], fonts: [], placements: [], baseAdjustmentPiastres: 0 } };
-  const fixture = await mockCommerce(page, { role: 'admin', template });
-  await page.goto('/admin/commerce/templates');
-  await page.getByRole('button', { name: `Edit ${template.name}`, exact: true }).click();
-  await expect(page.getByLabel('Available', { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel('Maximum quantity', { exact: true }).first()).toHaveAttribute('max', '20');
-  await expect(page.getByLabel('Maximum characters', { exact: true })).toHaveAttribute('max', '500');
-  await expect(page.getByLabel('Maximum artwork files', { exact: true })).toHaveAttribute('max', '5');
-  await expect(page.getByLabel('Maximum artwork size (bytes; 1048576 = 1 MB)', { exact: true })).toHaveValue('12345');
-  await page.getByLabel('Base adjustment (EGP)', { exact: true }).fill('12.');
-  await expect(page.getByLabel('Base adjustment (EGP)', { exact: true })).toHaveValue('12.');
-  await page.getByLabel('Base adjustment (EGP)', { exact: true }).fill('12.345');
-  await page.getByRole('button', { name: 'Save configuration', exact: true }).click();
-  expect(fixture.calls.filter((call) => call.method === 'PATCH')).toHaveLength(0);
-  await page.getByLabel('Base adjustment (EGP)', { exact: true }).fill('12.34');
-  await page.getByRole('button', { name: 'Save configuration', exact: true }).click();
-  await expect(page.getByText('Configuration saved.', { exact: true })).toBeVisible();
-  const patch = fixture.calls.find((call) => call.method === 'PATCH').body;
-  expect(patch.baseAdjustmentPiastres).toBe(1234);
-  expect(patch.engraving.artworkMaxBytes).toBe(12345);
-  expect(patch.groups.flatMap((group) => group.options).every((option) => !Object.hasOwn(option, 'available'))).toBe(true);
-});
+
 
 test('Customize This preserves original configured selections and locks unsupported changes', async ({ page }) => {
   const template = structuredClone(commerceTemplate);
@@ -409,7 +369,7 @@ test('admin proof is fetched only on request and viewed in an accessible in-page
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'View Proof', exact: true })).toBeFocused();
-  await page.getByRole('combobox', { name: /^Payment update/ }).selectOption('paid');
+  await chooseOption(page.getByRole('combobox', { name: /^Payment update/ }), 'paid');
   await page.getByRole('button', { name: 'Save order update', exact: true }).click();
   await expect.poll(() => fixture.state.order.paymentState).toBe('paid');
 });
@@ -433,52 +393,13 @@ test('tracking uses number and checkout phone with a privacy-limited result', as
   expect(fixture.calls.find((call) => call.path === '/commerce/orders/track').body).toEqual({ orderNumber: commerceOrder.orderNumber, phone: '01012345678' });
 });
 
-test('admin template questions save without manual approval and delivery remains confirmed per order', async ({ page }) => {
-  const fixture = await mockCommerce(page, { role: 'admin' });
-  await page.goto('/admin/commerce/templates'); await page.getByRole('button', { name: 'Add template', exact: true }).click();
-  await page.getByLabel('Template name', { exact: true }).fill('Isolated Gift Questions');
-  await expect(page.getByLabel('Stable key', { exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Add requirement field', exact: true }).click();
-  await page.getByLabel('Customer-facing label', { exact: true }).fill('Card message');
-  await page.getByRole('button', { name: 'Save configuration', exact: true }).click();
-  await expect(page.getByText('Configuration saved.', { exact: true })).toBeVisible();
-  const saved = fixture.calls.find(call => call.path === '/admin/commerce/templates' && call.method === 'POST').body;
-  expect(saved).toMatchObject({ ownerWorkflow: true, usage: 'enquiry', kind: 'gift_box', fields: [{ label: 'Card message', type: 'text' }] });
-  expect(saved.fields[0].key).toMatch(/^field_/);
-  await page.getByRole('link', { name: 'Shipping', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Delivery is confirmed per order', exact: true })).toBeVisible();
-  expect(fixture.calls.some(call => call.path === '/admin/commerce/shipping' && call.method === 'PATCH')).toBe(false);
-});
 
-test('admin component business fields preserve stock safeguards without approval clicks', async ({ page }) => {
-  const fixture = await mockCommerce(page, { role: 'admin' });
-  await page.goto('/admin/commerce/components'); await page.getByRole('button', { name: 'Edit Configured Card', exact: true }).click();
-  await page.getByLabel('Gift Box requests', { exact: true }).check();
-  await page.getByRole('combobox', { name: 'Request availability', exact: true }).selectOption('available');
-  await page.getByRole('combobox', { name: 'Request pricing', exact: true }).selectOption('fixed');
-  await page.getByLabel('Confirmed request unit price (EGP)').fill('50');
-  await page.getByRole('combobox', { name: 'Inventory availability', exact: true }).selectOption('made_to_order');
-  for (const label of ['Price approved', 'Configuration approved', 'Catalog review resolved']) await expect(page.getByLabel(label, { exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Save configuration', exact: true }).click();
-  await expect(page.getByText('Configuration saved.', { exact: true })).toBeVisible();
-  const change = fixture.calls.find(call => call.method === 'PATCH' && call.path.startsWith('/admin/commerce/components/'));
-  expect(change.body).toMatchObject({ ownerWorkflow: true, requestPolicy: { enabled: true, services: ['gift_box'], availability: 'available', pricing: 'fixed', unitPricePiastres: 5000 }, inventory: { mode: 'made_to_order', quantity: null, approved: true, available: true } });
-  expect(change.body).not.toHaveProperty('catalogRole'); expect(change.body).not.toHaveProperty('externalCatalogId');
-});
 
-test('admin bundle and discount forms preserve integer prices and stacking restrictions', async ({ page }) => {
+
+
+test('discount forms preserve integer prices without bundle controls', async ({ page }) => {
   const fixture = await mockCommerce(page, { role: 'admin' });
-  await page.goto('/admin/commerce/bundles');
-  await page.getByRole('button', { name: 'Add bundle', exact: true }).click();
-  await page.getByLabel('Bundle name', { exact: true }).fill('Isolated Pair');
-  await page.getByLabel('Fixed discount (EGP)', { exact: true }).fill('15');
-  await page.getByRole('button', { name: 'Add bundle product', exact: true }).click();
-  await page.getByRole('combobox', { name: /^Product/ }).selectOption(commerceProduct._id);
-  await page.getByLabel('Required quantity', { exact: true }).fill('2');
-  await page.getByRole('button', { name: 'Save configuration', exact: true }).click();
-  await expect(page.getByText('Configuration saved.', { exact: true })).toBeVisible();
-  expect(fixture.calls.find((call) => call.method === 'POST' && call.path === '/admin/commerce/bundles').body).toMatchObject({ discountKind: 'fixed', discountValue: 1500, items: [{ productId: commerceProduct._id, quantity: 2, variantKey: null }] });
-  await page.getByRole('link', { name: 'Discounts', exact: true }).click();
+  await page.goto('/admin/discounts');
   await page.getByRole('button', { name: 'Add discount', exact: true }).click();
   await page.getByLabel('Discount name', { exact: true }).fill('Isolated Discount');
   await page.getByLabel('Discount code', { exact: true }).fill('ISOLATED');
@@ -487,9 +408,9 @@ test('admin bundle and discount forms preserve integer prices and stacking restr
   await page.getByLabel('Total usage limit (optional)', { exact: true }).fill('10');
   await page.getByLabel('Per-customer limit (optional)', { exact: true }).fill('1');
   await page.getByLabel('Registered customers only', { exact: true }).check();
-  await page.getByRole('button', { name: 'Save configuration', exact: true }).click();
-  await expect(page.getByText('Configuration saved.', { exact: true })).toBeVisible();
-  expect(fixture.calls.find((call) => call.method === 'POST' && call.path === '/admin/commerce/discounts').body).toMatchObject({ value: 1000, minimumSubtotalPiastres: 5000, usageLimit: 10, perCustomerLimit: 1, authenticatedOnly: true, stackWithBundles: false });
+  await page.getByRole('button', { name: 'Save discount', exact: true }).click();
+  await expect(page.getByText('Discount saved.', { exact: true })).toBeVisible();
+  expect(fixture.calls.find((call) => call.method === 'POST' && call.path === '/admin/commerce/discounts').body).toMatchObject({ value: 1000, minimumSubtotalPiastres: 5000, usageLimit: 10, perCustomerLimit: 1, authenticatedOnly: true, });
 });
 
 test('ordinary personalization fields stay product-level and do not require templates', async ({ page }) => {
@@ -546,10 +467,10 @@ test('successful customer login explicitly merges eligible guest cart items', as
 test('admin order search uses strict order-number filtering and bounded server pagination', async ({ page }) => {
   const fixture = await mockCommerce(page, { role: 'admin' });
   await page.goto('/admin/commerce/orders');
-  await page.getByLabel('Search by order number', { exact: true }).fill(commerceOrder.orderNumber);
+  await page.getByLabel('Find an order', { exact: true }).fill(commerceOrder.orderNumber);
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   await expect.poll(() => fixture.calls.some((call) => call.path === '/admin/commerce/orders' && call.query.q === commerceOrder.orderNumber)).toBe(true);
-  await page.getByRole('combobox', { name: /^Order sorting/ }).selectOption('oldest');
+  await chooseOption(page.getByRole('combobox', { name: /^Sort/ }), 'oldest');
   await expect.poll(() => fixture.calls.some((call) => call.path === '/admin/commerce/orders' && call.query.sort === 'oldest')).toBe(true);
   const requests = fixture.calls.filter((call) => call.path === '/admin/commerce/orders');
   expect(requests.every((call) => call.query.limit === '20')).toBe(true);
@@ -581,5 +502,5 @@ test('reduced-motion cart feedback avoids the product flight animation', async (
   await page.getByRole('button', { name: `Add to Cart: ${commerceProduct.name}`, exact: true }).click();
   await expect.poll(() => fixture.state.cart.quantity).toBe(1);
   await expect(page.locator('body > img[aria-hidden="true"]')).toHaveCount(0);
-  await expect(page.getByRole('status').filter({ hasText: 'Added to your cart.' })).toBeVisible();
+  await expect(page.locator('[data-sonner-toast]').filter({ hasText: 'Added to your cart.' })).toBeVisible();
 });

@@ -1,3 +1,4 @@
+import Select from '../components/form/Select.jsx';
 import { useState } from 'react';
 import { ImagePlus, X } from 'lucide-react';
 import { STICKER_STYLES, stickerStyle } from '../../../shared/gift-box/sticker-styles.mjs';
@@ -15,7 +16,7 @@ export default function PersonalizationEditor({ personal, boxId, options, printS
     <details className="gb-personal-section"><summary><span>Add your photos</span><small>{prints[0] ? `${money(prints[0].pricePiastres)} each` : 'Currently unavailable'}</small></summary>
       <div className="gb-personal-body"><label className="gb-upload-tile"><ImagePlus size={28} aria-hidden="true"/><span>Choose your photos</span><input type="file" multiple accept="image/jpeg,image/png,image/webp" aria-label="Choose your photos" onChange={event => { personal.addPhotos(event.target.files); event.target.value = ''; }}/></label>
       <div className="gb-photo-thumbnails">{personal.photos.map((photo,index) => <div key={photo.id}><img src={photo.url} alt={`Photo ${index + 1}`}/><button type="button" aria-label={`Remove photo ${index + 1}`} onClick={() => personal.removePhoto(photo.id)}><X size={16}/></button>
-        {prints.length > 1 && <label>Print type<select value={printSelections[photo.id] || ''} onChange={event => onPrintSelection(photo.id,event.target.value)}><option value="">Choose print</option>{prints.map(option => <option key={option.optionId} value={option.optionId}>{option.displayName} - {money(option.pricePiastres)}</option>)}</select></label>}
+        {prints.length > 1 && <label>Print type<Select value={printSelections[photo.id] || ''} onChange={event => onPrintSelection(photo.id,event.target.value)}><option value="">Choose print</option>{prints.map(option => <option key={option.optionId} value={option.optionId}>{option.displayName} - {money(option.pricePiastres)}</option>)}</Select></label>}
       </div>)}</div></div>
     </details>
     <details className="gb-personal-section"><summary><span>Add a personalized sticker</span><small>{selectedOption ? money(selectedOption.pricePiastres) : 'Currently unavailable'}</small></summary>

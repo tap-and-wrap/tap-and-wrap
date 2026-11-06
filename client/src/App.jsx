@@ -3,11 +3,11 @@ import { PasswordResetResultProvider } from './auth/PasswordResetResultProvider.
 import { GiftBoxDraftProvider } from './gift-box/GiftBoxDraftProvider.jsx';
 import { lazy, Suspense } from 'react';
 import { Route, Routes, Navigate, useLocation } from 'react-router-dom';
-import { Toaster } from 'sonner';
+import BrandToaster from './components/BrandToaster.jsx';
+import LegacyAdminRoute from './admin/LegacyAdminRoute.jsx';
 import Header from './components/Header.jsx';
 import Footer from './components/Footer.jsx';
 import HomePage from './pages/HomePage.jsx';
-import ShopPage from './pages/ShopPage.jsx';
 import CustomizePage from './pages/CustomizePage.jsx';
 import AuthPage from './pages/AuthPage.jsx';
 import StaticPage from './pages/StaticPage.jsx';
@@ -19,9 +19,16 @@ import { useSession } from './auth/SessionProvider.jsx';
 import PageErrorBoundary from './components/PageErrorBoundary.jsx';
 import RouteFocus, { focusMainContent } from './components/RouteFocus.jsx';
 const EngravingBuilderPage = lazy(() => import('./pages/EngravingBuilderPage.jsx'));
+const ShopPage = lazy(() => import('./pages/ShopPage.jsx'));
 const AdminEngravingPage = lazy(() => import('./pages/AdminEngravingPage.jsx'));
 const CategoryPage = lazy(() => import('./pages/CategoryPage.jsx'));
 const AccountRecoveryPage = lazy(() => import('./pages/AccountRecoveryPage.jsx'));
+const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage.jsx'));
+const AdminOrdersPage = lazy(() => import('./pages/AdminOrdersPage.jsx'));
+const AdminAnalyticsPage = lazy(() => import('./pages/AdminAnalyticsPage.jsx'));
+const AdminPaymentPage = lazy(() => import('./pages/AdminPaymentPage.jsx'));
+const AdminCustomizationPage = lazy(() => import('./pages/AdminCustomizationPage.jsx'));
+const AdminGiftBoxWorkspace = lazy(() => import('./pages/AdminCustomizationPage.jsx').then(module => ({ default: module.AdminGiftBoxWorkspace })));
 const AdminWebsitePage = lazy(() => import('./pages/AdminWebsitePage.jsx'));
 const CartPage = lazy(() => import('./pages/CartPage.jsx'));
 const CheckoutPage = lazy(() => import('./pages/CheckoutPage.jsx'));
@@ -32,14 +39,9 @@ const AdminCommercePage = lazy(() => import('./pages/AdminCommercePage.jsx'));
 const AdminOrderPage = lazy(() => import('./pages/AdminOrderPage.jsx'));
 const ServiceRequestPage = lazy(() => import('./pages/ServiceRequestPage.jsx'));
 const GiftBoxBuilderPage = lazy(() => import('./pages/GiftBoxBuilderPage.jsx'));
-const AdminGiftBoxComponentsPage = lazy(() => import('./pages/AdminGiftBoxComponentsPage.jsx'));
-const AdminGiftBoxVisualPreviewPage = lazy(() => import('./pages/AdminGiftBoxVisualPreviewPage.jsx'));
-const AdminGiftBoxPoliciesPage = lazy(() => import('./pages/AdminGiftBoxPoliciesPage.jsx'));
-const AdminGiftBoxPersonalizationPage = lazy(() => import('./pages/AdminGiftBoxPersonalizationPage.jsx'));
 const GiftBoxGeometryReviewPage = import.meta.env.DEV ? lazy(() => import('./pages/GiftBoxGeometryReviewPage.jsx')) : null;
 const giftBoxV2Enabled = import.meta.env.VITE_GIFT_BOX_BUILDER_ENABLED === 'true' || (import.meta.env.DEV && import.meta.env.VITE_GIFT_BOX_BUILDER_ENABLED !== 'false');
 const AdminAttentionPage = lazy(() => import('./pages/AdminAttentionPage.jsx'));
-const AdminNotificationsPage = lazy(() => import('./pages/AdminNotificationsPage.jsx'));
 const AdminRequestsPage = lazy(() => import('./pages/AdminRequestsPage.jsx'));
 const AdminProductConfigurationPage = lazy(() => import('./pages/AdminProductConfigurationPage.jsx'));
 const ProductPage = lazy(() => import('./pages/ProductPage.jsx'));
@@ -60,17 +62,15 @@ export default function App() {
   <Route path="/products/:slug/customize" element={<CustomizationPage/>}/>
   <Route path="/customize" element={<CustomizePage/>}/>
   <Route path="/customize/gift-box" element={giftBoxV2Enabled && new URLSearchParams(location.search).get('mode') !== 'request' ? <GiftBoxBuilderPage/> : <ServiceRequestPage service="gift_box"/>}/>
-  <Route path="/admin/gift-box/components" element={<RequireAdmin><AdminGiftBoxComponentsPage/></RequireAdmin>}/>
-  <Route path="/admin/gift-box/visual-preview" element={<RequireAdmin><AdminGiftBoxVisualPreviewPage/></RequireAdmin>}/>
-  <Route path="/admin/gift-box/personalization-options" element={<RequireAdmin><AdminGiftBoxPersonalizationPage/></RequireAdmin>}/>
-  <Route path="/admin/gift-box/fulfillment-policies" element={<RequireAdmin><AdminGiftBoxPoliciesPage/></RequireAdmin>}/>
+  <Route path="/admin/gift-box" element={<RequireAdmin><AdminGiftBoxWorkspace/></RequireAdmin>}/>
+  <Route path="/admin/gift-box/:section" element={<RequireAdmin><LegacyAdminRoute kind="gift-box"/></RequireAdmin>}/>
   {GiftBoxGeometryReviewPage && <Route path="/dev/gift-box/geometry" element={<GiftBoxGeometryReviewPage/>}/>}
   <Route path="/customize/laser-engraving" element={<EngravingBuilderPage/>}/>
   <Route path="/admin/engraving" element={<RequireAdmin><AdminEngravingPage/></RequireAdmin>}/>
-  <Route path="/admin/attention" element={<RequireAdmin><AdminAttentionPage/></RequireAdmin>}/>
-  <Route path="/admin/notifications" element={<RequireAdmin><AdminNotificationsPage/></RequireAdmin>}/>
-  <Route path="/admin/requests" element={<RequireAdmin><AdminRequestsPage/></RequireAdmin>}/>
-  <Route path="/admin/requests/:id" element={<RequireAdmin><AdminRequestsPage/></RequireAdmin>}/>
+  <Route path="/admin/attention" element={<RequireAdmin><Navigate to="/admin/orders/attention" replace/></RequireAdmin>}/>
+  <Route path="/admin/notifications" element={<RequireAdmin><Navigate to="/admin" replace/></RequireAdmin>}/>
+  <Route path="/admin/requests" element={<RequireAdmin><LegacyAdminRoute kind="request"/></RequireAdmin>}/>
+  <Route path="/admin/requests/:id" element={<RequireAdmin><LegacyAdminRoute kind="request"/></RequireAdmin>}/>
   <Route path="/login" element={<AuthPage/>}/>
   <Route path="/signup" element={<AuthPage signup/>}/>
   <Route path="/forgot-password" element={<AccountRecoveryPage/>}/>
@@ -87,16 +87,27 @@ export default function App() {
   <Route path="/refund-policy" element={<StaticPage page="refund-policy"/>}/>
   <Route path="/shipping-policy" element={<StaticPage page="shipping-policy"/>}/>
   <Route path="/terms-of-service" element={<StaticPage page="terms-of-service"/>}/>
-  <Route path="/admin" element={<RequireAdmin><Navigate to="/admin/website/overview" replace/></RequireAdmin>}/>
-  <Route path="/admin/website/:section" element={<RequireAdmin><AdminWebsitePage/></RequireAdmin>}/>
+  <Route path="/admin" element={<RequireAdmin><AdminDashboardPage/></RequireAdmin>}/>
+  <Route path="/admin/website/:section" element={<RequireAdmin><LegacyAdminRoute kind="website"/></RequireAdmin>}/>
+  <Route path="/admin/categories" element={<RequireAdmin><AdminWebsitePage section="categories"/></RequireAdmin>}/>
+  <Route path="/admin/customers" element={<RequireAdmin><AdminWebsitePage section="customers"/></RequireAdmin>}/>
+  <Route path="/admin/analytics" element={<RequireAdmin><AdminAnalyticsPage/></RequireAdmin>}/>
+  <Route path="/admin/payment" element={<RequireAdmin><AdminPaymentPage/></RequireAdmin>}/>
+  <Route path="/admin/discounts" element={<RequireAdmin><AdminCommercePage section="discounts"/></RequireAdmin>}/>
+  <Route path="/admin/customization" element={<RequireAdmin><AdminCustomizationPage/></RequireAdmin>}/>
+  <Route path="/admin/orders" element={<RequireAdmin><AdminOrdersPage/></RequireAdmin>}/>
+  <Route path="/admin/orders/attention" element={<RequireAdmin><AdminAttentionPage/></RequireAdmin>}/>
+  <Route path="/admin/orders/requests" element={<RequireAdmin><AdminRequestsPage/></RequireAdmin>}/>
+  <Route path="/admin/orders/requests/:id" element={<RequireAdmin><AdminRequestsPage/></RequireAdmin>}/>
+  <Route path="/admin/orders/:id" element={<RequireAdmin><AdminOrderPage/></RequireAdmin>}/>
   <Route path="/admin/products" element={<RequireAdmin><AdminProductsPage/></RequireAdmin>}/>
   <Route path="/admin/products/new" element={<RequireAdmin><AdminProductFormPage/></RequireAdmin>}/>
   <Route path="/admin/products/:id/edit" element={<RequireAdmin><AdminProductFormPage/></RequireAdmin>}/>
   <Route path="/admin/products/:id/preview" element={<RequireAdmin><AdminProductPreviewPage/></RequireAdmin>}/>
   <Route path="/admin/products/:id/configuration" element={<RequireAdmin><AdminProductConfigurationPage/></RequireAdmin>}/>
-  <Route path="/admin/commerce/:section" element={<RequireAdmin><AdminCommercePage/></RequireAdmin>}/>
-  <Route path="/admin/commerce/orders/:id" element={<RequireAdmin><AdminOrderPage/></RequireAdmin>}/>
+  <Route path="/admin/commerce/:section" element={<RequireAdmin><LegacyAdminRoute kind="commerce"/></RequireAdmin>}/>
+  <Route path="/admin/commerce/orders/:id" element={<RequireAdmin><LegacyAdminRoute kind="order"/></RequireAdmin>}/>
   <Route path="/home" element={<Navigate to="/" replace/>}/>
   <Route path="*" element={<StaticPage page="notfound"/>}/>
- </Routes></Suspense></PageErrorBoundary></div><Footer/><TrackingConsent/><Toaster position="top-right" offset="calc(var(--site-header-height, 84px) + 16px)" mobileOffset="calc(var(--site-header-height, 76px) + 12px)" richColors/></EngravingDraftProvider></GiftBoxDraftProvider></CartProvider></PasswordResetResultProvider>;
+ </Routes></Suspense></PageErrorBoundary></div>{!/^\/admin(?:\/|$)/.test(location.pathname) && <><Footer/><TrackingConsent/></>}<BrandToaster/></EngravingDraftProvider></GiftBoxDraftProvider></CartProvider></PasswordResetResultProvider>;
 }

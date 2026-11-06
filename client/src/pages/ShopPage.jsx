@@ -1,3 +1,4 @@
+import Select from '../components/form/Select.jsx';
 import { categoryHref } from '../../../shared/category-paths.mjs';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -120,11 +121,11 @@ export default function ShopPage({ categorySlug, heading, categoryContext, categ
       </div>
       {lockedCategory && !lockedSubcategory && <nav className="catalog-subcategories" aria-label="Browse subcategories">
         <h2><label htmlFor="catalog-subcategory">Browse {lockedCategory.name}</label></h2>
-        <select id="catalog-subcategory" className="catalog-subcategory-select" value="" disabled={children.isPending || children.isError || !children.data?.categories.length}
+        <Select id="catalog-subcategory" className="catalog-subcategory-select" value="" disabled={children.isPending || children.isError || !children.data?.categories.length}
           onChange={event => { if (event.target.value) navigate(event.target.value); }}>
           <option value="">Choose a subcategory</option>
           {(children.data?.categories || []).map(item => <option key={item._id} value={categoryHref(item)}>{item.name}</option>)}
-        </select>
+        </Select>
         {children.isPending && <p role="status">Loading subcategories…</p>}
         {children.isError && <div className="catalog-inline-error" role="alert"><p>Subcategories could not be loaded.</p><button type="button" className="catalog-text-button" onClick={() => children.refetch()}>Retry subcategories</button></div>}
         {children.isSuccess && !children.data.categories.length && <p role="status">No subcategories in this category.</p>}
@@ -143,9 +144,9 @@ export default function ShopPage({ categorySlug, heading, categoryContext, categ
           <div className="catalog-results-toolbar">
             <p role="status">{invalidPrices ? 'Check price filters' : products.isLoading ? 'Loading products…' : pagination ? `${pagination.total} ${pagination.total === 1 ? 'product' : 'products'}` : 'Products'}</p>
             <label className="catalog-desktop-sort" htmlFor="catalog-sort">Sort by
-              <select id="catalog-sort" value={params.sort} onChange={(event) => update('sort', event.target.value)}>
+              <Select id="catalog-sort" value={params.sort} onChange={(event) => update('sort', event.target.value)}>
                 {CATALOG_SORTS.map((sort) => <option key={sort.value} value={sort.value}>{sort.label}</option>)}
-              </select>
+              </Select>
             </label>
             <span className="catalog-mobile-sort-label">{sortLabel}</span>
           </div>

@@ -1,3 +1,4 @@
+import { chooseOption } from './select-option.js';
 import { test, expect } from '@playwright/test';
 import { category, subcategory, mockCatalog } from './catalog-fixtures.js';
 
@@ -31,14 +32,16 @@ for (const width of [320, 768, 1440]) {
     await page.goto(`${category.publicPath}?q=Fixture&sort=newest`);
     const chooser = page.getByRole('combobox', { name: 'Browse Fixture Gifts' });
     await expect(chooser).toBeEnabled();
-    await expect(chooser.locator('option')).toHaveCount(24);
+    await chooser.click();
+    await expect(page.getByRole('option')).toHaveCount(24);
+    await page.keyboard.press('Escape');
     if (width !== 768) await page.screenshot({ path: `test-results/category-chooser-${width}.png`, fullPage: true });
     expect(calls).toEqual([1, 2].map(pageNumber => ({ parent: category.slug, page: String(pageNumber), limit: '20', includeProductCounts: 'false' })));
     await expect(page.locator('.catalog-sidebar details[open]')).toHaveCount(0);
     await expect(page.locator('.catalog-subcategories-pagination')).toHaveCount(0);
     await chooser.focus();
     await expect(chooser).toBeFocused();
-    await chooser.selectOption(children[22].publicPath);
+    await chooseOption(chooser, children[22].publicPath);
     await expect(page).toHaveURL(children[22].publicPath);
     await expect(page.locator('.catalog-card')).toHaveCount(20);
     await expect(page.locator('.catalog-subcategories')).toHaveCount(0);

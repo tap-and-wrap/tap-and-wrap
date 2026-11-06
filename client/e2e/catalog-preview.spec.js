@@ -1,3 +1,4 @@
+import { chooseOption } from './select-option.js';
 import { test, expect } from '@playwright/test';
 import { mockCatalog, adminProduct, previewProduct } from './catalog-fixtures.js';
 
@@ -69,7 +70,7 @@ test('preview uses safe configured gallery URLs in source order and hides provis
   await expect(page.locator('.product-main-image img')).toHaveAttribute('src', fixture.mainImageUrl);
   await page.getByRole('button', { name: 'View image 2', exact: true }).click();
   await expect(page.locator('.product-main-image img')).toHaveAttribute('src', fixture.gallerySlots[1].url);
-  await page.getByLabel('Choose size / color').selectOption('unapproved');
+  await chooseOption(page.getByLabel('Choose size / color'), 'unapproved');
   await expect(page.locator('.product-price')).toHaveText('Price awaiting approval');
   await expect(page.getByRole('button', { name: 'Ordering disabled', exact: true })).toBeDisabled();
 });

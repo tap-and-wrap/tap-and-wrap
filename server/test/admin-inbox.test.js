@@ -39,7 +39,7 @@ test('inbox plan uses existing collections, bounded pagination and virtual follo
   assert.throws(() => buildInboxPipeline({ limit: 100 }));
   const note = presentInboxRecord({ kind: 'request', _id: '507f1f77bcf86cd799439011', reference: 'TW-ABCDEF123456', service: 'gift_box', followup: 'soon', unread: true, state: 'submitted' });
   assert.equal(note.title, 'Follow-up due soon · Request TW-ABCDEF123456');
-  assert.equal(note.href, '/admin/requests/507f1f77bcf86cd799439011');
+  assert.equal(note.href, '/admin/orders/requests/507f1f77bcf86cd799439011');
   assert.equal(note.unread, true);
 });
 
@@ -54,8 +54,8 @@ test('admin-only inbox lists saved submissions; mark all read persists without t
   assert.equal(result.status, 200, JSON.stringify(result.error));
   assert.equal(result.data.pagination.total, 2);
   assert.equal(result.data.unreadCount, 2);
-  assert.ok(result.data.notifications.some(item => item.href === `/admin/commerce/orders/${order.id}`));
-  assert.ok(result.data.notifications.some(item => item.href === `/admin/requests/${request.id}`));
+  assert.ok(result.data.notifications.some(item => item.href === `/admin/orders/${order.id}`));
+  assert.ok(result.data.notifications.some(item => item.href === `/admin/orders/requests/${request.id}`));
   assert.equal(result.data.notifications.some(item => 'phone' in item || 'customer' in item), false);
   result = await call('/read-all', 'POST');
   assert.equal(result.status, 200, JSON.stringify(result.error));

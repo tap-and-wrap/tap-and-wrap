@@ -1,3 +1,4 @@
+import { chooseOption } from './select-option.js';
 import { test, expect } from '@playwright/test';
 import { category, subcategory, mockCatalog } from './catalog-fixtures.js';
 import { catalogPriceErrors } from '../src/utils/catalog.js';
@@ -30,7 +31,7 @@ test('three keyboard accordion groups preserve drafts and never request subcateg
   await page.keyboard.press('Space');
   await expect(priceMinimum(filters)).toHaveValue('12.');
   await filters.locator('summary').filter({ hasText: /^Category$/ }).click();
-  await filters.getByLabel('Category', { exact: true }).selectOption(category.slug);
+  await chooseOption(filters.getByLabel('Category', { exact: true }), category.slug);
   expect(fixture.requests.filter((request) => request.path === '/public/categories').every((request) => request.params.parent === 'root')).toBe(true);
   expect(productRequests(fixture)).toHaveLength(1);
   expect(productRequests(fixture)[0].params).toMatchObject({ limit: '20', includePriceRange: 'false' });
@@ -137,8 +138,8 @@ test('legacy subcategory URLs are represented by a visible category and never re
   await page.goto(`/shop?category=${category.slug}&subcategory=${subcategory.slug}&q=Fixture&sort=newest`);
   await expect(page).toHaveURL(`/shop?category=${subcategory.slug}&q=Fixture&sort=newest`);
   const select = page.locator('.catalog-sidebar').getByLabel('Category', { exact: true });
-  await expect(select).toHaveValue(subcategory.slug);
-  await expect(select.locator('option:checked')).toHaveText(subcategory.name);
+  await expect(select).toHaveAttribute('data-selected-value', subcategory.slug);
+  await expect(select).toContainText(subcategory.name);
   await expect(page.locator('.catalog-card')).toHaveCount(20);
   expect(productRequests(fixture).every((request) => request.params.category === subcategory.slug && !request.params.subcategory)).toBe(true);
 });
@@ -149,12 +150,12 @@ test('main category routes discard hidden legacy subcategory filters while prese
   await expect(page).toHaveURL(`/categories/${category.slug}?q=Fixture&sort=newest`);
   const select = page.locator('.catalog-sidebar').getByLabel('Category', { exact: true });
   await expect(select).toBeDisabled();
-  await expect(select).toHaveValue(category.slug);
+  await expect(select).toHaveAttribute('data-selected-value', category.slug);
   await expect(page.locator('.catalog-card')).toHaveCount(20);
   expect(productRequests(fixture).every((request) => request.params.category === category.slug && !request.params.subcategory)).toBe(true);
   await page.goto(`/categories/${subcategory.slug}?subcategory=obsolete-hidden-refinement&q=Fixture`);
   await expect(page).toHaveURL(`${subcategory.publicPath}?q=Fixture`);
-  await expect(select).toHaveValue(subcategory.slug);
+  await expect(select).toHaveAttribute('data-selected-value', subcategory.slug);
   await page.locator('.catalog-sidebar summary').filter({ hasText: /^Category$/ }).click();
   await expect(page.locator('.catalog-sidebar').getByText(`Within ${category.name}`, { exact: true })).toBeVisible();
   await expect(page.locator('.catalog-card')).toHaveCount(20);

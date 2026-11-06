@@ -1,3 +1,4 @@
+import { chooseOption } from './select-option.js';
 import { expect, test } from '@playwright/test';
 import { ASSET_VERSION, FIXED_COMPONENTS } from '../../shared/gift-box/definitions.mjs';
 import { giftBoxFixture as fixture, beginGiftBox as begin } from './gift-box-fixtures.js';
@@ -76,12 +77,12 @@ test('admin conflict retains draft until deliberate reload, and customer cannot 
 });
 test('local geometry drafts stay unreviewed, support compartments and keep the source defect blocked', async ({ page }, testInfo) => {
   await fixture(page); await page.goto('/dev/gift-box/geometry'); await expect(page.getByText(/Current registry: unreviewed/)).toBeVisible();
-  await page.getByLabel('Review box').selectOption('box-11'); await page.getByLabel('Region shape').selectOption('ellipse'); await page.getByRole('button', { name: 'Add draft region', exact: true }).click();
-  await page.getByLabel('Placement zone').selectOption('beside'); await page.getByRole('button', { name: 'Add draft region', exact: true }).click();
+  await chooseOption(page.getByLabel('Review box'), 'box-11'); await chooseOption(page.getByLabel('Region shape'), 'ellipse'); await page.getByRole('button', { name: 'Add draft region', exact: true }).click();
+  await chooseOption(page.getByLabel('Placement zone'), 'beside'); await page.getByRole('button', { name: 'Add draft region', exact: true }).click();
   const json = JSON.parse(await page.getByLabel('Geometry review draft JSON').inputValue()); expect(json.reviewStatus).toBe('unreviewed'); expect(json.capacity).toBeNull(); expect(json.regions).toHaveLength(3); expect(json.besideRegions).toHaveLength(2);
   await page.getByRole('button', { name: 'Add study sample' }).click(); await expect(page.getByText(/authoritative result: GEOMETRY_REVIEW_REQUIRED/)).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('geometry-compartments.png'), fullPage: true });
-  await page.getByLabel('Review box').selectOption('box-1'); await expect(page.locator('.gb-geometry .gb-box-art img')).toBeVisible();
+  await chooseOption(page.getByLabel('Review box'), 'box-1'); await expect(page.locator('.gb-geometry .gb-box-art img')).toBeVisible();
 });
 for (const width of [320, 390, 768, 1440]) test(`builder and admin fit ${width}px with real local artwork and reduced motion`, async ({ page }, testInfo) => {
   await page.setViewportSize({ width, height: 1000 }); await page.emulateMedia({ reducedMotion: 'reduce' }); await fixture(page, { role: 'admin' }); await begin(page);
@@ -94,7 +95,7 @@ for (const width of [320, 390, 768, 1440]) test(`builder and admin fit ${width}p
 test('all twelve source box shapes have local visual review outputs without geometry approval', async ({ page }, testInfo) => {
   await fixture(page); await page.goto('/dev/gift-box/geometry');
   for (let n = 1; n <= 12; n++) {
-    await page.getByLabel('Review box').selectOption(`box-${n}`);
+    await chooseOption(page.getByLabel('Review box'), `box-${n}`);
     await expect(page.getByText(/Current registry: unreviewed/)).toBeVisible();
     if (n > 1) await expect.poll(() => page.locator('.gb-canvas > .gb-box-art img').evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true);
     await page.locator('.gb-geometry .gb-workspace>section').first().screenshot({ path: testInfo.outputPath(`geometry-box-${n}.png`) });

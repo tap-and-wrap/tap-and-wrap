@@ -11,6 +11,7 @@ async function fixture(request) {
   expect(response.ok()).toBeTruthy(); return response.json();
 }
 async function login(page, account, destination) {
+  destination = destination.replace('/admin/commerce/orders/', '/admin/orders/').replace('/admin/website/categories', '/admin/categories');
   await page.goto(`/login?returnTo=${encodeURIComponent(destination)}`);
   await page.getByLabel('Email Address').fill(`${account}@connected.example.test`);
   await page.getByLabel('Password', { exact: true }).fill('isolated-fixture-password');

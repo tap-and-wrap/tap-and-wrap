@@ -1,3 +1,4 @@
+import { chooseOption } from './select-option.js';
 import { chooseImageFiles } from './media-helpers.js';
 import { test, expect } from '@playwright/test';
 import { mockCommerce, cartWithProduct, commerceOrder, fillCheckout, isolatedImageFile } from './commerce-fixtures.js';
@@ -101,7 +102,7 @@ test('admin quotes shipping, opens saved WhatsApp text and records explicit acce
   await page.getByRole('button', { name: 'Record operation', exact: true }).click();
   await page.getByRole('button', { name: 'Confirm and record operation', exact: true }).click();
   await expect.poll(() => fixture.order.revision).toBe(1);
-  await page.getByRole('combobox', { name: 'Operation', exact: true }).selectOption('accept_charge');
+  await chooseOption(page.getByRole('combobox', { name: 'Operation', exact: true }), 'accept_charge');
   await page.getByLabel('Private reconciliation / WhatsApp acceptance evidence', { exact: true }).fill('Customer accepted EGP 90 by WhatsApp');
   await page.getByRole('checkbox', { name: /I confirmed the actual account/ }).check();
   await page.getByRole('button', { name: 'Record operation', exact: true }).click();
@@ -117,12 +118,12 @@ test('admin records one completed transfer with merchandise and delivery refund 
   const fixture = await foundation(page, { role: 'admin' });
   Object.assign(fixture.order.accounting, { collectedPiastres: 54000, merchandisePiastres: 45000, settlements: [{ id: 'fixture-combined', direction: 'collection', scope: 'all_agreed', method: 'cod', reference: 'ACTUAL-COLLECTION', amountPiastres: 54000, allocations: [{ scope: 'merchandise', amountPiastres: 45000 }, { scope: 'shipping', amountPiastres: 9000 }] }] });
   await page.setViewportSize({ width: 320, height: 900 }); await page.goto(`/admin/commerce/orders/${fixture.order.id}`);
-  await page.getByRole('combobox', { name: 'Operation', exact: true }).selectOption('refund');
-  await page.getByRole('combobox', { name: 'Original collection', exact: true }).selectOption('fixture-combined');
+  await chooseOption(page.getByRole('combobox', { name: 'Operation', exact: true }), 'refund');
+  await chooseOption(page.getByRole('combobox', { name: 'Original collection', exact: true }), 'fixture-combined');
   await expect(page.getByLabel('Actual amount (EGP)', { exact: true })).toHaveValue('540.00');
   await expect(page.getByLabel(/^Original merchandise refund/)).toHaveValue('450.00');
   await expect(page.getByLabel(/^Delivery refund/)).toHaveValue('90.00');
-  await page.getByRole('combobox', { name: 'Collection/payment method', exact: true }).selectOption('instapay');
+  await chooseOption(page.getByRole('combobox', { name: 'Collection/payment method', exact: true }), 'instapay');
   await page.getByLabel('Actual bank transfer or COD collection reference', { exact: true }).fill('ONE-REAL-REFUND');
   await page.getByLabel('Private reconciliation / WhatsApp acceptance evidence', { exact: true }).fill('Completed actual combined refund reconciled independently');
   await page.getByRole('checkbox', { name: /I confirmed the actual account/ }).check();

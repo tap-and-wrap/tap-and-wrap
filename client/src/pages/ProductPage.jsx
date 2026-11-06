@@ -1,3 +1,4 @@
+import Select from '../components/form/Select.jsx';
 import ProductPersonalizationDialog from '../commerce/ProductPersonalizationDialog.jsx';
 import PersonalizationSummary from '../commerce/PersonalizationSummary.jsx';
 import { productDraft, notifyProductDraft } from '../commerce/product-personalization-drafts.js';
@@ -15,7 +16,6 @@ import { formatCatalogPrice, variantLabel } from '../utils/catalog.js';
 import { useCart } from '../commerce/CartContext.jsx';
 import ConfiguredFields, { validateConfiguredFields } from '../commerce/ConfiguredFields.jsx';
 import { commerceError, discardUploads, uploadConfiguredFields } from '../commerce/api.js';
-import { ProductReviews } from '../components/PublicContent.jsx';
 import CustomerWords from '../components/CustomerWords.jsx';
 import { ProductMetadata } from '../seo/PageMetadata.jsx';
 import { emitTracking } from '../tracking/client.js';
@@ -145,7 +145,7 @@ function ProductContentBody({ product, relatedProducts = [], preview = false, pr
           <p className={`product-stock-status ${orderingAvailable ? '' : 'is-unavailable'}`}>{preview ? 'Preview only · Ordering disabled' : enquiryRequired ? approvedPrice ? 'Online purchase unavailable · Enquire on WhatsApp' : 'Price and availability on request' : orderingAvailable ? (variant?.inventory || product.inventory)?.mode === 'made_to_order' ? 'Made by Request' : 'Available' : 'Currently unavailable'}</p>
           <form ref={purchaseRef} className="product-purchase-section" aria-label="Product options" onSubmit={addProduct} noValidate aria-busy={adding}>
             {variants.length > 0 && <div className="commerce-field"><label htmlFor={variantId}>Choose size / color</label>
-              <select id={variantId} value={variantKey} disabled={adding || uncertain} {...fieldErrorProps(variantId, fieldErrors.variant)} required onChange={(event) => {
+              <Select id={variantId} value={variantKey} disabled={adding || uncertain} {...fieldErrorProps(variantId, fieldErrors.variant)} required onChange={(event) => {
                 const nextKey = event.target.value;
                 const nextVariant = variants.find((item) => item.key === nextKey);
                 setVariantKey(nextKey);
@@ -153,7 +153,7 @@ function ProductContentBody({ product, relatedProducts = [], preview = false, pr
               }}>
                 <option value="">Choose an option</option>
                 {variants.map((item) => <option key={item.key} value={item.key}>{variantLabel(item)}{!preview && item.orderingAvailable === false ? ' — Sold Out' : ''}</option>)}
-              </select>
+              </Select>
               <FieldError id={variantId}>{fieldErrors.variant}</FieldError>
             </div>}
             {!requiresPersonalization && personalizationFields.length > 0 && <fieldset className="product-personalization"><legend>Personalize your gift</legend><ConfiguredFields fields={personalizationFields} values={personalization} onChange={setPersonalization} errors={fieldErrors} disabled={preview || adding || uncertain || enquiryRequired} /></fieldset>}
@@ -185,7 +185,7 @@ function ProductContentBody({ product, relatedProducts = [], preview = false, pr
         </section>
       </div>
       {customizing && <ProductPersonalizationDialog product={product} fields={personalizationFields} values={personalization} onChange={setPersonalization} onComplete={finishPersonalization} onClose={() => setCustomizing(false)} />}
-      {preview ? <ProductReviews key={product.slug} slug={product.slug} preview/> : <CustomerWords/>}
+      {!preview && <CustomerWords/>}
       {relatedProducts.length > 0 && <section className="product-related" aria-labelledby="product-related-heading"><h2 id="product-related-heading">You May Also Like</h2><div className="catalog-grid catalog-related-grid">{relatedProducts.slice(0, 4).map((item) => <ProductCard key={item._id} product={item} />)}</div></section>}
       {showSticky && <div className="product-sticky-bar" aria-label="Purchase options">
         <div><p>{product.name}</p><span>{displayPrice}</span></div>

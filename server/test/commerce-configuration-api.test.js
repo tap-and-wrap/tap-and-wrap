@@ -82,8 +82,6 @@ test('configuration edits require captured revisions and stale sequential forms 
     ['components', await ComponentOption.create({ name: 'Revision component', slug: 'revision-component', catalogRole: 'Customization Option', categoryId: main._id, mainImageKey: 'fixtures/component.webp', galleryKeys: ['fixtures/component.webp'] }), { name: 'First component edit' }],
     ['discounts', await DiscountCode.create({ code: 'REVISION', name: 'Revision discount', kind: 'fixed', value: 100 }), { name: 'First discount edit' }],
   ];
-  const first = await product('revision-bundle-first'), second = await product('revision-bundle-second');
-  records.push(['bundles', await BundleRule.create({ name: 'Revision bundle', items: [{ productId: first._id, quantity: 1 }, { productId: second._id, quantity: 1 }], discountKind: 'fixed', discountValue: 100 }), { name: 'First bundle edit' }]);
   for (const [section, record, patch] of records) {
     const path = `/api/v1/admin/commerce/${section}/${record._id}`;
     const loaded = (await request(path)).data[section.slice(0, -1)];
@@ -98,7 +96,7 @@ test('configuration edits require captured revisions and stale sequential forms 
     assert.equal(stale.error.code, 'EDIT_CONFLICT');
     assert.equal((await request(path)).data[section.slice(0, -1)].name, patch.name);
   }
-  assert.equal(await AdminAudit.countDocuments(), 4);
+  assert.equal(await AdminAudit.countDocuments(), 3);
 });
 
 test('concurrent promotion/template edits allow one winner and a clear revision conflict', async () => {
@@ -348,8 +346,8 @@ test('admin promotion mutations validate configured references and cannot reset 
   const second = await product('bundle-two');
   const bundleBody = { name: 'Isolated bundle', active: true, items: [{ productId: String(first._id), quantity: 1 }, { productId: String(second._id), quantity: 1 }], discountKind: 'percentage', discountValue: 1000 };
   const bundle = await request('/api/v1/admin/commerce/bundles', { method: 'POST', body: bundleBody });
-  assert.equal(bundle.status, 201);
-  assert.equal((await request(`/api/v1/admin/commerce/bundles/${bundle.data.bundle._id}`)).data.bundle.items.length, 2);
+  assert.equal(bundle.status, 410);
+  assert.equal(await BundleRule.countDocuments(), 0);
   const code = await request('/api/v1/admin/commerce/discounts', { method: 'POST', body: { code: 'ISOLATED', name: 'Isolated code', active: true, kind: 'fixed', value: 500, usageLimit: 10 } });
   assert.equal(code.status, 201);
   assert.equal((await request(`/api/v1/admin/commerce/discounts/${code.data.discount._id}`, { method: 'PATCH', body: { usedCount: 0 } })).status, 400);

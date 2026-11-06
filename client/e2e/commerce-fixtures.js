@@ -1,3 +1,4 @@
+import { chooseOption } from './select-option.js';
 import { expect } from '@playwright/test';
 import { blockExternalRequests } from './network-fixture.js';
 import { evaluateCustomization, publicTemplatePresentation } from '../../server/src/commerce/customization.js';
@@ -176,7 +177,7 @@ export async function fillCheckout(page) {
   await page.getByLabel('Full name', { exact: true }).fill('Isolated Customer');
   await page.getByLabel('Email', { exact: true }).fill('isolated@example.test');
   await page.getByLabel('Egyptian mobile number').fill('01012345678');
-  await page.getByRole('combobox', { name: /^Governorate/ }).selectOption('cairo');
+  await chooseOption(page.getByRole('combobox', { name: /^Governorate/ }), 'cairo');
   await page.getByLabel('Delivery address', { exact: true }).fill('Isolated test delivery address');
   await expect(page.getByRole('button', { name: 'Place Order', exact: true })).toBeEnabled();
 }

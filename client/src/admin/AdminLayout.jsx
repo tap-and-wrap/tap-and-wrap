@@ -1,36 +1,17 @@
-import { NavLink, Link } from 'react-router-dom';
-import { useEffect, useState } from 'react';
-import AccountActions from '../components/AccountActions.jsx';
+import { createContext, useContext } from 'react';
 import '../admin.css';
 
-const groups = [
-  ['Manage store', [['Requires attention', '/admin/attention'], ['Notifications', '/admin/notifications'], ['Overview', '/admin/website/overview'], ['Requests / Quotations', '/admin/requests'], ['Orders', '/admin/commerce/orders'], ['Products', '/admin/products'], ['Categories', '/admin/website/categories']]],
-  ['Website', [['Homepage', '/admin/website/homepage'], ['Reviews', '/admin/website/reviews'], ['Pages & owner guide', '/admin/website/content']]],
-  ['Commerce', [['Standalone Engraving', '/admin/engraving'], ['Customization', '/admin/commerce/templates'], ['Components', '/admin/commerce/components'], ['Gift Box Components', '/admin/gift-box/components'], ['Gift Box Visual Preview', '/admin/gift-box/visual-preview'], ['Gift Box Personalization', '/admin/gift-box/personalization-options'], ['Gift Box Packing Policies', '/admin/gift-box/fulfillment-policies'], ['Bundles', '/admin/commerce/bundles'], ['Discounts', '/admin/commerce/discounts'], ['Shipping', '/admin/commerce/shipping'], ['Payment settings', '/admin/website/payments']]],
-  ['Operations', [['Customers', '/admin/website/customers'], ['Analytics', '/admin/website/analytics'], ['Email delivery', '/admin/website/notifications']]],
-];
+export const EmbeddedAdmin = createContext(false);
 
 /** One outer geometry for every protected administration route, including states. */
-export default function AdminLayout({ title, description, actions, children, navigation = true, busy = false, className = '' }) {
-  const [navigationOpen, setNavigationOpen] = useState(() => typeof window === 'undefined' || window.matchMedia('(min-width: 761px)').matches);
-  useEffect(() => {
-    const media = window.matchMedia('(min-width: 761px)');
-    const update = () => setNavigationOpen(media.matches);
-    media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
-  }, []);
-  return <main className={`admin-shell admin-layout ${className}`} tabIndex={-1} aria-busy={busy}>
-    <header className="admin-page-heading">
-      <div><p className="admin-eyebrow">Tap &amp; Wrap administration</p><h1>{title}</h1>{description && <p>{description}</p>}</div>
-      <div className="admin-page-actions">{actions}<Link className="admin-button admin-button-secondary" to="/">View storefront</Link></div>
-    </header>
-    {navigation && <details className="admin-navigation-disclosure" open={navigationOpen} onToggle={event => setNavigationOpen(event.currentTarget.open)}>
-      <summary className="admin-navigation-toggle">Administration menu</summary>
-      <nav className="admin-navigation" aria-label="Administration" onClick={event => { if (event.target.closest('a') && !window.matchMedia('(min-width: 761px)').matches) setNavigationOpen(false); }}>
-      {groups.map(([label, links]) => <div className="admin-navigation-group" key={label}><span className="admin-navigation-label">{label}</span><div>{links.map(([name, path]) => <NavLink key={path} to={path} end={path === '/admin/website/overview'}>{name}</NavLink>)}</div></div>)}
-      <div className="admin-navigation-account"><AccountActions compact /></div>
-      </nav>
-    </details>}
+export default function AdminLayout({ title, description, actions, children, busy = false, className = '' }) {
+  const embedded = useContext(EmbeddedAdmin);
+  const Container = embedded ? 'section' : 'main';
+  return <Container className={`${embedded ? 'admin-embedded' : 'admin-shell admin-layout'} ${className}`} tabIndex={-1} aria-busy={busy}>
+    {!embedded && <header className="admin-page-heading">
+      <div><p className="admin-eyebrow">Your store, thoughtfully managed</p><h1>{title}</h1>{description && <p>{description}</p>}</div>
+      {actions && <div className="admin-page-actions">{actions}</div>}
+    </header>}
     <div className="admin-content">{children}</div>
-  </main>;
+  </Container>;
 }

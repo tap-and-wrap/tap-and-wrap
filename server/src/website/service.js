@@ -9,13 +9,11 @@ import { Order } from '../models/Order.js';
 import { NotificationEvent } from '../models/NotificationEvent.js';
 import { Review } from '../models/Review.js';
 import { SiteContent } from '../models/SiteContent.js';
-import BundleRule from '../models/BundleRule.js';
 import { displayProductFilter, publicProductFilter, orderableProductStockFilter } from '../catalog/product-policy.js';
 import { publicProductCard, inventoryCanOrder } from '../catalog/public-presentation.js';
 import { parseInput } from '../catalog/validation.js';
 import { commerceError, checkedMoney } from '../commerce/errors.js';
 import { recordAdminAudit } from '../commerce/audit.js';
-import { evaluatePromotions } from '../commerce/promotions.js';
 import { assertDatabaseWriteAllowed } from '../config/database-safety.js';
 import { env } from '../config/env.js';
 import { prepareAdminRevision, adminRevision } from '../utils/admin-revision.js';
@@ -136,23 +134,8 @@ export async function getAdminReview(id) {
   return adminRevision(review);
 }
 
-export async function saveReview(actor, id, input) {
-  return auditedWebsiteMutation(actor, id ? 'website.review.edit' : 'website.review.create', 'review', id || 'new', async (session) => {
-    if (input.productId && !await Product.exists({ _id: input.productId }).session(session).maxTimeMS(TIMEOUT)) throw commerceError(400, 'INVALID_PRODUCT', 'Choose an existing product.');
-    const review = id ? await Review.findById(id).session(session) : new Review({ createdBy: actor._id });
-    if (!review) throw commerceError(404, 'REVIEW_NOT_FOUND', 'Review not found.');
-    if (id) await prepareAdminRevision(review, input.expectedRevision, { session });
-    const changed = id && ['productId', 'authorLabel', 'rating', 'text', 'consentConfirmed', 'sourceNote'].some((key) => input[key] !== undefined && String(input[key] ?? '') !== String(review[key] ?? ''));
-    if (changed && input.approved === undefined) {
-      review.approved = false;
-      if (review.status === 'published' && input.status === undefined) review.status = 'draft';
-    }
-    const { expectedRevision: _expectedRevision, ...patch } = input;
-    review.set(patch);
-    review.updatedBy = actor._id;
-    await review.save({ session });
-    return review;
-  });
+export async function saveReview() {
+  throw commerceError(410, 'FEATURE_RETIRED', 'Review creation and editing have been retired. Historical records are retained.');
 }
 
 export async function listCustomers(query) {
@@ -233,55 +216,6 @@ export async function websiteAnalytics(now = new Date()) {
   return { since, until: now, days: 30, ...summary };
 }
 
-export async function listPublicBundles(now = new Date()) {
-  const bundles = [];
-  const batchSize = 20;
-  const candidateLimit = 100; // Matches the existing admin active-bundle ceiling.
-  let examined = 0;
-  let cursor = null;
-  while (bundles.length < 8 && examined < candidateLimit) {
-    const conditions = [
-      { $or: [{ startsAt: null }, { startsAt: { $lte: now } }] },
-      { $or: [{ endsAt: null }, { endsAt: { $gt: now } }] },
-    ];
-    if (cursor) conditions.push({ $or: [{ priority: { $gt: cursor.priority } }, { priority: cursor.priority, _id: { $gt: cursor._id } }] });
-    const candidates = await BundleRule.find({ published: true, active: true, $and: conditions })
-      .select('name description items discountKind discountValue active maxApplications priority startsAt endsAt').sort({ priority: 1, _id: 1 }).limit(Math.min(batchSize, candidateLimit - examined)).lean().maxTimeMS(TIMEOUT);
-    if (!candidates.length) break;
-    examined += candidates.length;
-    cursor = candidates.at(-1);
-    // At most twenty rules × twenty configured item references are read per batch.
-    const ids = [...new Set(candidates.flatMap((bundle) => bundle.items.map((item) => String(item.productId))))];
-    const products = await Product.find({ $and: [publicProductFilter(), orderableProductStockFilter(), { _id: { $in: ids } }] })
-      .select('visibility status published reviewRequired name slug categoryId subcategoryId mainImageKey pricePiastres compareAtPiastres priceApproved inventory variants personalization customization.enabled featured bestSeller').lean().maxTimeMS(TIMEOUT);
-    const byId = new Map((await attachEligibleCategories(products)).map((product) => [String(product._id), product]));
-    for (const bundle of candidates) {
-      const cards = [];
-      let eligible = true;
-      for (const item of bundle.items) {
-        const product = byId.get(String(item.productId));
-        const variant = item.variantKey ? product?.variants.find((entry) => entry.key === item.variantKey) : null;
-        const inventory = variant?.inventory || product?.inventory;
-        if (!product || (item.variantKey && (!variant || !inventoryCanOrder(variant.inventory))) || (!item.variantKey && product.variants.length) || (inventory?.mode === 'tracked' && inventory.quantity < item.quantity)) { eligible = false; break; }
-        const card = publicProductCard(product);
-        if (variant?.pricePiastres != null) card.pricePiastres = variant.pricePiastres;
-        cards.push({ ...card, bundleQuantity: item.quantity, variantKey: item.variantKey ?? null });
-      }
-      if (!eligible) continue;
-      let pricing;
-      try {
-        pricing = evaluatePromotions(cards.map((card) => ({ productId: card._id, variantKey: card.variantKey, quantity: card.bundleQuantity, unitPricePiastres: card.pricePiastres })), [bundle], null, { now });
-      } catch (error) {
-        if (['PRICING_INVALID', 'PROMOTION_UNAVAILABLE'].includes(error.code)) continue;
-        throw error;
-      }
-      bundles.push({ id: String(bundle._id), name: bundle.name, description: bundle.description || '', products: await attachProductPaths(cards), discountKind: bundle.discountKind, discountValue: bundle.discountValue,
-        bundleSubtotalPiastres: pricing.subtotalPiastres, effectiveDiscountPiastres: pricing.discountPiastres, bundleTotalPiastres: pricing.totalPiastres });
-      if (bundles.length === 8) break;
-    }
-    if (candidates.length < batchSize) break;
-  }
-  return { bundles };
-}
+export async function listPublicBundles() { return { bundles: [] }; }
 
 export const validateWebsiteInput = parseInput;

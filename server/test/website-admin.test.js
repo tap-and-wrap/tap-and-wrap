@@ -17,6 +17,8 @@ import BundleRule from '../src/models/BundleRule.js';
 import { newSessionToken, hashSession, makeCsrfToken } from '../src/utils/tokens.js';
 import { startTestDatabase } from './helpers/database.js';
 import { websiteModels, websiteAnalytics } from '../src/website/service.js';
+import { ownerAnalytics, ownerDashboard } from '../src/website/owner-dashboard.js';
+import { OrderSettlement } from '../src/models/OrderSettlement.js';
 
 let database, server, base, admin, customer, main, child;
 const models = [...new Set([...websiteModels, ...Object.values(mongoose.models)])];
@@ -83,7 +85,7 @@ test('overview reports real storefront listing and purchase eligibility, not inh
 });
 
 test('website administration rejects anonymous/customer access and invalid CSRF without writes', async () => {
-  for (const path of ['overview', 'customers', 'content', 'reviews', 'analytics', 'payment-settings']) {
+  for (const path of ['overview', 'dashboard', 'owner-analytics', 'customers', 'content', 'reviews', 'analytics', 'payment-settings']) {
     assert.equal((await request(`/admin/website/${path}`, { headers: {} })).status, 401);
     assert.equal((await request(`/admin/website/${path}`, { headers: customer.headers })).status, 403);
   }
@@ -122,50 +124,31 @@ test('fixed pages and FAQs reject all legacy writes and ignore historical approv
   assert.equal(await AdminAudit.countDocuments(), 0);
 });
 
-test('review publication requires explicit approval, quote permission and private provenance', async () => {
-  const invalid = await request('/admin/website/reviews', { method: 'POST', body: reviewInput({ approved: false }) });
-  assert.equal(invalid.status, 400);
-  assert.equal(await Review.countDocuments(), 0);
-  const created = await request('/admin/website/reviews', { method: 'POST', body: reviewInput({ featured: true }) });
-  assert.equal(created.status, 201, JSON.stringify(created.error));
-  const publicReview = (await request('/public/site-content')).data.featuredReviews[0];
-  assert.equal(publicReview.rating, 4);
-  assert.equal(publicReview.text, reviewInput().text);
-  assert.equal(publicReview.sourceNote, undefined);
-  assert.equal(publicReview.createdBy, undefined);
-  assert.equal(await AdminAudit.countDocuments({ action: 'website.review.create' }), 1);
-});
-
-test('authentic text-only testimonials require consent but never invent an author or rating', async () => {
-  const blocked = await request('/admin/website/reviews', { method: 'POST', body: reviewInput({ authorLabel: null, rating: null, consentConfirmed: false, featured: true }) });
-  assert.equal(blocked.status, 400);
-  assert.equal(await Review.countDocuments(), 0);
-  const created = await request('/admin/website/reviews', { method: 'POST', body: reviewInput({ authorLabel: null, rating: null, featured: true }) });
-  assert.equal(created.status, 201, JSON.stringify(created.error));
-  const featured = (await request('/public/site-content')).data.featuredReviews;
-  assert.equal(featured.length, 1);
-  assert.equal(featured[0].authorLabel, null);
-  assert.equal(featured[0].rating, null);
-  assert.equal(featured[0].sourceNote, undefined);
-  const adminRecord = (await request(`/admin/website/reviews/${created.data.review._id}`)).data.review;
-  assert.equal(adminRecord.authorLabel, null);
-  assert.equal(adminRecord.rating, null);
-  const invalidRating = await request(`/admin/website/reviews/${created.data.review._id}`, { method: 'PATCH', body: { rating: 4.5 } });
-  assert.equal(invalidRating.status, 400);
-});
-
-test('editing review text clears approval and hiding an authentic review removes public visibility', async () => {
+test('retired review writes reject approved and unapproved input without changing historical records', async () => {
   const record = await review({ featured: true });
-  const changed = await request(`/admin/website/reviews/${record._id}`, { method: 'PATCH', body: { text: 'Unreviewed revised fixture.' } });
-  assert.equal(changed.status, 200);
-  assert.equal(changed.data.review.approved, false);
-  assert.equal(changed.data.review.status, 'draft');
-  assert.deepEqual((await request('/public/site-content')).data.featuredReviews, []);
-  const approved = await request(`/admin/website/reviews/${record._id}`, { method: 'PATCH', body: { approved: true, status: 'published' } });
-  assert.equal(approved.status, 200);
-  assert.equal((await request('/public/site-content')).data.featuredReviews.length, 1);
-  assert.equal((await request(`/admin/website/reviews/${record._id}`, { method: 'PATCH', body: { status: 'hidden' } })).status, 200);
-  assert.deepEqual((await request('/public/site-content')).data.featuredReviews, []);
+  const before = await Review.findById(record._id).lean();
+  for (const method of ['POST','PUT','DELETE']) assert.equal((await request('/admin/website/reviews', { method, body: reviewInput() })).status, 410);
+  for (const method of ['PATCH','PUT','DELETE']) assert.equal((await request('/admin/website/reviews/' + record._id, { method, body: { expectedRevision: 0, text: 'Retired write', status: 'hidden' } })).status, 410);
+  assert.deepEqual(await Review.findById(record._id).lean(), before);
+  assert.equal(await Review.countDocuments(), 1);
+  assert.equal(await AdminAudit.countDocuments(), 0);
+  assert.equal((await request('/admin/website/reviews/' + record._id)).data.review.sourceNote, before.sourceNote);
+});
+
+test('historical text-only testimonials remain readable without invented author or rating', async () => {
+  const record = await review({ authorLabel: null, rating: null, featured: true });
+  const featured = (await request('/public/site-content')).data.featuredReviews;
+  assert.equal(featured.length, 1); assert.equal(featured[0].authorLabel, null); assert.equal(featured[0].rating, null);
+  assert.equal(featured[0].sourceNote, undefined);
+  assert.equal((await request('/admin/website/reviews/' + record._id, { method: 'PATCH', body: { rating: 4.5 } })).status, 410);
+});
+
+test('retired review editing cannot republish, hide or alter an authentic historical quotation', async () => {
+  const record = await review({ featured: true });
+  const before = await Review.findById(record._id).lean();
+  for (const body of [{ text: 'Replacement' }, { approved: true, status: 'published' }, { status: 'hidden' }]) assert.equal((await request('/admin/website/reviews/' + record._id, { method: 'PATCH', body })).status, 410);
+  assert.deepEqual(await Review.findById(record._id).lean(), before);
+  assert.equal((await request('/public/site-content')).data.featuredReviews[0].text, record.text);
 });
 
 test('public product reviews require approved public products and active category relationships', async () => {
@@ -214,33 +197,17 @@ test('customer list is paginated, excludes administrators and never returns secr
   assert.equal((await request('/admin/website/customers?q=.*')).data.pagination.total, 0);
 });
 
-test('published bundles require explicit publication and all approved products/stock without exposing image keys', async () => {
-  const first = await product('bundle-first');
-  const second = await product('bundle-second');
-  const bundle = await BundleRule.create({ name: 'Isolated published bundle', description: 'Isolated owner description.', active: true, published: true, items: [{ productId: first._id, quantity: 1 }, { productId: second._id, quantity: 2 }], discountKind: 'fixed', discountValue: 500 });
-  await BundleRule.create({ name: 'Unpublished fixture', active: true, items: [{ productId: first._id, quantity: 1 }, { productId: second._id, quantity: 1 }], discountKind: 'fixed', discountValue: 500 });
-  const result = await request('/public/bundles', { headers: {} });
-  assert.equal(result.data.bundles.length, 1);
-  assert.equal(result.data.bundles[0].id, String(bundle._id));
-  assert.equal(result.data.bundles[0].products[1].bundleQuantity, 2);
-  assert.equal(result.data.bundles[0].products[0].mainImageKey, undefined);
-  second.status = 'draft'; second.priceApproved = false; await second.save();
+test('public bundle presentation stays empty while historical rules remain untouched', async () => {
+  const first = await product('historical-bundle-first'), second = await product('historical-bundle-second');
+  const record = await BundleRule.create({ name: 'Historical bundle', active: true, published: true, items: [{ productId: first._id, quantity: 1 }, { productId: second._id, quantity: 1 }], discountKind: 'fixed', discountValue: 500 });
+  const before = await BundleRule.findById(record._id).lean();
   assert.deepEqual((await request('/public/bundles')).data.bundles, []);
+  for (const method of ['POST','PATCH','PUT','DELETE']) assert.equal((await request('/admin/commerce/bundles' + (method === 'POST' ? '' : '/' + record._id), { method, body: { active: false, expectedRevision: 0 } })).status, 410);
+  assert.deepEqual(await BundleRule.findById(record._id).lean(), before);
+  assert.equal(await AdminAudit.countDocuments(), 0);
 });
 
-test('bundles with insufficient or unavailable variant stock, expired schedules or inactive categories remain hidden', async () => {
-  const first = await product('bundle-variant', { variants: [{ key: 'small', attributes: [{ name: 'Size', value: 'Small' }], pricePiastres: 12000, priceApproved: true, inventory: { mode: 'tracked', quantity: 1, approved: true, available: true } }] });
-  const second = await product('bundle-other');
-  const bundle = await BundleRule.create({ name: 'Isolated variant bundle', active: true, published: true, items: [{ productId: first._id, variantKey: 'small', quantity: 2 }, { productId: second._id, quantity: 1 }], discountKind: 'percentage', discountValue: 1000 });
-  assert.deepEqual((await request('/public/bundles')).data.bundles, []);
-  first.variants[0].inventory.quantity = 3; await first.save();
-  assert.equal((await request('/public/bundles')).data.bundles[0].products[0].pricePiastres, 12000);
-  bundle.endsAt = new Date(Date.now() - 1000); await bundle.save();
-  assert.deepEqual((await request('/public/bundles')).data.bundles, []);
-  bundle.endsAt = null; await bundle.save();
-  child.active = false; await child.save();
-  assert.deepEqual((await request('/public/bundles')).data.bundles, []);
-});
+
 
 test('analytics uses a bounded thirty-day window and separates collected amounts from unverified transfers', async () => {
   const now = new Date('2026-10-09T12:00:00Z');
@@ -288,61 +255,13 @@ test('email diagnostics are bounded and exclude recipients, tokens, snapshots an
   assert.equal(overview.notifications.dead, 0);
 });
 
-test('existing protected bundle mutations persist separate homepage publication and return lightweight list records', async () => {
-  const first = await product('api-bundle-first');
-  const second = await product('api-bundle-second');
-  const created = await request('/admin/commerce/bundles', { method: 'POST', body: { name: 'Isolated API bundle', description: 'Owner-approved isolated bundle fixture.', active: true, published: true, items: [{ productId: String(first._id), quantity: 1 }, { productId: String(second._id), quantity: 1 }], discountKind: 'fixed', discountValue: 500 } });
-  assert.equal(created.status, 201, JSON.stringify(created.error));
-  assert.equal(created.data.bundle.published, true);
-  assert.equal(created.data.bundle.description, 'Owner-approved isolated bundle fixture.');
-  const listed = await request('/admin/commerce/bundles');
-  assert.equal(listed.data.bundles[0].published, true);
-  assert.equal(listed.data.bundles[0].items, undefined);
-  const id = created.data.bundle._id;
-  const changed = await request(`/admin/commerce/bundles/${id}`, { method: 'PATCH', body: { published: false } });
-  assert.equal(changed.status, 200);
-  assert.equal(changed.data.bundle.active, true);
-  assert.equal(changed.data.bundle.description, created.data.bundle.description);
-  assert.deepEqual((await request('/public/bundles')).data.bundles, []);
-  assert.equal((await request(`/admin/commerce/bundles/${id}`)).data.bundle.items.length, 2);
-});
 
-test('eligible ninth published bundle remains discoverable after eight earlier selections become unavailable', async () => {
-  const withdrawn = await product('withdrawn-bundle-member', { inventory: { mode: 'tracked', quantity: 0, approved: true, available: false } });
-  const first = await product('ninth-first');
-  const second = await product('ninth-second');
-  await BundleRule.insertMany(Array.from({ length: 8 }, (_, priority) => ({ name: `Isolated unavailable ${priority}`, published: true, active: true, priority, items: [{ productId: withdrawn._id, quantity: 1 }, { productId: first._id, quantity: 1 }], discountKind: 'fixed', discountValue: 500 })));
-  const available = await BundleRule.create({ name: 'Isolated ninth available', published: true, active: true, priority: 8, items: [{ productId: first._id, quantity: 1 }, { productId: second._id, quantity: 1 }], discountKind: 'fixed', discountValue: 500 });
-  const result = await request('/public/bundles');
-  assert.equal(result.data.bundles.length, 1);
-  assert.equal(result.data.bundles[0].id, String(available._id));
-  assert.equal(result.data.bundles[0].effectiveDiscountPiastres, 500);
-});
 
-test('bundle discovery crosses keyset batches, caps eligible output at eight and uses central clamped pricing', async () => {
-  const withdrawn = await product('keyset-withdrawn', { inventory: { mode: 'tracked', quantity: 0, approved: true, available: false } });
-  const first = await product('keyset-first');
-  const second = await product('keyset-second', { pricePiastres: 5000 });
-  await BundleRule.insertMany(Array.from({ length: 20 }, (_, index) => ({ name: `Isolated unavailable keyset ${index}`, published: true, active: true, priority: 0, items: [{ productId: withdrawn._id, quantity: 1 }, { productId: first._id, quantity: 1 }], discountKind: 'fixed', discountValue: 500 })));
-  const eligible = await BundleRule.insertMany(Array.from({ length: 9 }, (_, index) => ({ name: `Isolated available keyset ${index}`, published: true, active: true, priority: 0, items: [{ productId: first._id, quantity: 1 }, { productId: second._id, quantity: 1 }], discountKind: 'fixed', discountValue: 1000000 })));
-  const result = await request('/public/bundles');
-  assert.equal(result.data.bundles.length, 8);
-  assert.equal(result.data.bundles[0].id, String(eligible[0]._id));
-  assert.equal(result.data.bundles[7].id, String(eligible[7]._id));
-  assert.equal(result.data.bundles[0].bundleSubtotalPiastres, 15000);
-  assert.equal(result.data.bundles[0].effectiveDiscountPiastres, 15000);
-  assert.equal(result.data.bundles[0].bundleTotalPiastres, 0);
-});
 
-test('public bundle lookup refuses to scan past the configured one-hundred-active-rule ceiling', async () => {
-  const withdrawn = await product('bounded-withdrawn', { inventory: { mode: 'tracked', quantity: 0, approved: true, available: false } });
-  const first = await product('bounded-first');
-  const second = await product('bounded-second');
-  // Direct disposable fixtures exercise corrupted/legacy data; admin APIs forbid this state.
-  await BundleRule.insertMany(Array.from({ length: 100 }, (_, priority) => ({ name: `Isolated bound ${priority}`, published: true, active: true, priority, items: [{ productId: withdrawn._id, quantity: 1 }, { productId: first._id, quantity: 1 }], discountKind: 'fixed', discountValue: 500 })));
-  await BundleRule.create({ name: 'Isolated over-limit fixture', published: true, active: true, priority: 100, items: [{ productId: first._id, quantity: 1 }, { productId: second._id, quantity: 1 }], discountKind: 'fixed', discountValue: 500 });
-  assert.deepEqual((await request('/public/bundles')).data.bundles, []);
-});
+
+
+
+
 
 test('admin content directory is read-only and contains no legacy document details', async () => {
   const loaded = (await request('/admin/website/content')).data.content;
@@ -352,32 +271,65 @@ test('admin content directory is read-only and contains no legacy document detai
   assert.equal(loaded._id, undefined);
 });
 
-test('review revisions reject stale forms and preserve source notes and publication decisions', async () => {
-  const record = await review();
-  const path = `/admin/website/reviews/${record._id}`;
-  const loaded = (await request(path)).data.review;
-  assert.equal(loaded.revision, 0);
-  assert.equal((await request(path, { method: 'PATCH', body: { status: 'hidden' }, autoRevision: false })).status, 400);
-  const saved = await request(path, { method: 'PATCH', body: { expectedRevision: loaded.revision, status: 'hidden' } });
-  assert.equal(saved.status, 200);
-  assert.equal(saved.data.review.revision, 1);
-  const stale = await request(path, { method: 'PATCH', body: { expectedRevision: loaded.revision, status: 'published', text: 'Stale quotation', sourceNote: 'Stale provenance' } });
-  assert.equal(stale.status, 409);
-  const preserved = (await request(path)).data.review;
-  assert.equal(preserved.status, 'hidden');
-  assert.equal(preserved.text, record.text);
-  assert.equal(preserved.sourceNote, record.sourceNote);
-  assert.equal(await AdminAudit.countDocuments({ action: 'website.review.edit' }), 1);
-});
 
-test('concurrent fixed-content writes are denied while review revision protection remains', async () => {
+
+test('concurrent fixed-content and retired review writes never change historical documents', async () => {
   const contentResults = await Promise.all(['Content A', 'Content B'].map((title) => request('/admin/website/content', { method: 'PATCH', body: { expectedRevision: 0, about: { title, body: 'Concurrent synthetic content' } } })));
   assert.deepEqual(contentResults.map((result) => result.status), [403, 403]);
   assert.ok(contentResults.every(result => result.error.code === 'FIXED_CONTENT_READ_ONLY'));
   const record = await review({ status: 'draft', approved: false });
   const reviewResults = await Promise.all(['Quotation A', 'Quotation B'].map((text) => request(`/admin/website/reviews/${record._id}`, { method: 'PATCH', body: { expectedRevision: 0, text } })));
-  assert.deepEqual(reviewResults.map((result) => result.status).sort(), [200, 409]);
-  assert.equal(reviewResults.find((result) => result.status === 409).error.code, 'EDIT_CONFLICT');
-  assert.equal((await Review.findById(record._id)).__v, 1);
-  assert.equal(await AdminAudit.countDocuments(), 1);
+  assert.deepEqual(reviewResults.map((result) => result.status).sort(), [410, 410]);
+
+  assert.equal((await Review.findById(record._id)).__v, 0);
+  assert.equal(await AdminAudit.countDocuments(), 0);
+});
+
+
+test('owner analytics uses settlement dates, excludes unpaid engraving and separates legacy paid snapshots', async () => {
+  const now = new Date('2026-11-06T08:00:00Z');
+  const oldId = new mongoose.Types.ObjectId(), engravingId = new mongoose.Types.ObjectId();
+  await Order.collection.insertMany([
+    { _id: oldId, orderNumber: '100010', owner: 'old-fixture', checkoutKey: 'old', accountingVersion: 1, paymentState: 'paid', fulfillmentState: 'delivered', totals: { totalPiastres: 50000 }, createdAt: new Date('2026-09-01T00:00:00Z'), lines: [{ kind: 'product', name: 'Historical product', quantity: 1 }] },
+    { _id: engravingId, orderNumber: '100011', owner: 'service-fixture', checkoutKey: 'service', accountingVersion: 1, paymentState: 'unpaid', fulfillmentState: 'received', totals: { totalPiastres: 10000 }, createdAt: new Date('2026-11-05T23:00:00Z'), lines: [{ kind: 'engraving_service_v1', name: 'Fixture engraving', quantity: 1 }], engraving: { collectionAuthorized: false, items: [{ stage: 'inspection_pending' }] }, customer: { name: 'Fixture customer', email: 'private@example.test', notes: 'private note' } },
+    { orderNumber: '100012', owner: 'legacy-fixture', checkoutKey: 'legacy', paymentState: 'paid', fulfillmentState: 'delivered', totals: { totalPiastres: 7000 }, createdAt: new Date('2026-10-20T00:00:00Z') },
+  ]);
+  await OrderSettlement.create([
+    { orderId: oldId, direction: 'collection', amountPiastres: 10000, createdAt: new Date('2026-11-04T00:00:00Z') },
+    { orderId: oldId, direction: 'refund', amountPiastres: 1500, createdAt: new Date('2026-11-05T00:00:00Z') },
+    { orderId: oldId, direction: 'collection', amountPiastres: 99999, createdAt: new Date('2026-09-02T00:00:00Z') },
+  ].map((entry, index) => ({ ...entry, operationKey: 'fixture-operation-' + index, requestHash: 'fixture-request-' + index, referenceKey: 'fixture-reference-' + index, reference: 'fixture-' + index, method: 'cod', scope: 'merchandise', recordedBy: admin.user._id, reason: 'Isolated recorded settlement' })));
+  const result = await ownerAnalytics(30, now);
+  assert.equal(result.orders, 2); assert.equal(result.collectionsPiastres, 10000); assert.equal(result.refundsPiastres, 1500);
+  assert.equal(result.netCollectionsPiastres, 8500); assert.equal(result.legacyPaidPiastres, 7000);
+  assert.equal(result.daily.find(day => day.date === '2026-11-06').orders, 1, 'Cairo date rolls over independently of UTC');
+  assert.equal(result.products.some(item => item.name === 'Fixture engraving'), false);
+  assert.equal(JSON.stringify(result).includes('private@example.test'), false);
+  await assert.rejects(ownerAnalytics(999, now), { code: 'INVALID_PERIOD' });
+  const dashboard = await ownerDashboard(now);
+  const service = dashboard.recentOrders.find(order => order.id === String(engravingId));
+  assert.deepEqual(service.itemTypes, ['engraving']); assert.deepEqual(service.serviceStages, ['inspection_pending']);
+  assert.equal(service.actionRequired, 'Inspect customer item'); assert.equal(service.customer.email, undefined);
+  assert.equal(service.lines, undefined); assert.equal(service.engraving, undefined);
+});
+
+test('unified admin order views are bounded, service-aware and leave payment authorization untouched', async () => {
+  const id = new mongoose.Types.ObjectId();
+  await Order.collection.insertOne({ _id: id, owner: 'list-fixture', checkoutKey: 'list', orderNumber: '100013', paymentState: 'unpaid', fulfillmentState: 'received', createdAt: new Date(), totals: { totalPiastres: 10000 }, lines: [{ kind: 'engraving_service_v1' }], engraving: { collectionAuthorized: false, items: [{ stage: 'inspection_pending' }] }, customer: { name: 'Fixture service customer', notes: 'Not for the list' } });
+  const response = await request('/admin/commerce/orders?view=requires_action&type=engraving&limit=20');
+  assert.equal(response.status, 200); assert.equal(response.data.orders.length, 1);
+  assert.equal(response.data.orders[0].actionRequired, 'Inspect customer item');
+  assert.equal((await request('/admin/commerce/orders?view=completed')).data.orders.length, 0);
+  assert.equal((await request('/admin/commerce/orders?view=unpaid')).data.orders.length, 1);
+  assert.equal((await request('/admin/commerce/orders?type=mixed')).data.orders.length, 0);
+  assert.equal((await request('/admin/commerce/orders?view=invalid')).status, 400);
+  assert.equal((await request('/admin/website/owner-analytics?days=500')).status, 400);
+  assert.equal((await request('/admin/website/owner-analytics?days=7&owner=injected')).status, 400);
+  assert.equal((await Order.findById(id).lean()).engraving.collectionAuthorized, false);
+  assert.equal(await OrderSettlement.countDocuments(), 0);
+  await Order.updateOne({ _id: id }, { $set: { fulfillmentState: 'cancelled', 'engraving.items': [{ stage: 'inspection_pending', inCustody: true }] } });
+  const cancelled = await request('/admin/commerce/orders?view=requires_action&type=engraving');
+  assert.equal(cancelled.data.orders.length, 1, 'Cancellation cannot hide a customer item still in store custody');
+  assert.equal(cancelled.data.orders[0].actionRequired, 'Return customer item');
+  assert.equal((await ownerDashboard()).actionRequired, 1);
 });

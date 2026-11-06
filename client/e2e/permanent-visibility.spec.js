@@ -1,3 +1,4 @@
+import { chooseOption } from './select-option.js';
 import { test, expect } from '@playwright/test';
 import { mockCommerce, commerceProduct } from './commerce-fixtures.js';
 import { mockCatalog, adminProduct } from './catalog-fixtures.js';
@@ -45,10 +46,10 @@ test('variant stock and Made by Request control the actual selected purchase opt
     { key: 'made', attributes: [{ name: 'Size', value: 'Large' }], pricePiastres: 20000, priceApproved: true, inventory: { mode: 'made_to_order', quantity: null, approved: true, available: true } },
   ] }) });
   await page.goto('/products/permanent-gift');
-  await page.getByLabel('Choose size / color').selectOption('empty');
+  await chooseOption(page.getByLabel('Choose size / color'), 'empty');
   await expect(page.locator('.product-price')).toContainText('100.00');
   await expect(page.getByRole('button', { name: 'Add to Cart', exact: true })).toHaveCount(0);
-  await page.getByLabel('Choose size / color').selectOption('made');
+  await chooseOption(page.getByLabel('Choose size / color'), 'made');
   await expect(page.locator('.product-price')).toContainText('200.00');
   await expect(page.locator('.product-stock-status')).toHaveText('Made by Request');
   await expect(page.getByRole('button', { name: 'Add to Cart', exact: true })).toBeEnabled();
@@ -63,7 +64,7 @@ test('admin approves display without confirming imported placeholder stock or ch
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
   await page.screenshot({ path: 'test-results/batch1-admin-320.png', fullPage: true });
-  await page.getByRole('combobox', { name: 'Public display', exact: true }).selectOption('public');
+  await chooseOption(page.getByRole('combobox', { name: 'Public display', exact: true }), 'public');
   await page.getByRole('textbox', { name: /^Price \(EGP\)/ }).fill('123.45');
   await expect(page.getByLabel('Product quantity', { exact: true })).toHaveValue('');
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();

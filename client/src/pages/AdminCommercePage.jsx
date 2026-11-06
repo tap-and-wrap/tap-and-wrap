@@ -1,86 +1,46 @@
-import AdminForm, { hasAdminFieldErrors } from '../admin/AdminForm.jsx';
 import { useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { adminCommerceGet, adminCommercePatch, adminCommercePost, commerceError, money } from '../commerce/api';
-import { BundleEditor, ComponentEditor, DiscountEditor, TemplateEditor } from '../commerce/AdminEditors';
-import CategoryRestrictions from '../commerce/CategoryRestrictions';
-import EditConflict from '../admin/EditConflict';
+import { toast } from 'sonner';
+import AdminForm, { hasAdminFieldErrors } from '../admin/AdminForm.jsx';
 import AdminLayout from '../admin/AdminLayout.jsx';
+import EditConflict from '../admin/EditConflict.jsx';
 import { invalidateAdminDependencies } from '../admin/query-invalidation.js';
 import { validatePromotionSchedule } from '../admin/cairo-time.js';
+import { DiscountEditor } from '../commerce/AdminEditors.jsx';
+import CategoryRestrictions from '../commerce/CategoryRestrictions.jsx';
+import { adminCommerceGet, adminCommercePost, adminCommercePatch, commerceError } from '../commerce/api.js';
 
-const sections = ['orders', 'templates', 'components', 'bundles', 'discounts', 'shipping'];
-const singular = { templates: 'template', components: 'component', bundles: 'bundle', discounts: 'discount' };
-const editableKeys = {
-  templates: ['usage', 'key', 'name', 'kind', 'status', 'active', 'pricingMode', 'baseAdjustmentPiastres', 'groups', 'fields', 'engraving'],
-  components: ['categoryId', 'subcategoryId', 'requestPolicy', 'mainImageKey', 'galleryKeys', 'name', 'description', 'pricePiastres', 'compareAtPiastres', 'priceApproved', 'inventory', 'enabledForCustomization', 'configurationApproved', 'reviewRequired', 'merchantReviewNotes'],
-  bundles: ['name', 'description', 'active', 'published', 'items', 'discountKind', 'discountValue', 'maxApplications', 'priority', 'startsAt', 'endsAt'],
-  discounts: ['code', 'name', 'active', 'kind', 'value', 'minimumSubtotalPiastres', 'maximumDiscountPiastres', 'productIds', 'categoryIds', 'authenticatedOnly', 'stackWithBundles', 'startsAt', 'endsAt', 'usageLimit', 'perCustomerLimit'],
-};
-const defaults = {
-  templates: { usage: 'enquiry', key: '', name: '', kind: 'gift_box', status: 'draft', active: true, pricingMode: 'additive', baseAdjustmentPiastres: 0, groups: [], fields: [], engraving: { materials: [], fonts: [], placements: [], maxChars: 120, textRequired: true, allowedTextLines: 1, maxCharsPerLine: 120, baseAdjustmentPiastres: 0, artworkAllowed: false, artworkRequired: false, artworkMaxFiles: 1, artworkMaxBytes: 8 * 1024 * 1024, artworkAcceptedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'] } },
-  bundles: { name: '', description: '', active: false, published: false, items: [], discountKind: 'fixed', discountValue: 0, maxApplications: 1, priority: 0, startsAt: null, endsAt: null },
-  components: { name: '', slug: '', description: '', sku: '', categoryId: '', subcategoryId: null, mainImageKey: '', galleryKeys: [], pricePiastres: null, compareAtPiastres: null, priceApproved: false, inventory: { mode: 'tracked', quantity: 0, approved: false, available: true }, enabledForCustomization: false, configurationApproved: false, reviewRequired: true, merchantReviewNotes: '' },
-  discounts: { code: '', name: '', active: false, kind: 'fixed', value: 0, minimumSubtotalPiastres: 0, maximumDiscountPiastres: null, productIds: [], categoryIds: [], authenticatedOnly: false, stackWithBundles: false, startsAt: null, endsAt: null, usageLimit: null, perCustomerLimit: null },
-};
-
-function PromotionEditor({ value, onChange }) {
-  return <><DiscountEditor value={value} onChange={onChange} /><CategoryRestrictions values={value.categoryIds || []} onChange={(categoryIds) => onChange({ ...value, categoryIds })} /></>;
-}
-
-function ShippingEditor() {
-  return <section className="commerce-notice"><h2>Delivery is confirmed per order</h2><p>No final delivery charge is collected at checkout. Use the order Payment, delivery and exception operations to quote the fee, send the saved WhatsApp message and record customer acceptance. Make initial customer contact within 12 hours of submission. Global EGP 90/120 rate approval is retired.</p><Link to="/admin/commerce/orders">Manage orders and delivery</Link></section>;
-}
-
-function CommerceCollection({ section }) {
-  const [params, setParams] = useSearchParams();
-  const queryClient = useQueryClient();
-  const [searchInput, setSearchInput] = useState(params.get(section === 'orders' ? 'q' : 'search') || '');
-  const [editor, setEditor] = useState(null);
-  const [mediaPending, setMediaPending] = useState(false);
-  const [feedback, setFeedback] = useState('');
-  const [editError, setEditError] = useState('');
-  const page = Math.max(1, Number(params.get('page') || 1));
-  const filters = Object.fromEntries(params);
-  const query = useQuery({ queryKey: ['admin', 'commerce', section, filters], queryFn: ({ signal }) => adminCommerceGet(`/${section}`, { ...filters, page, limit: 20 }, signal), retry: false, staleTime: 0 });
-  const entries = query.data?.[section] || [];
-  const pagination = query.data?.pagination;
-  const save = useMutation({ mutationFn: async () => {
-    if (['bundles', 'discounts'].includes(section)) validatePromotionSchedule(editor.value);
-    const keys = section === 'components' && !editor.id ? [...editableKeys.components, 'slug', 'sku', 'categoryId', 'subcategoryId', 'mainImageKey', 'galleryKeys'] : editableKeys[section];
-    const payload = Object.fromEntries(keys.filter((key) => editor.value[key] !== undefined).map((key) => [key, editor.value[key]]));
-    if (['templates', 'components'].includes(section)) payload.ownerWorkflow = true;
-    if (editor.id) payload.expectedRevision = editor.value.revision ?? 0;
-    return editor.id ? adminCommercePatch(`/${section}/${editor.id}`, payload) : adminCommercePost(`/${section}`, payload);
-  }, onSuccess: async (result) => {
-    const record = result[singular[section]];
-    setFeedback(result.revisionCreated ? 'Saved as a new version. Existing order and accepted quotation snapshots remain unchanged.' : 'Configuration saved.');
-    if (record) setEditor({ id: record._id || record.id, value: structuredClone(record) });
-    await invalidateAdminDependencies(queryClient, section);
-  } });
-  const revision = useMutation({ mutationFn: () => adminCommercePost(`/templates/${editor.id}/revisions`, { ownerWorkflow: true, expectedRevision: editor.value.revision ?? 0 }), onSuccess: async (result) => { setEditor({ id: result.template._id || result.template.id, value: structuredClone(result.template) }); setFeedback('New version saved.'); await invalidateAdminDependencies(queryClient, 'templates'); } });
-  function filter(key, value) { const next = new URLSearchParams(params); next.delete('page'); if (value) next.set(key, value); else next.delete(key); setParams(next); }
-  async function edit(entry) {
-    setFeedback(''); setEditError('');
-    try {
-      const result = await adminCommerceGet(`/${section}/${entry._id || entry.id}`);
-      setEditor({ id: entry._id || entry.id, value: structuredClone(result[singular[section]] || entry) });
-      save.reset(); revision.reset();
-    } catch (error) { setEditError(commerceError(error)); }
-  }
-  const Editor = section === 'templates' ? TemplateEditor : section === 'components' ? ComponentEditor : section === 'bundles' ? BundleEditor : PromotionEditor;
-  return <><div className="commerce-heading"><AdminForm className="commerce-inline-form" onSubmit={(event) => { event.preventDefault(); filter(section === 'orders' ? 'q' : 'search', searchInput.trim()); }}><label className="commerce-field">{section === 'orders' ? 'Search by order number' : `Search ${section}`}<input value={searchInput} inputMode={section === 'orders' ? 'numeric' : undefined} maxLength={section === 'orders' ? 6 : 200} pattern={section === 'orders' ? '[0-9]{6}' : undefined} onChange={(event) => setSearchInput(event.target.value)} /></label><button className="button button-secondary">Search</button></AdminForm>{defaults[section] && <button className="button button-primary" disabled={save.isPending || revision.isPending} onClick={() => { setEditor({ id: null, value: structuredClone(defaults[section]) }); setFeedback(''); }}>Add {singular[section]}</button>}</div>
-    {section === 'orders' && <label className="commerce-field">Order sorting<select value={params.get('sort') || 'newest'} onChange={(event) => filter('sort', event.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>}
-    <div className="commerce-editor-grid">{section === 'orders' ? <><label className="commerce-field">Requires action<select value={params.get('action') || ''} onChange={event => filter('action', event.target.value)}><option value="">All orders</option>{[['awaiting_transfer','Awaiting InstaPay transfer'],['proof_review','Proofs awaiting verification'],['shipping_pending','Delivery awaiting confirmation'],['follow_up_overdue','12-hour follow-up overdue'],['cancellation_requested','Cancellation requested'],['refund_review','Refund review required']].map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label><label className="commerce-field">Fulfillment status<select value={params.get('fulfillmentState') || ''} onChange={(event) => filter('fulfillmentState', event.target.value)}><option value="">All</option>{['received', 'confirmed', 'preparing', 'out_for_delivery', 'delivered', 'delivery_failed', 'returned', 'cancelled'].map((state) => <option key={state} value={state}>{state.replaceAll('_', ' ')}</option>)}</select></label><label className="commerce-field">Payment status<select value={params.get('paymentState') || ''} onChange={(event) => filter('paymentState', event.target.value)}><option value="">All</option>{['unpaid', 'awaiting_transfer', 'awaiting_verification', 'partially_paid', 'paid', 'rejected', 'refunded'].map((state) => <option key={state} value={state}>{state.replaceAll('_', ' ')}</option>)}</select></label></> : section === 'templates' ? <><label className="commerce-field">Template type<select value={params.get('kind') || ''} onChange={(event) => filter('kind', event.target.value)}><option value="">All</option><option value="gift_box">Gift box</option><option value="laser_engraving">Laser engraving</option><option value="generic">Product-level customization</option><option value="tray">Tray</option></select></label></> : section === 'components' ? <><label className="commerce-field">Enabled<select value={params.get('enabled') || ''} onChange={(event) => filter('enabled', event.target.value)}><option value="">All</option><option value="true">Enabled</option><option value="false">Disabled</option></select></label></> : null}</div>
-    {query.isPending ? <p className="admin-state" role="status">Loading {section}…</p> : query.error ? <div className="admin-state"><p role="alert">{commerceError(query.error)}</p><button className="admin-button admin-button-secondary" onClick={() => query.refetch()}>Try again</button></div> : !entries.length ? <p className="admin-state">No {section} found.</p> : <div className="commerce-admin-table-wrap" tabIndex={0} role="region" aria-label={`${section} table, scroll horizontally on small screens`}><table className="commerce-admin-table"><thead><tr><th scope="col">{section === 'orders' ? 'Order' : 'Name'}</th><th scope="col">Status</th><th scope="col">{section === 'orders' ? 'Payment / Total' : 'Price / Type'}</th><th scope="col">Actions</th></tr></thead><tbody>{entries.map((entry) => <tr key={entry._id || entry.id}><td>{section === 'orders' ? `#${entry.orderNumber}` : entry.name || entry.code}</td><td>{section === 'orders' ? entry.fulfillmentState.replaceAll('_', ' ') : section === 'templates' ? `${entry.status} · v${entry.version}` : section === 'components' ? entry.requestPolicy?.enabled && entry.requestPolicy?.availability === 'available' ? 'Available for requests' : 'Not offered' : entry.active ? 'Active' : 'Inactive'}</td><td>{section === 'orders' ? <>{entry.paymentState.replaceAll('_', ' ')}<br />{money(entry.totalPiastres ?? entry.totals?.totalPiastres)}</> : section === 'components' ? entry.requestPolicy?.pricing === 'free' ? 'Free' : entry.requestPolicy?.pricing === 'fixed' ? money(entry.requestPolicy.unitPricePiastres) : 'Price on Request' : entry.kind || entry.discountKind}</td><td>{section === 'orders' ? <Link to={`/admin/commerce/orders/${entry.id || entry._id}`}>View order</Link> : <button type="button" className="commerce-link-button" disabled={save.isPending || revision.isPending} onClick={() => edit(entry)}>Edit {entry.name || entry.code}</button>}</td></tr>)}</tbody></table></div>}
-    <nav className="commerce-pagination" aria-label={`${section} pages`}><button disabled={page <= 1 || query.isFetching} onClick={() => { params.set('page', String(page - 1)); setParams(params); }}>Previous</button><span>Page {page}{pagination && ` of ${pagination.pages || pagination.totalPages || 1}`}</span><button disabled={query.isFetching || (pagination ? page >= (pagination.pages || pagination.totalPages || 1) : entries.length < 20)} onClick={() => { params.set('page', String(page + 1)); setParams(params); }}>Next</button></nav>
-    {editError && <p className="form-error" role="alert">{editError}</p>}{editor && <AdminForm error={save.error || revision.error} className="commerce-editor" onSubmit={(event) => { event.preventDefault(); if (!mediaPending) save.mutate(); }}><fieldset disabled={save.isPending || revision.isPending} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><div className="commerce-heading"><h2>{editor.id ? 'Edit' : 'Add'} {singular[section]}</h2><button type="button" className="commerce-link-button" onClick={() => setEditor(null)}>Close editor</button></div>{section === 'templates' && editor.value.status === 'approved' && <p className="commerce-notice">Saving rule changes creates a new version automatically. Existing orders and accepted quotations retain their saved configuration.</p>}<Editor key={editor.id || 'new'} onMediaPending={setMediaPending} value={editor.value} onChange={(value) => setEditor((previous) => ({ ...previous, value }))} /><div className="commerce-editor-actions"><button className="button button-primary" disabled={save.isPending || mediaPending}>{save.isPending ? 'Saving…' : 'Save configuration'}</button>{section === 'templates' && editor.id && <button className="button button-secondary" type="button" disabled={revision.isPending} onClick={() => revision.mutate()}>Create new version</button>}</div>{feedback && <p role="status">{feedback}</p>}{(save.error || revision.error) && !hasAdminFieldErrors(save.error || revision.error) && <p className="form-error" role="alert">{commerceError(save.error || revision.error)}</p>}<EditConflict error={save.error || revision.error} onReload={async () => { const result = await adminCommerceGet(`/${section}/${editor.id}`); setEditor({ id: editor.id, value: structuredClone(result[singular[section]]) }); save.reset(); revision.reset(); }} /></fieldset></AdminForm>}
-  </>;
-}
-
+const fields = ['code', 'name', 'active', 'kind', 'value', 'minimumSubtotalPiastres', 'maximumDiscountPiastres', 'productIds', 'categoryIds', 'authenticatedOnly', 'startsAt', 'endsAt', 'usageLimit', 'perCustomerLimit'];
+const empty = { code: '', name: '', active: false, kind: 'fixed', value: 0, minimumSubtotalPiastres: 0, maximumDiscountPiastres: null, productIds: [], categoryIds: [], authenticatedOnly: false, startsAt: null, endsAt: null, usageLimit: null, perCustomerLimit: null };
 export default function AdminCommercePage() {
-  const { section = 'orders' } = useParams();
-  if (!sections.includes(section)) return <AdminLayout title="Commerce Management"><p className="admin-state">Choose a valid management section.</p><Link to="/admin/commerce/orders">Orders</Link></AdminLayout>;
-  return <AdminLayout title={section === 'templates' ? 'Customization' : section[0].toUpperCase() + section.slice(1)}>{section === 'shipping' ? <ShippingEditor /> : <CommerceCollection key={section} section={section} />}</AdminLayout>;
+  const [params, setParams] = useSearchParams();
+  const cache = useQueryClient();
+  const page = Math.min(200, Math.max(1, Number(params.get('page')) || 1));
+  const [draftSearch, setDraftSearch] = useState(params.get('search') || '');
+  const [editor, setEditor] = useState(null), [loadError, setLoadError] = useState('');
+  const query = useQuery({ queryKey: ['admin', 'commerce', 'discounts', page, params.get('search') || ''], queryFn: ({ signal }) => adminCommerceGet('/discounts', { page, limit: 20, ...(params.get('search') ? { search: params.get('search') } : {}) }, signal), retry: false, staleTime: 0 });
+  const save = useMutation({ onMutate: () => toast.dismiss('admin-discount-save'), mutationFn: () => {
+    validatePromotionSchedule(editor.value);
+    const payload = Object.fromEntries(fields.filter(key => editor.value[key] !== undefined).map(key => [key, editor.value[key]]));
+    if (editor.id) payload.expectedRevision = editor.value.revision;
+    return editor.id ? adminCommercePatch(`/discounts/${editor.id}`, payload) : adminCommercePost('/discounts', payload);
+  }, onSuccess: async result => {
+    setEditor({ id: result.discount._id || result.discount.id, value: structuredClone(result.discount) });
+    toast.success('Discount saved.', { id: 'admin-discount-save' });
+    await invalidateAdminDependencies(cache, 'discounts');
+  } });
+  async function edit(entry) {
+    setLoadError('');
+    try { const result = await adminCommerceGet(`/discounts/${entry._id || entry.id}`); setEditor({ id: entry._id || entry.id, value: structuredClone(result.discount) }); save.reset(); }
+    catch (error) { setLoadError(commerceError(error)); }
+  }
+  const pages = Math.max(1, query.data?.pagination.pages || 1);
+  return <AdminLayout title="Discounts" description="Create a code, choose its value and decide when customers can use it." actions={<button className="admin-button" disabled={save.isPending} onClick={() => { setEditor({ id: null, value: structuredClone(empty) }); save.reset(); }}>Add discount</button>}>
+    <section className="owner-workspace"><form className="owner-filter-row" onSubmit={event => { event.preventDefault(); setParams(draftSearch.trim() ? { search: draftSearch.trim() } : {}); }}><label>Find a discount<input type="search" maxLength={100} value={draftSearch} onChange={event => setDraftSearch(event.target.value)}/></label><button className="admin-button admin-button-secondary">Search</button></form>
+      {query.isPending ? <p className="admin-state" role="status">Loading discounts...</p> : query.error ? <div className="admin-state" role="alert"><p>{commerceError(query.error)}</p><button className="admin-button admin-button-secondary" onClick={() => query.refetch()}>Try again</button></div> : query.data?.discounts.length ? <div className="admin-table-scroll" role="region" aria-label="Discount codes" tabIndex={0}><table className="admin-products-table"><thead><tr><th>Name / Code</th><th>Status</th><th>Usage</th><th>Action</th></tr></thead><tbody>{query.data.discounts.map(entry => <tr key={entry._id || entry.id}><td><strong>{entry.name}</strong><span className="admin-cell-note">{entry.code}</span></td><td><span className="owner-type">{entry.active ? entry.endsAt && new Date(entry.endsAt) <= new Date() ? 'Expired' : entry.startsAt && new Date(entry.startsAt) > new Date() ? 'Scheduled' : 'Active' : 'Inactive'}</span></td><td>{entry.usedCount || 0}{entry.usageLimit ? ` / ${entry.usageLimit}` : ''}</td><td><button className="admin-button admin-button-secondary" disabled={save.isPending} onClick={() => edit(entry)}>Edit {entry.name || entry.code}</button></td></tr>)}</tbody></table></div> : <div className="admin-empty"><h3>Your next promotion starts here</h3><p>Create a discount code when you’re ready to offer one.</p></div>}
+      <nav className="admin-pagination" aria-label="Discount pages"><button className="admin-button admin-button-secondary" disabled={page <= 1 || query.isFetching} onClick={() => { const next = new URLSearchParams(params); next.set('page', page - 1); setParams(next); }}>Previous</button><span>Page {page} of {pages}</span><button className="admin-button admin-button-secondary" disabled={page >= pages || page >= 200 || query.isFetching} onClick={() => { const next = new URLSearchParams(params); next.set('page', page + 1); setParams(next); }}>Next</button></nav>
+    </section>{loadError && <p role="alert">{loadError}</p>}
+    {editor && <section className="admin-panel"><AdminForm error={save.error} className="commerce-editor" onSubmit={event => { event.preventDefault(); save.mutate(); }}><fieldset className="admin-form-fields" disabled={save.isPending}><div className="commerce-heading"><h2>{editor.id ? 'Edit discount' : 'New discount'}</h2><button className="admin-button admin-button-secondary" type="button" onClick={() => setEditor(null)}>Close editor</button></div><DiscountEditor key={editor.id || 'new'} value={editor.value} onChange={value => setEditor(previous => ({ ...previous, value }))}/><CategoryRestrictions values={editor.value.categoryIds || []} onChange={categoryIds => setEditor(previous => ({ ...previous, value: { ...previous.value, categoryIds } }))}/><EditConflict error={save.error} onReload={async () => { const result = await adminCommerceGet(`/discounts/${editor.id}`); setEditor({ id: editor.id, value: structuredClone(result.discount) }); save.reset(); }}/>{save.error && !hasAdminFieldErrors(save.error) && <p role="alert">{commerceError(save.error)}</p>}<button className="admin-button" disabled={save.isPending}>{save.isPending ? 'Saving...' : 'Save discount'}</button></fieldset></AdminForm></section>}
+  </AdminLayout>;
 }

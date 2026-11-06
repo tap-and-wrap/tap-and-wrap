@@ -302,31 +302,31 @@ test('F49 timed-out adapter receives cancellation and cannot return a fake succe
   await assert.rejects(boundedOperation(signal => new Promise(() => { signal.addEventListener('abort', () => { aborted = true; }); }), { timeoutMs: 20, code: 'SYNTHETIC_TIMEOUT' }), { code: 'SYNTHETIC_TIMEOUT' });
   assert.equal(aborted, true);
 });
-test('F31 concurrent active-bundle creations at 99 cannot exceed the 100-rule contract or create unaudited winners', async () => {
+test('F31 retired bundle creation rejects concurrent writes without changing existing rules', async () => {
   const admin = await auth('admin'), another = await makeProduct();
   const body = { name: 'Synthetic concurrent bundle', active: true, published: false, items: [{ productId: String(product._id), quantity: 1 }, { productId: String(another._id), quantity: 1 }], discountKind: 'fixed', discountValue: 100 };
   await BundleRule.insertMany(Array.from({ length: 99 }, (_, i) => ({ ...body, name: `Seed ${i}` })));
   await CommerceControl.create({ _id: 'bundle-activation', revision: 0 });
   const results = await Promise.all([request('/admin/commerce/bundles', admin, body), request('/admin/commerce/bundles', admin, { ...body, name: 'Second candidate' })]);
-  assert.deepEqual(results.map(value => value.status).sort(), [201, 409]); assert.equal(await BundleRule.countDocuments({ active: true }), 100);
-  assert.equal(await AdminAudit.countDocuments({ action: 'promotion.bundle.created' }), 1);
+  assert.deepEqual(results.map(value => value.status).sort(), [410, 410]); assert.equal(await BundleRule.countDocuments({ active: true }), 99);
+  assert.equal(await AdminAudit.countDocuments({ action: 'promotion.bundle.created' }), 0);
 });
-test('F31 first-use activation fence initialization fails safely or commits without duplicates', async () => {
+test('F31 retired bundle creation never initializes an activation fence', async () => {
   const admin = await auth('admin'), another = await makeProduct();
   const body = { name: 'First fence', active: true, items: [{ productId: String(product._id), quantity: 1 }, { productId: String(another._id), quantity: 1 }], discountKind: 'fixed', discountValue: 100 };
   const results = await Promise.all([request('/admin/commerce/bundles', admin, body), request('/admin/commerce/bundles', admin, { ...body, name: 'Second fence' })]);
-  assert.ok(results.every(value => [201, 409].includes(value.status))); assert.equal(await CommerceControl.countDocuments(), 1);
-  assert.equal(await BundleRule.countDocuments(), results.filter(value => value.status === 201).length);
+  assert.ok(results.every(value => [410].includes(value.status))); assert.equal(await CommerceControl.countDocuments(), 0);
+  assert.equal(await BundleRule.countDocuments(), 0);
 });
-test('F31 concurrent captured-revision activations of different draft bundles enforce the shared capacity boundary', async () => {
+test('F31 retired bundle activation preserves every existing draft and revision', async () => {
   const admin = await auth('admin'), another = await makeProduct();
   const body = { name: 'Synthetic activation', active: true, items: [{ productId: product._id, quantity: 1 }, { productId: another._id, quantity: 1 }], discountKind: 'fixed', discountValue: 100 };
   await BundleRule.insertMany(Array.from({ length: 99 }, (_, i) => ({ ...body, name: `Active ${i}` })));
   const drafts = await BundleRule.create([{ ...body, active: false, name: 'Draft A' }, { ...body, active: false, name: 'Draft B' }]);
   await CommerceControl.create({ _id: 'bundle-activation' });
   const results = await Promise.all(drafts.map(draft => request(`/admin/commerce/bundles/${draft._id}`, admin, { expectedRevision: 0, active: true }, 'PATCH')));
-  assert.deepEqual(results.map(result => result.status).sort(), [200, 409]); assert.equal(await BundleRule.countDocuments({ active: true }), 100);
-  assert.equal(await AdminAudit.countDocuments({ action: 'promotion.bundle.updated' }), 1);
+  assert.deepEqual(results.map(result => result.status).sort(), [410, 410]); assert.equal(await BundleRule.countDocuments({ active: true }), 99);
+  assert.equal(await AdminAudit.countDocuments({ action: 'promotion.bundle.updated' }), 0);
 });
 test('F29 isolated shared checkout-fence contention is measured without removing any correctness fences', async t => {
   const products = [product]; for (let i = 1; i < 6; i += 1) products.push(await makeProduct());

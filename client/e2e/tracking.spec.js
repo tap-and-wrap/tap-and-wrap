@@ -1,3 +1,4 @@
+import { chooseOption } from './select-option.js';
 import { test, expect } from '@playwright/test';
 import { mockCommerce, commerceProduct, cartWithProduct } from './commerce-fixtures.js';
 
@@ -127,12 +128,12 @@ test('search events represent explicit submissions, not URL loads, sorting, pagi
   await page.goto('/shop?q=Old');
   await expect(page.getByRole('heading', { name: commerceProduct.name })).toBeVisible();
   expect(actions).toHaveLength(0);
-  await page.getByLabel('Sort by').selectOption('price_asc');
+  await chooseOption(page.getByLabel('Sort by'), 'price_asc');
   await page.getByLabel('Search products by name').fill('New');
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   await expect.poll(() => actions.length).toBe(1);
   await expect.poll(async () => (await pixelEvents(page)).filter(call => call[1] === 'Search').length).toBe(1);
-  await page.getByLabel('Sort by').selectOption('newest');
+  await chooseOption(page.getByLabel('Sort by'), 'newest');
   await expect(page).toHaveURL(/sort=newest/);
   await page.goBack();
   await expect(page).toHaveURL(/sort=price_asc/);

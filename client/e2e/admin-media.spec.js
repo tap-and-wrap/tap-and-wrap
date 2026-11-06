@@ -98,29 +98,11 @@ test('duplicate selection is not added twice and stale save retains the uploaded
   await expect(gallery.getByAltText(/^Image \d/)).toHaveCount(3);
   await expect(page.getByRole('button', { name: 'Reload latest record', exact: true })).toBeVisible();
 });
-test('existing component editor includes uploaded gallery in the normal guarded save', async ({ page }) => {
-  await mockCommerce(page, { role: 'admin' }); await mediaFixture(page);
-  const writes = [];
-  await page.route('**/api/v1/admin/commerce/components/*', async route => {
-    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
-    if (route.request().method() !== 'PATCH') return route.fallback();
-    const patch = route.request().postDataJSON(); writes.push(patch);
-    return route.fulfill({ headers: cors, json: { ok: true, data: { component: { _id: '710000000000000000000030', ...patch, revision: 1 } } } });
-  });
-  await page.goto('/admin/commerce/components');
-  await page.getByRole('button', { name: /^Edit Configured Card/ }).click();
-  const gallery = page.getByRole('region', { name: 'Component images', exact: true });
-  await chooseImageFiles(page, gallery, 'Add images', file('discard-on-close.png'));
-  await expect(page.getByRole('button', { name: 'Save configuration' })).toBeDisabled();
-  await page.getByRole('button', { name: 'Close editor', exact: true }).click();
-  await page.getByRole('button', { name: /^Edit Configured Card/ }).click();
-  await expect(gallery.getByAltText('Selected discard-on-close.png')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Save configuration' })).toBeEnabled();
-  await chooseImageFiles(page, gallery, 'Add images', file('component.png'));
-  await gallery.getByRole('button', { name: 'Upload selected images' }).click();
-  await page.getByRole('button', { name: 'Save configuration' }).click();
-  await expect.poll(() => writes.length).toBe(1);
-  expect(writes[0].galleryKeys).toHaveLength(1); expect(writes[0].mainImageKey).toBe(writes[0].galleryKeys[0]); expect(writes[0].expectedRevision).toBe(0);
+test('legacy component bookmark opens the consolidated Gift Box workspace without old component mutation controls', async ({ page }) => {
+ await mockCatalog(page, { role: 'admin' }); await page.goto('/admin/commerce/components');
+ await expect(page).toHaveURL(/\/admin\/gift-box$/);
+ await expect(page.getByRole('heading', { name: 'Gift Box', exact: true, level: 1 })).toBeVisible();
+ await expect(page.getByRole('button', { name: 'Add component', exact: true })).toHaveCount(0);
 });
 
 test('stopping an in-flight admin upload preserves references and retries the remaining selection', async ({ page }) => {

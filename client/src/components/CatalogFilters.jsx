@@ -1,3 +1,4 @@
+import Select from './form/Select.jsx';
 import { useId, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -56,12 +57,12 @@ export default function CatalogFilters({
           <summary>Category<ChevronDown size={18} aria-hidden="true" /></summary>
           <div className="catalog-filter-group-body">
             <label className="catalog-visually-hidden" htmlFor={`${id}-category`}>Category</label>
-            <select id={`${id}-category`} value={fixedCategory?.slug || filters.category} disabled={categoriesLoading || Boolean(fixedCategory)}
+            <Select id={`${id}-category`} value={fixedCategory?.slug || filters.category} disabled={categoriesLoading || Boolean(fixedCategory)}
               onChange={(event) => change({ category: event.target.value })}>
               {fixedCategory ? <option value={fixedCategory.slug}>{fixedCategory.name}</option> : <><option value="">All categories</option>
                 {filters.category && !categories.some((category) => category.slug === filters.category) && <option value={filters.category}>{currentCategory?.name || 'Selected category'}</option>}
                 {categories.map((category) => <option key={category._id} value={category.slug}>{category.name}</option>)}</>}
-            </select>
+            </Select>
             {lockedSubcategory && <p className="catalog-filter-context">Within {lockedCategory.name}</p>}
             {fixedCategory && <Link className="catalog-text-button" to="/shop">Browse all categories</Link>}
             {categoriesLoading && <p className="catalog-filter-context" role="status">Loading categories…</p>}
@@ -72,9 +73,9 @@ export default function CatalogFilters({
           <summary>Availability<ChevronDown size={18} aria-hidden="true" /></summary>
           <div className="catalog-filter-group-body">
             <label className="catalog-visually-hidden" htmlFor={`${id}-availability`}>Availability</label>
-            <select id={`${id}-availability`} value={filters.availability} onChange={(event) => change({ availability: event.target.value })}>
+            <Select id={`${id}-availability`} value={filters.availability} onChange={(event) => change({ availability: event.target.value })}>
               <option value="">All availability</option><option value="available">Available</option><option value="sold_out">Not available for ordering</option>
-            </select>
+            </Select>
           </div>
         </details>
         <details className="catalog-filter-group" data-price-section>

@@ -1,3 +1,4 @@
+import { ownerFixture } from './owner-dashboard-fixtures.js';
 import { test, expect } from '@playwright/test';
 import { mockCatalog } from './catalog-fixtures.js';
 import { fixedPages, fixedFaq, publicContacts } from '../../shared/storefront-content.mjs';
@@ -39,14 +40,11 @@ test('code-managed FAQ and policies describe the same contact, delivery and quot
   expect(publicContacts.whatsapp).not.toBe('01060673073');
 });
 
-test('owner guide puts required actions first and remains usable on a small phone', async ({ page }) => {
-  await mockCatalog(page, { role: 'admin' });
+test('retired content bookmark redirects to the owner dashboard on a small phone', async ({ page }) => {
+  await ownerFixture(page);
   await page.setViewportSize({ width: 320, height: 900 });
   await page.goto('/admin/website/content');
-  await expect(page.getByRole('heading', { name: 'Pages, policies & owner guide' })).toBeVisible();
-  await expect(page.locator('.owner-guide')).toContainText('One reminder is eligible at 9 hours');
-  await expect(page.locator('.owner-guide')).toContainText('12 hours adds an overdue dashboard warning only');
-  await expect(page.locator('main form')).toHaveCount(0);
+  await expect(page).toHaveURL('/admin');
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: 'test-results/batch6-owner-guide-mobile.png', fullPage: true });
 });

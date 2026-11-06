@@ -1,3 +1,5 @@
+import { toast } from 'sonner';
+import Select from '../components/form/Select.jsx';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import AdminLayout from '../admin/AdminLayout.jsx';
@@ -8,8 +10,6 @@ import { commerceError } from '../commerce/api.js';
 import { decimalInput, parseDecimalPiastres } from '../commerce/money-input.js';
 import { getCatalog, getSetting, reorderCategory, updateSetting } from '../gift-box/api.js';
 import { componentLabel } from '../gift-box/state.mjs';
-import { compareOwnerStartingPrices } from '../gift-box/owner-starting-prices.mjs';
-import { planMadeToOrderActivation } from '../gift-box/made-to-order-activation.mjs';
 import '../gift-box/gift-box.css';
 
 const categoryNames = { box: 'Boxes', flower: 'Flowers', plush: 'Plush toys', chocolate: 'Chocolates', ribbon: 'Ribbons', gift_card: 'Gift card' };
@@ -25,7 +25,7 @@ function SettingEditor({ component, onSaved }) {
   const [confirmQuantity, setConfirmQuantity] = useState(false), [validationError, setValidationError] = useState(null);
   const ribbon = loaded.category === 'ribbon';
   const switchingToTracked = inventoryMode === 'tracked' && loaded.inventoryMode !== 'tracked';
-  const mutation = useMutation({ mutationFn: body => updateSetting(component.componentId, body), onSuccess: async result => { setLoaded(result); setPrice(decimalInput(result.pricePiastres)); setComplimentary(false); setConfirmQuantity(false); await onSaved(); } });
+  const mutation = useMutation({ mutationFn: body => updateSetting(component.componentId, body), onSuccess: async result => { toast.success('Component settings saved.', { id: 'gift-box-component-save' }); setLoaded(result); setPrice(decimalInput(result.pricePiastres)); setComplimentary(false); setConfirmQuantity(false); await onSaved(); } });
   function reset(record) {
     setLoaded(record); setName(record.displayName || ''); setPrice(decimalInput(record.pricePiastres)); setOrder(String(record.displayOrder)); setEnabled(record.enabled); setAvailable(record.available === true); setInventoryMode(record.inventoryMode || ''); setQuantity(record.inventoryQuantity === null ? '' : String(record.inventoryQuantity)); setComplimentary(false); setConfirmQuantity(false); setValidationError(null); mutation.reset();
   }
@@ -53,7 +53,7 @@ function SettingEditor({ component, onSaved }) {
     setValidationError(null);
     mutation.mutate(body);
   }
-  return <AdminForm className="gb-setting-editor" error={validationError || mutation.error} onSubmit={submit}>
+  return <details className="gb-component-card" data-component-id={component.componentId}><summary><span>{componentLabel(loaded)}<small>{loaded.inventoryMode === 'tracked' ? `${loaded.inventoryQuantity ?? 'Unconfirmed'} in stock` : loaded.inventoryMode === 'made_to_order' ? 'Made by Request' : available ? 'Available' : 'Unavailable'}</small></span><span>{loaded.pricePiastres == null ? 'Add a price' : `EGP ${(loaded.pricePiastres / 100).toFixed(2)}`}<small>Edit settings</small></span></summary><AdminForm className="gb-setting-editor" error={validationError || mutation.error} onSubmit={submit}>
     <h3>{componentLabel(loaded)}</h3><p className="gb-help">{loaded.componentId} · {loaded.category} · revision {loaded.revision}</p>
     {loaded.category === 'chocolate' && <p className="gb-help">One unit is the complete pictured retail product. Confirm its identity and unit before approving its name, price, and availability.</p>}
     <fieldset disabled={mutation.isPending}>
@@ -64,130 +64,23 @@ function SettingEditor({ component, onSaved }) {
       {/^0+(?:\.0{1,2})?$/.test(price) && loaded.pricePiastres !== 0 && <label className="gb-check"><input name="confirmComplimentary" type="checkbox" required checked={complimentary} onChange={event => setComplimentary(event.target.checked)}/>Explicitly approve this component as complimentary</label>}
       <label className="gb-check"><input name="available" type="checkbox" checked={enabled && available} onChange={event => { setEnabled(true); setAvailable(event.target.checked); }}/>{ribbon ? 'In stock' : 'Available to make'}</label>
       {ribbon ? <p className="gb-help">Ribbons have no numeric stock. Use the availability checkbox.</p> : <details><summary>Advanced inventory settings</summary>
-        <label>Inventory mode<select name="inventoryMode" value={inventoryMode} onChange={event => { setInventoryMode(event.target.value); setConfirmQuantity(false); }}><option value="" disabled>Not configured</option><option value="tracked">Tracked stock</option><option value="made_to_order">Made to order</option></select></label>
+        <label>Inventory mode<Select name="inventoryMode" value={inventoryMode} onChange={event => { setInventoryMode(event.target.value); setConfirmQuantity(false); }}><option value="" disabled>Not configured</option><option value="tracked">Tracked stock</option><option value="made_to_order">Made to order</option></Select></label>
         {inventoryMode === 'tracked' && <label>Stock quantity<input name="inventoryQuantity" type="text" inputMode="numeric" pattern="[0-9]+" required value={quantity} onChange={event => { setQuantity(event.target.value); setConfirmQuantity(false); setValidationError(null); }}/></label>}
         {switchingToTracked && <label className="gb-check"><input name="confirmInventoryQuantity" type="checkbox" required checked={confirmQuantity} onChange={event => setConfirmQuantity(event.target.checked)}/>Confirm this tracked stock quantity</label>}
         {inventoryMode === 'made_to_order' && <p className="gb-help">Made to order uses availability without a numeric stock limit. Any saved stock quantity is preserved.</p>}
       </details>}
       <button className="button button-primary" type="submit">{mutation.isPending ? 'Saving…' : 'Save component settings'}</button>
     </fieldset>
-    {mutation.error && <p role="alert">{commerceError(mutation.error)}</p>}{mutation.isSuccess && <p role="status">Component settings saved.</p>}
+    {mutation.error && <p role="alert">{commerceError(mutation.error)}</p>}
     <EditConflict error={mutation.error} onReload={async () => reset(await getSetting(component.componentId))}/>
-  </AdminForm>;
+  </AdminForm></details>;
 }
 function CategoryOrder({ category, components, onSaved }) {
   const [ordered, setOrdered] = useState(components);
-  const mutation = useMutation({ mutationFn: () => reorderCategory({ category, items: ordered.map(item => ({ componentId: item.componentId, expectedRevision: item.revision })) }), onSuccess: async result => { setOrdered(result.components); await onSaved(); } });
+  const mutation = useMutation({ mutationFn: () => reorderCategory({ category, items: ordered.map(item => ({ componentId: item.componentId, expectedRevision: item.revision })) }), onSuccess: async result => { toast.success('Category order saved.', { id: 'gift-box-order-save' }); setOrdered(result.components); await onSaved(); } });
   function move(index, delta) { const next = [...ordered]; [next[index], next[index + delta]] = [next[index + delta], next[index]]; setOrdered(next); mutation.reset(); }
-  return <details className="gb-order"><summary>Reorder {categoryNames[category].toLowerCase()}</summary><p>Move options, then save the complete category. Saved revisions protect every row.</p><ol>{ordered.map((item, index) => <li key={item.componentId}><span>{componentLabel(item)}</span><button type="button" disabled={index === 0 || mutation.isPending} aria-label={`Move ${item.componentId} up`} onClick={() => move(index, -1)}>Up</button><button type="button" disabled={index === ordered.length - 1 || mutation.isPending} aria-label={`Move ${item.componentId} down`} onClick={() => move(index, 1)}>Down</button></li>)}</ol><button className="button button-secondary" disabled={mutation.isPending} onClick={() => mutation.mutate()}>Save category order</button>{mutation.isSuccess && <p role="status">Category order saved.</p>}{mutation.error && <p role="alert">{commerceError(mutation.error)}</p>}<EditConflict error={mutation.error} onReload={async () => { const latest = await getCatalog(undefined, true); setOrdered(latest.components.filter(item => item.category === category)); mutation.reset(); }}/></details>;
+  return <details className="gb-order"><summary>Reorder {categoryNames[category].toLowerCase()}</summary><p>Move options, then save the complete category. Saved revisions protect every row.</p><ol>{ordered.map((item, index) => <li key={item.componentId}><span>{componentLabel(item)}</span><button type="button" disabled={index === 0 || mutation.isPending} aria-label={`Move ${item.componentId} up`} onClick={() => move(index, -1)}>Up</button><button type="button" disabled={index === ordered.length - 1 || mutation.isPending} aria-label={`Move ${item.componentId} down`} onClick={() => move(index, 1)}>Down</button></li>)}</ol><button className="button button-secondary" disabled={mutation.isPending} onClick={() => mutation.mutate()}>Save category order</button>{mutation.error && <p role="alert">{commerceError(mutation.error)}</p>}<EditConflict error={mutation.error} onReload={async () => { const latest = await getCatalog(undefined, true); setOrdered(latest.components.filter(item => item.category === category)); mutation.reset(); }}/></details>;
 }
-function StartingPricesReview({ onSaved }) {
-  const [preview, setPreview] = useState(null);
-  const [confirmed, setConfirmed] = useState(false);
-  const [working, setWorking] = useState(false);
-  const [progress, setProgress] = useState('');
-  const [problem, setProblem] = useState('');
-  const [result, setResult] = useState('');
-  const scan = async () => {
-    if (working) return;
-    setProblem(''); setResult(''); setConfirmed(false);
-    try {
-      const fresh = await getCatalog(undefined, true);
-      setPreview(compareOwnerStartingPrices(fresh.components));
-    } catch (error) { setPreview(null); setProblem(commerceError(error)); }
-  };
-  const apply = async () => {
-    if (!confirmed || !preview || preview.conflicts.length || working) return;
-    setWorking(true); setProblem(''); setResult('');
-    let saved = 0;
-    try {
-      // Recheck all revisions and amounts immediately before beginning. Abort on any drift.
-      const fresh = await getCatalog(undefined, true);
-      const current = compareOwnerStartingPrices(fresh.components);
-      if (JSON.stringify(current) !== JSON.stringify(preview)) throw new Error('Settings changed. Review the price plan again before applying.');
-      for (const { componentId, patch } of current.updates) {
-        setProgress(`Saving ${saved + 1} / ${current.updates.length} — ${componentId}`);
-        await updateSetting(componentId, patch);
-        saved += 1;
-      }
-      setProgress('');
-      setResult(`${saved} component settings saved through the authenticated admin API. No inventory, availability, checkout or packing policy was changed.`);
-      setPreview(null); setConfirmed(false);
-    } catch (error) {
-      setProgress('');
-      setProblem(`Stopped after ${saved} successful saves. ${commerceError(error)} Review again to resume; saved records will be skipped. No automatic retries were made.`);
-      setPreview(null); setConfirmed(false);
-    } finally {
-      setWorking(false);
-      await onSaved();
-    }
-  };
-  return <section className="admin-panel" aria-label="Owner starting prices review">
-    <h2>One-time starting price setup</h2>
-    <p className="gb-help">Review the owner&apos;s October 28 prices for 74 fixed Gift Box components. Only currently missing prices and names can be saved. Existing different approved prices are protected. This does not approve inventory, physical packing, availability or gift checkout.</p>
-    <button type="button" className="button button-secondary" onClick={scan} disabled={working}>Review starting prices</button>
-    {preview && <div role="region" aria-label="Starting price change preview">
-      <p><strong>{preview.updates.length}</strong> updates · <strong>{preview.unchanged.length}</strong> already correct · <strong>{preview.conflicts.length}</strong> price conflicts</p>
-      <p className="gb-help">Boxes EGP 200 · Roses EGP 30 · Plush EGP 500 · Chocolates EGP 100 · Ribbons EGP 50 · Gift card EGP 50. Print and engraving option pricing is managed separately.</p>
-      {preview.conflicts.length > 0 && <p role="alert">Existing approved prices differ for: {preview.conflicts.map(item => item.componentId).join(', ')}. The import is blocked; review those settings individually.</p>}
-      {preview.updates.length > 0 && preview.conflicts.length === 0 && <>
-        <label className="gb-check"><input type="checkbox" disabled={working} checked={confirmed} onChange={event => setConfirmed(event.target.checked)}/>I confirm these are the current approved prices to save in production. No stock availability is being approved.</label>
-        <button type="button" className="button button-primary" disabled={!confirmed || working} onClick={apply}>{working ? 'Applying…' : `Save ${preview.updates.length} approved price records`}</button>
-      </>}
-      {preview.updates.length === 0 && preview.conflicts.length === 0 && <p role="status">All 74 starting prices are already saved. No action required.</p>}
-    </div>}
-    {progress && <p role="status">{progress}</p>}
-    {result && <p role="status">{result}</p>}
-    {problem && <p role="alert">{problem}</p>}
-  </section>;
-}
-
-function MadeToOrderActivation({ onSaved }) {
-  const [preview, setPreview] = useState(null), [confirmed, setConfirmed] = useState(false);
-  const [working, setWorking] = useState(false), [message, setMessage] = useState('');
-  async function scan() {
-    setMessage(''); setConfirmed(false); setPreview(null);
-    try { setPreview(planMadeToOrderActivation((await getCatalog(undefined, true)).components)); }
-    catch (error) { setMessage(commerceError(error)); }
-  }
-  async function apply() {
-    if (!confirmed || !preview || working || preview.conflicts.length) return;
-    setWorking(true); setMessage('');
-    let saved = 0;
-    try {
-      const current = planMadeToOrderActivation((await getCatalog(undefined, true)).components);
-      if (JSON.stringify(current) !== JSON.stringify(preview)) throw new Error('Availability settings changed; review again before saving.');
-      for (const { componentId, patch } of current.updates) {
-        setMessage(`Saving ${saved + 1} / ${current.updates.length} — ${componentId}`);
-        await updateSetting(componentId, patch);
-        saved += 1;
-      }
-      const after = planMadeToOrderActivation((await getCatalog(undefined, true)).components);
-      if (after.updates.length || after.conflicts.length) throw new Error('Some settings still need review.');
-      setMessage(`All 74 components are enabled and available; 53 made to order and 21 status-only ribbons. Saved ${saved} updates. No prices, checkout settings or packing approvals were changed.`);
-      setPreview(null); setConfirmed(false);
-    } catch (error) {
-      setMessage(`Stopped after ${saved} saves: ${commerceError(error)}. Review again to safely resume; no automatic retries.`);
-      setPreview(null); setConfirmed(false);
-    } finally { setWorking(false); await onSaved(); }
-  }
-  return <section className="admin-panel" aria-label="Made to order availability">
-    <h2>Made-to-order availability</h2>
-    <p className="gb-help">All 74 components can be available without numeric stock. Existing prices stay untouched. This does not enable checkout or assert unlimited physical capacity.</p>
-    <button type="button" className="button button-secondary" disabled={working} onClick={scan}>Review all component availability</button>
-    {preview && <div role="region" aria-label="Availability plan">
-      <p>{preview.updates.length} to update · {preview.unchanged.length} already configured · {preview.conflicts.length} conflicts</p>
-      {preview.conflicts.length > 0 && <p role="alert">Cannot apply until resolved: {preview.conflicts.map(x => x.id).join(', ')}</p>}
-      {preview.updates.length > 0 && preview.conflicts.length === 0 && <>
-        <label className="gb-check"><input type="checkbox" checked={confirmed} disabled={working} onChange={e => setConfirmed(e.target.checked)}/>I confirm all 74 components are available and the non-ribbon items are made to order. Packing and checkout are separate.</label>
-        <button type="button" className="button button-primary" disabled={!confirmed || working} onClick={apply}>{working ? 'Applying…' : `Save ${preview.updates.length} availability updates`}</button>
-      </>}
-      {preview.updates.length === 0 && preview.conflicts.length === 0 && <p role="status">All 74 are already available and configured.</p>}
-    </div>}
-    {message && <p role="status">{message}</p>}
-  </section>;
-}
-
 export default function AdminGiftBoxComponentsPage() {
   const session = useSession(), cache = useQueryClient();
   const [category, setCategory] = useState('box');
@@ -196,10 +89,8 @@ export default function AdminGiftBoxComponentsPage() {
   const components = (query.data?.components || []).filter(item => item.category === category);
   async function saved() { await Promise.all([cache.invalidateQueries({ queryKey: key }), cache.invalidateQueries({ queryKey: ['gift-box', 'catalog'] }), cache.invalidateQueries({ queryKey: ['private', session.ownerKey, 'gift-box-estimate'] })]); }
   return <AdminLayout title="Gift Box Components" description="Edit names, order, approved prices and availability for the fixed builder catalog. Identities, artwork, colors and placement rules are code-owned." busy={query.isPending}>
-    {!query.isPending && !query.error && (query.data?.components?.length === 74 && query.data.components.every(item => item.pricing === "paid" && Number.isSafeInteger(item.pricePiastres) && item.pricePiastres > 0) ? <section className="admin-panel"><p role="status">All 74 component prices are saved and approved. No price import needed.</p></section> : <StartingPricesReview onSaved={saved}/>)}
-    {!query.isPending && !query.error && <MadeToOrderActivation onSaved={saved}/> }
     {query.isPending ? <p role="status">Loading fixed components…</p> : query.error ? <div className="admin-state"><p role="alert">{commerceError(query.error)}</p><button onClick={() => query.refetch()}>Retry components</button></div> : <>
-      <label className="gb-category-label">Component category<select value={category} onChange={event => setCategory(event.target.value)}>{Object.entries(categoryNames).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+      <label className="gb-category-label">Component category<Select value={category} onChange={event => setCategory(event.target.value)}>{Object.entries(categoryNames).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</Select></label>
       {!components.length ? <p className="gb-empty">No approved fixed definitions exist in this category yet.</p> : <><CategoryOrder key={category} category={category} components={components} onSaved={saved}/><div className="gb-settings">{components.map(item => <SettingEditor key={item.componentId} component={item} onSaved={saved}/>)}</div></>}
     </>}
   </AdminLayout>;

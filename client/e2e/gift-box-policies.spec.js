@@ -1,3 +1,4 @@
+import { chooseOption } from './select-option.js';
 import { expect, test } from '@playwright/test';
 import { mockCommerce } from './commerce-fixtures.js';
 
@@ -55,8 +56,8 @@ async function mockPolicies(page, options = {}) {
   return { state, calls };
 }
 async function addComponent(page, category, id) {
-  await page.getByRole('combobox', { name: 'Component category', exact: true }).selectOption(category);
-  await page.getByRole('combobox', { name: 'Compatible component', exact: true }).selectOption(id);
+  await chooseOption(page.getByRole('combobox', { name: 'Component category', exact: true }), category);
+  await chooseOption(page.getByRole('combobox', { name: 'Compatible component', exact: true }), id);
   await page.getByRole('button', { name: 'Add compatible component', exact: true }).click();
 }
 async function fillRules(page) {
@@ -68,7 +69,7 @@ async function fillRules(page) {
   await addComponent(page, 'ribbon', 'ribbon-navy');
   for (const [name, value] of [['Overall maximum units', '2'], ['Maximum flower units', '2'], ['Maximum plush units', '0'], ['Maximum chocolate units', '0']]) await page.getByRole('spinbutton', { name, exact: true }).fill(value);
   for (const name of ['flowers + plush', 'flowers + chocolates', 'plush + chocolates', 'flowers + plush + chocolates']) await page.getByRole('spinbutton', { name: `Mixed ${name} limit`, exact: true }).fill('0');
-  await page.getByRole('combobox', { name: 'Lid requirement', exact: true }).selectOption('must_close');
+  await chooseOption(page.getByRole('combobox', { name: 'Lid requirement', exact: true }), 'must_close');
   await page.getByRole('textbox', { name: 'Lid and clearance instructions', exact: true }).fill(syntheticPacking().clearanceNotes);
   await page.getByRole('textbox', { name: 'Safe packing and transport instructions', exact: true }).fill(syntheticPacking().transportNotes);
 }
@@ -82,16 +83,16 @@ test.afterEach(({ page }) => expect(pageErrors.get(page)).toEqual([]));
 
 test('twelve pending policies have blank capacities and never gain approval from loading or saving a blank draft', async ({ page }) => {
   const fixture = await mockPolicies(page); await page.goto(path);
-  await expect(page.getByRole('heading', { name: 'Gift Box Packing Policies', exact: true })).toBeVisible();
-  await expect(page.getByRole('combobox', { name: 'Box', exact: true }).locator('option')).toHaveCount(12);
+  await expect(page.getByRole('heading', { name: 'Gift Box', exact: true, level: 1 })).toBeVisible(); await expect(page.locator('.owner-workspace-tabs a[aria-current=page]')).toHaveText('Packing policies');
+  await page.getByRole('combobox', { name: 'Box', exact: true }).click(); await expect(page.getByRole('option')).toHaveCount(12); await page.keyboard.press('Escape');
   await expect(page.getByRole('spinbutton', { name: 'Overall maximum units', exact: true })).toHaveValue('');
-  await expect(page.getByRole('combobox', { name: 'Lid requirement', exact: true })).toHaveValue('');
+  await expect(page.getByRole('combobox', { name: 'Lid requirement', exact: true })).toHaveAttribute('data-selected-value', '');
   await expect(page.getByRole('button', { name: 'Approve saved policy', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Save policy draft', exact: true }).click();
   await expect(page.getByText('Policy draft saved. It has not been approved.', { exact: true })).toBeVisible();
   expect(fixture.calls.find(call => call.method === 'PUT').body).toEqual({ expectedRevision: 0, rules: null, packing: null });
   expect(fixture.calls.some(call => call.suffix.endsWith('/approve'))).toBe(false);
-  await expect(page.getByText('Public gift purchasing is closed.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Physical packing needs your review.', { exact: true })).toBeVisible();
   expect(fixture.state.get('box-1').activePublication).toBeNull();
 });
 
@@ -104,7 +105,7 @@ test('structured draft publishes explicit owner evidence, records version histor
   expect(saved.rules.componentRules[0]).toMatchObject({ componentId: 'rose-red', maxQuantity: 2, allowedRegionIds: ['fixture-inside'] });
   expect(saved).not.toHaveProperty('approvedBy'); expect(saved).not.toHaveProperty('policyHash');
   await attest(page); await page.getByRole('button', { name: 'Approve saved policy', exact: true }).click();
-  await expect(page.getByText('Reviewed policy version published. Public gift purchasing remains disabled.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Reviewed packing policy published.', { exact: true })).toBeVisible();
   expect(fixture.calls.find(call => call.suffix.endsWith('/approve')).body).toMatchObject({ expectedRevision: 1, confirmPackingTested: true, confirmSafeTransport: true, confirmLidChecked: true });
   await page.getByText('Version 1 · Approved', { exact: true }).click();
   await expect(page.getByText('Synthetic fixture tested two roses, closed lid and safe transport.', { exact: true })).toBeVisible();
@@ -152,7 +153,7 @@ test('approval requires explicit evidence and attestations and remains disabled 
 });
 
 test('Box 11 records separate compartments and oversized plush beside permission through ordinary form controls', async ({ page }) => {
-  const fixture = await mockPolicies(page); await page.goto(path); await page.getByRole('combobox', { name: 'Box', exact: true }).selectOption('box-11');
+  const fixture = await mockPolicies(page); await page.goto(path); await chooseOption(page.getByRole('combobox', { name: 'Box', exact: true }), 'box-11');
   await expect(page.getByText(/BOX-11 requires two separately reviewed compartments/)).toBeVisible();
   for (const index of [1, 2]) {
     await page.getByRole('button', { name: 'Add compartment', exact: true }).click();
@@ -160,11 +161,11 @@ test('Box 11 records separate compartments and oversized plush beside permission
     await page.getByRole('spinbutton', { name: `Compartment maximum ${index}`, exact: true }).fill('1');
     await page.getByRole('button', { name: 'Add placement region', exact: true }).click();
     await page.getByRole('textbox', { name: `Region ID ${index}`, exact: true }).fill(`fixture-region-${index}`);
-    await page.getByRole('combobox', { name: `Region compartment ${index}`, exact: true }).selectOption(`fixture-well-${index}`);
+    await chooseOption(page.getByRole('combobox', { name: `Region compartment ${index}`, exact: true }), `fixture-well-${index}`);
   }
   await page.getByRole('button', { name: 'Add placement region', exact: true }).click();
   await page.getByRole('textbox', { name: 'Region ID 3', exact: true }).fill('fixture-beside');
-  await page.getByRole('combobox', { name: 'Region zone 3', exact: true }).selectOption('beside');
+  await chooseOption(page.getByRole('combobox', { name: 'Region zone 3', exact: true }), 'beside');
   await expect(page.getByRole('combobox', { name: 'Region compartment 3', exact: true })).toBeDisabled();
   await addComponent(page, 'plush', 'plush-1');
   await page.getByRole('spinbutton', { name: 'Maximum quantity: Fixture Plush One', exact: true }).fill('1');
@@ -174,7 +175,7 @@ test('Box 11 records separate compartments and oversized plush beside permission
   await addComponent(page, 'ribbon', 'ribbon-navy');
   for (const [name, value] of [['Overall maximum units', '1'], ['Maximum flower units', '0'], ['Maximum plush units', '1'], ['Maximum chocolate units', '0']]) await page.getByRole('spinbutton', { name, exact: true }).fill(value);
   for (const name of ['flowers + plush', 'flowers + chocolates', 'plush + chocolates', 'flowers + plush + chocolates']) await page.getByRole('spinbutton', { name: `Mixed ${name} limit`, exact: true }).fill('0');
-  await page.getByRole('combobox', { name: 'Lid requirement', exact: true }).selectOption('open_presentation');
+  await chooseOption(page.getByRole('combobox', { name: 'Lid requirement', exact: true }), 'open_presentation');
   for (const label of ['Lid and clearance instructions', 'Safe packing and transport instructions', 'Plush handling instructions', 'Box 11 compartment instructions']) await page.getByRole('textbox', { name: label, exact: true }).fill(`Synthetic fixture instructions for ${label}.`);
   await page.getByRole('button', { name: 'Save policy draft', exact: true }).click();
   await expect(page.getByText('Policy draft saved. It has not been approved.', { exact: true })).toBeVisible();
@@ -236,12 +237,12 @@ test('draft region names align with the current builder, without inventing capac
 
 test('Box 11 preview names keep separate unknown-capacity wells, with no server mutation', async ({ page }) => {
   const fixture = await mockPolicies(page); await page.goto(path);
-  await page.getByRole('combobox', { name: 'Box', exact: true }).selectOption('box-11');
+  await chooseOption(page.getByRole('combobox', { name: 'Box', exact: true }), 'box-11');
   await page.getByRole('button', { name: 'Use builder preview region names (draft only)' }).click();
   await expect(page.getByRole('textbox', { name: 'Region ID 1', exact: true })).toHaveValue('lower-circular-floor');
   await expect(page.getByRole('textbox', { name: 'Region ID 2', exact: true })).toHaveValue('raised-circular-floor');
-  await expect(page.getByRole('combobox', { name: 'Region compartment 1', exact: true })).toHaveValue('lower-well');
-  await expect(page.getByRole('combobox', { name: 'Region compartment 2', exact: true })).toHaveValue('raised-well');
+  await expect(page.getByRole('combobox', { name: 'Region compartment 1', exact: true })).toHaveAttribute('data-selected-value', 'lower-well');
+  await expect(page.getByRole('combobox', { name: 'Region compartment 2', exact: true })).toHaveAttribute('data-selected-value', 'raised-well');
   await expect(page.getByRole('spinbutton', { name: 'Compartment maximum 1', exact: true })).toHaveValue('');
   await expect(page.getByRole('spinbutton', { name: 'Compartment maximum 2', exact: true })).toHaveValue('');
   expect(fixture.calls.some(call => call.method !== 'GET')).toBe(false);
@@ -256,7 +257,7 @@ test('beside chocolate can be selected in a saved draft, without authorizing a p
   await addComponent(page, 'ribbon', 'ribbon-navy');
   for (const [name, value] of [['Overall maximum units', '1'], ['Maximum flower units', '0'], ['Maximum plush units', '0'], ['Maximum chocolate units', '1']]) await page.getByRole('spinbutton', { name, exact: true }).fill(value);
   for (const name of ['flowers + plush', 'flowers + chocolates', 'plush + chocolates', 'flowers + plush + chocolates']) await page.getByRole('spinbutton', { name: `Mixed ${name} limit`, exact: true }).fill('0');
-  await page.getByRole('combobox', { name: 'Lid requirement', exact: true }).selectOption('open_presentation');
+  await chooseOption(page.getByRole('combobox', { name: 'Lid requirement', exact: true }), 'open_presentation');
   await page.getByRole('textbox', { name: 'Lid and clearance instructions', exact: true }).fill('Synthetic tested clearance; not a real approval.');
   await page.getByRole('textbox', { name: 'Safe packing and transport instructions', exact: true }).fill('Synthetic tested transport; not a real approval.');
   await page.getByRole('button', { name: 'Save policy draft', exact: true }).click();

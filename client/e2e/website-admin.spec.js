@@ -1,3 +1,5 @@
+import { ownerFixture } from './owner-dashboard-fixtures.js';
+import { chooseOption } from './select-option.js';
 import { test, expect } from '@playwright/test';
 import { mockCatalog, category, cards } from './catalog-fixtures.js';
 
@@ -43,17 +45,7 @@ async function websiteFixture(page, { role = 'admin' } = {}) {
   return { ...existing, writes, content, reviews, categoryRecord };
 }
 
-test('overview uses customer-relevant catalog metrics and truthful admin links', async ({ page }) => {
-  await websiteFixture(page);
-  await page.goto('/admin/website/overview');
-  await expect(page.getByRole('link', { name: /Publicly listed.*5/ })).toHaveAttribute('href', '/admin/products?visibility=public');
-  await expect(page.getByRole('link', { name: /Import reviews outstanding.*2/ })).toHaveAttribute('href', '/admin/products?reviewRequired=true');
-  await expect(page.locator('.website-metric').filter({ hasText: 'Enquiries only' })).toContainText('4');
-  await expect(page.locator('.website-metric').filter({ hasText: 'Online purchase ready' })).toContainText('1');
-  await expect(page.getByText('Draft products')).toHaveCount(0);
-  await expect(page.getByText('Products on hold')).toHaveCount(0);
-  await expect(page.getByText(/Checkout is disabled pending launch approval/)).toBeVisible();
-});
+
 
 test('admin customer lists request server pages of twenty and expose no customer mutations', async ({ page }) => {
   const fixture = await websiteFixture(page);
@@ -69,55 +61,11 @@ test('admin customer lists request server pages of twenty and expose no customer
   expect(fixture.writes).toHaveLength(0);
 });
 
-test('admin review form authors real-configured content with explicit approval and supports hiding', async ({ page }) => {
-  const fixture = await websiteFixture(page);
-  await page.goto('/admin/website/reviews');
-  await page.getByRole('button', { name: 'Add review', exact: true }).click();
-  await page.getByLabel('Display author name').fill('Isolated quotation author');
-  await page.getByRole('combobox', { name: /^Rating/ }).selectOption('4');
-  await page.getByLabel('Review text', { exact: true }).fill('Isolated authentic-quotation workflow fixture.');
-  await page.getByLabel('Private source/provenance note').fill('Isolated permission/provenance fixture.');
-  await page.getByLabel('Permission to display this authentic quotation is confirmed').check();
-  await page.getByLabel('Owner approval confirmed', { exact: true }).check();
-  await page.locator('form.website-form').getByRole('combobox', { name: /^Publication/ }).selectOption('published');
-  await page.getByLabel('Feature on homepage when published').check();
-  await page.getByRole('button', { name: 'Save review', exact: true }).click();
-  await expect(page.getByRole('cell', { name: 'Isolated quotation author' })).toBeVisible();
-  expect(fixture.writes[0].payload).toMatchObject({ approved: true, consentConfirmed: true, featured: true, status: 'published', rating: 4 });
-  expect(fixture.writes[0].csrf).toBeTruthy();
-  await page.getByRole('button', { name: 'Hide', exact: true }).click();
-  await expect(page.getByRole('cell', { name: 'hidden · Approved' })).toBeVisible();
-  expect(fixture.writes[1].payload).toEqual({ status: 'hidden', expectedRevision: 0 });
-});
 
-test('fixed pages expose an owner guide and links without mutation controls', async ({ page }) => {
-  const fixture = await websiteFixture(page);
-  await page.goto('/admin/website/content');
-  await expect(page.getByRole('heading', { name: 'Pages, policies & owner guide' })).toBeVisible();
-  await expect(page.getByRole('main').getByRole('link', { name: 'Returns & Refunds', exact: true })).toHaveAttribute('href', '/refund-policy');
-  await expect(page.getByRole('button', { name: 'Save section' })).toHaveCount(0);
-  await expect(page.locator('main textarea, main input')).toHaveCount(0);
-  expect(fixture.writes).toHaveLength(0);
-});
 
-test('stale review editor retains a genuine quotation draft until confirmed reload', async ({ page }) => {
-  const fixture = await websiteFixture(page);
-  fixture.reviews.push({ _id: '444444444444444444444444', authorLabel: 'Isolated review author', text: 'Existing isolated quotation', sourceNote: 'Existing private provenance', rating: 5, productId: null, status: 'draft', approved: false, consentConfirmed: true, featured: false, displayOrder: 0, revision: 0 });
-  await page.goto('/admin/website/reviews');
-  await page.getByRole('button', { name: 'Edit', exact: true }).click();
-  await page.getByRole('textbox', { name: 'Review text', exact: true }).fill('My unsaved quotation');
-  fixture.reviews[0].text = 'Other editor quotation'; fixture.reviews[0].revision = 1;
-  await page.getByRole('button', { name: 'Save review', exact: true }).click();
-  await expect(page.getByText('Another editor changed this record. Your unsaved changes are still here. Copy any changes you need before reloading.', { exact: true })).toBeVisible();
-  await expect(page.getByRole('textbox', { name: 'Review text', exact: true })).toHaveValue('My unsaved quotation');
-  await page.getByRole('button', { name: 'Reload latest record', exact: true }).click();
-  await page.getByRole('button', { name: 'Confirm reload and discard draft', exact: true }).click();
-  await expect(page.getByRole('textbox', { name: 'Review text', exact: true })).toHaveValue('Other editor quotation');
-  await page.getByRole('textbox', { name: 'Review text', exact: true }).fill('Reviewed latest quotation');
-  await page.getByRole('button', { name: 'Save review', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Edit review', exact: true })).toHaveCount(0);
-  expect(fixture.writes.map((write) => write.payload.expectedRevision)).toEqual([0, 1]);
-});
+
+
+
 
 test('stale category editor retains merchant changes and reloads the explicit detail contract', async ({ page }) => {
   const fixture = await websiteFixture(page);
@@ -149,24 +97,13 @@ test('category editor reuses protected category API and preserves audited refere
   expect(fixture.writes[0].csrf).toBeTruthy();
 });
 
-test('delivery diagnostics and payment settings are read-only and responsive on a 320px phone', async ({ page }) => {
-  const fixture = await websiteFixture(page);
-  const pageErrors = [];
-  page.on('pageerror', (error) => pageErrors.push(error.message));
-  await page.setViewportSize({ width: 320, height: 800 });
-  await page.goto('/admin/website/notifications');
-  await expect(page.getByRole('cell', { name: 'Delivery uncertain; verify provider records', exact: true })).toBeVisible();
-  await page.getByText('Technical diagnostic', { exact: true }).click();
-  await expect(page.getByText('SMTP_ACCEPTANCE_UNCERTAIN')).toBeVisible();
-  await expect(page.getByText(/automatic retries are suppressed/)).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.locator('.admin-navigation-toggle').click();
-  await page.getByRole('link', { name: 'Payment settings', exact: true }).click();
-  await expect(page.getByText(/disabled pending launch approval/)).toBeVisible();
-  await expect(page.getByText('Verified InstaPay destination: 01060673073')).toBeVisible();
-  await expect(page.getByRole('button', { name: /Enable checkout|Send|Retry email/ })).toHaveCount(0);
-  expect(fixture.writes).toHaveLength(0);
-  expect(pageErrors).toEqual([]);
+test('Payment is read only and diagnostics are absent from owner navigation on a phone', async ({ page }) => {
+ await ownerFixture(page); await page.setViewportSize({ width: 320, height: 800 }); await page.goto('/admin/payment');
+ await expect(page.getByRole('heading', { name: 'Payment', exact: true, level: 1 })).toBeVisible();
+ await expect(page.getByText('01060673073', { exact: true })).toBeVisible();
+ await expect(page.getByRole('button', { name: /Enable checkout|Send|Retry email/ })).toHaveCount(0);
+ await expect(page.getByText('SMTP_ACCEPTANCE_UNCERTAIN')).toHaveCount(0);
+ expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
 test('normal customers cannot reach website administration', async ({ page }) => {
@@ -177,42 +114,12 @@ test('normal customers cannot reach website administration', async ({ page }) =>
   expect(fixture.writes).toHaveLength(0);
 });
 
-test('bundle editor saves explicit homepage publication and uses the existing product-name search contract', async ({ page }) => {
-  const fixture = await websiteFixture(page);
-  const saved = [];
-  const headers = { 'Access-Control-Allow-Origin': 'http://127.0.0.1:5191', 'Access-Control-Allow-Credentials': 'true', 'Access-Control-Allow-Headers': 'content-type,x-csrf-token', 'Access-Control-Allow-Methods': 'GET,POST,PATCH,OPTIONS' };
-  await page.route('**/api/v1/admin/commerce/bundles**', async (route) => {
-    const request = route.request();
-    if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
-    if (request.method() === 'POST') { saved.push(request.postDataJSON()); return route.fulfill({ headers, json: { ok: true, data: { bundle: { _id: '777777777777777777777777', ...saved[0] } } } }); }
-    return route.fulfill({ headers, json: { ok: true, data: { bundles: [], pagination: { page: 1, limit: 20, total: 0, pages: 0 } } } });
-  });
-  await page.goto('/admin/commerce/bundles');
-  await page.getByRole('button', { name: 'Add bundle', exact: true }).click();
-  await page.getByLabel('Bundle name', { exact: true }).fill('Isolated owner bundle');
-  await page.getByLabel('Owner-approved bundle description').fill('Owner-approved isolated bundle description.');
-  await expect(page.getByRole('textbox', { name: 'Owner-approved bundle description', exact: true })).toHaveAttribute('name', 'description');
-  await page.getByLabel('Active', { exact: true }).check();
-  await page.getByLabel('Publish eligible bundle on homepage').check();
-  await page.getByLabel('Fixed discount (EGP)').fill('5');
-  await page.getByRole('button', { name: 'Add bundle product', exact: true }).click();
-  await page.getByLabel('Find product', { exact: true }).fill('Gift 01');
-  await page.getByRole('button', { name: 'Find products', exact: true }).click();
-  await expect.poll(() => fixture.requests.filter((request) => request.path === '/admin/products' && request.params.q === 'Gift 01').length).toBeGreaterThan(0);
-  await page.getByRole('combobox', { name: /^Product/ }).first().selectOption(cards[0]._id);
-  await page.getByRole('button', { name: 'Add bundle product', exact: true }).click();
-  await page.getByRole('combobox', { name: /^Product/ }).nth(1).selectOption(cards[1]._id);
-  await page.getByRole('button', { name: 'Save configuration', exact: true }).click();
-  await expect.poll(() => saved.length).toBe(1);
-  expect(saved[0]).toMatchObject({ published: true, active: true, description: 'Owner-approved isolated bundle description.', discountValue: 500 });
-  expect(saved[0].items).toHaveLength(2);
-  expect(fixture.requests.filter((request) => request.path === '/admin/products').every((request) => !request.params.search)).toBe(true);
-});
+
 
 test('subcategory editing keeps homepage selection main-only and preserves omitted feature metadata', async ({ page }) => {
   const fixture = await websiteFixture(page);
   await page.goto('/admin/website/categories');
-  await page.getByRole('combobox', { name: /^Category group/ }).selectOption(category.slug);
+  await chooseOption(page.getByRole('combobox', { name: /^Category group/ }), category.slug);
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await expect(page.getByLabel('Featured on homepage (main categories only)')).toBeDisabled();
   await expect(page.getByText(/any existing subcategory feature metadata is preserved/)).toBeVisible();

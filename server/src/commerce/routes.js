@@ -29,6 +29,7 @@ import { publicConfigurationRoutes } from './configuration.routes.js';
 import uploadsRouter from './uploads.routes.js';
 import { captureAction, currentConsent, monetaryParameters, ownedPurchaseReceipt } from '../tracking/service.js';
 import { presentOrderSummary } from './order-presentation.js';
+import { ownerOrderView } from './order-list.js';
 import { CommerceJobRun } from '../models/CommerceJobRun.js';
 import { NotificationEvent } from '../models/NotificationEvent.js';
 import { MetaEvent } from '../models/MetaEvent.js';
@@ -49,6 +50,7 @@ const pageSchema = z.object({ page: z.coerce.number().int().min(1).max(200).defa
   q: z.string().trim().max(100).optional(), fulfillmentState: states.shape.fulfillmentState, paymentState: states.shape.paymentState,
   action: z.enum(['awaiting_transfer', 'proof_review', 'shipping_pending', 'follow_up_overdue', 'cancellation_requested', 'refund_review']).optional(),
   sort: z.enum(['newest', 'oldest']).default('newest') }).strict();
+const adminPageSchema = pageSchema.extend({ view: z.enum(['all', 'requires_action', 'unpaid', 'verification', 'preparing', 'completed', 'cancelled']).optional(), type: z.enum(['product', 'gift_box', 'engraving', 'mixed']).optional() });
 const shoppingLimit = rateLimit({ windowMs: 60000, limit: 90, standardHeaders: 'draft-8', legacyHeaders: false });
 const checkoutLimit = rateLimit({ windowMs: 15 * 60000, limit: 20, standardHeaders: 'draft-8', legacyHeaders: false });
 const trackingLimit = rateLimit({ windowMs: 15 * 60000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false });
@@ -66,7 +68,7 @@ export function requireCommerceDatabase(req, res, next) {
 async function listOrders(filter, query, admin) {
   const direction = query.sort === 'oldest' ? 1 : -1;
   const [orders, total] = await Promise.all([
-    Order.find(filter).select('_id orderNumber customer.name customer.governorate totals accountingVersion charges financialSummary followUpDueAt cancellationRequestedAt paymentMethod paymentState fulfillmentState createdAt updatedAt revision').sort({ createdAt: direction, _id: direction }).skip((query.page - 1) * query.limit).limit(query.limit).lean().maxTimeMS(3000),
+    Order.find(filter).select(`_id orderNumber customer.name customer.governorate totals accountingVersion charges financialSummary followUpDueAt cancellationRequestedAt paymentMethod paymentState fulfillmentState createdAt updatedAt revision${admin ? ' lines.kind engraving.items.stage engraving.items.inCustody engraving.collectionAuthorized initialContactAt serviceRequestId responseState proofReviewRequired' : ''}`).sort({ createdAt: direction, _id: direction }).skip((query.page - 1) * query.limit).limit(query.limit).lean().maxTimeMS(3000),
     Order.countDocuments(filter).maxTimeMS(3000),
   ]);
   return { orders: orders.map(order => presentOrderSummary(order, { admin })), pagination: { page: query.page, limit: query.limit, total, pages: Math.ceil(total / query.limit) } };
@@ -204,7 +206,15 @@ adminCommerceRoutes.get('/jobs', async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   res.json({ ok: true, data: { runs, pagination: { page: query.page, limit: query.limit, total, pages: Math.ceil(total / query.limit) }, attention: { notificationDead, notificationUncertain, trackingDead, cleanupReview } } });
 });
-adminCommerceRoutes.get('/orders', async (req, res) => { const query = pageSchema.parse(req.query); res.json({ ok: true, data: await listOrders(orderFilter(query), query, true) }); });
+adminCommerceRoutes.get('/orders', async (req, res) => {
+  const query = adminPageSchema.parse(req.query);
+  const filters = [orderFilter(query), ownerOrderView(query.view)];
+  const kind = { product: 'product', gift_box: 'gift_box_v2', engraving: 'engraving_service_v1' }[query.type];
+  if (kind === 'product') filters.push({ lines: { $elemMatch: { kind: { $nin: ['gift_box_v2', 'engraving_service_v1'] } } } });
+  else if (kind) filters.push({ 'lines.kind': kind });
+  if (query.type === 'mixed') filters.push({ $expr: { $gt: [{ $size: { $setUnion: [{ $map: { input: { $ifNull: ['$lines', []] }, as: 'line', in: { $ifNull: ['$$line.kind', 'product'] } } }, []] } }, 1] } });
+  res.json({ ok: true, data: await listOrders({ $and: filters }, query, true) });
+});
 function adminInventoryClaims(order) {
   return (order.inventoryClaims || []).map(claim => {
     const label = claim.kind === 'product'

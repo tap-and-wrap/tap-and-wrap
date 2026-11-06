@@ -101,21 +101,18 @@ const lines = [{ productId: firstProduct, quantity: 2, unitPricePiastres: 5000, 
 const bundle = () => ({ _id: id(), name: 'Isolated bundle', active: true, items: [{ productId: firstProduct, variantKey: null, quantity: 1 }, { productId: secondProduct, variantKey: null, quantity: 1 }], discountKind: 'percentage', discountValue: 1250, maxApplications: 2, priority: 1 });
 const discount = (patch = {}) => ({ _id: id(), code: 'FIXTURE', name: 'Isolated discount', active: true, kind: 'fixed', value: 500, minimumSubtotalPiastres: 0, maximumDiscountPiastres: null, usageLimit: null, usedCount: 0, authenticatedOnly: false, stackWithBundles: false, productIds: [], categoryIds: [], ...patch });
 
-test('bundle allocations are deterministic, disjoint, quantity-aware and capped', () => {
-  const rule = bundle();
-  const result = evaluatePromotions(lines, [rule, { ...rule, _id: id(), priority: 2 }]);
-  assert.equal(result.subtotalPiastres, 16000);
-  assert.equal(result.discountPiastres, 2000);
-  assert.equal(result.totalPiastres, 14000);
-  assert.equal(result.applied.length, 1);
-  assert.equal(result.applied[0].applications, 2);
-});
+test('retired bundle rules cannot affect current totals and are not mutated', () => {
+   const rules = [bundle(), { ...bundle(), priority: 2 }], before = JSON.stringify(rules);
+   const result = evaluatePromotions(lines, rules);
+   assert.equal(result.subtotalPiastres, 16000); assert.equal(result.discountPiastres, 0); assert.equal(result.totalPiastres, 16000); assert.deepEqual(result.applied, []);
+   assert.equal(JSON.stringify(rules), before);
+ });
 
-test('discount calculations enforce stacking, expiry, eligibility, limits and nonnegative totals', () => {
-  assert.throws(() => evaluatePromotions(lines, [bundle()], discount()));
+test('discount calculations enforce retirement, expiry, eligibility, limits and nonnegative totals', () => {
+  assert.equal(evaluatePromotions(lines, [bundle()], discount()).discountPiastres, 500);
   const stacked = evaluatePromotions(lines, [bundle()], discount({ stackWithBundles: true, kind: 'percentage', value: 1000 }));
-  assert.equal(stacked.discountPiastres, 3400);
-  assert.equal(stacked.totalPiastres, 12600);
+  assert.equal(stacked.discountPiastres, 1600);
+  assert.equal(stacked.totalPiastres, 14400);
   assert.equal(evaluatePromotions(lines, [], discount({ value: 100000 })).totalPiastres, 0);
   assert.throws(() => evaluatePromotions(lines, [], discount({ usageLimit: 1, usedCount: 1 })));
   assert.throws(() => evaluatePromotions(lines, [], discount({ authenticatedOnly: true })));
@@ -172,12 +169,12 @@ test('approved template pricing cannot be edited in place through document save 
   await assert.rejects(configuration.save(), /immutable/i);
 });
 
-test('specific bundle variants are allocated before wildcard entries of the same product', () => {
+test('historical variant-specific bundle rules cannot allocate current inventory or discounts', () => {
   const productId = String(id());
   const configured = { ...bundle(), maxApplications: 1, items: [{ productId, variantKey: null, quantity: 1 }, { productId, variantKey: 'red', quantity: 1 }] };
   const result = evaluatePromotions([{ productId, variantKey: 'red', quantity: 1, unitPricePiastres: 1000 }, { productId, variantKey: 'blue', quantity: 1, unitPricePiastres: 2000 }], [configured]);
-  assert.equal(result.applied.length, 1);
-  assert.equal(result.discountPiastres, 375);
+  assert.equal(result.applied.length, 0);
+  assert.equal(result.discountPiastres, 0);
 });
 
 test('valid stored hyphenated template fields and upper bounds remain supported without schema relaxation', async () => {

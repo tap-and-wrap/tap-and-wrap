@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
 import { FeaturedCategories, BestSellerProducts } from '../components/HomeCatalog.jsx';
-import { ApprovedFaq, DeveloperHeroMedia, PublishedBundles, ReviewMarquee } from '../components/PublicContent.jsx';
+import { ApprovedFaq, DeveloperHeroMedia, ReviewMarquee } from '../components/PublicContent.jsx';
 import ServiceFilm from '../components/ServiceFilm.jsx';
 import BrandIconMarquee from '../components/BrandIconMarquee.jsx';
 import RibbonOpening from '../components/RibbonOpening.jsx';
@@ -24,7 +24,6 @@ export default function HomePage() {
       </div>
     </section>
     <BrandIconMarquee />
-    <PublishedBundles />
     <section className="section" aria-labelledby="home-categories-heading"><div className="section-heading"><p className="eyebrow">BROWSE WITH LOVE</p><h2 id="home-categories-heading">Shop by Category</h2></div><FeaturedCategories /></section>
     <section className="section" aria-labelledby="home-featured-heading"><div className="section-heading"><p className="eyebrow">HANDPICKED FOR YOU</p><h2 id="home-featured-heading">Featured Gifts</h2><p>Thoughtful picks from our collection.</p></div><BestSellerProducts /><div className="home-section-footer"><Link className="button button-dark home-shop-all" to="/shop">Shop All</Link></div></section>
     <section className="section service-section" aria-labelledby="home-personal-heading"><div className="section-heading"><p className="eyebrow">MAKE IT YOURS</p><h2 id="home-personal-heading">A gift as unique as them</h2></div><div className="service-grid home-service-grid">

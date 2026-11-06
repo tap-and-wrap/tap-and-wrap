@@ -1,5 +1,6 @@
 import { engravingCollectionAllowed } from '../engraving/payment-policy.js';
 import { validEngravingLine } from '../engraving/contracts.js';
+import { orderItemTypes, orderActionLabel } from './order-list.js';
 import { isFreePresentation } from '../../../shared/gift-box/presentation.mjs';
 // Order snapshots contain Mixed fields for immutable historical records. Customer
 // responses must explicitly select their public contract, never spread a record.
@@ -131,5 +132,5 @@ export function presentOrderSummary(order, { admin = false } = {}) {
   return { ...pick(order, ['orderNumber', 'paymentMethod', 'paymentState', 'fulfillmentState', 'createdAt', 'updatedAt', 'revision']),
     accountingVersion: order.accountingVersion || 0, financialSummary: pick(order.financialSummary, ['collectedPiastres', 'refundedPiastres', 'outstandingPiastres', 'unresolvedCharges', 'refundReviewRequired']), followUpDueAt: order.followUpDueAt,
     id: String(order._id), _id: String(order._id), totals: pick(order.totals, ['subtotalPiastres', 'discountPiastres', 'shippingPiastres', 'totalPiastres']),
-    ...(admin ? { customer: pick(order.customer, ['name', 'governorate']) } : {}) };
+    ...(admin ? { customer: pick(order.customer, ['name', 'governorate']), itemTypes: orderItemTypes(order), serviceStages: [...new Set((order.engraving?.items || []).map(item => item.stage))], actionRequired: orderActionLabel(order) } : {}) };
 }

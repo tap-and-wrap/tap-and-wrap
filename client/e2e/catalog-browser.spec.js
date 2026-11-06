@@ -1,3 +1,4 @@
+import { chooseOption } from './select-option.js';
 import { test, expect } from '@playwright/test';
 import { adminProduct, detail, mockCatalog } from './catalog-fixtures.js';
 
@@ -19,17 +20,17 @@ test('shop requests twenty products and keeps server filters, counts, sorting an
   expect(fixture.requests.find((item) => item.path === '/public/products').params).toMatchObject({ page: '2', limit: '20' });
   await page.getByRole('button', { name: 'Next page', exact: true }).click();
   await expect(page.locator('.catalog-card')).toHaveCount(1);
-  await page.getByRole('combobox', { name: 'Sort by', exact: true }).selectOption('price_desc');
+  await chooseOption(page.getByRole('combobox', { name: 'Sort by', exact: true }), 'price_desc');
   await expect(page).toHaveURL(/sort=price_desc/);
   await expect(page.locator('.catalog-card').first()).toContainText('Fixture Gift 41');
   const filters = page.locator('.catalog-sidebar');
   await expect(filters.getByRole('slider')).toHaveCount(0);
   await expect(filters.locator('summary')).toHaveText(['Category', 'Availability', 'Price']);
   await filters.locator('summary').filter({ hasText: /^Category$/ }).click();
-  await filters.getByRole('combobox', { name: 'Category', exact: true }).selectOption('fixture-gifts');
+  await chooseOption(filters.getByRole('combobox', { name: 'Category', exact: true }), 'fixture-gifts');
   await expect(filters.getByRole('combobox', { name: 'Subcategory', exact: true })).toHaveCount(0);
   await filters.locator('summary').filter({ hasText: /^Availability$/ }).click();
-  await filters.getByLabel('Availability').selectOption('available');
+  await chooseOption(filters.getByLabel('Availability'), 'available');
   await filters.locator('summary').filter({ hasText: /^Price$/ }).click();
   await filters.getByLabel('Minimum price (EGP)').fill('12.00');
   await filters.getByLabel('Maximum price (EGP)').fill('15.00');
@@ -61,7 +62,7 @@ test('mobile drawers contain focus, support Escape and apply and clear filters',
   await expect(trigger).toBeFocused();
   await trigger.click();
   await dialog.locator('summary').filter({ hasText: /^Availability$/ }).click();
-  await dialog.getByLabel('Availability').selectOption('sold_out');
+  await chooseOption(dialog.getByLabel('Availability'), 'sold_out');
   await dialog.getByRole('button', { name: 'View Results' }).click();
   await expect(page.locator('.catalog-results-toolbar')).toContainText('1 product');
   await trigger.click();
@@ -113,16 +114,16 @@ test('product gallery, required options, stock and sticky controls preserve serv
   // The chooser has multiple native Gallery/Camera/Files inputs, all scoped to the configured requirement.
   await expect(page.locator('input[type=file]')).toHaveCount(3);
   await expect(page.getByRole('link', { name: 'Customize This' })).toHaveCount(0);
-  await page.getByLabel('Choose size / color').selectOption('small-rose');
+  await chooseOption(page.getByLabel('Choose size / color'), 'small-rose');
   await expect(page.locator('.product-price')).toContainText('12.34');
   await page.getByRole('button', { name: 'Increase quantity' }).click();
   await expect(page.getByLabel('Quantity', { exact: true })).toHaveValue('2');
   await page.getByLabel('Quantity', { exact: true }).fill('20');
   await expect(page.getByLabel('Quantity', { exact: true })).toHaveValue('3');
-  await page.getByLabel('Choose size / color').selectOption('large-rose');
+  await chooseOption(page.getByLabel('Choose size / color'), 'large-rose');
   await expect(page.locator('.product-stock-status')).toHaveText('Online purchase unavailable · Enquire on WhatsApp');
   await expect(page.locator('.product-purchase-section').getByRole('link', { name: 'Enquire on WhatsApp', exact: true })).toBeVisible();
-  await page.getByLabel('Choose size / color').selectOption('small-rose');
+  await chooseOption(page.getByLabel('Choose size / color'), 'small-rose');
   await expect(page.getByRole('button', { name: 'Add to Cart', exact: true })).toBeEnabled();
   await expect(page.locator('.product-related .catalog-card')).toHaveCount(4);
   await page.locator('.product-related').evaluate((element) => element.scrollIntoView({ block: 'start' }));
@@ -161,8 +162,9 @@ test('admin requires protected server verification and paginates its product tab
   await page.getByRole('button', { name: 'Next page', exact: true }).click();
   await expect(page.getByText('Page 2 of 3')).toBeVisible();
   expect(fixture.requests.filter((item) => item.path === '/admin/products').at(-1).params).toMatchObject({ page: '2', limit: '20' });
-  await page.getByRole('combobox', { name: 'Original catalog status', exact: true }).selectOption('draft');
-  await page.getByRole('combobox', { name: 'Sort products', exact: true }).selectOption('name_desc');
+  await page.getByText('More filters', { exact: true }).click();
+  await chooseOption(page.getByRole('combobox', { name: 'Original catalog status', exact: true }), 'draft');
+  await chooseOption(page.getByRole('combobox', { name: 'Sort products', exact: true }), 'name_desc');
   await expect(page).toHaveURL(/status=draft/);
   await expect.poll(() => fixture.requests.filter((item) => item.path === '/admin/products').at(-1).params.sort).toBe('name_desc');
   expect(fixture.requests.filter((item) => item.path === '/admin/products').at(-1).params).toMatchObject({ page: '1', status: 'draft', sort: 'name_desc' });
@@ -174,7 +176,7 @@ test('admin edits invalidate approval and preserve untouched configuration and m
   await expect(page.getByLabel('Product name', { exact: true })).toHaveValue(adminProduct.name);
   await page.getByRole('textbox', { name: /^Price \(EGP\)/ }).fill('12.34');
   await expect(page.getByLabel('Approve product price', { exact: true })).toHaveCount(0);
-  await page.getByRole('combobox', { name: 'Product availability', exact: true }).selectOption('made_to_order');
+  await chooseOption(page.getByRole('combobox', { name: 'Product availability', exact: true }), 'made_to_order');
   await expect(page.getByLabel('Approve product inventory', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Set image 2 as main' }).click();
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
@@ -196,7 +198,7 @@ test('admin add form requires a real quantity and shows server validation feedba
   await expect(page.getByLabel('Approve product inventory', { exact: true })).toHaveCount(0);
   await page.getByLabel('Product quantity', { exact: true }).fill('4');
   await page.getByLabel('Product name', { exact: true }).fill('Fixture New Product');
-  await page.getByRole('combobox', { name: 'Main category', exact: true }).selectOption('111111111111111111111111');
+  await chooseOption(page.getByRole('combobox', { name: 'Main category', exact: true }), '111111111111111111111111');
   await page.getByRole('button', { name: 'Save product', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Approve price before publication.');
 });

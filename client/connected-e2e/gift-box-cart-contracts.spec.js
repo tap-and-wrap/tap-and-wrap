@@ -1,3 +1,4 @@
+import { chooseOption } from '../e2e/select-option.js';
 import { test, expect } from '@playwright/test';
 
 const api = 'http://127.0.0.1:' + (process.env.TAP_WRAP_CONTRACT_API_PORT || 4092);
@@ -42,10 +43,11 @@ test('real mixed cart persists one configured gift, updates quantities and keeps
   await page.goto('/cart');
   const gift = page.getByRole('article', { name: 'Build Your Gift Box' });
   await expect(gift.getByRole('heading', { name: 'Build Your Gift Box' })).toBeVisible();
-  await expect(gift.getByText(/Synthetic rose-red/)).toBeVisible();
-  await expect(gift.getByText(/Synthetic chocolate-1/)).toBeVisible();
+  await expect(gift.locator('.commerce-gift-description')).toContainText('Synthetic rose-red');
+  await expect(gift.locator('.commerce-gift-description')).toContainText('Synthetic chocolate-1');
   await expect(gift.locator('img')).toHaveCount(1);
   await expect(gift.getByText('Private fixture message', { exact: true })).toBeHidden();
+  await gift.getByText('View design and details', { exact: true }).click();
   await gift.getByText('View gift-card message', { exact: true }).click();
   await expect(gift.getByText('Private fixture message', { exact: true })).toBeVisible();
   for (const width of [320, 1440]) {
@@ -53,7 +55,7 @@ test('real mixed cart persists one configured gift, updates quantities and keeps
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
     await page.screenshot({ path: info.outputPath(`connected-mixed-cart-${width}.png`), fullPage: true });
   }
-  await gift.getByRole('combobox', { name: 'Quantity for Build Your Gift Box' }).selectOption('2');
+  await chooseOption(gift.getByRole('combobox', { name: 'Quantity for Build Your Gift Box' }), '2');
   await expect.poll(async () => (await currentCart(context)).subtotalPiastres).toBe(206000);
   await expect(page.getByRole('button', { name: 'Checkout unavailable', exact: true })).toBeDisabled();
   const denied = await context.request.post(`${api}/api/v1/commerce/checkout/quote`, { headers: await csrf(context),

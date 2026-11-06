@@ -1,3 +1,4 @@
+import Select from '../components/form/Select.jsx';
 import { useEffect, useId, useState } from 'react';
 import { FieldError, fieldErrorProps } from '../components/FormFeedback.jsx';
 import ImageSourceChooser, { IMAGE_FORMAT_HELP } from '../components/ImageSourceChooser.jsx';
@@ -67,7 +68,7 @@ export default function ConfiguredFields({ fields = [], values, onChange, errors
     // Leave enough native capacity for valid emoji, then enforce the actual limit above.
     const props = { id, name: field.key, value, disabled, required: field.required, ...fieldErrorProps(id, errors[field.key], (field.maxLength || field.maxChars) ? `${id}-help` : ''), onChange: (event) => change(event.target.value), maxLength: 2 * (field.maxLength ?? field.maxChars ?? 2000) };
     return <div key={field.key} className="commerce-field"><label htmlFor={id}>{field.label}{field.required ? ' *' : ''}</label>
-      {field.type === 'select' ? <select {...props}><option value="">Select an option</option>{(field.options || (field.choices || []).map((key) => ({ key, label: key }))).map((choice) => <option key={choice.key} value={choice.key}>{choice.label}</option>)}</select> : ['textarea', 'long_text'].includes(field.type) ? <textarea {...props} rows={3} /> : <input {...props} type="text" />}
+      {field.type === 'select' ? <Select {...props}><option value="">Select an option</option>{(field.options || (field.choices || []).map((key) => ({ key, label: key }))).map((choice) => <option key={choice.key} value={choice.key}>{choice.label}</option>)}</Select> : ['textarea', 'long_text'].includes(field.type) ? <textarea {...props} rows={3} /> : <input {...props} type="text" />}
       {(field.maxLength || field.maxChars) && <small id={`${id}-help`}>{Array.from(value).length}/{field.maxLength || field.maxChars} characters</small>}
       <FieldError id={id}>{errors[field.key]}</FieldError>
     </div>;

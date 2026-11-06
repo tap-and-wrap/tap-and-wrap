@@ -1,3 +1,4 @@
+import { chooseOption } from './select-option.js';
 import { chooseImageFiles } from './media-helpers.js';
 import { test, expect } from '@playwright/test';
 import { mockCommerce, isolatedImageFile } from './commerce-fixtures.js';
@@ -43,26 +44,6 @@ async function fixture(page, { role, empty = false, initial, loseFirst = false, 
 async function contact(page) { await page.getByLabel('Your name', { exact: true }).fill('Isolated Customer'); await page.getByLabel('Egyptian WhatsApp number').fill('01012345678'); }
 async function gift(page) { await page.getByLabel('Occasion', { exact: true }).fill('Birthday'); await page.getByLabel('Desired contents').fill('A bespoke gift based on my instructions'); await contact(page); }
 
-test('merchant explicitly selects component request eligibility and real stock without approving imported quantity', async ({ page }) => {
-  await mockCommerce(page, { role: 'admin' }); const writes = [];
-  await page.route('**/api/v1/admin/commerce/components/*', async route => {
-    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
-    if (route.request().method() !== 'PATCH') return route.fallback();
-    const patch = route.request().postDataJSON(); writes.push(patch);
-    return route.fulfill({ headers, json: { ok: true, data: { component: { _id: '710000000000000000000030', ...patch, revision: 1 } } } });
-  });
-  await page.goto('/admin/commerce/components'); await page.getByRole('button', { name: /^Edit Configured Card/ }).click();
-  await expect(page.getByLabel('Actual stock quantity')).toHaveValue('');
-  await expect(page.getByLabel('Owner approved for quotation requests')).toHaveCount(0); await page.getByLabel('Gift Box requests', { exact: true }).check();
-  await page.getByRole('combobox', { name: /^Request availability/ }).selectOption('available');
-  await page.getByRole('combobox', { name: /^Request pricing/ }).selectOption('fixed');
-  await page.getByLabel('Confirmed request unit price (EGP)').fill('25');
-  await page.getByLabel('Actual stock quantity').fill('3'); await page.getByRole('button', { name: 'Save configuration' }).click();
-  await expect.poll(() => writes.length).toBe(1);
-  expect(writes[0].requestPolicy).toEqual({ enabled: true, services: ['gift_box'], availability: 'available', pricing: 'fixed', unitPricePiastres: 2500 });
-  expect(writes[0].inventory).toEqual({ mode: 'tracked', quantity: 3, approved: true, available: true }); expect(writes[0].priceApproved).toBe(false);
-});
-
 test('merchant configures engraving eligibility and human options without a template or base-price approval', async ({ page }) => {
   const data = await mockCatalog(page, { role: 'admin' }); await page.goto(`/admin/products/${adminProduct._id}/edit`);
   await page.getByLabel('Offer this product for engraving quotations').check();
@@ -96,15 +77,15 @@ test('fixed, pending and explicit Free components remain distinct and client sen
 });
 test('engraving accepts an unpriced approved product with only owner-approved options', async ({ page }) => {
   const data = await fixture(page); await page.goto('/customize/laser-engraving');
-  await page.getByRole('combobox', { name: /^Product to engrave/ }).selectOption(product.id); await page.getByLabel('Engraving text', { exact: true }).fill('For Alice');
-  await page.getByRole('combobox', { name: /^Font/ }).selectOption('Owner approved font'); await page.getByRole('combobox', { name: /^Engraving placement/ }).selectOption('Front'); await contact(page);
+  await chooseOption(page.getByRole('combobox', { name: /^Product to engrave/ }), product.id); await page.getByLabel('Engraving text', { exact: true }).fill('For Alice');
+  await chooseOption(page.getByRole('combobox', { name: /^Font/ }), 'Owner approved font'); await chooseOption(page.getByRole('combobox', { name: /^Engraving placement/ }), 'Front'); await contact(page);
   await expect(page.getByText('Material: the owner will confirm options.')).toBeVisible();
   await page.getByRole('button', { name: 'Submit request · No payment now' }).click(); await expect.poll(() => data.submissions.length).toBe(1);
   expect(data.submissions[0].details).toMatchObject({ productId: product.id, font: 'Owner approved font', placement: 'Front' }); expect(data.submissions[0].details).not.toHaveProperty('material');
 });
 test('manual engraving fallback invents no fonts/materials and supports optional local reference images', async ({ page }) => {
   const data = await fixture(page, { empty: true }); await page.goto('/customize/laser-engraving'); await page.getByLabel('Item description or product reference').fill('My own item for suitability review');
-  await page.getByRole('combobox', { name: /^Engraving type/ }).selectOption('design'); await chooseImageFiles(page, page, 'Reference images / artwork', isolatedImageFile()); await contact(page);
+  await chooseOption(page.getByRole('combobox', { name: /^Engraving type/ }), 'design'); await chooseImageFiles(page, page, 'Reference images / artwork', isolatedImageFile()); await contact(page);
   expect(data.uploads).toHaveLength(0); await page.getByRole('button', { name: 'Submit request · No payment now' }).click(); await expect.poll(() => data.submissions.length).toBe(1);
   expect(data.uploads[0]).toMatchObject({ purpose: 'service_reference', requestKey: data.submissions[0].requestKey }); expect(data.submissions[0].details).not.toHaveProperty('font'); expect(data.submissions[0].uploadIds).toHaveLength(1);
 });
@@ -123,7 +104,7 @@ test('admin saves quotation, opens a manual message, records sharing/acceptance 
   await expect(page.getByRole('link', { name: 'Open WhatsApp', exact: true })).toHaveAttribute('href', /^https:\/\/wa.me\//); expect(data.actions).toHaveLength(1);
   await page.getByLabel('Private review / WhatsApp evidence note').fill('Actual manual sharing and customer reply evidence'); await page.getByRole('button', { name: 'Record quotation actually shared' }).click();
   await page.getByLabel('Customer confirmed this version and method through WhatsApp').check(); await page.getByRole('button', { name: 'Record WhatsApp acceptance', exact: true }).click();
-  await page.getByLabel('Agreed delivery governorate').selectOption('cairo'); await page.getByLabel('Agreed delivery address').fill('10 Isolated Delivery Street');
+  await chooseOption(page.getByLabel('Agreed delivery governorate'), 'cairo'); await page.getByLabel('Agreed delivery address').fill('10 Isolated Delivery Street');
   await page.getByRole('button', { name: 'Create order from accepted quotation' }).click(); await expect(page.getByRole('heading', { name: 'Linked order #681243' })).toBeVisible();
   await expect(page.getByText('Payment: Awaiting InstaPay transfer · Fulfillment: received')).toBeVisible(); expect(data.actions.map(action => action.action)).toEqual(['prepare', 'share', 'accept', 'convert']);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); await page.screenshot({ path: 'test-results/batch4b-admin-320.png', fullPage: true });

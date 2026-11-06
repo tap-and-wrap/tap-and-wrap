@@ -1,3 +1,4 @@
+import { chooseOption } from './select-option.js';
 import { chooseImageFiles } from './media-helpers.js';
 import { expect, test } from '@playwright/test';
 import { mockCatalog } from './catalog-fixtures.js';
@@ -342,8 +343,8 @@ test('a verified administrator signing in goes to the dashboard instead of custo
   await page.getByLabel('Email Address', { exact: true }).fill('admin-fixture@example.test');
   await page.getByLabel('Password', { exact: true }).fill('isolated-password-only');
   await page.getByRole('button', { name: 'Log In', exact: true }).click();
-  await expect(page).toHaveURL(/\/admin\/website\/overview$/);
-  await expect(page.locator('header.site-header').getByRole('link', { name: 'Account', exact: true })).toHaveAttribute('href', '/admin');
+  await expect(page).toHaveURL(/\/admin$/);
+  await expect(page.locator('header.site-header').getByRole('link', { name: /^Home.*storefront$/, exact: true })).toHaveAttribute('href', '/');
   expect(fixture.calls.filter((call) => call.path === '/commerce/orders')).toHaveLength(0);
 });
 
@@ -447,7 +448,7 @@ test('adding during session checking announces the guard and requires an explici
     await expect.poll(() => fixture.calls.filter((call) => call.path === '/commerce/cart' && call.method === 'GET').length).toBeGreaterThan(0);
     expect(additions()).toHaveLength(0);
     await add.click();
-    await expect(page.locator('.commerce-announcement')).toContainText('Added to your cart.');
+    await expect(page.locator('[data-sonner-toast]')).toContainText('Added to your cart.');
     expect(additions()).toHaveLength(1);
     expect(fixture.state.cart.quantity).toBe(1);
   } finally { releaseVerification(); }
@@ -479,7 +480,7 @@ test('failed session verification gives actionable cart feedback and safe recove
   expect(additions()).toHaveLength(0);
   await page.locator('.site-header').getByRole('link', { name: 'Shop', exact: true }).click();
   await page.getByRole('button', { name: `Add to Cart: ${commerceProduct.name}`, exact: true }).click();
-  await expect(page.locator('.commerce-announcement')).toContainText('Added to your cart.');
+  await expect(page.locator('[data-sonner-toast]')).toContainText('Added to your cart.');
   expect(additions()).toHaveLength(1);
   expect(fixture.state.cart.quantity).toBe(1);
 });
@@ -516,7 +517,7 @@ test('a late initial cart read cannot replace the successful add snapshot', asyn
     await expect(cartLink).toBeVisible();
     await cartLink.click();
     await expect(page.getByRole('heading', { name: commerceProduct.name, exact: true })).toBeVisible();
-    await expect(page.getByRole('combobox', { name: 'Quantity', exact: true })).toHaveValue('1');
+    await expect(page.getByRole('combobox', { name: 'Quantity', exact: true })).toHaveAttribute('data-selected-value', '1');
     expect(fixture.state.cart.quantity).toBe(1);
   } finally { releaseRead(); page.off('requestfinished', finish); page.off('requestfailed', finish); }
 });
@@ -526,9 +527,9 @@ test('cart feedback can be dismissed without another mutation and restores focus
   await page.goto('/shop');
   const add = page.getByRole('button', { name: `Add to Cart: ${commerceProduct.name}`, exact: true });
   await add.click();
-  await expect(page.getByRole('status').filter({ hasText: 'Added to your cart.' })).toBeVisible();
-  await page.getByRole('button', { name: 'Dismiss cart feedback', exact: true }).click();
-  await expect(page.locator('.commerce-announcement')).toBeHidden();
+  await expect(page.locator('[data-sonner-toast]').filter({ hasText: 'Added to your cart.' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close toast', exact: true }).click();
+  await expect(page.getByText('Added to your cart.', { exact: true })).toHaveCount(0);
   await expect(add).toBeFocused();
   expect(fixture.calls.filter((call) => call.path === '/commerce/cart/items' && call.method === 'POST')).toHaveLength(1);
   expect(fixture.state.cart.quantity).toBe(1);
@@ -554,7 +555,7 @@ test('checkout links invalid delivery fields and preserves the globally disabled
   const options = { cart: cartWithProduct(), checkoutEnabled: true };
   const fixture = await mockCommerce(page, options);
   await page.goto('/checkout');
-  await page.getByLabel('Governorate', { exact: true }).selectOption('cairo');
+  await chooseOption(page.getByLabel('Governorate', { exact: true }), 'cairo');
   await expect(page.getByRole('button', { name: 'Place Order', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Place Order', exact: true }).click();
   await expect(page.getByLabel('Full name', { exact: true })).toBeFocused();

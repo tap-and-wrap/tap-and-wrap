@@ -17,6 +17,10 @@ const families = {
 export function invalidateAdminDependencies(client, domain) {
   const prefixes = families[domain] || [];
   const requests = prefixes.map(queryKey => client.invalidateQueries({ queryKey }));
+  const owner = sessionOwner();
+  for (const family of ['owner-dashboard', 'owner-analytics', 'owner-orders', 'owner-action-orders', 'attention', 'admin-notifications']) {
+    requests.push(client.invalidateQueries({ queryKey: ['private', owner, family] }));
+  }
   if (['products', 'categories', 'templates', 'components', 'bundles', 'discounts', 'shipping'].includes(domain)) {
     const owner = sessionOwner();
     requests.push(client.invalidateQueries({ predicate: query => query.queryKey[0] === 'private' && query.queryKey[1] === owner && ['checkout-config', 'checkout-quote'].includes(query.queryKey[2]) }));

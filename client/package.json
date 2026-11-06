@@ -17,6 +17,7 @@
     "test:contracts": "node scripts/run-contract-tests.js"
   },
   "dependencies": {
+    "@ariakit/react": "^0.4.42",
     "@tanstack/react-query": "^5.90.0",
     "axios": "^1.12.2",
     "lucide-react": "^0.468.0",

@@ -1,3 +1,4 @@
+import { chooseOption } from './select-option.js';
 import { test, expect } from '@playwright/test';
 import { mockCatalog } from './catalog-fixtures.js';
 
@@ -5,14 +6,14 @@ test('shop opens in Discover, keeps explicit sorting and normal pagination', asy
   const fixture = await mockCatalog(page);
   await page.goto('/shop');
   const sort = page.locator('#catalog-sort');
-  await expect(sort).toHaveValue('discovery');
+  await expect(sort).toHaveAttribute('data-selected-value', 'discovery');
   await expect(page.getByRole('heading', { name: 'Shop Our Gifts' })).toBeVisible();
   await expect(page.locator('.catalog-grid .catalog-card')).toHaveCount(20);
   expect(fixture.requests.some(request => request.path === '/public/products' && request.params.sort === 'discovery')).toBe(true);
   await page.getByRole('button', { name: 'Next page' }).click();
   await expect(page).toHaveURL(/page=2/);
-  await expect(page.locator('#catalog-sort')).toHaveValue('discovery');
-  await sort.selectOption('featured');
+  await expect(page.locator('#catalog-sort')).toHaveAttribute('data-selected-value', 'discovery');
+  await chooseOption(sort, 'featured');
   await expect(page).toHaveURL(/sort=featured/);
   await expect(page.getByText('Page 1 of 3')).toBeVisible();
   expect(fixture.requests.some(request => request.path === '/public/products' && request.params.sort === 'featured')).toBe(true);

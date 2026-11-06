@@ -51,7 +51,7 @@ export async function giftBoxFixture(page, options = {}) {
     if (record) return reply({ component: record });
     return reply({ components, pagination: { total: components.length, pages: 1 }, pendingCategories: [], submissionAllowed: false, photoAspectRatios: true, presentationVersion: 'gift-box-presentation-v1',supportedPresentationVersions: options.legacyPresentation ? ['gift-box-presentation-v1'] : ['gift-box-presentation-v1','gift-box-presentation-v2'], directCommerceEnabled: options.directCommerceEnabled === true, freePlacementCommerceEnabled: options.directCommerceEnabled === true, orderableBoxIds: options.directCommerceEnabled ? ['box-2'] : [] });
   });
-  return { ...base, components, estimates, patches, calls, media, recoverCatalog: () => { failCatalog = false; }, recoverEstimate: () => { failEstimate = false; } };
+  return { ...base, commerceCalls: base.calls, components, estimates, patches, calls, media, recoverCatalog: () => { failCatalog = false; }, recoverEstimate: () => { failEstimate = false; } };
 }
 export async function beginGiftBox(page) {
   await page.goto('/customize/gift-box'); await page.getByRole('button', { name: 'Choose Fixture box-2', exact: true }).click();

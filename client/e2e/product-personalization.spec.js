@@ -1,3 +1,4 @@
+import { chooseOption } from './select-option.js';
 import { chooseImageFiles } from './media-helpers.js';
 import { test, expect } from '@playwright/test';
 import { mockCommerce, commerceProduct, isolatedImageFile } from './commerce-fixtures.js';
@@ -17,7 +18,7 @@ async function complete(page, name = 'Alice') {
   await chooseImageFiles(page, dialog, /^Your photo/, isolatedImageFile());
   await dialog.getByLabel(/^Name on your gift/).fill(name);
   await dialog.getByLabel('Your instructions').fill('Keep the original crop');
-  await dialog.getByLabel(/^Gift style/).selectOption('Classic');
+  await chooseOption(dialog.getByLabel(/^Gift style/), 'Classic');
   await dialog.getByRole('button', { name: 'Save personalization' }).click();
 }
 
@@ -46,7 +47,7 @@ test('mobile keyboard dialog, quantity and variant state survive normal navigati
   await mockCommerce(page, { product: { ...product, variants: [{ key: 'large', attributes: [{ name: 'Size', value: 'Large' }], priceApproved: true, pricePiastres: 50000, orderingAvailable: true, inventory: { mode: 'tracked', quantity: 3 } }] } });
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.setViewportSize({ width: 320, height: 900 }); await page.goto(`/products/${product.slug}`);
-  await page.getByLabel('Choose size / color').selectOption('large'); await page.getByLabel('Quantity', { exact: true }).fill('2');
+  await chooseOption(page.getByLabel('Choose size / color'), 'large'); await page.getByLabel('Quantity', { exact: true }).fill('2');
   const opener = purchase(page).getByRole('button', { name: 'Customize This', exact: true }); await opener.click();
   await complete(page); await purchase(page).getByRole('button', { name: 'Edit', exact: true }).click();
   const dialog = page.getByRole('dialog');
@@ -58,7 +59,7 @@ test('mobile keyboard dialog, quantity and variant state survive normal navigati
   await page.keyboard.press('Escape'); await expect(dialog).toHaveCount(0); await expect(purchase(page).getByRole('button', { name: 'Edit', exact: true })).toBeFocused();
   await page.getByRole('link', { name: 'Shop', exact: true }).first().click(); await page.goBack();
   await expect(purchase(page).getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
-  await expect(page.getByLabel('Choose size / color')).toHaveValue('large'); await expect(page.getByLabel('Quantity', { exact: true })).toHaveValue('2');
+  await expect(page.getByRole('combobox', { name: 'Choose size / color' })).toHaveAttribute('data-selected-value', 'large'); await expect(page.getByLabel('Quantity', { exact: true })).toHaveValue('2');
   await page.reload(); await expect(purchase(page).getByRole('button', { name: 'Customize This', exact: true })).toBeVisible();
   await purchase(page).getByRole('button', { name: 'Customize This', exact: true }).click(); await expect(page.getByLabel(/^Name on your gift/)).toHaveValue('');
   expect(errors).toEqual([]);
@@ -100,7 +101,7 @@ test('admin checkbox and friendly fields save with the loaded revision and never
   await page.getByLabel('Requires Customization Before Purchase').check(); await page.getByRole('button', { name: 'Add customer field' }).click();
   await page.getByLabel('Customer-facing label', { exact: true }).last().fill('Printed name');
   await expect(page.getByLabel('Field key', { exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Save changes', exact: true }).click(); await expect(page.getByRole('status').filter({ hasText: 'Changes saved.' })).toBeVisible();
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click(); await expect(page.locator('[data-sonner-toast]').filter({ hasText: 'Changes saved.' })).toBeVisible();
   const saved = fixture.saves.at(-1).payload;
   expect(saved.personalization.requiredBeforePurchase).toBe(true); expect(saved.personalization.fields.at(-1)).toMatchObject({ label: 'Printed name', required: true });
   expect(saved.expectedRevision).toBe(0); expect(saved).not.toHaveProperty('customization');

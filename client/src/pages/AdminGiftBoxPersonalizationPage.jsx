@@ -1,3 +1,4 @@
+import Select from '../components/form/Select.jsx';
 import { STICKER_STYLES } from '../../../shared/gift-box/sticker-styles.mjs';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -77,7 +78,7 @@ function Creator({ existing, onCreate }) {
   return <form className="admin-panel gb-opt-create" onSubmit={start}><h2>Prepare a new option</h2><div className="gb-opt-actions">{[['standard-photo-print','photo_print','Photo print'],['exterior-box-sticker','box_sticker','Personalized box sticker']].filter(([optionId]) => !existing.some(option => option.optionId === optionId)).map(([optionId,type,label]) => <button key={optionId} type="button" className="button button-secondary" onClick={() => onCreate({ ...newGiftBoxOption(optionId,type), displayName: label, suggestedPricePiastres: 2000, ...(type === 'box_sticker' ? { approvedStyleIds: STICKER_STYLES.map(style => style.id), approvedColorIds: ENGRAVING_COLORS.map(color => color.id) } : {}) })}>Prepare {label} - EGP 20</button>)}</div>
     <p>Choose a permanent option ID. New options begin disabled and unavailable. No default price or license approval is inferred.</p>
     <label>Option ID<input type="text" maxLength={80} pattern="[a-z][a-z0-9-]*" required value={id} placeholder="small-photo-print" onChange={event=>setId(event.target.value)}/></label>
-    <label>Type<select value={kind} onChange={event=>setKind(event.target.value)}><option value="photo_print">Photo print</option><option value="engraving_surface">Engraving surface (legacy)</option><option value="box_sticker">Personalized box sticker</option></select></label>
+    <label>Type<Select value={kind} onChange={event=>setKind(event.target.value)}><option value="photo_print">Photo print</option><option value="engraving_surface">Engraving surface (legacy)</option><option value="box_sticker">Personalized box sticker</option></Select></label>
     <button type="submit" className="button button-secondary">Prepare new option</button>
     {error && <p role="alert" className="form-error">{error}</p>}
   </form>;
@@ -93,7 +94,7 @@ export default function AdminGiftBoxPersonalizationPage() {
   ]);}
   const records=query.data?.options || [];
   return <AdminLayout title="Gift Box Personalization" description="Manage photo prints, exterior box stickers and legacy engraving options. This editor does not authorize physical packing or checkout." busy={query.isPending}>
-    {query.isPending ? <p role="status">Loading personalization options…</p> : query.error ? <section className="admin-panel"><p role="alert">The personalization registry is unavailable. The backend feature and guarded MongoDB schema must be ready before this editor works. {commerceError(query.error)}</p><button className="button button-secondary" type="button" onClick={()=>query.refetch()}>Retry options</button></section> : <>
+    {query.isPending ? <p role="status">Loading personalization options…</p> : query.error ? <section className="admin-panel"><p role="alert">Personalization settings are temporarily unavailable. {commerceError(query.error)}</p><button className="button button-secondary" type="button" onClick={()=>query.refetch()}>Retry options</button></section> : <>
       <section className="admin-panel"><h2>Availability and approval</h2><p>{records.length} configured option{records.length===1?'':'s'}. Public choices include only enabled, available, correctly priced and approved options. This screen does not turn on customer checkout.</p><p>Font permission and box compatibility require real merchant review. Do not enable a surface using only the visual preview as proof of a license or physical fit.</p></section>
       {!newRecord ? <Creator existing={records} onCreate={setNewRecord}/> : <section><div className="gb-opt-actions"><button className="button button-secondary" type="button" onClick={()=>setNewRecord(null)}>Cancel new option</button></div><Editor key={'new:'+newRecord.optionId} initial={newRecord} onSaved={saved}/></section>}
       {!records.length ? <p className="admin-panel">No personalization options saved yet. Create one as a pending configuration above.</p> : <div className="gb-opt-list">{records.map(record=><Editor key={`${record.optionId}:${record.revision}`} initial={record} onSaved={saved}/>)}</div>}

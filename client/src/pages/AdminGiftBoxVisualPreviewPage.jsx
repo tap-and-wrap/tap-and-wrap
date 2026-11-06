@@ -1,3 +1,4 @@
+import Select from '../components/form/Select.jsx';
 import { useMemo, useState } from 'react';
 import AdminLayout from '../admin/AdminLayout.jsx';
 import ArrangementCanvas from '../gift-box/ArrangementCanvas.jsx';
@@ -52,24 +53,24 @@ export default function AdminGiftBoxVisualPreviewPage() {
 
   return <AdminLayout title="Gift Box Visual Preview" description="Inspect versioned production images and a draft arrangement on the live site. No customer orders, prices, or stock are changed.">
     <section className="admin-panel gb-media-inspector-notice">
-      <h2>Artwork delivery review — not a commerce release</h2>
-      <p>Media release: <code>{GIFT_BOX_MEDIA.releaseId}</code> · {GIFT_BOX_MEDIA.entries.length} pinned assets. Physical fit, packing, placement boundaries, prices and stock are not approved by this preview.</p>
-      {!configured && <p role="alert" className="gb-media-inspector-failed">The media build variables are missing or do not match the pinned release. Check the Cloudflare production build variables and rebuild before reviewing images.</p>}
+      <h2>Gift Box visuals</h2>
+      <p>Check the saved images and compare box and ribbon alignment. Physical packing, prices and availability are managed in their own sections.</p>
+      {!configured && <p role="alert" className="gb-media-inspector-failed">Gift Box images are temporarily unavailable. Contact your operator to restore the approved images.</p>}
     </section>
     {configured && <section className="admin-panel gb-media-inspector-stage" aria-label="Approximate box and ribbon layout">
       <h2>Box and ribbon arrangement study</h2>
       <p>Use this to compare image alignment only. No physical measurements or packing guarantees are implied.</p>
       <div className="gb-media-inspector-controls">
         <label>Box
-          <select value={selectedBox} onChange={event => setSelectedBox(event.target.value)}>
+          <Select value={selectedBox} onChange={event => setSelectedBox(event.target.value)}>
             {boxes.map(box => <option key={box.id} value={box.id}>Box {box.sourceNumber}</option>)}
-          </select>
+          </Select>
         </label>
         <label>Ribbon bow
-          <select value={selectedBow} onChange={event => setSelectedBow(event.target.value)}>
+          <Select value={selectedBow} onChange={event => setSelectedBow(event.target.value)}>
             <option value="">No ribbon</option>
             {bows.map(bow => <option key={bow.id} value={bow.id}>{bow.id.replace('ribbon-', '').replaceAll('-', ' ')}</option>)}
-          </select>
+          </Select>
         </label>
       </div>
       <div className="gb-media-inspector-canvas">
@@ -78,11 +79,11 @@ export default function AdminGiftBoxVisualPreviewPage() {
     </section>}
     <section className="admin-panel" aria-label="Pinned Gift Box images">
       <div className="gb-media-inspector-summary">
-        <div><h2>Pinned image inventory</h2><p>Load images as you scroll. A successfully loaded image is only a browser delivery check, not an artwork or packing approval.</p></div>
+        <div><h2>Component images</h2><p>Images load as you scroll. Physical fit still needs a packing check.</p></div>
         <label>Category
-          <select value={category} onChange={event => setCategory(event.target.value)}>
+          <Select value={category} onChange={event => setCategory(event.target.value)}>
             {Object.entries(categoryNames).map(([id, title]) => <option key={id} value={id}>{title}</option>)}
-          </select>
+          </Select>
         </label>
       </div>
       <p role="status">Showing {filtered.length} images · {loaded} loaded · {failed} failed. Remaining images load as you scroll.</p>

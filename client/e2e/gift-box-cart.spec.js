@@ -1,3 +1,4 @@
+import { chooseOption } from './select-option.js';
 import { expect, test } from '@playwright/test';
 import { cartWithProduct, commerceProduct, mockCommerce } from './commerce-fixtures.js';
 import { giftBoxFixture, beginGiftBox } from './gift-box-fixtures.js';
@@ -35,7 +36,7 @@ for (const width of [320, 390, 768, 1440]) test(`mixed cart presents one configu
   await expect(gift.getByText(message, { exact: true })).toBeHidden();
   await expect(gift.getByText('Gift box preview unavailable', { exact: true })).toHaveCount(0);
   await expect(gift.locator('img')).toHaveCount(1);
-  await expect(gift.getByRole('combobox', { name: 'Quantity for Build Your Gift Box' })).toHaveValue('1');
+  await expect(gift.getByRole('combobox', { name: 'Quantity for Build Your Gift Box' })).toHaveAttribute('data-selected-value', '1');
   await expect(page.getByRole('link', { name: 'Proceed to Checkout', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Checkout unavailable', exact: true })).toBeDisabled();
   await expect(gift.getByText('View design and details')).toBeVisible();
@@ -48,7 +49,7 @@ for (const width of [320, 390, 768, 1440]) test(`mixed cart presents one configu
 test('gift quantity and removal use existing cart operations while the ordinary product remains intact', async ({ page }) => {
   const fixture = await mockCommerce(page, { cart: mixedCart(), checkoutEnabled: true });
   await page.goto('/cart');
-  await page.getByRole('combobox', { name: 'Quantity for Build Your Gift Box' }).selectOption('3');
+  await chooseOption(page.getByRole('combobox', { name: 'Quantity for Build Your Gift Box' }), '3');
   await expect.poll(() => fixture.state.cart.items.find(item => item.kind === 'gift_box_v2').quantity).toBe(3);
   await expect(page.getByRole('article', { name: 'Build Your Gift Box' })).toContainText('EGP 2,880.00');
   await page.getByRole('button', { name: 'Remove Build Your Gift Box', exact: true }).click();

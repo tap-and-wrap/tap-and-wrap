@@ -1,3 +1,4 @@
+import { chooseOption } from './select-option.js';
 import { test, expect } from '@playwright/test';
 import { mockCatalog, adminProduct } from './catalog-fixtures.js';
 import { mockCommerce } from './commerce-fixtures.js';
@@ -8,7 +9,7 @@ test('owner listing calls inherited stock unconfirmed and distinguishes enquiry-
   await page.setViewportSize({ width: 320, height: 900 }); await page.goto('/admin/products');
   await expect(page.locator('table')).toContainText('Unconfirmed quantity: 10');
   await expect(page.locator('table')).toContainText('Enquiries only');
-  await expect(page.getByRole('combobox', { name: 'Original catalog status', exact: true })).toBeVisible();
+  await page.getByText('More filters', { exact: false }).click(); await expect(page.getByRole('combobox', { name: 'Original catalog status', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
@@ -20,7 +21,7 @@ test('owner saves price and actual stock without approval/status controls; impor
   await expect(page.locator('input[name=reviewRequired]')).toHaveCount(0);
   await expect(page.getByLabel('Product quantity', { exact: true })).toHaveValue('');
   await page.getByRole('textbox', { name: /^Price \(EGP\)/ }).fill('450');
-  await page.getByRole('combobox', { name: 'Product availability', exact: true }).selectOption('tracked');
+  await chooseOption(page.getByRole('combobox', { name: 'Product availability', exact: true }), 'tracked');
   await page.getByLabel('Product quantity', { exact: true }).fill('3');
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect.poll(() => fixture.saves.length).toBe(1);
@@ -30,24 +31,13 @@ test('owner saves price and actual stock without approval/status controls; impor
   expect(body.pricePiastres).toBe(45000); expect(body.inventory.quantity).toBe(3); expect(body.inventory.approved).toBe(true);
 });
 
-test('new enquiry template saves without an approval, price, stable-key or engraving-font step', async ({ page }) => {
-  await mockCommerce(page, { role: 'admin' }); const writes = [];
-  await page.route('**/api/v1/admin/commerce/templates', async route => {
-    if (route.request().method() === 'GET') return route.fulfill({ json: { ok: true, data: { templates: [], pagination: { page: 1, pages: 1 } } } });
-    const body = route.request().postDataJSON(); writes.push(body);
-    return route.fulfill({ json: { ok: true, data: { template: { ...body, _id: '710000000000000000000055', key: 'generated_template', status: 'approved', active: true, version: 1, revision: 0 } } } });
-  });
-  await page.goto('/admin/commerce/templates'); await page.getByRole('button', { name: 'Add template', exact: true }).click();
-  await page.getByLabel('Template name', { exact: true }).fill('Engraving request questions');
-  await page.getByRole('combobox', { name: 'Service / configuration type', exact: true }).selectOption('laser_engraving');
-  await expect(page.getByLabel('Approval status', { exact: true })).toHaveCount(0); await expect(page.getByLabel('Stable key', { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'Fonts', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Add requirement field', exact: true }).click();
-  await page.getByLabel('Customer-facing label', { exact: true }).fill('Who is the gift for?');
-  await expect(page.getByLabel('Field key', { exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Save configuration', exact: true }).click();
-  await expect.poll(() => writes.length).toBe(1);
-  expect(writes[0].ownerWorkflow).toBe(true); expect(writes[0].usage).toBe('enquiry'); expect(writes[0].fields[0].key).toMatch(/^field_/);
+test('legacy template workspace opens the two supported customization services', async ({ page }) => {
+  await mockCommerce(page, { role: 'admin' });
+  await page.goto('/admin/commerce/templates');
+  await expect(page).toHaveURL('/admin/customization');
+  await expect(page.getByRole('heading', { name: 'Customization', exact: true })).toBeVisible();
+  await expect(page.locator('main').getByRole('link', { name: /Gift Box/ })).toHaveAttribute('href', '/admin/gift-box');
+  await expect(page.locator('main').getByRole('link', { name: /Standalone Engraving/ })).toHaveAttribute('href', '/admin/engraving');
 });
 
 test('variant editor uses real per-variant quantities without asking the owner to certify the imported parent ten', async ({ page }) => {
@@ -78,7 +68,7 @@ test('mobile accountless Gift Box uses saved request questions and keeps no-temp
   await page.setViewportSize({ width: 320, height: 900 }); await page.goto('/customize/gift-box');
   await page.getByLabel('Occasion', { exact: true }).fill('Birthday'); await page.getByLabel('Desired contents').fill('A thoughtful gift');
   await page.getByLabel('Your name', { exact: true }).fill('Synthetic Customer'); await page.getByLabel('Egyptian WhatsApp number').fill('01012345678');
-  await page.getByRole('combobox', { name: 'Additional request questions', exact: true }).selectOption('710000000000000000000056');
+  await chooseOption(page.getByRole('combobox', { name: 'Additional request questions', exact: true }), '710000000000000000000056');
   await page.getByLabel('Tell us about the recipient', { exact: false }).fill('They like handwritten notes');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole('button', { name: 'Submit request · No payment now' }).click();

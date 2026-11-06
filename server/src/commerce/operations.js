@@ -54,7 +54,7 @@ export async function attentionQueue(input, now = new Date()) {
   ];
   const [result] = await Order.aggregate(pipeline).option({ maxTimeMS: 3000 });
   const total = result.count[0]?.total || 0;
-  return { records: result.records.map(record => ({ ...record, id: String(record._id), timing: contactTiming(record, now), href: record.kind === 'request' ? `/admin/requests/${record._id}` : `/admin/commerce/orders/${record._id}` })), pagination: { page: input.page, total, pages: Math.ceil(total / 20) }, serverNow: now };
+  return { records: result.records.map(record => ({ ...record, id: String(record._id), timing: contactTiming(record, now), href: record.kind === 'request' ? `/admin/orders/requests/${record._id}` : `/admin/orders/${record._id}` })), pagination: { page: input.page, total, pages: Math.ceil(total / 20) }, serverNow: now };
 }
 export async function recordContact(kind, id, input, actor, now = new Date()) {
   if (actor?.role !== 'admin' || actor.active === false) throw commerceError(403, 'ADMIN_REQUIRED', 'Administrator action required.');
@@ -128,7 +128,7 @@ operationsRoutes.get('/operations', async (req, res) => {
     CommerceJobRun.find({ state: { $in: ['partial', 'interrupted', 'stopped'] } }).sort({ startedAt: -1 }).limit(10).select('state startedAt finishedAt').lean().maxTimeMS(3000),
     NotificationEvent.find({ state: { $in: ['failed', 'dead', 'uncertain'] } }).sort({ createdAt: -1 }).limit(20).select('event audience state attempts createdAt nextAttemptAt orderId requestId snapshot.reference snapshot.orderNumber snapshot.requestReference').lean().maxTimeMS(3000),
   ]);
-  const safeEvents = events.map(({ snapshot, ...event }) => { const reference = snapshot?.reference || snapshot?.orderNumber || snapshot?.requestReference; return { ...event, reference: /^(?:[1-9][0-9]{5}|TW-[A-F0-9]{12})$/.test(reference || '') ? reference : null, href: event.requestId ? `/admin/requests/${event.requestId}` : event.orderId ? `/admin/commerce/orders/${event.orderId}` : null }; });
+  const safeEvents = events.map(({ snapshot, ...event }) => { const reference = snapshot?.reference || snapshot?.orderNumber || snapshot?.requestReference; return { ...event, reference: /^(?:[1-9][0-9]{5}|TW-[A-F0-9]{12})$/.test(reference || '') ? reference : null, href: event.requestId ? `/admin/orders/requests/${event.requestId}` : event.orderId ? `/admin/orders/${event.orderId}` : null }; });
   res.json({ ok: true, data: { readiness: { ...emailReadiness(), ownerAlertsConfigured: owner.enabled, storageEnabled: process.env.STORAGE_ENABLED === 'true' }, counts: Object.fromEntries(counts.map(row => [row._id, row.count])), historicalHeld, lastRun, failedRuns: runs, events: safeEvents, serverNow: new Date() } });
 });
 operationsRoutes.post('/operations/notifications/:id/review', async (req, res) => {

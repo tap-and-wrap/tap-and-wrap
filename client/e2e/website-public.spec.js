@@ -31,7 +31,7 @@ test('homepage orders actual sections and displays only approved fixture content
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Make their heart flutter.');
   await expect(page.locator('.home-product-grid > article')).toHaveCount(8);
   const headings = await page.locator('main h2').allTextContents();
-  expect(headings).toEqual(['Gift Bundles', 'Shop by Category', 'Featured Gifts', 'A gift as unique as them', 'What Our Customers Say', 'Frequently Asked Questions']);
+  expect(headings).toEqual(['Shop by Category', 'Featured Gifts', 'A gift as unique as them', 'What Our Customers Say', 'Frequently Asked Questions']);
   await expect(page.locator('.review-marquee-group').first().locator('figure')).toHaveCount(12);
   await expect(page.getByText('Approved review fixture only.')).toHaveCount(0);
   await expect(page.getByText('Is this a real merchant claim?')).toHaveCount(0);

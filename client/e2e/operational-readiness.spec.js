@@ -41,7 +41,7 @@ test('stale contact revisions preserve the note and offer reload instead of over
 });
 test('uncertain contact response retries the identical operation and diagnostics never offer blind resend', async ({ page }) => {
   const data = await fixture(page, { lost: true }); await page.goto('/admin/attention'); await page.getByRole('button', { name: 'Contact and actions for 123456' }).click(); await page.getByLabel('Private contact / response note').fill('Actual contact evidence'); await page.getByRole('button', { name: 'Mark as Contacted', exact: true }).click(); await page.getByRole('button', { name: 'Retry same contact action' }).click();
-  await expect(page.getByText('Contact record saved. Payment and acceptance are unchanged.')).toBeVisible(); expect(data.writes[1]).toEqual(data.writes[0]); await expect(page.getByText(/Delivery uncertain; verify provider records/)).toBeVisible(); await expect(page.getByRole('button', { name: 'Close without resending' })).toBeDisabled();
+  await expect(page.getByText('Contact record saved. Payment and acceptance are unchanged.')).toBeVisible(); expect(data.writes[1]).toEqual(data.writes[0]); await expect(page.getByText(/Delivery uncertain; verify provider records/)).toHaveCount(0); await expect(page.getByRole('button', { name: 'Close without resending' })).toHaveCount(0);
 });
 
 test('branded transactional and owner emails remain readable on mobile without tracking or private files', async ({ page }) => {

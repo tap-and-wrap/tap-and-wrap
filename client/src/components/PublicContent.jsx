@@ -1,12 +1,9 @@
 import useVideoPlayback, { useMediaPreference, videoSurfacePointerDown } from './useVideoPlayback.js';
-import { productHref } from '../../../shared/product-paths.mjs';
 import TestimonialCard from './TestimonialCard.jsx';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
-import { getPublishedBundles, getProductReviews, getSiteContent } from '../services/website.js';
+import { getSiteContent } from '../services/website.js';
 import { developerContent } from '../content/developer-content.js';
-import { formatCatalogPrice } from '../utils/catalog.js';
 
 export function useSiteContent() {
   return useQuery({ queryKey: ['website', 'content'], queryFn: ({ signal }) => getSiteContent(signal), staleTime: 60_000, retry: false, refetchOnWindowFocus: false });
@@ -66,26 +63,6 @@ export function TrustStatistics({ claims = developerContent.trustStatistics }) {
     const finalValue = `${(item.value / item.scale).toLocaleString('en-US')}${item.suffix}`;
     return <div className="trust-statistic" key={item.id}><dt>{item.label}</dt><dd style={{ width: `${Math.max(5, finalValue.length) * .65}em` }}><span className="storefront-sr-only">{finalValue}</span><span ref={element => { counters.current[index] = element; }} aria-hidden="true">{finalValue}</span></dd></div>;
   })}</dl></section>;
-}
-export function PublishedBundles() {
-  const query = useQuery({ queryKey: ['website', 'bundles'], queryFn: ({ signal }) => getPublishedBundles(signal), staleTime: 60_000, retry: false, refetchOnWindowFocus: false });
-  const bundles = query.data?.bundles || [];
-  if (!bundles.length) return null;
-  return <section className="section" aria-labelledby="home-bundles-heading"><div className="section-heading"><p className="eyebrow">THOUGHTFUL COMBINATIONS</p><h2 id="home-bundles-heading">Gift Bundles</h2></div><div className="website-bundle-grid">{bundles.map(bundle => <article className="website-bundle" key={bundle.id}><h3>{bundle.name}</h3>{bundle.description && <p>{bundle.description}</p>}<p>{Number.isSafeInteger(bundle.effectiveDiscountPiastres) ? formatCatalogPrice(bundle.effectiveDiscountPiastres) : bundle.discountKind === 'percentage' ? `${bundle.discountValue / 100}%` : `Up to ${formatCatalogPrice(bundle.discountValue)}`} bundle saving when all configured items are eligible in your cart.</p><ul>{bundle.products.map(product => <li key={`${product._id}:${product.variantKey || ''}`}><Link to={productHref(product)}>{product.name}</Link> × {product.bundleQuantity || 1}</li>)}</ul><p className="editorial-note">The server applies eligible bundle savings at checkout.</p></article>)}</div></section>;
-}
-export function ReviewCards({ reviews }) {
-  return <div className="website-reviews">{reviews.map(review => <figure key={review.id}>
-    {Number.isInteger(review.rating) && review.rating >= 1 && review.rating <= 5 && <p className="website-review-stars" aria-label={`${review.rating} out of 5 stars`}>{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</p>}
-    <blockquote>{review.text}</blockquote>
-    {typeof review.authorLabel === 'string' && review.authorLabel.trim() && <figcaption>{review.authorLabel}</figcaption>}
-  </figure>)}</div>;
-}
-export function ProductReviews({ slug, preview, enabled = true }) {
-  const [page, setPage] = useState(1);
-  const query = useQuery({ queryKey: ['website', 'reviews', slug, page], queryFn: ({ signal }) => getProductReviews(slug, page, signal), enabled: !preview && enabled, retry: false, staleTime: 60_000, refetchOnWindowFocus: false });
-  const reviews = query.data?.reviews || [];
-  if (!preview && !enabled) return null;
-  return <section className="product-reviews" aria-labelledby="product-reviews-heading"><h2 id="product-reviews-heading">Product reviews</h2>{preview ? <p>Reviews are unavailable in draft preview.</p> : query.isPending ? <p role="status">Loading reviews…</p> : query.isError ? <div><p>Reviews are unavailable at the moment.</p><button className="catalog-text-button" onClick={() => query.refetch()}>Retry reviews</button></div> : !reviews.length ? <p>No owner-approved reviews have been published for this product.</p> : <><ReviewCards reviews={reviews}/>{query.data.pagination.pages > 1 && <nav className="commerce-pagination" aria-label="Review pages"><button disabled={page <= 1 || query.isFetching} onClick={() => setPage(page - 1)}>Previous</button><span>Page {page}</span><button disabled={page >= query.data.pagination.pages || query.isFetching} onClick={() => setPage(page + 1)}>Next</button></nav>}</>}</section>;
 }
 export function ReviewMarquee({ reviews }) {
   return <div className="review-marquee">

@@ -8,6 +8,7 @@ test.beforeEach(async ({ context }) => {
   });
 });
 async function login(page, name, destination) {
+  destination = destination.replace('/admin/commerce/orders/', '/admin/orders/').replace('/admin/website/categories', '/admin/categories');
   await page.goto(`/login?returnTo=${encodeURIComponent(destination)}`);
   await page.getByLabel('Email Address').fill(`${name}@connected.example.test`);
   await page.getByLabel('Password', { exact: true }).fill('isolated-fixture-password');

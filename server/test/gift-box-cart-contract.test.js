@@ -134,10 +134,10 @@ test('mixed merchandise counts every line once but discounts only ordinary Produ
   assert.equal(evaluatePromotions([product, gift], [], discount({ kind: 'fixed', value: 100000 })).totalPiastres, 10000);
 });
 
-test('gift rows cannot qualify for bundles even with a misleading Product field', () => {
+test('retired bundles never discount gift or product rows, and unknown line kinds remain invalid', () => {
   const rule = { _id: '507f1f77bcf86cd799439013', name: 'Fixture bundle', active: true, priority: 1,
     maxApplications: 3, items: [{ productId, variantKey: null, quantity: 3 }], discountKind: 'percentage', discountValue: 5000 };
   assert.equal(evaluatePromotions([product, { ...gift, productId }], [rule]).discountPiastres, 0);
-  assert.equal(evaluatePromotions([product, { ...product, quantity: 1, lineTotalPiastres: 1000 }], [rule]).discountPiastres, 1500);
+  assert.equal(evaluatePromotions([product, { ...product, quantity: 1, lineTotalPiastres: 1000 }], [rule]).discountPiastres, 0);
   assert.throws(() => evaluatePromotions([{ ...gift, kind: 'unknown' }]), { code: 'CART_LINE_KIND_INVALID' });
 });

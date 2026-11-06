@@ -1,3 +1,4 @@
+import { chooseOption } from './select-option.js';
 import { expect, test } from '@playwright/test';
 import { commerceOrder, commerceProduct, mockCommerce } from './commerce-fixtures.js';
 
@@ -99,7 +100,7 @@ test('admin inspected return can restore tracked builder units and submits zero 
     return route.fulfill({ json: { ok: true, data: { order } }, headers: { 'access-control-allow-origin': 'http://127.0.0.1:5191', 'access-control-allow-credentials': 'true' } });
   });
   await page.goto(`/admin/commerce/orders/${order.id}`);
-  await page.getByRole('combobox', { name: 'Operation', exact: true }).selectOption('inventory_return');
+  await chooseOption(page.getByRole('combobox', { name: 'Operation', exact: true }), 'inventory_return');
   await page.getByRole('spinbutton', { name: /Inspected resellable units: Purchased red roses/ }).fill('2');
   for (const name of ['Purchased plush', 'Purchased ribbon']) {
     const input = page.getByRole('spinbutton', { name: new RegExp(`Inspected resellable units: ${name}`) });
