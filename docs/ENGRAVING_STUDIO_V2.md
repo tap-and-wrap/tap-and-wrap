@@ -98,11 +98,11 @@ fix or compatible forward patch. Never rewrite historical snapshots.
 - Screenshots at 320, 390, 768 and 1440 px cover category selection, text/icons/
   Personal, handwriting, review, cart, admin overview/editor. Main panels were
   checked for document overflow and visually reviewed. Corrections included admin
-  illustration cropping, narrow-heading sizing and the explicit revision-conflict
+  illustration cropping (including category card image-fit), narrow-heading sizing and the explicit revision-conflict
   alert. Synthetic flat-color image fixtures are not merchant/customer content.
 
 Evidence is ignored: client/test-results-contracts/browser-62811 (34 screenshots),
-browser-55969 (20 DPR-2 studio screenshots), and client/test-results-engraving-studio
+browser-64747 (20 DPR-2 studio screenshots), and client/test-results-engraving-studio
 (contact sheets). Earlier failed test artifacts remain available; rate-limit
 contention was resolved with independent fixture lifecycles, never disabled limits.
 The full default browser suite was not rerun; the focused counts above are actual.
