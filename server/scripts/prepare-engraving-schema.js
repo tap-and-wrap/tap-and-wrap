@@ -40,7 +40,8 @@ function compatible(required, actual) {
 /** Only metadata and an existence probe; never returns customer/configuration documents. */
 export async function inspectEngravingSchema(db) {
   const missing = [];
-  const collections = await db.listCollections({ name: { $in: [CONFIG, ORDERS] } }, { nameOnly: false, maxTimeMS: 5000 }).toArray();
+  const collections = (await Promise.all([CONFIG, ORDERS].map(name =>
+    db.listCollections({ name }, { nameOnly: false, maxTimeMS: 5000 }).toArray()))).flat();
   if (!collections.some(c => c.name === ORDERS)) fail('ENGRAVING_ORDERS_COLLECTION_MISSING');
   for (const name of [CONFIG, ORDERS]) {
     const metadata = collections.find(c => c.name === name);

@@ -9,10 +9,14 @@ function fixture({ records = false } = {}) {
   const indexes = new Map([['orders', [{ name: '_id_', key: { _id: 1 } }]],
     ['unrelated', [{ name: '_id_', key: { _id: 1 } }]]]);
   const commands = [];
+  const metadataQueries = [];
   const connection = { readyState: 1, host: '127.0.0.1', name: 'tap_wrap_catalog_test', db: {
-    listCollections(filter) {
-      assert.deepEqual(filter, { name: { $in: [configName, 'orders'] } });
-      return { toArray: async () => [...indexes.keys()].filter(name => filter.name.$in.includes(name))
+    listCollections(filter, options) {
+      assert.ok([configName, 'orders'].includes(filter.name), 'only exact allowlisted collection names');
+      assert.deepEqual(filter, { name: filter.name });
+      assert.deepEqual(options, { nameOnly: false, maxTimeMS: 5000 });
+      metadataQueries.push(filter.name);
+      return { toArray: async () => [...indexes.keys()].filter(name => name === filter.name)
         .map(name => ({ name, type: 'collection', options: {} })) };
     },
     collection(name) {
@@ -35,7 +39,7 @@ function fixture({ records = false } = {}) {
       indexes.set(name, [{ name: '_id_', key: { _id: 1 } }]);
     },
   } };
-  return { connection, commands, indexes };
+  return { connection, commands, indexes, metadataQueries };
 }
 
 test('default dry-run is offline even with an unusable production URI', async () => {
@@ -70,6 +74,10 @@ test('returned plans cannot mutate the internal DDL allowlist', async () => {
 test('connected read-only preflight reports missing objects with zero writes', async () => {
   const f = fixture(); const result = await prepareEngravingSchema(f.connection, settings);
   assert.equal(result.status, 'MISSING_SCHEMA'); assert.equal(result.missing.length, 4); assert.deepEqual(f.commands, []);
+  assert.deepEqual(f.metadataQueries, [configName, 'orders']);
+  assert.throws(() => f.connection.db.listCollections({ name: 'unrelated' }));
+  assert.throws(() => f.connection.db.listCollections({ name: { $in: [configName, 'orders'] } }));
+  assert.throws(() => f.connection.db.collection('unrelated'));
 });
 test('wrong live database fails before metadata or writes', async () => {
   const f = fixture(); f.connection.name = 'another_database';
