@@ -4,14 +4,14 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { FONT_REGISTRY } from '../../shared/engraving/definitions.mjs';
 import { STUDIO_PLACEMENTS } from '../../shared/engraving/studio-placements.mjs';
-import { createProductionClient, productionPreflight } from '../../server/scripts/launch-engraving-production.js';
+import { productionPreflight } from '../../server/scripts/launch-engraving-production.js';
 
 if(process.argv.length!==3||process.argv[2]!=='--authorized-studio-cart-smoke')throw Error('EXPLICIT_STUDIO_PRODUCTION_SMOKE_REQUIRED');
 const site='https://tapandwrap.net',api='https://api.tapandwrap.net';
 const directory=new URL('../test-results-engraving-studio-production/',import.meta.url);
 await mkdir(directory,{recursive:true});
 const report={time:new Date().toISOString(),success:false,synthetic:true,ordersCreated:0,paymentsProcessed:0,checks:[]};
-const client=createProductionClient(),browser=await chromium.launch({channel:'msedge',headless:true});
+const browser=await chromium.launch({channel:'msedge',headless:true});
 const context=await browser.newContext({viewport:{width:1440,height:1000}}),page=await context.newPage();
 const errors=[],signs=[];
 page.on('pageerror',error=>errors.push(error.name));
@@ -30,9 +30,11 @@ await context.route('**/*',route=>{
   return route.abort();
 });
 async function screen(name){await page.evaluate(()=>{window.scrollTo(0,0);document.activeElement?.blur();});await page.screenshot({path:fileURLToPath(new URL(name+'.png',directory)),fullPage:true});}
-async function json(path){const response=await context.request.get(api+path);expect(response.status()).toBe(200);return(await response.json()).data;}
+async function json(path){return page.evaluate(async url=>{const response=await fetch(url,{credentials:'include'});if(response.status!==200)throw Error('PUBLIC_READ_FAILED');const value=await response.json();if(!value.ok)throw Error('PUBLIC_READ_FAILED');return value.data;},api+path);}
+const client={get:json,asset:async path=>Buffer.from(await page.evaluate(async path=>{const response=await fetch(path);if(response.status!==200)throw Error('PUBLIC_ASSET_UNAVAILABLE');return Array.from(new Uint8Array(await response.arrayBuffer()));},path))};
 const image={name:'SYNTHETIC-STUDIO-V2-NO-ORDER.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWO4NbsXAARVAgOYIL6CAAAAAElFTkSuQmCC','base64')};
 try{
+  await page.goto(site+'/customize/laser-engraving');
   const preflight=await productionPreflight(client);expect(preflight.intakeEnabled).toBe(true);report.assetsVerified=preflight.assets.length;
   const types=await client.get('/api/v1/commerce/engraving/types?page=1');expect(types.enabled).toBe(true);expect(types.types).toHaveLength(9);
   expect(new Set(types.types.map(type=>type.typeId)).size).toBe(9);
@@ -63,4 +65,4 @@ try{
   await page.goto(site+'/shop');await expect(page.locator('main:not([data-prerender])')).toBeVisible();await page.goto(site+'/checkout');await expect(page.getByText('Your cart is empty.',{exact:true})).toBeVisible();report.checks.push('gift-box-shop-and-empty-checkout-read-only');
   expect(errors).toEqual([]);report.success=true;
 }catch(error){report.failure={name:error.name,message:String(error.message).slice(0,1000)};process.exitCode=1;await screen('failure').catch(()=>{});}
-finally{await writeFile(new URL('latest.json',directory),JSON.stringify(report,null,2));await context.close();await browser.close();await client.close();console.log(JSON.stringify(report,null,2));}
+finally{await writeFile(new URL('latest.json',directory),JSON.stringify(report,null,2));await context.close();await browser.close();console.log(JSON.stringify(report,null,2));}

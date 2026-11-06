@@ -67,7 +67,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\RUN_ENGRAVING_PRODUCTI
 Enter an existing administrator's credentials locally, never in chat. The utility
 uses existing login/CSRF, administrator identity, optimistic revisions, audited
 publication and process-only Cloudflare DNS. It verifies 85 local/live asset
-references before writes. It adds suggested IDs without changing old placement
+references before writes. SVG/text comparisons normalize only CRLF/LF line endings; font
+bytes remain exact. Reported hashes identify the actual live bytes. It adds suggested IDs without changing old placement
 labels/status/order, preserves merchant prices/names/status/text limits and skips
 matching configurations. An uncertain mutation is resolved by exact readback,
 never automatic replay. All nine unchanged initial v1 configurations are expected
@@ -81,7 +82,7 @@ fix or compatible forward patch. Never rewrite historical snapshots.
 
 ## Local verification
 
-- 38 engraving/launch tests: ownership/expiry, idempotency, pricing invariance,
+- 39 engraving/launch tests: ownership/expiry, idempotency, pricing invariance,
   no inventory claims, immutable history, payment/custody gates, asset safety,
   no-op publication and preservation of merchant/retired placement settings.
 - One additional real isolated launch API/authentication/audit test passed.
@@ -125,3 +126,9 @@ Reports/screenshots stay under ignored test-results-engraving-studio-production.
 
 Deployment, authenticated production publication and live smoke results must be
 recorded after execution; local checks alone do not certify production success.
+
+The first Render rollout reported live while the API still exposed the old
+registry. A same-commit clean-cache redeploy resolved the mismatch; subsequent
+readback exposes twelve fonts and 48 icons. Publication is held until full asset
+verification succeeds. A Windows/Linux SVG line-ending-only mismatch was reproduced
+and the verifier corrected/tested without allowing other content differences.

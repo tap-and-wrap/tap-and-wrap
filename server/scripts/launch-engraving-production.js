@@ -134,9 +134,11 @@ export async function verifyAssets(client) {
     if (path.endsWith('rochester-LICENSE.txt') && !cleanText(local).includes('Apache License')) stop('FONT_LICENSE_MISSING');
     if (path.endsWith('NOTICE.txt') && !cleanText(local).includes('CC0-1.0')) stop('ICON_LICENSE_MISSING');
     const live = await client.asset(path);
-    const matches = path.endsWith('.txt') ? cleanText(live) === cleanText(local) : hash(live) === hash(local);
+    // Git normalizes text assets to LF in the Linux deployment. Windows clones
+    // may use CRLF. No SVG content change beyond that normalization is accepted.
+    const matches = /\.(?:txt|svg)$/.test(path) ? cleanText(live) === cleanText(local) : hash(live) === hash(local);
     if (!matches) stop('LIVE_ASSET_MISMATCH');
-    result.push({ path, sha256: hash(local), verified: true });
+    result.push({ path, sha256: hash(live), verified: true });
   }
   return result;
 }

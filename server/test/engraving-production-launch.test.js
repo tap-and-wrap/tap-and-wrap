@@ -100,6 +100,14 @@ test('asset audit checks both font hashes, notices, SVG safety and live bytes', 
   f.client.asset = async () => Buffer.from('Wrong hosted asset');
   await assert.rejects(verifyAssets(f.client), { code: 'LIVE_ASSET_MISMATCH' });
 });
+
+test('SVG asset verification tolerates only Git CRLF/LF normalization', async () => {
+  const f=fixture(),asset=f.client.asset;
+  f.client.asset=async path=>{const bytes=await asset(path);return path.endsWith('.svg')?Buffer.from(bytes.toString('utf8').replaceAll('\r\n','\n').replaceAll('\n','\r\n')):bytes;};
+  assert.equal((await verifyAssets(f.client)).length,85);
+  f.client.asset=async path=>{const bytes=await asset(path);return path.endsWith('.svg')?Buffer.from(bytes.toString('utf8').replace('svg','svg data-changed="true"')):bytes;};
+  await assert.rejects(verifyAssets(f.client),{code:'LIVE_ASSET_MISMATCH'});
+});
 test('disabled admin and mismatched deployed registries fail before publication', async () => {
   for (const response of [{ available: false }, { available: true, types: [], fonts: [], icons: [] }]) {
     const f = fixture(); f.client.get = async () => response;
