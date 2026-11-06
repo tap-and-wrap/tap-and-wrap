@@ -7,7 +7,7 @@ const status = z.enum(['active','disabled','retired']);
 export const configurationInput = z.object({ typeId: slug, name: text(120).min(1), pricePiastres: z.number().int().positive().max(100000000), displayOrder: z.number().int().min(0).max(10000), status,
   placements: z.array(z.object({ id: slug, label: text(120).min(1), status, displayOrder: z.number().int().min(0).max(10000) }).strict()).max(30).refine(values => new Set(values.map(value => value.id)).size === values.length),
   fontIds: z.array(z.enum(FONT_REGISTRY.map(font => font.id))).max(20).refine(values => new Set(values).size === values.length),
-  iconIds: z.array(z.enum(ICON_REGISTRY.map(icon => icon.id))).max(30).refine(values => new Set(values).size === values.length),
+  iconIds: z.array(z.enum(ICON_REGISTRY.map(icon => icon.id))).max(64).refine(values => new Set(values).size === values.length),
   assetsApproved: z.boolean(), maxLines: z.number().int().min(1).max(5), maxCharacters: z.number().int().min(1).max(500), maxCharactersPerLine: z.number().int().min(1).max(200),
 }).strict().refine(value => value.status !== 'active' || value.assetsApproved && value.fontIds.length > 0 && value.iconIds.length > 0, 'Approve production assets and choose fonts/icons before enabling a type.');
 export const specificationInput = z.object({ contractVersion: z.literal('engraving-spec-v1'), itemKey: z.uuid(), typeId: slug, configurationVersion: z.number().int().positive(), description: text(300),

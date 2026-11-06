@@ -13,6 +13,8 @@ import { engravingQuote } from '../src/engraving/pricing.js';
 import { engravingAction } from '../src/engraving/workflow.js';
 import { INITIAL_ENGRAVING_TYPES, FONT_REGISTRY, ICON_REGISTRY } from '../../shared/engraving/definitions.mjs';
 import { configurationInput, engravingCartInput } from '../src/engraving/contracts.js';
+import { validEngravingLine } from '../src/engraving/contracts.js';
+import { STUDIO_PLACEMENTS } from '../../shared/engraving/studio-placements.mjs';
 import { addCartItem, cartResponse, mergeGuestCart, updateCartQuantity, readCart } from '../src/commerce/cart.js';
 import { prepareCheckout, placeOrder } from '../src/commerce/orders.js';
 import { mutateOrderAccounting, orderAccounting } from '../src/commerce/order-accounting.js';
@@ -203,4 +205,41 @@ test('clarification never reuses an accepted/proposed specification version',asy
   await act(order,'clarify',{publicReason:'Clarify the location'});await act(order,'propose',{placementLabel:'Inspected flat base'});
   await assert.rejects(act(order,'accept',{proposalVersion:1,customerConfirmed:true,internalNote:'Stale acceptance'}),{code:'ENGRAVING_WORKFLOW_CONFLICT'});
   const current=await act(order,'accept',{proposalVersion:2,customerConfirmed:true,internalNote:'Actual current acceptance'});assert.equal(current.engraving.items[0].proposal.placementLabel,'Inspected flat base');
+});
+
+
+test('studio assets are twelve licensed fonts, 48 safe versioned icons and eight placement sets', async()=>{
+  assert.equal(FONT_REGISTRY.length,12);assert.equal(ICON_REGISTRY.length,48);
+  assert.equal(FONT_REGISTRY.filter(font=>font.language==='ar').length,6);
+  assert.equal(new Set(ICON_REGISTRY.map(icon=>icon.id)).size,48);
+  for(const font of FONT_REGISTRY){
+    const bytes=await readFile(new URL('../../client/public'+font.source,import.meta.url));assert.ok(bytes.length>1000);
+    assert.ok((await readFile(new URL('../../client/public'+font.license,import.meta.url),'utf8')).length>500);
+  }
+  for(const icon of ICON_REGISTRY){
+    const svg=await readFile(new URL('../../client/public'+icon.asset,import.meta.url),'utf8');
+    assert.match(svg,/<svg/);assert.doesNotMatch(svg,/<script|<foreignObject|\bon\w+\s*=|\bhref\s*=|<!ENTITY/i);
+  }
+  assert.equal(STUDIO_PLACEMENTS.perfume.length,6);assert.deepEqual(STUDIO_PLACEMENTS.other,[]);
+  for(const placements of Object.values(STUDIO_PLACEMENTS))assert.equal(new Set(placements.map(value=>value.id)).size,placements.length);
+});
+test('unchanged publication preserves version and audit count; stale no-op still conflicts',async()=>{
+  const {revision,version,...same}=config;
+  const before=await mongoose.models.AdminAudit.countDocuments({action:'engraving.configuration_published'});
+  const result=await publishConfiguration(same,revision,admin);
+  assert.equal(result.version,version);assert.equal(result.revision,revision);
+  assert.equal(await mongoose.models.AdminAudit.countDocuments({action:'engraving.configuration_published'}),before);
+  await assert.rejects(publishConfiguration(same,revision-1,admin),{code:'EDIT_CONFLICT'});
+});
+test('studio publication preserves historical two-font Drawing and text order snapshots',async()=>{
+  const {version,revision,...base}=config;void version;
+  config=await publishConfiguration({...base,fontIds:FONT_REGISTRY.slice(0,2).map(font=>font.id),iconIds:ICON_REGISTRY.slice(0,3).map(icon=>icon.id)},revision,admin);
+  const entry=await input('personal','drawing');await addCartItem(owner,entry);
+  const checkoutKey=randomUUID();await prepareCheckout(owner,{checkoutKey,paymentMethod:'instapay',governorate:'cairo'});
+  const placed=await placeOrder(owner,{checkoutKey,paymentMethod:'instapay',customer:{name:'Historical Fixture',email:'fixture@example.test',phone:'01012345678',governorate:'cairo',address:'Disposable return fixture'}});
+  const old=await Order.findById(placed.id).lean(), snapshot=JSON.stringify(old.lines);
+  const {version:oldVersion,revision:oldRevision,...oldConfig}=config;void oldVersion;
+  await publishConfiguration({...oldConfig,fontIds:FONT_REGISTRY.map(font=>font.id),iconIds:ICON_REGISTRY.map(icon=>icon.id),placements:STUDIO_PLACEMENTS.perfume},oldRevision,admin);
+  const after=await Order.findById(placed.id).lean();assert.equal(JSON.stringify(after.lines),snapshot);assert.equal(validEngravingLine(after.lines[0]),true);
+  assert.equal(after.lines[0].engraving.specification.content.subtype,'drawing');
 });

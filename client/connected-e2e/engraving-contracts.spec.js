@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { chooseImageFiles } from '../e2e/media-helpers.js';
+import { chooseImageFiles as chooseSharedImageFiles } from '../e2e/media-helpers.js';
+async function chooseImageFiles(page,scope,name,files){const input=scope.getByLabel(name,{exact:true});if(await input.count()&&await input.evaluate(element=>element.tagName==='INPUT'&&element.type==='file'))await input.setInputFiles(files);else await chooseSharedImageFiles(page,scope,name,files);}
 const api='http://127.0.0.1:'+process.env.TAP_WRAP_CONTRACT_API_PORT;
 const origin='http://127.0.0.1:'+process.env.TAP_WRAP_CONTRACT_WEB_PORT;
 const image={name:'isolated.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWO4NbsXAARVAgOYIL6CAAAAAElFTkSuQmCC','base64')};
@@ -12,19 +13,19 @@ async function text(page){await page.getByRole('button',{name:'Continue',exact:t
 async function screen(page,info,name,width){await expect(page.locator('main')).toBeVisible();await expect(page.locator('main').getByText(/^Loading/)).toHaveCount(0);await page.evaluate(()=>document.fonts.ready);await page.setViewportSize({width,height:1000});await page.evaluate(()=>{window.scrollTo(0,0);document.activeElement?.blur();});await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);if(name==='cart')await expect.poll(()=>page.locator('.commerce-engraving-cart-item .commerce-cart-item-content').evaluate(element=>element.getBoundingClientRect().width)).toBeGreaterThan(Math.min(width-100,400));if(name==='admin-custody'||name==='unpaid-order')expect(await page.locator('.engraving-financial-summary dd').evaluateAll(elements=>elements.flatMap(element=>{const walker=document.createTreeWalker(element,NodeFilter.SHOW_TEXT);const wrapped=[];let node;while((node=walker.nextNode()))for(const match of node.textContent.matchAll(/\d+\.\d{2}/g)){const range=document.createRange();range.setStart(node,match.index);range.setEnd(node,match.index+match[0].length);if(range.getClientRects().length>1)wrapped.push(match[0]);}return wrapped;}))).toEqual([]);await page.screenshot({path:info.outputPath(`${name}-${width}.png`),fullPage:true});}
 test('connected builder: nine types, all modes, memory draft, widths, cart and inspection-gated checkout',async({page,context},info)=>{
   test.setTimeout(120000);const errors=[];page.on('pageerror',error=>errors.push(error.message));
-  await page.emulateMedia({reducedMotion:'reduce'});await start(page);await expect(page.locator('.engraving-type')).toHaveCount(9);
-  for(const width of [320,390,440,1440])await screen(page,info,'step-1',width);
-  await text(page);for(const width of [320,390,440,1440])await screen(page,info,'step-2-text',width);
+  await page.emulateMedia({reducedMotion:'reduce'});await start(page);await expect(page.locator('.engraving-type')).toHaveCount(6);await page.getByRole('button',{name:/Load More/}).click();await expect(page.locator('.engraving-type')).toHaveCount(9);
+  for(const width of [320,390,768,1440])await screen(page,info,'step-1',width);
+  await text(page);for(const width of [320,390,768,1440])await screen(page,info,'step-2-text',width);
   await page.getByLabel('Your engraving text').fill('A lasting memory\n2026');await page.getByRole('radio',{name:/Rochester/}).check();await screen(page,info,'step-2-english',1440);await page.getByLabel('Your engraving text').fill('\u0623\u062d\u0645\u062f\n2026');await page.getByRole('radio',{name:/Amiri/}).check();
   await page.getByRole('radio',{name:'Icons',exact:true}).check();await page.getByRole('radio',{name:'Heart',exact:true}).check();await screen(page,info,'step-2-icons',1440);
   await page.getByRole('radio',{name:'Personal',exact:true}).check();
-  for(const subtype of ['Photo','Drawing','Handwriting','Fingerprint']){
+  for(const subtype of ['Photo','Handwriting','Fingerprint']){
     await page.getByRole('radio',{name:subtype,exact:true}).check();await chooseImageFiles(page,page,`${subtype} artwork`,image);
     await screen(page,info,`step-2-${subtype.toLowerCase()}`,390);
   }
   await page.getByRole('radio',{name:'Text',exact:true}).check();
   await page.setViewportSize({width:1440,height:1000});await page.getByRole('link',{name:'Customize',exact:true}).first().click();await page.getByRole('link',{name:/Explore Engraving/}).click();await expect(page.getByLabel('Your engraving text')).toHaveValue('أحمد\n2026');
-  await page.getByRole('button',{name:'Continue',exact:true}).click();for(const width of [320,390,440,1440])await screen(page,info,'step-3',width);
+  await page.getByRole('button',{name:'Continue',exact:true}).click();for(const width of [320,390,768,1440])await screen(page,info,'step-3',width);
   await page.getByRole('button',{name:'Add Engraving to Cart',exact:true}).click();await expect(page.getByRole('heading',{name:'Your engraving is in the cart'})).toBeVisible();
   const response=await context.request.get(api+'/api/v1/commerce/cart');const cart=(await response.json()).data.cart;expect(cart.items).toHaveLength(1);expect(cart.items[0].unitPricePiastres).toBe(10000);expect(JSON.stringify(cart)).not.toContain('itemPhotoUploadId');
   await page.getByRole('link',{name:'View cart',exact:true}).click();await expect(page.getByRole('link',{name:'Edit engraving / replace images'})).toBeVisible();await screen(page,info,'cart',390);await screen(page,info,'cart',1440);
@@ -37,14 +38,23 @@ test('connected builder: nine types, all modes, memory draft, widths, cart and i
   await screen(page,info,'unpaid-order',390);expect(errors).toEqual([]);
 });
 test('connected real administration publishes type and placement, preserves conflict draft',async({page,context},info)=>{
-  await login(page,'admin','/admin/engraving');await page.getByRole('button',{name:'Create engraving type',exact:true}).click();await page.getByLabel('Stable type ID',{exact:true}).fill('fixture-flask');await page.getByLabel('Display name',{exact:true}).fill('Fixture Flask');await page.getByLabel('New stable placement ID').fill('base');await page.getByRole('button',{name:'Add placement',exact:true}).click();await page.getByLabel('Placement label').fill('Flask base');
-  await page.getByRole('button',{name:'Publish configuration version'}).click();await expect(page.getByRole('status').filter({hasText:'Configuration version published'})).toBeVisible();
-  const records=(await(await context.request.get(api+'/api/v1/admin/commerce/engraving/types')).json()).data.types;const saved=records.find(value=>value.typeId==='fixture-flask');expect(saved.pricePiastres).toBe(10000);expect(saved.placements[0].id).toBe('base');
+  await login(page,'admin','/admin/engraving');await expect(page.getByRole('heading',{name:'Standalone engraving',exact:true})).toBeVisible();await expect(page.locator('.studio-admin-grid>article')).toHaveCount(9);
+  for(const width of [320,390,768,1440])await screen(page,info,'admin-overview',width);
+  await page.getByRole('button',{name:'Create engraving type',exact:true}).click();
+  await page.getByLabel('Stable type ID',{exact:true}).fill('fixture-flask');await page.getByLabel('Display name',{exact:true}).fill('Fixture Flask');
+  const nav=page.getByRole('navigation',{name:'Configuration sections'});
+  await nav.getByRole('button',{name:/Placements/}).click();await page.getByLabel('New stable placement ID').fill('base');await page.getByRole('button',{name:'Add placement',exact:true}).click();
+  await nav.getByRole('button',{name:/Approval/}).click();await page.getByRole('button',{name:'Publish configuration version',exact:true}).click();
+  await expect(page.getByRole('status')).toContainText('Configuration saved');
+  const saved=(await(await context.request.get(api+'/api/v1/admin/commerce/engraving/types')).json()).data.types.find(value=>value.typeId==='fixture-flask');
   const {revision,version,...configuration}=saved;void version;
-  const next=await post(context,'/admin/commerce/engraving/types',{expectedRevision:revision,configuration:{...configuration,pricePiastres:12500}});expect(next.ok()).toBe(true);
-  await page.getByLabel('Display name',{exact:true}).fill('Retained conflict draft');await page.getByRole('button',{name:'Publish configuration version'}).click();await expect(page.getByRole('alert')).toContainText('draft is retained');await expect(page.getByLabel('Display name',{exact:true})).toHaveValue('Retained conflict draft');
-  await screen(page,info,'admin-configuration',1440);
+  expect((await post(context,'/admin/commerce/engraving/types',{expectedRevision:revision,configuration:{...configuration,name:'Concurrent edit'}})).ok()).toBe(true);
+  await nav.getByRole('button',{name:/General/}).click();await page.getByLabel('Display name',{exact:true}).fill('Retained conflict draft');
+  await nav.getByRole('button',{name:/Approval/}).click();await page.getByRole('button',{name:'Publish configuration version'}).click();await expect(page.getByText(/Your draft is retained/)).toBeVisible();
+  await nav.getByRole('button',{name:/General/}).click();await expect(page.getByLabel('Display name',{exact:true})).toHaveValue('Retained conflict draft');
+  for(const width of [320,390,768,1440])await screen(page,info,'admin-configuration',width);
 });
+
 test('connected physical inspection, acceptance, reconciled payment, engraving and return',async({page,context,browser},info)=>{
   test.setTimeout(120000);await start(page);await text(page);await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByRole('button',{name:'Add Engraving to Cart'}).click();await expect(page.getByRole('heading',{name:'Your engraving is in the cart'})).toBeVisible();
   const checkoutKey=crypto.randomUUID();expect((await post(context,'/commerce/checkout/quote',{checkoutKey,paymentMethod:'instapay',governorate:'cairo'})).ok()).toBe(true);

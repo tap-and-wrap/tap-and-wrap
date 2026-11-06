@@ -1,4 +1,4 @@
-import EngravingSummary from '../engraving/EngravingSummary.jsx';
+import EngravingCartCard from '../engraving/EngravingCartCard.jsx';
 import PersonalizationSummary from '../commerce/PersonalizationSummary.jsx';
 import { Link } from 'react-router-dom';
 import { productHref } from '../../../shared/product-paths.mjs';
@@ -17,7 +17,7 @@ export default function CartPage() {
   return <main className="commerce-page"><div className="commerce-heading"><div><p className="eyebrow">Thoughtful gifts, ready for you</p><h1>Your Cart</h1></div>{cart.items.length > 0 && <button className="commerce-link-button" disabled={pending} onClick={() => clear().catch(() => {})}>Clear cart</button>}</div>
     {!cart.items.length ? <div className="commerce-empty"><p>Your cart is empty.</p><Link className="button button-primary" to="/shop">Explore the shop</Link></div> : <div className="commerce-cart-layout">
       <section aria-label="Cart items" className="commerce-cart-items">{cart.items.map((item) => {
-        if (item.kind === 'engraving_service_v1') return <article key={item.id} className="commerce-cart-item commerce-engraving-cart-item"><div className="commerce-cart-item-content"><h2>{item.name}</h2><EngravingSummary engraving={item.engraving}/>{!item.valid && <p role="alert">{item.error}</p>}{item.attachments?.expiresAt && <p>Private photos expire {new Date(item.attachments.expiresAt).toLocaleString()}. Ordering retains accepted files; cart addition does not extend expiry.</p>}{item.attachments?.replacementRequired && <p>Replace expired images before ordering.</p>}<Link to={`/customize/laser-engraving?edit=${item.id}`}>Edit engraving / replace images</Link><button className="commerce-link-button" disabled={pending} onClick={()=>remove(item.id).catch(()=>{})}>Remove {item.name}</button><p>{item.valid ? money(item.lineTotalPiastres) : 'Review required'}</p><p>One customer-owned item. Inspection and acceptance before payment.</p></div></article>;
+        if (item.kind === 'engraving_service_v1') return <EngravingCartCard key={item.id} item={item} pending={pending} remove={remove}/>;
         const gift = item.kind === 'gift_box_v2';
         if (gift) return <article key={item.id} className="commerce-cart-item commerce-gift-cart-item" aria-label={item.name || 'Build Your Gift Box'}>
           <div className="commerce-cart-photo commerce-gift-photo"><GiftBoxPreview giftBox={item.giftBox}/></div>

@@ -29,17 +29,21 @@ warning requires operator review; no logout failure is hidden.
    cookies never accompany asset requests. A process-only DNS resolver uses
    Cloudflare `1.1.1.1` and `1.0.0.1`; OS/server DNS and database guards are unchanged.
 2. Require healthy database readiness and existing checkout enabled. Verify the
-   two original font hashes, licenses/provenance, three safe local SVGs and hosted
-   bytes. This verifies asset integrity/provenance notices, not material suitability.
+   two original font hashes, all twelve font/license paths, 48 safe local symbols,
+   nine original category illustrations and hosted bytes (85 asset references).
+   This verifies asset integrity/provenance notices, not material suitability.
 3. Authenticate via login + CSRF, verify the live admin identity through `/auth/me`,
    and load every current configuration page and deployed font/icon registry.
 4. Build the entire plan before writes. Refuse duplicate IDs, retired initial
-   types, invalid revisions or existing placements that would require removing
-   historical IDs. Unrelated types remain untouched.
+   types or invalid revisions. Existing placement identities, including disabled
+   and retired positions, are preserved. Unrelated types remain untouched.
 5. Publish only missing/changed initial types through the versioned route using
-   loaded `expectedRevision`. Each type is active, assets approved, 10,000 piastres,
-   both fonts, all three icons, no placements, and text limits 3/80/40. A line is
-   one item and one placement; Office Set is one selected piece.
+   loaded `expectedRevision`. Missing types default to active, asset-approved,
+   10,000 piastres and text limits 3/80/40. Studio V2 upgrades add twelve font IDs,
+   48 symbol IDs and the type's suggested placement IDs. Existing merchant names,
+   prices, status, display order, text limits and placement settings are preserved.
+   Other retains placement help without a fabricated placement. A line is one
+   item and one placement; Office Set is one selected piece.
 6. Verify all nine current types and unchanged checkout. A matching rerun publishes
    nothing. An uncertain POST is never automatically repeated: exact single-version
    readback can confirm it, otherwise stop and explicitly rerun after inspection.

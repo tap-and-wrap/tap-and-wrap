@@ -5,11 +5,13 @@ import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { INITIAL_ENGRAVING_TYPES, FONT_REGISTRY, ICON_REGISTRY } from '../../shared/engraving/definitions.mjs';
+import { STUDIO_PLACEMENTS } from '../../shared/engraving/studio-placements.mjs';
 
 const API = 'https://api.tapandwrap.net';
 const SITE = 'https://tapandwrap.net';
 const ADMIN = '/api/v1/admin/commerce/engraving/types';
 const PUBLIC = '/api/v1/commerce/engraving/types';
+const ITEM_ASSETS = INITIAL_ENGRAVING_TYPES.map(type => `/assets/engraving/v2/${type.typeId}-item.svg`);
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const stop = code => { throw Object.assign(new Error(code), { code }); };
 const safeCode = error => /^[A-Z][A-Z0-9_]{0,100}$/.test(error?.code || '') ? error.code : 'LAUNCH_OPERATION_FAILED';
@@ -30,7 +32,7 @@ export function createProductionClient({ request = https.request, lookup = cloud
   const cookies = new Map();
   let csrf = null;
   const assets = new Set([...FONT_REGISTRY.flatMap(font => [font.source, font.license]),
-    ...ICON_REGISTRY.map(icon => icon.asset), '/assets/engraving/fonts/v1/SOURCE.txt', '/assets/engraving/v1/NOTICE.txt']);
+    ...ICON_REGISTRY.map(icon => icon.asset), ...ITEM_ASSETS, '/assets/engraving/fonts/v1/SOURCE.txt', '/assets/engraving/v1/NOTICE.txt', '/assets/engraving/v2/NOTICE.txt', '/fonts/gift-sticker/SOURCE.txt']);
   const allowedGet = path => ['/health/ready', '/api/v1/status', '/api/v1/auth/csrf', '/api/v1/auth/me'].includes(path)
     || [ADMIN, PUBLIC].some(prefix => new RegExp(`^${prefix}\\?page=([1-9]|[1-9][0-9]|1[0-9]{2}|200)$`).test(path));
   async function send(origin, path, method = 'GET', body) {
@@ -84,18 +86,23 @@ export function createProductionClient({ request = https.request, lookup = cloud
   };
 }
 
-export function desiredConfigurations() {
-  return INITIAL_ENGRAVING_TYPES.map(type => ({ ...type, placements: [], status: 'active', assetsApproved: true,
-    fontIds: FONT_REGISTRY.map(font => font.id), iconIds: ICON_REGISTRY.map(icon => icon.id) }));
+export function desiredConfigurations(records = []) {
+  return INITIAL_ENGRAVING_TYPES.map(type => {
+    const old = records.find(record => record.typeId === type.typeId);
+    const current = old ? configuration(old) : { ...type, status: 'active' };
+    const placements = [...(current.placements || []), ...(STUDIO_PLACEMENTS[type.typeId] || [])
+      .filter(value => !(current.placements || []).some(saved => saved.id === value.id))];
+    return { ...current, placements, assetsApproved: true,
+      fontIds: FONT_REGISTRY.map(font => font.id), iconIds: ICON_REGISTRY.map(icon => icon.id) };
+  });
 }
 function configuration(record) { const { revision, version, ...value } = record; void revision; void version; return value; }
 export function planPublications(records) {
   if (!Array.isArray(records) || new Set(records.map(record => record.typeId)).size !== records.length) stop('DUPLICATE_CURRENT_TYPE');
-  return desiredConfigurations().map(desired => {
+  return desiredConfigurations(records).map(desired => {
     const current = records.find(record => record.typeId === desired.typeId);
     if (current && (!Number.isSafeInteger(current.revision) || current.revision < 1 || !Number.isSafeInteger(current.version) || current.version < 1)) stop('CONFIGURATION_REVISION_INVALID');
     if (current?.status === 'retired') stop('RETIRED_INITIAL_TYPE_REQUIRES_REVIEW');
-    if (current?.placements?.length) stop('EXISTING_PLACEMENTS_REQUIRE_REVIEW');
     return { desired, current, change: !current || !isDeepStrictEqual(configuration(current), desired) };
   });
 }
@@ -114,8 +121,8 @@ export async function listConfigurations(client) {
 }
 
 export async function verifyAssets(client) {
-  const paths = [...FONT_REGISTRY.flatMap(font => [font.source, font.license]), ...ICON_REGISTRY.map(icon => icon.asset),
-    '/assets/engraving/fonts/v1/SOURCE.txt', '/assets/engraving/v1/NOTICE.txt'];
+  const paths = [...FONT_REGISTRY.flatMap(font => [font.source, font.license]), ...ICON_REGISTRY.map(icon => icon.asset), ...ITEM_ASSETS,
+    '/assets/engraving/fonts/v1/SOURCE.txt', '/assets/engraving/v1/NOTICE.txt', '/assets/engraving/v2/NOTICE.txt', '/fonts/gift-sticker/SOURCE.txt'];
   const result = [];
   for (const path of paths) {
     const local = await readFile(new URL(`../../client/public${path}`, import.meta.url));

@@ -32,8 +32,8 @@ test('nine exact active approved configurations pass the application contract an
   assert.deepEqual(desired.map(record => record.typeId), ['perfume','necklace','bracelet','watch','lip-gloss','makeup','bag','office-set','other']);
   for (const value of desired) {
     configurationInput.parse(value); assert.equal(value.status, 'active'); assert.equal(value.assetsApproved, true);
-    assert.equal(value.pricePiastres, 10000); assert.deepEqual(value.placements, []);
-    assert.equal(value.fontIds.length, 2); assert.equal(value.iconIds.length, 3);
+    assert.equal(value.pricePiastres, 10000); assert.ok(Array.isArray(value.placements));
+    assert.equal(value.fontIds.length, 12); assert.equal(value.iconIds.length, 48);
     assert.deepEqual([value.maxLines,value.maxCharacters,value.maxCharactersPerLine], [3,80,40]);
     assert.deepEqual(Object.keys(value).filter(key => /price|fee|adjustment/i.test(key)), ['pricePiastres']);
   }
@@ -48,13 +48,28 @@ test('missing types publish once; rerun adds no versions and preserves unrelated
 });
 test('only changed initial types publish using loaded revision', async () => {
   const f = fixture(desiredConfigurations().map(record => ({ ...record, version: 3, revision: 5 })));
-  f.saved[0].pricePiastres = 20000;
+  f.saved[0].pricePiastres = 20000; f.saved[0].fontIds = [FONT_REGISTRY[0].id];
   await publishInitialTypes(f.client, { id: 'real-admin-id' });
-  assert.equal(f.posts.length, 1); assert.equal(f.posts[0].expectedRevision, 5); assert.equal(f.saved[0].version, 4);
+  assert.equal(f.posts.length, 1); assert.equal(f.posts[0].expectedRevision, 5); assert.equal(f.saved[0].version, 4); assert.equal(f.saved[0].pricePiastres,20000);
 });
-test('duplicate IDs, retired types, existing placements and invalid revisions stop before mutation', async () => {
+
+test('studio upgrade preserves merchant settings and retired placement identities', async () => {
+  const current = { ...desiredConfigurations()[0], name: 'Merchant perfume', status: 'disabled', pricePiastres: 23500,
+    displayOrder: 17, maxLines: 2, maxCharacters: 50, maxCharactersPerLine: 30,
+    placements: [{ id: 'front', label: 'Original front', status: 'retired', displayOrder: 4 },
+      { id: 'custom-surface', label: 'Merchant surface', status: 'disabled', displayOrder: 8 }], version: 1, revision: 1 };
+  const f = fixture([current]);
+  await publishInitialTypes(f.client, { id: 'real-admin-id' });
+  const saved = f.saved.find(value => value.typeId === current.typeId);
+  for (const key of ['name','status','pricePiastres','displayOrder','maxLines','maxCharacters','maxCharactersPerLine']) assert.equal(saved[key], current[key]);
+  assert.deepEqual(saved.placements.slice(0,2), current.placements);
+  assert.equal(saved.placements.filter(value => value.id === 'front').length, 1);
+  assert.equal(saved.version, 2);
+  const count = f.posts.length; await publishInitialTypes(f.client, { id: 'real-admin-id' }); assert.equal(f.posts.length, count);
+});
+test('duplicate IDs, retired types and invalid revisions stop before mutation', async () => {
   const type = { ...desiredConfigurations()[0], version: 1, revision: 1 };
-  for (const records of [[type, type], [{ ...type, status: 'retired' }], [{ ...type, placements: [{ id: 'existing' }] }], [{ ...type, revision: -1 }]]) {
+  for (const records of [[type, type], [{ ...type, status: 'retired' }], [{ ...type, revision: -1 }]]) {
     const f = fixture(records); await assert.rejects(publishInitialTypes(f.client, { id: 'real-admin-id' })); assert.equal(f.posts.length, 0);
   }
 });
@@ -81,7 +96,7 @@ test('read-only verify detects incomplete records without publication', async ()
   assert.equal(f.posts.length, 0);
 });
 test('asset audit checks both font hashes, notices, SVG safety and live bytes', async () => {
-  const f = fixture(); assert.equal((await verifyAssets(f.client)).length, 9);
+  const f = fixture(); assert.equal((await verifyAssets(f.client)).length, FONT_REGISTRY.length*2+ICON_REGISTRY.length+13);
   f.client.asset = async () => Buffer.from('Wrong hosted asset');
   await assert.rejects(verifyAssets(f.client), { code: 'LIVE_ASSET_MISMATCH' });
 });

@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import mongoose from 'mongoose';
 import { EngravingServiceConfiguration as Config } from '../models/EngravingServiceConfiguration.js';
 import { env } from '../config/env.js';
@@ -26,6 +27,7 @@ export async function publishConfiguration(raw, expectedRevision, actor) {
   try { await mongoose.connection.transaction(async session => {
     const old = await Config.findOne({ typeId: configuration.typeId, current: true }).session(session).lean();
     if ((old?.revision ?? 0) !== expectedRevision) throw commerceError(409, 'EDIT_CONFLICT', 'This configuration changed. Your draft is retained.');
+    if (old && isDeepStrictEqual(old.configuration, configuration)) { result = old; return; }
     if (old) {
       if (old.configuration.status === 'retired') throw commerceError(409, 'RETIRED_ID', 'Retired type identifiers cannot be reused.');
       for (const placement of old.configuration.placements) {
