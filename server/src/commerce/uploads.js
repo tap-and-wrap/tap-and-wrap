@@ -1,3 +1,6 @@
+import { commerceOwnerContext } from './ownership.js';
+import { requireEngraving } from '../engraving/configuration.js';
+import { requireCollectionAuthorization } from '../engraving/payment-policy.js';
 import { Order } from '../models/Order.js';
 import { assertRequestIntakeOpen } from './request-intake.js';
 import { productPersonalizationFields } from '../../../shared/product-personalization.mjs';
@@ -63,9 +66,16 @@ export function serializeUpload(upload) {
 }
 
 async function policyForUpload(owner, body) {
-  if (!body || !['personalization', 'artwork', 'payment_proof', 'service_reference', 'gift_box_photo'].includes(body.purpose)) {
+  if (!body || !['personalization', 'artwork', 'payment_proof', 'service_reference', 'gift_box_photo', 'engraving_service'].includes(body.purpose)) {
     throw fail('INVALID_UPLOAD_PURPOSE', 'Choose a supported upload purpose.');
   }
+  if (body.purpose === 'engraving_service') {
+    requireEngraving();
+    if (body.ownerContext !== commerceOwnerContext(owner)) throw fail('ENGRAVING_OWNER_CHANGED', 'Your private shopping session changed. Reload the cart before starting another engraving.', 409);
+    if (!/^[a-f0-9-]{36}$/i.test(body.engravingItemKey || '') || !['item_photo','surface_photo','personal_artwork'].includes(body.fieldKey) || ['productId','giftBoxId','orderId','requestKey','templateId','templateVersion','checkoutKey'].some(key => body[key] !== undefined)) throw fail('ENGRAVING_UPLOAD_SCOPE_INVALID', 'Select an engraving item and image role.');
+    return { acceptedMimeTypes: UPLOAD_MIME_TYPES, maxBytes: 8388608, fieldKey: body.fieldKey };
+  }
+  if (body.ownerContext !== undefined || body.engravingItemKey !== undefined) throw fail('ENGRAVING_UPLOAD_SCOPE_INVALID', 'An engraving item cannot be attached to another upload purpose.');
   if (body.purpose === 'gift_box_photo') {
     // Gift boxes are NOT Products. Never create a dummy product or borrow a
     // product personalization field to sign an otherwise unowned private file.
@@ -85,8 +95,9 @@ async function policyForUpload(owner, body) {
   }
   if (body.purpose === 'payment_proof') {
     if (!mongoose.isObjectIdOrHexString(body.orderId)) throw fail('ORDER_REQUIRED', 'Create an order before transferring and uploading proof.');
-    const order = await Order.findOne({ _id: body.orderId, owner, paymentMethod: 'instapay', orderChannel: { $ne: 'owner_quotation' }, accountingVersion: 1, fulfillmentState: { $nin: ['cancelled', 'returned', 'delivery_failed'] } }).select('_id').lean();
+    const order = await Order.findOne({ _id: body.orderId, owner, paymentMethod: 'instapay', orderChannel: { $ne: 'owner_quotation' }, accountingVersion: 1, fulfillmentState: { $nin: ['cancelled', 'returned', 'delivery_failed'] } }).select('_id lines engraving').lean();
     if (!order) throw fail('ORDER_NOT_FOUND', 'No eligible owned order was found.', 404);
+    requireCollectionAuthorization(order);
     return { acceptedMimeTypes: UPLOAD_MIME_TYPES, maxBytes: 5 * 1024 * 1024, fieldKey: 'payment_proof' };
   }
   if (!mongoose.isObjectIdOrHexString(body.productId) || typeof body.fieldKey !== 'string'
@@ -150,7 +161,7 @@ export async function signUpload(owner, body) {
       await reserveQuota(owner, body.sizeBytes, { session });
       writeGuard();
       [upload] = await Upload.create([{
-        owner, purpose: body.purpose, productId: body.purpose === 'payment_proof' || body.purpose === 'gift_box_photo' ? undefined : body.productId,
+        owner, purpose: body.purpose, engravingItemKey: body.purpose === 'engraving_service' ? body.engravingItemKey : undefined, productId: body.purpose === 'payment_proof' || body.purpose === 'gift_box_photo' ? undefined : body.productId,
         giftBoxId: body.purpose === 'gift_box_photo' ? body.giftBoxId : undefined,
         fieldKey: policy.fieldKey, requestKey: body.purpose === 'service_reference' ? body.requestKey : undefined, proofOrderId: body.purpose === 'payment_proof' ? body.orderId : undefined,
         mimeType: body.mimeType, sizeBytes: body.sizeBytes, temporaryKey: privateObjectKey(),

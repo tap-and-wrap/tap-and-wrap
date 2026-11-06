@@ -1,0 +1,9 @@
+Standalone engraving font assets v1. These are byte-for-byte copies of the
+existing licensed Tap & Wrap font files from client/public/fonts/gift-sticker/.
+Original source: https://github.com/google/fonts/tree/bbda7253fc363238b05d97515ca71f8ae49c4fa9
+Each font retains its accompanying copyright/license text. Trailing whitespace
+in the Amiri notice was normalized; no license terms or font bytes were changed.
+Amiri SHA-256: ab391c4147d054c48976e98322ad0eefe1427aa0e0502a12a4c75d80a70cfcd7
+Rochester SHA-256: 38657df5e357e841a39995592970ac14ea96a1376f178f0d8e0231fd5d630b2b
+Do not overwrite a versioned asset; publish a new ID/path/version instead.
+Merchant approval is required before production engraving availability.

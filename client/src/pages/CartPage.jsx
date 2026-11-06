@@ -1,3 +1,4 @@
+import EngravingSummary from '../engraving/EngravingSummary.jsx';
 import PersonalizationSummary from '../commerce/PersonalizationSummary.jsx';
 import { Link } from 'react-router-dom';
 import { productHref } from '../../../shared/product-paths.mjs';
@@ -7,7 +8,7 @@ import GiftBoxCartSummary from '../commerce/GiftBoxCartSummary.jsx';
 import GiftBoxPreview from '../commerce/GiftBoxPreview.jsx';
 
 export default function CartPage() {
-  const { cart, checkoutEnabled, loading, error, pending, setQuantity, remove, clear, refresh } = useCart();
+  const { cart, checkoutEnabled, mixedCheckout, loading, error, pending, setQuantity, remove, clear, refresh } = useCart();
   const invalid = cart.items.some((item) => !item.valid);
   // The server calculates checkout eligibility from current prices, settings
   // and launch authorization. A gift is not categorically non-checkoutable.
@@ -16,6 +17,7 @@ export default function CartPage() {
   return <main className="commerce-page"><div className="commerce-heading"><div><p className="eyebrow">Thoughtful gifts, ready for you</p><h1>Your Cart</h1></div>{cart.items.length > 0 && <button className="commerce-link-button" disabled={pending} onClick={() => clear().catch(() => {})}>Clear cart</button>}</div>
     {!cart.items.length ? <div className="commerce-empty"><p>Your cart is empty.</p><Link className="button button-primary" to="/shop">Explore the shop</Link></div> : <div className="commerce-cart-layout">
       <section aria-label="Cart items" className="commerce-cart-items">{cart.items.map((item) => {
+        if (item.kind === 'engraving_service_v1') return <article key={item.id} className="commerce-cart-item commerce-engraving-cart-item"><div className="commerce-cart-item-content"><h2>{item.name}</h2><EngravingSummary engraving={item.engraving}/>{!item.valid && <p role="alert">{item.error}</p>}{item.attachments?.expiresAt && <p>Private photos expire {new Date(item.attachments.expiresAt).toLocaleString()}. Ordering retains accepted files; cart addition does not extend expiry.</p>}{item.attachments?.replacementRequired && <p>Replace expired images before ordering.</p>}<Link to={`/customize/laser-engraving?edit=${item.id}`}>Edit engraving / replace images</Link><button className="commerce-link-button" disabled={pending} onClick={()=>remove(item.id).catch(()=>{})}>Remove {item.name}</button><p>{item.valid ? money(item.lineTotalPiastres) : 'Review required'}</p><p>One customer-owned item. Inspection and acceptance before payment.</p></div></article>;
         const gift = item.kind === 'gift_box_v2';
         if (gift) return <article key={item.id} className="commerce-cart-item commerce-gift-cart-item" aria-label={item.name || 'Build Your Gift Box'}>
           <div className="commerce-cart-photo commerce-gift-photo"><GiftBoxPreview giftBox={item.giftBox}/></div>
@@ -39,6 +41,7 @@ export default function CartPage() {
         </div><strong className="commerce-cart-line-total">{item.valid ? money(item.lineTotalPiastres) : 'Unavailable'}</strong>
       </article>; })}</section>
       <aside className="commerce-summary"><h2>Order Summary</h2><dl><div><dt>Subtotal</dt><dd>{money(cart.subtotalPiastres)}</dd></div><div><dt>Delivery</dt><dd>Confirmed separately</dd></div></dl><p className="commerce-muted">Eligible discounts are applied at checkout.</p>
+        {mixedCheckout && <p role="alert">Engraving must be ordered separately from products and Gift Boxes. Remove the other group to check out; nothing is removed automatically.</p>}
         {invalid && <p className="form-error">Review unavailable items before checkout.</p>}
 
         {checkoutEnabled && !invalid ? <Link className="button button-primary" to="/checkout">Proceed to Checkout</Link> : <><button className="button button-primary" disabled>Checkout unavailable</button>{!checkoutEnabled && !invalid && <p className="commerce-muted">Ordering is not available for the current cart yet.</p>}</>}

@@ -1,0 +1,6 @@
+Tap & Wrap engraving symbols v1
+Origin: original geometric path artwork authored locally for this project, 2026.
+License: CC0-1.0 dedication. No competitor artwork or third-party icon package used.
+These versioned assets are candidates, not production approval. A merchant must
+review suitability and explicitly approve assets in each published configuration.
+Do not replace an asset at an existing v1 path. Publish a new ID/path/version.

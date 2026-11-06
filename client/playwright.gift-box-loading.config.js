@@ -3,6 +3,7 @@ import base from './playwright.config.js';
 
 export default defineConfig({
   ...base,
+  metadata: { browserFixture: 'production-preview' },
   testIgnore: [],
   testMatch: ['**/gift-box-loading.spec.js'],
   outputDir: './test-results/gift-box-loading',

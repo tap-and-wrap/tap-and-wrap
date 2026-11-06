@@ -1,3 +1,4 @@
+import { validEngravingLine } from '../engraving/contracts.js';
 import { z } from 'zod';
 import { deepFreeze, getFixedComponent } from '../../../shared/gift-box/definitions.mjs';
 import { giftBoxV2CommerceInput, identifyGiftBoxConfiguration } from './commerce-contract.js';
@@ -134,5 +135,5 @@ export function giftBoxOrderLine(quoted) {
 
 export function validOrderLineKinds(lines) {
   return Array.isArray(lines) && lines.every(line => line && typeof line === 'object'
-    && (line.kind === undefined || line.kind === 'product' || line.kind === 'gift_box_v2' && giftBoxOrderLineInput.safeParse(line).success));
+    && (line.kind === undefined || line.kind === 'product' || line.kind === 'engraving_service_v1' && validEngravingLine(line) || line.kind === 'gift_box_v2' && giftBoxOrderLineInput.safeParse(line).success));
 }

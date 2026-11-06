@@ -45,10 +45,10 @@ async function foundation(page, { role, loseFirst = false } = {}) {
 test('COD mobile checkout shows merchandise-only amount and Pending Confirmation delivery', async ({ page }) => {
   const fixture = await foundation(page); const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto('/checkout'); await fillCheckout(page);
-  await expect(page.getByText('Pending Confirmation', { exact: true })).toBeVisible();
+  await expect(page.getByText('Confirmed separately', { exact: true })).toBeVisible();
   await expect(page.getByText('Price awaiting approval', { exact: true })).toHaveCount(0);
   await expect(page.locator('.commerce-total')).toContainText('250.00');
-  await expect(page.getByText(/Payable now: EGP 0.00/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: /InstaPay instructions/ })).toHaveCount(0);
   await page.setViewportSize({ width: 320, height: 900 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/batch3-checkout-320.png', fullPage: true });

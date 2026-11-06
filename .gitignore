@@ -27,3 +27,6 @@ test-results-contracts/
 playwright-report/
 test-results-*.txt
 .playwright-mcp/
+# Isolated standalone-engraving verification artifacts and owned Vite caches.
+client/test-results-engraving-*/
+client/test-results-browser-cache-*/

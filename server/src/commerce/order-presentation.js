@@ -1,3 +1,5 @@
+import { engravingCollectionAllowed } from '../engraving/payment-policy.js';
+import { validEngravingLine } from '../engraving/contracts.js';
 import { isFreePresentation } from '../../../shared/gift-box/presentation.mjs';
 // Order snapshots contain Mixed fields for immutable historical records. Customer
 // responses must explicitly select their public contract, never spread a record.
@@ -84,6 +86,11 @@ function giftBox(value, { admin }) {
   return result;
 }
 function orderLine(line, { admin }) {
+  if (line.kind === 'engraving_service_v1') {
+    if (!validEngravingLine(line)) return { kind: 'unsupported', name: 'Engraving details unavailable' };
+    const saved = line.engraving, spec = saved.specification;
+    return { ...pick(line, ['kind','name','quantity','unitPricePiastres','lineTotalPiastres']), engraving: { snapshotVersion: saved.snapshotVersion, typeName: saved.configuration.name, fileRoles: ['itemPhotoUploadId', ...(spec.surfacePhotoUploadId ? ['surfacePhotoUploadId'] : []), ...(spec.content.mode === 'personal' ? ['artworkUploadId'] : [])], itemKey: spec.itemKey, description: spec.description, placement: spec.placement, placementLabel: spec.placement.kind === 'help' ? 'Help me choose the best placement' : saved.configuration.placements.find(value => value.id === spec.placement.placementId)?.label, content: pick(spec.content, ['mode','text','fontId','iconId','subtype']), requestedAppearance: spec.requestedAppearance, specialRequests: spec.specialRequests, font: saved.font, icon: saved.icon, ...(admin ? { placements: saved.configuration.placements } : {}), customerOwnedItem: true } };
+  }
   if (line.kind === 'gift_box_v2') return { ...pick(line, ['kind', 'name', 'quantity', 'unitPricePiastres', 'lineTotalPiastres']), giftBox: giftBox(line.giftBox, { admin }) };
   if (line.kind !== undefined && line.kind !== 'product') return { kind: 'unsupported', name: 'Order item details unavailable' };
   return { kind: 'product', ...pick(line, ['productId', 'name', 'slug', 'variantKey', 'variantLabel', 'sku', 'description', 'categoryId', 'subcategoryId', 'mainImageUrl', 'quantity', 'unitPricePiastres', 'lineTotalPiastres']),
@@ -107,10 +114,12 @@ export function presentOrder(order, { admin = false } = {}) {
   return { id: String(order._id), _id: String(order._id), orderNumber: order.orderNumber,
     customer: pick(order.customer, ['name', 'email', 'phone', 'governorate', 'address', 'notes']),
     lines: (order.lines || []).map(line => orderLine(line, { admin })),
+    collectionAuthorized: engravingCollectionAllowed(order),
+    engravingWorkflow: order.engraving ? { collectionAuthorized: order.engraving.collectionAuthorized === true, items: (order.engraving.items || []).map(item => ({ ...pick(item, ['itemKey','stage','inCustody','receivedAt','returnedAt','returnArrangement']), ...(admin ? pick(item, ['condition','accessories','inspectionApproved']) : {}), proposal: item.proposal ? { ...pick(item.proposal, ['version','placementLabel','publicDetails','acceptedAt']), ...(admin ? pick(item.proposal, ['privateEvidence']) : {}) } : null, history: (item.history || []).map(entry => ({ ...pick(entry, ['action','at','publicReason']), ...(admin ? pick(entry, ['internalNote']) : {}) })) })) } : null,
     proofStatus: order.proofHistory?.at(-1)?.state || null,
     orderChannel: order.orderChannel || 'website', ...(admin && order.serviceRequestId ? { serviceRequestId: String(order.serviceRequestId) } : {}), allowedPaymentMethods: order.allowedPaymentMethods || [], accountingVersion: order.accountingVersion || 0, followUpDueAt: order.followUpDueAt, cancellationRequestedAt: order.cancellationRequestedAt,
     shipping: order.accountingVersion === 1 ? (order.charges || []).filter(charge => charge.kind === 'shipping').map(charge => pick(charge, ['id', 'state', 'amountPiastres', 'collectionMethod', 'acceptedAt']))[0] : null,
-    paymentInstructions: order.accountingVersion === 1 && order.orderChannel !== 'owner_quotation' && order.paymentMethod === 'instapay' ? { destination: '01060673073', amountPiastres: order.totals.totalPiastres, orderReference: order.orderNumber } : null,
+    paymentInstructions: engravingCollectionAllowed(order) && order.accountingVersion === 1 && order.orderChannel !== 'owner_quotation' && order.paymentMethod === 'instapay' ? { destination: '01060673073', amountPiastres: order.totals.totalPiastres, orderReference: order.orderNumber } : null,
     totals, paymentMethod: order.paymentMethod, paymentState: order.paymentState, fulfillmentState: order.fulfillmentState,
     history: presentOrderHistory(order.history, { admin }), createdAt: order.createdAt, updatedAt: order.updatedAt, revision: order.revision,
     canCancel: ['received', 'confirmed'].includes(order.fulfillmentState) && (order.accountingVersion === 1 || order.paymentState !== 'paid'),

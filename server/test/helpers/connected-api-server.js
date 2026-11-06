@@ -18,6 +18,8 @@ Object.assign(process.env, {
   CHECKOUT_ENABLED: String(enabledCheckout), COMMERCE_LAUNCH_AUTHORIZED: String(enabledCheckout), STORAGE_ENABLED: 'false',
   CUSTOM_REQUESTS_ENABLED: 'true', CUSTOM_REQUESTS_LAUNCH_AUTHORIZED: 'true',
   GIFT_BOX_BUILDER_BACKEND_ENABLED: 'true',
+  ENGRAVING_CONFIGURATION_ENABLED: String(process.env.TAP_WRAP_CONTRACT_ENGRAVING === 'true'),
+  ENGRAVING_ENABLED: String(process.env.TAP_WRAP_CONTRACT_ENGRAVING === 'true'), ENGRAVING_LAUNCH_AUTHORIZED: String(process.env.TAP_WRAP_CONTRACT_ENGRAVING === 'true'),
   EMAIL_ENABLED: 'false', EMAIL_USER: '', EMAIL_APP_PASSWORD: '', EMAIL_SMOKE_TEST_ENABLED: 'false',
   NOTIFICATIONS_ENABLED: 'false', NOTIFICATION_LIVE_DELIVERY_ENABLED: 'false', NOTIFICATION_SAFE_RECIPIENTS: '', RESEND_API_KEY: '',
   META_ENABLED: 'false', META_POLICY_APPROVED: 'false', META_CAPI_ENABLED: 'false', META_PIXEL_ID: '', META_ACCESS_TOKEN: '',
@@ -96,6 +98,13 @@ try {
   const passwordHash = await bcrypt.hash('isolated-fixture-password', 4);
   const accounts = {};
   for (const [name, role] of [['admin', 'admin'], ['alice', 'customer'], ['bob', 'customer']]) accounts[name] = await User.create({ name: `Connected ${name}`, email: `${name}@connected.example.test`, role, passwordHash, active: true });
+  if (process.env.TAP_WRAP_CONTRACT_ENGRAVING === 'true') {
+    const { EngravingServiceConfiguration } = await import('../../src/models/EngravingServiceConfiguration.js');
+    const { publishConfiguration } = await import('../../src/engraving/configuration.js');
+    const { INITIAL_ENGRAVING_TYPES, FONT_REGISTRY, ICON_REGISTRY } = await import('../../../shared/engraving/definitions.mjs');
+    await EngravingServiceConfiguration.createCollection(); await EngravingServiceConfiguration.createIndexes();
+    for (const definition of INITIAL_ENGRAVING_TYPES) await publishConfiguration({ ...definition, status: 'active', assetsApproved: true, fontIds: FONT_REGISTRY.map(value=>value.id), iconIds: ICON_REGISTRY.map(value=>value.id), placements: [{id:'front',label:'Front surface',status:'active',displayOrder:0}] }, 0, accounts.admin);
+  }
   // This executable is already restricted to a fresh isolated test replica set.
   // Install synthetic policies here, never through an application route or flag.
   const { GiftBoxComponentSetting } = await import('../../src/models/GiftBoxComponentSetting.js');

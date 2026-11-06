@@ -1,17 +1,18 @@
+import { specificationInput } from '../engraving/contracts.js';
 import mongoose from 'mongoose';
 import { giftCartConfigurationInput } from '../commerce/cart-contract.js';
 import { identifyGiftBoxConfiguration } from '../gift-box/commerce-contract.js';
-const productOnly = value => function () { return this.kind === 'gift_box_v2' ? undefined : value; };
+const productOnly = value => function () { return ['gift_box_v2','engraving_service_v1'].includes(this.kind) ? undefined : value; };
 const line = new mongoose.Schema({
   id: { type: String, required: true }, identity: { type: String, required: true },
-  kind: { type: String, enum: ['product', 'gift_box_v2'] },
-  productId: { type: mongoose.Schema.Types.ObjectId, required() { return this.kind !== 'gift_box_v2'; }, ref: 'Product' },
+  kind: { type: String, enum: ['product', 'gift_box_v2', 'engraving_service_v1'] },
+  productId: { type: mongoose.Schema.Types.ObjectId, required() { return this.kind === undefined || this.kind === 'product'; }, ref: 'Product' },
   name: { type: String, maxlength: 240 }, slug: { type: String, maxlength: 300 }, mainImageUrl: { type: String, maxlength: 2000, default: productOnly(null) },
   variantKey: { type: String, default: productOnly(null) }, quantity: { type: Number, min: 1, max: 99, required: true, validate: Number.isSafeInteger },
   personalization: { type: mongoose.Schema.Types.Mixed, default: productOnly({}) }, customization: { type: mongoose.Schema.Types.Mixed, default: productOnly(null) },
 }, { _id: false, strict: 'throw', discriminatorKey: 'kind', versionKey: false });
 line.pre('validate', function () {
-  if (this.kind === 'gift_box_v2') {
+  if (['gift_box_v2','engraving_service_v1'].includes(this.kind)) {
     for (const key of ['productId', 'slug', 'mainImageUrl', 'variantKey', 'personalization', 'customization']) {
       if (this.get(key) !== undefined) this.invalidate(key, 'Product fields cannot appear on a configured gift line.');
     }
@@ -54,5 +55,6 @@ giftLine.pre('validate', function () {
   }
 });
 schema.path('items').discriminator('gift_box_v2', giftLine);
+schema.path('items').discriminator('engraving_service_v1', new mongoose.Schema({ specification: { type: mongoose.Schema.Types.Mixed, required: true, validate: value => specificationInput.safeParse(value).success }, reviewFingerprint: { type: String, required: true, match: /^[a-f0-9]{64}$/ } }, { _id: false, strict: 'throw', versionKey: false }));
 schema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 export const Cart = mongoose.model('Cart', schema);

@@ -1,6 +1,9 @@
+import { env } from '../config/env.js';
 import mongoose from 'mongoose';
 import { validOrderLineKinds } from '../gift-box/order-snapshot.js';
 const schema = new mongoose.Schema({
+  cartAddOperations: { type: [mongoose.Schema.Types.Mixed], default: [], immutable: true },
+  engraving: { type: mongoose.Schema.Types.Mixed, default: null },
   orderNumber: { type: String, required: true, unique: true, match: /^[1-9][0-9]{5}$/ },
   owner: { type: String, required: true }, userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   checkoutKey: { type: String, required: true }, requestHash: { type: String, required: true },
@@ -45,6 +48,7 @@ schema.pre('validate', function () {
   }
 });
 schema.index({ owner: 1, checkoutKey: 1 }, { unique: true });
+if (env.engravingConfigurationEnabled) schema.index({ owner: 1, 'cartAddOperations.key': 1 });
 schema.index({ createdAt: -1, _id: -1 });
 schema.index({ userId: 1, createdAt: -1, _id: -1 });
 schema.index({ fulfillmentState: 1, createdAt: -1, _id: -1 });

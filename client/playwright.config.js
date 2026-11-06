@@ -2,7 +2,12 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
-  testIgnore: ['**/gift-box-v2.spec.js','**/gift-box-phase35.spec.js','**/gift-box-phase4.spec.js','**/gift-box-cart.spec.js'],
+  // Enabled-builder studies use playwright.gift-box-phase4.config.js. The
+  // production chunk-loading check uses playwright.gift-box-loading.config.js.
+  // Default public intake stays disabled; do not run contradictory fixtures here.
+  testIgnore: ['**/gift-box-v2.spec.js','**/gift-box-phase35.spec.js','**/gift-box-phase4.spec.js','**/gift-box-cart.spec.js',
+    '**/gift-box-calibration.spec.js','**/gift-box-redesign.spec.js','**/gift-box-release-checkout.spec.js',
+    '**/gift-box-phase6b4-audit.spec.js','**/gift-box-personalization-final.spec.js','**/gift-box-loading.spec.js'],
   timeout: 30_000,
   expect: { timeout: 8000 },
   fullyParallel: false,

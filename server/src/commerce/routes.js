@@ -1,3 +1,5 @@
+import { engravingCollectionAllowed } from '../engraving/payment-policy.js';
+import { engravingRoutes, adminEngravingRoutes } from '../engraving/routes.js';
 import { whatsappQuotation } from './whatsapp-quotation.js';
 import { serviceRequestRoutes, adminServiceRequestRoutes } from './service-request.routes.js';
 import { operationsRoutes } from './operations.js';
@@ -109,7 +111,7 @@ commerceRoutes.post('/cart/items', async (req, res) => res.status(201).json({ ok
   onAdded: async (item) => {
     // Builder contents/messages/configuration hashes have no approved public
     // Product tracking identity. Do not construct or dispatch a gift receipt.
-    if (item.kind === 'gift_box_v2') return null;
+    if (item.kind === 'gift_box_v2' || item.kind === 'engraving_service_v1') return null;
     const parameters = monetaryParameters([item], item.unitPricePiastres * item.quantity);
     const [product] = await attachProductPaths([{ _id: item.productId, slug: item.slug }]);
     const sourcePath = productHref(product);
@@ -154,7 +156,7 @@ commerceRoutes.post('/orders', checkoutLimit, async (req, res) => {
   // or adapter must not turn an already committed order into a false failure.
   try {
     const record = consent ? await getOwnedOrder(order.id, req.commerceOwner) : null;
-    paymentTracking = record && String(record.trackingConsentId) === String(consent._id)
+    paymentTracking = record && engravingCollectionAllowed(record) && String(record.trackingConsentId) === String(consent._id)
       ? await captureAction(req, 'AddPaymentInfo', { currency: 'EGP', value: record.totals.totalPiastres / 100, payment_method: record.paymentMethod }, { sourcePath: '/checkout', dedupKey: `order:${record._id}` }) : null;
     tracking = record ? await optionalPurchaseReceipt(record, req) : null;
   } catch { /* The order and durable transactional event remain authoritative. */ }
@@ -175,11 +177,13 @@ commerceRoutes.get('/orders/:id', async (req, res) => {
 commerceRoutes.post('/orders/:id/accounting', async (req, res) => { const order = await mutateOrderAccounting(id.parse(req.params.id), req.commerceOwner, accountingInput.parse(req.body), req.user); res.json({ ok: true, data: { order: { ...presentOrder(order), accounting: await orderAccounting(order) } } }); });
 commerceRoutes.post('/orders/:id/cancel', async (req, res) => { const input = z.object({ revision: states.shape.revision, reason: states.shape.reason }).strict().parse(req.body); const record = await getOwnedOrder(id.parse(req.params.id), req.commerceOwner); const order = record.accountingVersion === 1 ? presentOrder(await mutateOrderAccounting(record._id, req.commerceOwner, { ...input, action: 'request_cancel' }, req.user)) : await changeOrderState(record._id, req.commerceOwner, { ...input, fulfillmentState: 'cancelled' }, req.user); res.json({ ok: true, data: { order } }); });
 
+commerceRoutes.use(engravingRoutes);
 commerceRoutes.use(publicConfigurationRoutes);
 commerceRoutes.use(serviceRequestRoutes);
 commerceRoutes.use('/uploads', uploadsRouter);
 export const adminCommerceRoutes = Router();
 adminCommerceRoutes.use(requireCommerceDatabase, requireAuth, requireAdmin, csrfProtection);
+adminCommerceRoutes.use(adminEngravingRoutes);
 adminCommerceRoutes.use(operationsRoutes);
 adminCommerceRoutes.use(adminServiceRequestRoutes);
 adminCommerceRoutes.get('/settlements/lookup', async (req, res) => {

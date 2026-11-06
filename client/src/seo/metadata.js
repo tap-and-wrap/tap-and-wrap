@@ -9,7 +9,7 @@ export const PUBLIC_STATIC_ROUTES = Object.freeze({
   '/shop': { title: 'Shop Gifts | Tap & Wrap', description: 'Browse approved Tap & Wrap gifts by category, availability and price.', heading: 'Shop Our Gifts' },
   '/customize': { title: 'Personalized Gifts | Tap & Wrap', description: 'Explore Build Your Gift Box and Laser Engraving, with options configured for eligible products.', heading: 'Make It Yours' },
   '/customize/gift-box': { title: 'Build Your Gift Box | Tap & Wrap', description: 'Request a bespoke gift box without upfront payment, with a reviewed quotation shared through WhatsApp.', heading: 'Build Your Gift Box' },
-  '/customize/laser-engraving': { title: 'Laser Engraving | Tap & Wrap', description: 'Request laser engraving with owner-reviewed options and a quotation through WhatsApp before payment.', heading: 'Laser Engraving' },
+  '/customize/laser-engraving': { title: 'Laser Engraving | Tap & Wrap', description: 'Personal engraving for an item you already own. Physical inspection and final design approval before payment.', heading: 'Laser Engraving' },
 });
 export const CONTENT_ROUTES = Object.freeze(['/about', '/contact', '/privacy-policy', '/refund-policy', '/shipping-policy', '/terms-of-service']);
 export const PRIVATE_ROUTE = /^\/(?:admin(?:\/|$)|cart(?:\/|$)|checkout(?:\/|$)|orders(?:\/|$)|my-orders(?:\/|$)|track-order(?:\/|$)|login(?:\/|$)|signup(?:\/|$)|reset-password(?:\/|$)|forgot-password(?:\/|$)|verify-email(?:\/|$))/;

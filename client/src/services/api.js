@@ -47,6 +47,9 @@ api.interceptors.response.use(response => {
   if (config && error.response?.status === 403 && error.response?.data?.error?.code === 'INVALID_CSRF' && !config.csrfRetried) {
     config.csrfRetried = true;
     if (csrfToken === config.headers?.['x-csrf-token']) csrfToken = null;
+    // One-use password recovery must remain an explicit single POST, including
+    // pre-execution CSRF rejection. Other mutations retain bounded recovery.
+    if (config.csrfRetry === false) throw error;
     const token = await getCsrfToken();
     assertCurrent(config);
     if (config.signal?.aborted) throw new axios.CanceledError();

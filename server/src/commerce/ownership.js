@@ -3,6 +3,7 @@ import { env } from '../config/env.js';
 import { optionalAuth } from '../middleware/auth.js';
 
 const ownerFor = token => `guest:${createHash('sha256').update(token).digest('hex')}`;
+export const commerceOwnerContext = owner => createHash('sha256').update(`checkout-context:${owner}`).digest('hex');
 export function guestOwner(req) {
   const token = req.cookies?.tw_cart;
   return typeof token === 'string' && /^[a-f0-9]{64}$/.test(token) ? ownerFor(token) : null;

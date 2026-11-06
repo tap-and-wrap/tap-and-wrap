@@ -1,3 +1,4 @@
+import { EngravingServiceConfiguration } from '../models/EngravingServiceConfiguration.js';
 import { OrderSettlement } from '../models/OrderSettlement.js';
 import { GiftBoxComponentSetting } from '../models/GiftBoxComponentSetting.js';
 import { GiftBoxPersonalizationOption } from '../models/GiftBoxPersonalizationOption.js';
@@ -21,7 +22,7 @@ import { TrackingConsent } from '../models/TrackingConsent.js';
 import { MetaEvent } from '../models/MetaEvent.js';
 import { assertDatabaseWriteAllowed, DatabaseSafetyError } from './database-safety.js';
 
-export const databaseModels = [...new Set([OrderSettlement, Product, Category, ComponentOption, User, Session, ...commerceModels,
+export const databaseModels = [...new Set([OrderSettlement, Product, Category, ComponentOption, User, Session, ...commerceModels, ...(env.engravingConfigurationEnabled ? [EngravingServiceConfiguration] : []),
   ...(process.env.CATALOG_MEDIA_UPLOADS_ENABLED === 'true' ? [CatalogMedia] : []),
   ...websiteModels, AccountActionToken, EmailRateWindow, TrackingConsent, MetaEvent, ...(env.productAliasesEnabled ? [ProductAddress] : []),
   ...(env.giftBoxBuilderBackendEnabled ? [GiftBoxComponentSetting, GiftBoxFulfillmentPolicyFence, GiftBoxPhysicalPolicy, GiftBoxPolicyPublication, ...(env.giftBoxPersonalizationOptionsEnabled ? [GiftBoxPersonalizationOption] : [])] : [])])];

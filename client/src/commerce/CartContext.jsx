@@ -45,6 +45,7 @@ export function CartProvider({ children }) {
   }, [queryClient]);
   const value = useMemo(() => ({
     cart: session.ready && query.data?.cart || { items: [], subtotalPiastres: 0, quantity: 0 },
+    mixedCheckout: session.ready && query.data?.mixedCheckout === true,
     checkoutEnabled: session.ready && query.data?.checkoutEnabled === true,
     checkoutOwnerKey: session.ready && /^[a-f0-9]{64}$/.test(query.data?.checkoutOwnerKey || '') ? query.data.checkoutOwnerKey : null,
     loading: session.phase === 'checking' || session.phase === 'transition' || session.ready && query.isPending, error: session.error || query.error, pending, feedback,

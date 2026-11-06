@@ -1,5 +1,8 @@
 # Tap & Wrap — JavaScript project
 
+Standalone customer-owned-item engraving is implemented locally behind default-off
+configuration/intake gates. See [contracts, custody/payment policy and guarded release preparation](docs/STANDALONE_ENGRAVING_IMPLEMENTATION.md).
+
 **Plain MERN project like Darb and Wish A Mesh. NO TypeScript. NO pnpm or workspaces.**
 
 - `client/`: React + Vite + JavaScript/JSX + Tailwind CSS 4, React Router, TanStack Query, Axios.

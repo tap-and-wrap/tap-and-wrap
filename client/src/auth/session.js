@@ -75,7 +75,7 @@ export async function changeAuthentication(path, payload) {
   if (snapshot.phase === 'transition') throw new Error('An account change is already in progress.');
   const generation = reset('transition');
   try {
-    const response = await safePost(path, payload);
+    const response = await safePost(path, payload, path === '/auth/reset-password' ? { csrfRetry: false } : {});
     // Set-Cookie can already have changed the shared browser even if another
     // tab superseded this request. Every completed auth response must announce
     // that change, rather than leaving other tabs bound to the previous owner.

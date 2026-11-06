@@ -1,3 +1,5 @@
+import { EngravingDraftProvider } from './engraving/EngravingDraftProvider.jsx';
+import { PasswordResetResultProvider } from './auth/PasswordResetResultProvider.jsx';
 import { GiftBoxDraftProvider } from './gift-box/GiftBoxDraftProvider.jsx';
 import { lazy, Suspense } from 'react';
 import { Route, Routes, Navigate, useLocation } from 'react-router-dom';
@@ -16,6 +18,8 @@ import TrackingConsent from './tracking/TrackingConsent.jsx';
 import { useSession } from './auth/SessionProvider.jsx';
 import PageErrorBoundary from './components/PageErrorBoundary.jsx';
 import RouteFocus, { focusMainContent } from './components/RouteFocus.jsx';
+const EngravingBuilderPage = lazy(() => import('./pages/EngravingBuilderPage.jsx'));
+const AdminEngravingPage = lazy(() => import('./pages/AdminEngravingPage.jsx'));
 const CategoryPage = lazy(() => import('./pages/CategoryPage.jsx'));
 const AccountRecoveryPage = lazy(() => import('./pages/AccountRecoveryPage.jsx'));
 const AdminWebsitePage = lazy(() => import('./pages/AdminWebsitePage.jsx'));
@@ -47,7 +51,7 @@ export default function App() {
  const session = useSession();
  const location = useLocation();
  const privateRoute = /^\/(?:admin|orders|my-orders|cart|checkout|track-order)(?:\/|$)/.test(location.pathname) || /^\/products\/[^/]+(?:\/customize)?$/.test(location.pathname) || /^\/customize\/(?:gift-box|laser-engraving)$/.test(location.pathname);
- return <CartProvider><GiftBoxDraftProvider ownerKey={session.ownerKey}><a href="#main-content" className="skip-navigation" onClick={focusMainContent}>Skip to main content</a><RouteMetadata/><Header/><div id="main-content" className="route-content" tabIndex={-1}><RouteFocus/><PageErrorBoundary key={`${location.pathname}:${privateRoute ? session.ownerKey : 'public'}`}><Suspense key={privateRoute ? session.ownerKey : 'public'} fallback={<main className="page-shell" role="status">Loading…</main>}><Routes>
+ return <PasswordResetResultProvider><CartProvider><GiftBoxDraftProvider ownerKey={session.ownerKey}><EngravingDraftProvider ownerKey={session.ownerKey}><a href="#main-content" className="skip-navigation" onClick={focusMainContent}>Skip to main content</a><RouteMetadata/><Header/><div id="main-content" className="route-content" tabIndex={-1}><RouteFocus/><PageErrorBoundary key={`${location.pathname}:${privateRoute ? session.ownerKey : 'public'}`}><Suspense key={privateRoute ? session.ownerKey : 'public'} fallback={<main className="page-shell" role="status">Loading…</main>}><Routes>
   <Route path="/" element={<HomePage/>}/>
   <Route path="/shop" element={<ShopPage/>}/>
   <Route path="/categories/:slug" element={<CategoryPage/>}/>
@@ -61,7 +65,8 @@ export default function App() {
   <Route path="/admin/gift-box/personalization-options" element={<RequireAdmin><AdminGiftBoxPersonalizationPage/></RequireAdmin>}/>
   <Route path="/admin/gift-box/fulfillment-policies" element={<RequireAdmin><AdminGiftBoxPoliciesPage/></RequireAdmin>}/>
   {GiftBoxGeometryReviewPage && <Route path="/dev/gift-box/geometry" element={<GiftBoxGeometryReviewPage/>}/>}
-  <Route path="/customize/laser-engraving" element={<ServiceRequestPage service="laser_engraving"/>}/>
+  <Route path="/customize/laser-engraving" element={<EngravingBuilderPage/>}/>
+  <Route path="/admin/engraving" element={<RequireAdmin><AdminEngravingPage/></RequireAdmin>}/>
   <Route path="/admin/attention" element={<RequireAdmin><AdminAttentionPage/></RequireAdmin>}/>
   <Route path="/admin/notifications" element={<RequireAdmin><AdminNotificationsPage/></RequireAdmin>}/>
   <Route path="/admin/requests" element={<RequireAdmin><AdminRequestsPage/></RequireAdmin>}/>
@@ -93,5 +98,5 @@ export default function App() {
   <Route path="/admin/commerce/orders/:id" element={<RequireAdmin><AdminOrderPage/></RequireAdmin>}/>
   <Route path="/home" element={<Navigate to="/" replace/>}/>
   <Route path="*" element={<StaticPage page="notfound"/>}/>
- </Routes></Suspense></PageErrorBoundary></div><Footer/><TrackingConsent/><Toaster position="top-right" offset="calc(var(--site-header-height, 84px) + 16px)" mobileOffset="calc(var(--site-header-height, 76px) + 12px)" richColors/></GiftBoxDraftProvider></CartProvider>;
+ </Routes></Suspense></PageErrorBoundary></div><Footer/><TrackingConsent/><Toaster position="top-right" offset="calc(var(--site-header-height, 84px) + 16px)" mobileOffset="calc(var(--site-header-height, 76px) + 12px)" richColors/></EngravingDraftProvider></GiftBoxDraftProvider></CartProvider></PasswordResetResultProvider>;
 }

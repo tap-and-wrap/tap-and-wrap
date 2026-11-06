@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const cwd = fileURLToPath(new URL('../', import.meta.url));
 const keys = ['PATH','Path','SystemRoot','WINDIR','TEMP','TMP','COMSPEC','PATHEXT','USERPROFILE','LOCALAPPDATA','APPDATA','PLAYWRIGHT_CHANNEL'];
 const safe = Object.fromEntries(keys.filter(k => process.env[k] !== undefined).map(k => [k, process.env[k]]));
-const args = process.argv.slice(2), enabled = args.includes('--enabled-checkout'), giftShopping = args.includes('--gift-box-shopping');
+const args = process.argv.slice(2), engraving = args.some(value => value.includes('engraving-contracts')), enabled = args.includes('--enabled-checkout') || engraving, giftShopping = args.includes('--gift-box-shopping');
 if (args.length === 0) {
   // Each spec retains the real rate limits and receives its own fresh database,
   // API and browser fixture. Explicit selections keep the original lifecycle.
@@ -41,7 +41,7 @@ if (args.length === 0) {
 const children = []; let browser, shuttingDown;
 async function port() { const socket = createServer(); socket.listen(0,'127.0.0.1'); await once(socket,'listening'); const value = socket.address().port; await new Promise(resolve => socket.close(resolve)); return value; }
 const apiPort = await port(); let webPort = await port(); while (webPort === apiPort) webPort = await port();
-const env = { ...safe, NODE_ENV:'test', NODE_OPTIONS:'', TAP_WRAP_ISOLATED_TEST:'true', MONGODB_URI:'', CATALOG_IMPORT_STAGING_URI:'', TAP_WRAP_CONTRACT_API_PORT:String(apiPort), TAP_WRAP_CONTRACT_WEB_PORT:String(webPort), TAP_WRAP_CONTRACT_CHECKOUT:String(enabled || giftShopping), TAP_WRAP_CONTRACT_GIFT_SHOPPING:String(giftShopping), VITE_GIFT_BOX_BUILDER_ENABLED:String(giftShopping), VITE_API_BASE_URL:'http://127.0.0.1:' + apiPort + '/api/v1', VITE_META_ENABLED:'false', VITE_SEO_INDEXING_ENABLED:'false' };
+const env = { ...safe, NODE_ENV:'test', NODE_OPTIONS:'', TAP_WRAP_ISOLATED_TEST:'true', MONGODB_URI:'', CATALOG_IMPORT_STAGING_URI:'', TAP_WRAP_CONTRACT_API_PORT:String(apiPort), TAP_WRAP_CONTRACT_WEB_PORT:String(webPort), TAP_WRAP_CONTRACT_ENGRAVING:String(engraving), TAP_WRAP_CONTRACT_CHECKOUT:String(enabled || giftShopping), TAP_WRAP_CONTRACT_GIFT_SHOPPING:String(giftShopping), VITE_GIFT_BOX_BUILDER_ENABLED:String(giftShopping), VITE_API_BASE_URL:'http://127.0.0.1:' + apiPort + '/api/v1', VITE_META_ENABLED:'false', VITE_SEO_INDEXING_ENABLED:'false' };
 async function start(file) {
   const child = fork(file, ['--isolated-contract-tests'], { cwd, env, stdio:['ignore','inherit','inherit','ipc'], windowsHide:true });
   children.push(child);

@@ -1,3 +1,4 @@
+import { engravingCollectionAllowed } from '../engraving/payment-policy.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { env } from '../config/env.js';
 import { assertDatabaseWriteAllowed } from '../config/database-safety.js';
@@ -47,7 +48,7 @@ export function orderMonetaryParameters(lines, totalPiastres) {
   for (const line of lines) {
     if (!line || typeof line !== 'object' || Array.isArray(line)) throw commerceError(400, 'INVALID_TRACKING_EVENT', 'Unsupported event items.');
     if (line.kind === undefined || line.kind === 'product') products.push(line);
-    else if (line.kind === 'gift_box_v2') {
+    else if (line.kind === 'gift_box_v2' || line.kind === 'engraving_service_v1') {
       if (!Number.isSafeInteger(line.quantity) || line.quantity < 1 || line.quantity > 99) throw commerceError(400, 'INVALID_TRACKING_EVENT', 'Unsupported event items.');
       checkedMoney(line.unitPricePiastres);
     } else throw commerceError(400, 'INVALID_TRACKING_EVENT', 'Unsupported event items.');
@@ -93,7 +94,7 @@ export async function captureAction(req, name, parameters, options) {
 export async function recordOrderTracking(order, { session } = {}) {
   if (!order.trackingConsentId || !trackingSettings().enabled) return null;
   const parameters = { ...orderMonetaryParameters(order.lines, order.totals.totalPiastres), payment_method: order.paymentMethod };
-  const qualifies = order.paymentMethod === 'cod' || order.paymentState === 'paid';
+  const qualifies = engravingCollectionAllowed(order) && (order.paymentMethod === 'cod' || order.paymentState === 'paid');
   return recordQualifiedEvent(order.trackingConsentId, qualifies ? 'Purchase' : 'OrderSubmitted', parameters, { sourcePath: '/checkout', dedupKey: String(order._id), session });
 }
 export async function ownedPurchaseReceipt(order, req) {

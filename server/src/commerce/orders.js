@@ -1,3 +1,7 @@
+import { engravingSnapshot } from '../engraving/pricing.js';
+import { currentConfiguration } from '../engraving/configuration.js';
+import { initialEngravingWorkflow } from '../engraving/workflow.js';
+import { isEngravingOrder } from '../engraving/payment-policy.js';
 import { fenceGiftBoxPersonalization } from '../gift-box/personalization-options.js';
 import { pendingShipping, orderAccounting, accountingSummary } from './order-accounting.js';
 import { randomInt } from 'node:crypto';
@@ -38,6 +42,7 @@ export async function checkoutQuote(owner, input, options = {}) { return checkou
 async function checkoutQuoteCore(owner, input, { session, userId } = {}, capability = null) {
   if (capability) assertGiftBoxCheckoutCapability(capability, owner);
   const cart = capability ? await quoteCartForGiftBoxDisposableCheckout(owner, { session, capability }) : await quoteCart(owner, { session, strict: true });
+  if (cart.items.some(line => line.kind === 'engraving_service_v1') && input.paymentMethod !== 'instapay') throw commerceError(409, 'ENGRAVING_PAYMENT_METHOD', 'Engraving uses InstaPay after inspection and approval.');
   if (!cart.items.length) throw commerceError(400, 'CART_EMPTY', 'Add an eligible product before checking out.');
   const policyFences = await readGiftBoxCheckoutPolicyFences(cart.items, { session });
   const promotions = await calculatePromotions(cart.items, { code: input.discountCode, session, userId });
@@ -45,7 +50,7 @@ async function checkoutQuoteCore(owner, input, { session, userId } = {}, capabil
   const shipping = pendingShipping();
   const totals = { subtotalPiastres: promotions.subtotalPiastres, discountPiastres: promotions.discountPiastres,
     shippingPiastres: null, totalPiastres: checkedMoney(promotions.totalPiastres), applied: promotions.applied };
-  const digest = fingerprint({ lines: cart.items.map(line => ({ identity: line.identity, quantity: line.quantity, unitPrice: line.unitPricePiastres, customization: line.customizationSnapshot,
+  const digest = fingerprint({ lines: cart.items.map(line => ({ identity: line.identity, quantity: line.quantity, unitPrice: line.unitPricePiastres, customization: line.customizationSnapshot, ...(line.kind === 'engraving_service_v1' ? { kind: line.kind, specification: line.specification, reviewFingerprint: line.reviewFingerprint } : {}),
     ...(line.kind === 'gift_box_v2' ? { kind: line.kind, configuration: line.configuration,
       components: line.giftComponents.map(component => ({ ...component, priceApprovedAt: new Date(component.priceApprovedAt).toISOString() })),
       personalization: line.giftPersonalization, fulfillment: line.giftFulfillment, policyHash: line.giftPolicyHash } : {}) })), totals,
@@ -79,6 +84,7 @@ export async function placeGiftBoxOrderForDisposableTest(owner, input, userId, {
   return placeOrderCore(owner, input, userId, { trackingConsentId }, capability);
 }
 function snapshotOrderLine(line) {
+  if (line.kind === 'engraving_service_v1') return { kind: line.kind, name: line.name, quantity: 1, unitPricePiastres: line.unitPricePiastres, lineTotalPiastres: line.lineTotalPiastres, engraving: engravingSnapshot(line) };
   if (line.kind === 'gift_box_v2') return giftBoxOrderLine(line);
   if (line.kind !== undefined && line.kind !== 'product') throw commerceError(400, 'CART_LINE_KIND_INVALID', 'Unsupported order line kind.');
   return { kind: 'product', productId: line.productId, name: line.name, slug: line.slug, variantKey: line.variantKey, variantLabel: line.variantLabel,
@@ -114,8 +120,10 @@ async function placeOrderCore(owner, input, userId, { trackingConsentId = null }
         if (intent.fingerprint !== quote.fingerprint || intent.paymentMethod !== input.paymentMethod) throw commerceError(409, 'CHECKOUT_CHANGED', 'Prices or cart contents changed. Review the updated total before submitting again.');
         if (input.paymentProofId) throw commerceError(400, 'ORDER_FIRST_REQUIRED', 'Create the order before transferring or submitting proof.');
         const uploadIds = [...new Set(quote.cart.items.flatMap(line => line.uploadIds))];
+        const hasEngraving = quote.cart.items.some(line => line.kind === 'engraving_service_v1');
+        for (const line of quote.cart.items.filter(line => line.kind === 'engraving_service_v1')) await currentConfiguration(line.specification.typeId, { session, fence: true });
         const hasGifts = quote.cart.items.some(line => line.kind === 'gift_box_v2');
-        const personalized = hasGifts || quote.cart.items.some(line => line.requiresPersonalization || Object.keys(line.personalization || {}).length > 0 || line.customizationSnapshot);
+        const personalized = hasEngraving || hasGifts || quote.cart.items.some(line => line.requiresPersonalization || Object.keys(line.personalization || {}).length > 0 || line.customizationSnapshot);
         if (hasGifts && input.paymentMethod !== 'instapay') throw commerceError(409, 'GIFT_BOX_PAYMENT_METHOD_UNAVAILABLE', 'Configured gifts currently require InstaPay. No other payment method has been authorized.');
         if (personalized && input.paymentMethod === 'cod') throw commerceError(409, 'QUOTATION_REQUIRED', 'Personalized COD requires an owner-authorized quotation before acceptance. Choose InstaPay or contact the store.');
         await runGiftBoxCheckoutTestHook(capability, owner, 'beforeInventory', { session, quote });
@@ -124,9 +132,9 @@ async function placeOrderCore(owner, input, userId, { trackingConsentId = null }
         await runGiftBoxCheckoutTestHook(capability, owner, 'beforePolicyFence', { session, quote });
         await fenceGiftBoxCheckoutPolicies(quote.policyFences, session);
         await fenceGiftBoxPersonalization(quote.cart.items, session);
-        const order = new Order({ owner, userId: userId || null, trackingConsentId, checkoutKey: input.checkoutKey, requestHash, orderNumber: generateOrderNumber(), customer: normalized.customer,
-          lines: quote.cart.items.map(snapshotOrderLine), totals: quote.totals, inventoryClaims, uploadIds, accountingVersion: 1, personalized, allowedPaymentMethods: personalized ? ['instapay'] : ['cod', 'instapay'], charges: [pendingShipping()], followUpDueAt: new Date(Date.now() + 12 * 3600000),
-          paymentMethod: input.paymentMethod, paymentState: quote.totals.totalPiastres === 0 ? 'paid' : input.paymentMethod === 'instapay' ? 'awaiting_transfer' : 'unpaid',
+        const order = new Order({ ...(hasEngraving ? { cartAddOperations: quote.cart.document.addOperations } : {}), ...(hasEngraving ? { engraving: initialEngravingWorkflow(quote.cart.items) } : {}), owner, userId: userId || null, trackingConsentId, checkoutKey: input.checkoutKey, requestHash, orderNumber: generateOrderNumber(), customer: normalized.customer,
+          lines: quote.cart.items.map(snapshotOrderLine), totals: quote.totals, inventoryClaims, uploadIds, accountingVersion: 1, personalized, allowedPaymentMethods: personalized ? ['instapay'] : ['cod', 'instapay'], charges: [{ ...pendingShipping(), ...(hasEngraving ? { label: 'Return delivery' } : {}) }], followUpDueAt: new Date(Date.now() + 12 * 3600000),
+          paymentMethod: input.paymentMethod, paymentState: hasEngraving ? 'unpaid' : quote.totals.totalPiastres === 0 ? 'paid' : input.paymentMethod === 'instapay' ? 'awaiting_transfer' : 'unpaid',
           history: [{ at: new Date(), event: 'order_received', actor: userId ? 'customer' : 'guest' }] });
         for (const discount of quote.totals.applied.filter(value => value.kind === 'discount')) {
           const count = userId ? await DiscountRedemption.countDocuments({ userId, discountId: discount.id, reversedAt: null }).session(session) : 0;
@@ -181,6 +189,7 @@ export async function changeOrderState(id, owner, input, actor) {
   await mongoose.connection.transaction(async session => {
     const order = await Order.findOne({ _id: id, ...(actor?.role === 'admin' ? {} : { owner }) }).session(session);
     if (!order) throw commerceError(404, 'ORDER_NOT_FOUND', 'Order not found.');
+    if (isEngravingOrder(order)) throw commerceError(409, 'ENGRAVING_WORKFLOW_REQUIRED', 'Use the dedicated customer-item workflow; order receipt is not physical receipt.');
     if (['returned', 'delivery_failed'].includes(input.fulfillmentState) && !(input.publicReason || input.internalNote || input.reason)?.trim()) throw commerceError(400, 'REASON_REQUIRED', 'Record the delivery/return circumstances before changing status.');
     if (order.accountingVersion !== 1 && input.paymentState) throw commerceError(409, 'LEGACY_ACCOUNTING_REVIEW_REQUIRED', 'Reconcile this historical payment into the reviewed ledger procedure before changing its financial state.');
     if (order.accountingVersion === 1) {

@@ -1,3 +1,4 @@
+import { engravingCollectionAllowed, isEngravingOrder, requireCollectionAuthorization } from '../engraving/payment-policy.js';
 import { randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
 import { Order } from '../models/Order.js';
@@ -28,6 +29,8 @@ export function accountingSummary(order, settlements = []) {
   const scopes = [{ id: 'merchandise', amountPiastres: order.totals.totalPiastres }, ...charges.filter(charge => charge.state === 'accepted').map(charge => ({ id: charge.id, amountPiastres: charge.amountPiastres }))];
   scopes.forEach(scope => { scope.amountPiastres = Math.max(0, scope.amountPiastres - reductionFor(scope.id)); });
   return {
+    collectionAuthorized: engravingCollectionAllowed(order),
+    amountDueNowPiastres: engravingCollectionAllowed(order) ? (cancelled ? 0 : sum(scopes.map(scope => Math.max(0, scope.amountPiastres - netFor(scope.id))))) : 0,
     merchandisePiastres: order.totals.totalPiastres,
     merchandisePayablePiastres: scopes[0].amountPiastres,
     merchandiseCollectedPiastres: netFor('merchandise'),
@@ -64,6 +67,8 @@ export async function mutateOrderAccounting(id, owner, input, actor) {
       if (!order) throw commerceError(404, 'ORDER_NOT_FOUND', 'Order not found.');
       if (order.accountingVersion !== 1) fail('Legacy order requires a separately reviewed reconciliation; original totals remain unchanged.');
       if (order.serviceRequestId && ['quote_charge', 'accept_charge'].includes(input.action)) fail('Custom-service quotations are versioned in Requests. Reconcile the linked order before issuing a replacement quotation.');
+      if (isEngravingOrder(order) && ['submit_proof','collection'].includes(input.action) && !(admin && input.action === 'collection' && input.exceptionConfirmed && input.reconciled && input.reason)) requireCollectionAuthorization(order);
+      if (isEngravingOrder(order) && input.action === 'inventory_return') fail('Customer property never enters merchant inventory. Use the engraving return workflow.');
       const entries = await OrderSettlement.find({ orderId: id }).session(session).lean();
       if (['collection', 'refund'].includes(input.action)) {
         const repeated = entries.find(entry => entry.operationKey === input.operationKey);
@@ -76,6 +81,7 @@ export async function mutateOrderAccounting(id, owner, input, actor) {
       if (input.action === 'submit_proof' && order.proofHistory.some(entry => String(entry.uploadId) === input.uploadId)) { result = order.toObject(); return; }
       if (order.revision !== input.revision) throw commerceError(409, 'ORDER_CHANGED', 'Reload the order before saving.');
       const charges = order.charges.map(charge => ({ ...charge }));
+      if (isEngravingOrder(order) && input.action === 'quote_charge' && (input.chargeId ? charges.find(charge => charge.id === input.chargeId)?.kind !== 'shipping' : input.kind !== 'shipping')) fail('Standalone engraving permits separately agreed logistics charges only. Engraving options never add to the service price.');
       const closed = ['cancelled', 'returned', 'delivery_failed'].includes(order.fulfillmentState);
       const now = new Date();
       let event = 'order_updated', publicReason = '', proofIds;
@@ -127,7 +133,7 @@ export async function mutateOrderAccounting(id, owner, input, actor) {
         if (!input.reconciled) fail('Confirm the actual receiving/refund account or COD collection before recording money.');
         const charge = charges.find(value => value.id === input.scope);
         const combined = input.action === 'collection' && input.scope === 'all_agreed';
-        if (input.action === 'collection' && (combined || input.scope === 'merchandise') && order.orderChannel !== 'owner_quotation' && order.paymentMethod === 'instapay' && !order.paymentProofId && !(closed && input.exceptionConfirmed)) fail('Ordinary website InstaPay orders require their secure order-bound proof before initial verification. Late closed-order funds need explicit exception reconciliation.');
+        if (input.action === 'collection' && (combined || input.scope === 'merchandise') && order.orderChannel !== 'owner_quotation' && order.paymentMethod === 'instapay' && !order.paymentProofId && !((closed || isEngravingOrder(order) && !engravingCollectionAllowed(order)) && input.exceptionConfirmed)) fail('Ordinary website InstaPay orders require their secure order-bound proof before initial verification. Late closed-order funds need explicit exception reconciliation.');
         if (input.action === 'collection' && !combined && input.scope !== 'merchandise' && charge?.state !== 'accepted') fail('Additional money requires an accepted, separately recorded charge.');
         const method = input.scope === 'merchandise' ? order.paymentMethod : charge?.collectionMethod;
         if (input.action === 'collection' && !combined && input.method !== method && !input.exceptionConfirmed) fail('Actual collection differs from the agreement. Explicitly reconcile the exception without rewriting the agreed method.');

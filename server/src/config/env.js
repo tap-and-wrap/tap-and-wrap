@@ -8,6 +8,8 @@ export function requestIntakeSettings(settings = process.env) {
 
 export const env = {
   ...runtimeSettings(),
+  engravingConfigurationEnabled: process.env.ENGRAVING_CONFIGURATION_ENABLED === 'true',
+  engravingEnabled: process.env.ENGRAVING_CONFIGURATION_ENABLED === 'true' && process.env.ENGRAVING_ENABLED === 'true' && process.env.ENGRAVING_LAUNCH_AUTHORIZED === 'true',
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT || 4000),
   mongoUri: process.env.MONGODB_URI || '',

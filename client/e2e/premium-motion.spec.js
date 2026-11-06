@@ -4,7 +4,9 @@ import { mockCatalog } from './catalog-fixtures.js';
 for (const width of [320, 1440]) {
   test(`homepage motion is progressive and sections reveal safely at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 850 });
-    await mockCatalog(page);
+    // This motion scenario explicitly expects eight picks. The shared default
+    // fixture now supplies nine orderable best sellers; bound this scenario.
+    await mockCatalog(page, { bestSellerCount: 8 });
     await page.goto('/', { waitUntil: 'domcontentloaded' });
 
     await expect(page.getByRole('heading', { level: 1, name: 'Make their heart flutter.' })).toBeVisible();

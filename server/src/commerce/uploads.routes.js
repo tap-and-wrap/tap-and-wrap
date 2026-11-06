@@ -9,7 +9,9 @@ import {
 
 const router = Router();
 const signSchema = z.object({
-  purpose: z.enum(['personalization', 'artwork', 'payment_proof', 'service_reference', 'gift_box_photo']),
+  purpose: z.enum(['personalization', 'artwork', 'payment_proof', 'service_reference', 'gift_box_photo', 'engraving_service']),
+  ownerContext: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  engravingItemKey: z.uuid().optional(),
   requestKey: z.uuid().optional(),
   mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp'], { error: 'Use JPEG, PNG or WebP. Export HEIC or other unsupported formats as JPEG or PNG, then try again.' }),
   sizeBytes: z.number().int().positive().max(10 * 1024 * 1024),

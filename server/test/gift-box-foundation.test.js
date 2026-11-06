@@ -39,7 +39,7 @@ test('registry identities, assets and pending catalogs cannot be changed through
 });
 
 test('the final six steps include personal touches without making the box optional', () => {
-  assert.deepEqual(BUILDER_STEPS.map(step => step.title), ['Choose Your Box', 'Fill With Flowers', 'Add Plush Toys', 'Add Chocolates', 'Make It Personal', 'Finishing Touches']);
+  assert.deepEqual(BUILDER_STEPS.map(step => step.title), ['Choose Your Box', 'Fill With Flowers', 'Add Soft Toys', 'Add Chocolates', 'Make It Personal', 'Finishing Touches']);
   assert.deepEqual(BUILDER_STEPS.map(step => step.required), [true, false, false, false, false, false]);
 });
 

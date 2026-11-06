@@ -72,6 +72,8 @@ export async function enqueueOrderEvent(order, event, { session, eventVersion } 
   await NotificationEvent.updateOne({ eventKey }, { $setOnInsert: {
     eventKey, orderId, event, recipient: recipient.toLowerCase(),
     snapshot: { items: (order.lines || []).slice(0, 20).map(orderItemSnapshot), orderNumber, orderChannel: order.orderChannel || 'website', accountingVersion: order.accountingVersion || 0, shippingState: order.charges?.find(charge => charge.kind === 'shipping')?.state || null,
+      engravingService: order.lines?.some(line => line.kind === 'engraving_service_v1') === true,
+      engravingReviewPending: order.lines?.some(line => line.kind === 'engraving_service_v1') && order.engraving?.collectionAuthorized !== true,
       paymentState: order.paymentState,
       ...(order.orderChannel === 'owner_quotation' && Number.isSafeInteger(order.acceptedQuotation?.totalPiastres) ? { acceptedQuotationTotalPiastres: order.acceptedQuotation.totalPiastres } : {}),
       ...(order.accountingVersion === 1 ? { financial: { collectedPiastres: order.financialSummary?.collectedPiastres, refundedPiastres: order.financialSummary?.refundedPiastres, outstandingPiastres: order.financialSummary?.outstandingPiastres } } : {}),

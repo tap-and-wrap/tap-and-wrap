@@ -24,7 +24,7 @@ async function respond(page, path, data, record) {
 }
 
 test('homepage orders actual sections and displays only approved fixture content', async ({ page }) => {
-  await mockCatalog(page);
+  await mockCatalog(page, { bestSellerCount: 8 });
   await respond(page, '/public/site-content', content);
   await respond(page, '/public/bundles', { bundles: [{ id: 'bundle-fixture', name: 'Isolated Bundle', description: 'Approved fixture only.', discountKind: 'fixed', discountValue: 100, products: [{ ...cards[0], bundleQuantity: 2 }] }] });
   await page.goto('/');
@@ -69,7 +69,8 @@ test('homepage fills unselected featured slots with real browsable catalog produ
     return route.fulfill({ headers: apiHeaders, json: { ok: true, data: { products: rows, pagination: { page: 1, limit: rows.length, total: rows.length, pages: 1 } } } });
   });
   await page.goto('/');
-  await expect(page.locator('.home-product-grid > article')).toHaveCount(8);
+  // The accepted starter fallback is four real products (HomeCatalog.jsx).
+  await expect(page.locator('.home-product-grid > article')).toHaveCount(4);
   await expect(page.getByRole('heading', { level: 2, name: 'Featured Gifts' })).toBeVisible();
 });
 

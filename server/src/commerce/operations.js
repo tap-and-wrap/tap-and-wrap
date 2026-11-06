@@ -1,3 +1,4 @@
+import { engravingCollectionAllowed } from '../engraving/payment-policy.js';
 import mongoose from 'mongoose';
 import { Router } from 'express';
 import { z } from 'zod';
@@ -92,7 +93,8 @@ export async function operationMessages(kind, record) {
     follow_up: `${reference}\nPlease let us know if you have already transferred or need assistance. Do not repeat a transfer because a screenshot or message failed. We check the receiving account before confirming payment.`,
     coordination: `Tap & Wrap | ${reference}\n${payable.fulfillmentState ? `Recorded fulfillment status: ${payable.fulfillmentState.replaceAll('_', ' ')}.` : 'We are coordinating your request.'} Please confirm a convenient time and your agreed delivery details.`,
   };
-  if (settled) messages.payment = `Tap & Wrap | ${reference}\nYour recorded known balance is settled. Do not repeat a transfer. Any charges still pending confirmation must be separately confirmed and accepted before they become payable.`;
+  if (!engravingCollectionAllowed(payable)) { messages.payment = `${reference}\nDo not transfer yet. Your physical item must be inspected and the final design accepted before payment is authorized.`; messages.follow_up = messages.payment; }
+  if (settled && engravingCollectionAllowed(payable)) messages.payment = `Tap & Wrap | ${reference}\nYour recorded known balance is settled. Do not repeat a transfer. Any charges still pending confirmation must be separately confirmed and accepted before they become payable.`;
   return Object.entries(messages).map(([key, text]) => ({ key, text, url: /^201[0125][0-9]{8}$/.test(phone) ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : null }));
 }
 export const operationsRoutes = Router();

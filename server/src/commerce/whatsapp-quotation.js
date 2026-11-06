@@ -1,6 +1,12 @@
+import { engravingCollectionAllowed } from '../engraving/payment-policy.js';
 const money = value => `EGP ${(value / 100).toFixed(2)}`;
 // Derived only from saved records. Opening the link never records send/delivery/acceptance.
 export function whatsappQuotation(order, accounting) {
+  if (!engravingCollectionAllowed(order)) {
+    const text = `Tap & Wrap | Order #${order.orderNumber}\nEngraving service: ${money(order.totals.totalPiastres)}. Payment is not authorized. Do not transfer yet. Physical inspection and final design acceptance are required first.`;
+    const phone = String(order.customer?.phone || '').replace(/\D/g, '');
+    return { text, url: /^201[0125][0-9]{8}$/.test(phone) ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : null, deliveryConfirmed: false };
+  }
   const lines = [`Tap & Wrap | Order #${order.orderNumber}`, `Merchandise: ${money(order.totals.totalPiastres)}`];
   for (const charge of accounting?.charges || []) {
     lines.push(`${charge.label}: ${charge.amountPiastres === null ? 'Pending confirmation' : charge.pricing === 'free' ? 'Explicitly free' : money(charge.amountPiastres)} (${charge.state}; quotation version ${charge.quotationVersion || 0})`);

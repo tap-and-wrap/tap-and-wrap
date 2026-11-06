@@ -52,7 +52,7 @@ export function evaluatePromotions(lines, rules = [], discount = null, { userId 
     const kind = cartLineKind(line);
     if (!Number.isSafeInteger(line.quantity) || line.quantity < 1 || line.quantity > 99 || !Number.isSafeInteger(line.unitPricePiastres) || line.unitPricePiastres < 0 || (line.lineTotalPiastres !== undefined && line.lineTotalPiastres !== line.quantity * line.unitPricePiastres)) throw configurationError('The cart contains invalid prices or quantities.', 'PRICING_INVALID');
     subtotalPiastres = safeSum(subtotalPiastres, line.quantity * line.unitPricePiastres);
-    if (kind === 'gift_box_v2') return null;
+    if (kind === 'gift_box_v2' || kind === 'engraving_service_v1') return null;
     productSubtotalPiastres = safeSum(productSubtotalPiastres, line.quantity * line.unitPricePiastres);
     return { line, index, remaining: line.quantity, bundledDiscount: 0 };
   }).filter(Boolean);

@@ -1,0 +1,97 @@
+Standalone engraving approved local commit inventory
+Baseline: c5f8a46e10de804f0dc5e82c4988cba42bcdd89f
+Scope: standalone engraving, release safeguards, final review and account-recovery closure.
+Exactly 52 modified tracked files and 35 intended new files; unrelated untracked files are excluded.
+Only the credential-free server/.env.example template is included; no runtime .env files, secrets or generated artifacts.
+Final browser gate:406/406 PASS; see docs/ACCOUNT_RECOVERY_RELEASE_GATE.md.
+
+MODIFIED (52)
+.gitignore
+README.md
+client/connected-e2e/enabled-checkout.spec.js
+client/e2e/batch1-auth.spec.js
+client/e2e/checkout-foundation.spec.js
+client/e2e/commerce-fixtures.js
+client/e2e/premium-motion.spec.js
+client/e2e/website-public.spec.js
+client/playwright.config.js
+client/playwright.contract.config.js
+client/playwright.gift-box-loading.config.js
+client/scripts/run-browser-tests.js
+client/scripts/run-contract-tests.js
+client/src/App.jsx
+client/src/admin/AdminLayout.jsx
+client/src/admin/order-actions.js
+client/src/auth/session.js
+client/src/commerce/CartContext.jsx
+client/src/commerce/OrderFinancials.jsx
+client/src/commerce/api.js
+client/src/pages/AccountRecoveryPage.jsx
+client/src/pages/AdminOrderPage.jsx
+client/src/pages/CartPage.jsx
+client/src/pages/CheckoutPage.jsx
+client/src/pages/CustomizePage.jsx
+client/src/pages/OrdersPage.jsx
+client/src/seo/metadata.js
+client/src/services/api.js
+server/.env.example
+server/src/commerce/cart-contract.js
+server/src/commerce/cart.js
+server/src/commerce/notifications.js
+server/src/commerce/operations.js
+server/src/commerce/order-accounting.js
+server/src/commerce/order-presentation.js
+server/src/commerce/orders.js
+server/src/commerce/ownership.js
+server/src/commerce/promotions.js
+server/src/commerce/routes.js
+server/src/commerce/uploads.js
+server/src/commerce/uploads.routes.js
+server/src/commerce/whatsapp-quotation.js
+server/src/config/env.js
+server/src/config/schema.js
+server/src/email/templates.js
+server/src/gift-box/order-snapshot.js
+server/src/models/Cart.js
+server/src/models/Order.js
+server/src/models/Upload.js
+server/src/tracking/service.js
+server/test/gift-box-foundation.test.js
+server/test/helpers/connected-api-server.js
+
+NEW (35)
+client/connected-e2e/engraving-contracts.spec.js
+client/e2e/account-recovery-lifecycle.spec.js
+client/public/assets/engraving/fonts/v1/SOURCE.txt
+client/public/assets/engraving/fonts/v1/amiri-LICENSE.txt
+client/public/assets/engraving/fonts/v1/amiri.ttf
+client/public/assets/engraving/fonts/v1/rochester-LICENSE.txt
+client/public/assets/engraving/fonts/v1/rochester.ttf
+client/public/assets/engraving/v1/NOTICE.txt
+client/public/assets/engraving/v1/heart.svg
+client/public/assets/engraving/v1/infinity.svg
+client/public/assets/engraving/v1/star.svg
+client/scripts/browser-vite-server.js
+client/scripts/owned-browser.config.js
+client/src/auth/PasswordResetResultProvider.jsx
+client/src/engraving/EngravingDraftProvider.jsx
+client/src/engraving/EngravingOrderFiles.jsx
+client/src/engraving/EngravingSummary.jsx
+client/src/engraving/EngravingWorkflow.jsx
+client/src/engraving/engraving.css
+client/src/pages/AdminEngravingPage.jsx
+client/src/pages/EngravingBuilderPage.jsx
+docs/ACCOUNT_RECOVERY_RELEASE_GATE.md
+docs/STANDALONE_ENGRAVING_FILES.txt
+docs/STANDALONE_ENGRAVING_IMPLEMENTATION.md
+docs/STANDALONE_ENGRAVING_RELEASE_REVIEW.md
+docs/STANDALONE_ENGRAVING_VERIFICATION.md
+server/src/engraving/configuration.js
+server/src/engraving/contracts.js
+server/src/engraving/payment-policy.js
+server/src/engraving/pricing.js
+server/src/engraving/routes.js
+server/src/engraving/workflow.js
+server/src/models/EngravingServiceConfiguration.js
+server/test/engraving.test.js
+shared/engraving/definitions.mjs

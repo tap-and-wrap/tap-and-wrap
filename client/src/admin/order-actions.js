@@ -2,6 +2,7 @@ const nextFulfillment = { received: ['confirmed', 'cancelled'], confirmed: ['pre
 // Mirror the inspected server transition contract for useful choices. The server
 // remains authoritative and independently checks revisions and every transition.
 export function adminOrderActions(order, { fulfillmentState = '', paymentState = '' } = {}) {
+  if (order.lines?.some(line => line.kind === 'engraving_service_v1')) return { fulfillment: [], payment: [] };
   const effectivePayment = paymentState || order.paymentState;
   const fulfillment = (nextFulfillment[order.fulfillmentState] || []).filter(state => {
     if (order.accountingVersion === 1 && state === 'cancelled') return false;
