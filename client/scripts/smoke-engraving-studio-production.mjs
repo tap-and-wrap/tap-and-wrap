@@ -29,7 +29,7 @@ await context.route('**/*',route=>{
   if(method==='DELETE'&&/^\/api\/v1\/commerce\/cart\/items\/[a-f0-9-]{36}$/.test(url.pathname))return route.continue();
   return route.abort();
 });
-async function screen(name){await page.evaluate(()=>{window.scrollTo(0,0);document.activeElement?.blur();});await page.screenshot({path:fileURLToPath(new URL(name+'.png',directory)),fullPage:true});}
+async function screen(name){await page.evaluate(async()=>{await document.fonts.ready;await Promise.all([...document.images].map(image=>image.decode()));window.scrollTo(0,0);document.activeElement?.blur();});await page.screenshot({path:fileURLToPath(new URL(name+'.png',directory)),fullPage:true});}
 async function json(path){return page.evaluate(async url=>{const response=await fetch(url,{credentials:'include'});if(response.status!==200)throw Error('PUBLIC_READ_FAILED');const value=await response.json();if(!value.ok)throw Error('PUBLIC_READ_FAILED');return value.data;},api+path);}
 const client={get:json,asset:async path=>Buffer.from(await page.evaluate(async path=>{const response=await fetch(path);if(response.status!==200)throw Error('PUBLIC_ASSET_UNAVAILABLE');return Array.from(new Uint8Array(await response.arrayBuffer()));},path))};
 const image={name:'SYNTHETIC-STUDIO-V2-NO-ORDER.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWO4NbsXAARVAgOYIL6CAAAAAElFTkSuQmCC','base64')};

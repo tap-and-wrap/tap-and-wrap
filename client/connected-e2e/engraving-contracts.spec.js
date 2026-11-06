@@ -43,6 +43,7 @@ test('connected real administration publishes type and placement, preserves conf
   await page.getByRole('button',{name:'Create engraving type',exact:true}).click();
   await page.getByLabel('Stable type ID',{exact:true}).fill('fixture-flask');await page.getByLabel('Display name',{exact:true}).fill('Fixture Flask');
   const nav=page.getByRole('navigation',{name:'Configuration sections'});
+  await page.getByRole('combobox',{name:/Type status/}).selectOption('active');await nav.getByRole('button',{name:/Approval/}).click();await page.getByRole('button',{name:'Publish configuration version',exact:true}).click();await expect(nav.getByRole('button',{name:/General/})).toHaveAttribute('aria-invalid','true');await expect(nav.getByRole('button',{name:/General/})).toBeFocused();await nav.getByRole('button',{name:/General/}).click();await page.getByRole('combobox',{name:/Type status/}).selectOption('disabled');
   await nav.getByRole('button',{name:/Placements/}).click();await page.getByLabel('New stable placement ID').fill('base');await page.getByRole('button',{name:'Add placement',exact:true}).click();
   await nav.getByRole('button',{name:/Approval/}).click();await page.getByRole('button',{name:'Publish configuration version',exact:true}).click();
   await expect(page.getByRole('status')).toContainText('Configuration saved');

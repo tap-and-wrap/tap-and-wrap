@@ -129,6 +129,59 @@ recorded after execution; local checks alone do not certify production success.
 
 The first Render rollout reported live while the API still exposed the old
 registry. A same-commit clean-cache redeploy resolved the mismatch; subsequent
-readback exposes twelve fonts and 48 icons. Publication is held until full asset
-verification succeeds. A Windows/Linux SVG line-ending-only mismatch was reproduced
+readback exposes twelve fonts and 48 icons. Publication was held until all 85 live asset references verified. A Windows/Linux SVG line-ending-only mismatch was reproduced
 and the verifier corrected/tested without allowing other content differences.
+
+## Executed production result - 6 November 2026
+
+The owner ran the authenticated launcher locally. The sanitized report at
+2026-11-06T14:16:43.895Z confirms success, no logout warning and all nine types at
+version 2/revision 2, active, assets approved, 10,000 piastres, twelve fonts and
+48 icons. Placement counts: Perfume 6, Necklace 4, Bracelet 5, Watch 4, Lip Gloss 4,
+Makeup 5, Bag 5, Office Set 5, Other 0. Help remains available for every type.
+Existing text limits remain 3/80/40. No duplicate current type was returned.
+
+Independent cart-only browser smoke started at 2026-11-06T14:17:28.855Z and passed:
+85 hosted asset references, nine public upgraded configurations, six-card reveal,
+actual font loading/Arabic restrictions, symbol browsing, placement/help choices,
+three appearance preferences, live private item/surface/transparent-handwriting
+uploads, design review, one EGP 100 cart line, owner-authorized private thumbnails,
+and unpaid checkout with no transfer/proof instructions. The synthetic cart was
+removed. Gift Box, shop and ordinary empty checkout loaded read-only. Zero orders,
+payments or shipments were created; order 767557 was not read or modified.
+
+The first symbol screenshot was captured before its image decoded. A separate
+mutation-blocked browser read verified the decoded Butterfly has 706 nontransparent
+pixels and recaptured desktop/mobile symbols plus Arabic font samples. The smoke
+screenshot helper now explicitly waits for font/image decoding. This was a capture
+readiness issue, not a registry/artwork failure. Original evidence is preserved.
+
+Production evidence (ignored, synthetic only):
+- client/test-results-engraving-production-launch/latest.json
+- client/test-results-engraving-studio/live-asset-verification.json
+- client/test-results-engraving-studio-production/latest.json
+- client/test-results-engraving-studio-production/*-decoded-final.png
+- client/test-results-engraving-studio-production/live-step-1-{320,390,768,1440}.png
+
+Source release commits: 4ac481c (studio), 1256749 (platform-independent asset
+verification), b78d6e3 (complete category illustration fit). Render deployment
+dep-dbmu1768bjmc73e48fs0 reached live; Cloudflare deployment
+2735c652-8696-4e02-8b22-fb256ecdb75a served version
+0c74daa6-0f3f-4cd6-8c04-7dad4dae6829 at 100 percent. Later documentation/tooling-only
+commits do not change runtime behavior; final provider status belongs in the
+release report. All 204 unrelated untracked paths were hash-verified unchanged.
+
+No schema preparation, production flag changes, raw database mutation, product or
+inventory edits, Gift Box source changes, payments or fulfillment occurred.
+Admin overview/editor visuals and conflicts were verified against the real isolated
+API; production publication was verified through the genuinely authenticated
+owner-run admin API. No production administrator browser session was available for
+an additional live admin visual inspection. No feature blocker remains.
+
+Final admin accessibility correction: section validation targets now sit inside
+AdminForm so the shared error helper can associate and focus a hidden section's
+navigation button. An actual rejected active/unapproved publication verifies the
+error target/focus, followed by successful publication and retained-conflict flow.
+The focused admin test passed after correcting its new select lookup to the
+combobox's accessible role. Production build/loading (3 tests), scoped ESLint,
+syntax and diff checks passed again. This change does not alter publication rules.
