@@ -7,14 +7,14 @@ test.afterEach(async({page})=>expect(page.__errors).toEqual([]));
 for (const width of [320,390,768,1024]) test(`200 percent text preserves shopping controls at ${width}px`,async({page})=>{
   await page.setViewportSize({width,height:1000});await giftBoxFixture(page);await beginGiftBox(page);
   await page.evaluate(()=>{document.documentElement.style.fontSize='200%';});
-  await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();await page.locator('.gb-finishing summary').click();await page.getByLabel('Your message').fill('A literal gift message');
+  await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();await page.getByLabel('Your message').fill('A literal gift message');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await expect(page.getByRole('button',{name:'Next: Review'})).toBeVisible();
   expect(await page.locator('.gb-options').evaluate(el=>Boolean(el.compareDocumentPosition(document.querySelector('.gb-navigation')) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
 });
 test('restricted admin review exposes fixed fields and explicit price approval only',async({page},info)=>{
   await giftBoxFixture(page,{role:'admin'});await page.goto('/admin/gift-box/components');await chooseOption(page.getByLabel('Component category'), 'chocolate');
-  const form=page.locator('.gb-setting-editor').first();await expect(form).toContainText('complete pictured retail product');await capture(form,info,'restricted-admin-component-editor.png');
+  await page.locator('.gb-component-card').first().locator('summary').first().click();const form=page.locator('.gb-setting-editor').first();await expect(form).toContainText('complete pictured retail product');await capture(form,info,'restricted-admin-component-editor.png');
   await expect(form.locator('input[type=file]')).toHaveCount(0);await expect(form.getByRole('button',{name:/Create|Delete|Replace/})).toHaveCount(0);
   await form.getByLabel('Approved price (EGP)').fill('0');await expect(form.getByLabel('Explicitly approve this component as complimentary')).toBeVisible();
 });

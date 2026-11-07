@@ -38,30 +38,34 @@ test('unpriced options and known broken artwork stay disabled; catalog and estim
   await expect(page.getByRole('alert')).toContainText('price needs approval'); f.recoverEstimate(); await page.getByRole('button', { name: 'Retry total' }).click(); await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
   const g = await fixture(page, { unpriced: true, directCommerceEnabled: true }); await page.reload(); await expect(page.locator('.gb-option:not(:disabled)')).toHaveCount(0); expect(g.components.every(item => item.pricePiastres === null)).toBe(true);
 });
-test('owner-reviewed availability activates all 74 settings without touching approved prices', async ({ page }) => {
+test('catalog loading never changes availability; only an explicit component save can enable it', async ({ page }) => {
   const f = await fixture(page, { role: 'admin', componentOverrides: Object.fromEntries(FIXED_COMPONENTS.map(item =>
     [item.id, { enabled: false, available: false, inventoryMode: item.category === 'ribbon' ? 'status_only' : null, inventoryQuantity: null }])) });
   await page.goto('/admin/gift-box/components');
-  await page.getByRole('button', { name: 'Review all component availability' }).click();
-  await expect(page.getByRole('region', { name: 'Availability plan' })).toContainText('74 to update');
-  await page.getByRole('checkbox', { name: /I confirm all 74 components are available/ }).check();
-  await page.getByRole('button', { name: 'Save 74 availability updates' }).click();
-  await expect(page.getByRole('region', { name: 'Made to order availability' }))
-    .toContainText('All 74 components are enabled and available', { timeout: 30000 });
-  expect(f.patches).toHaveLength(74);
-  for (const { body } of f.patches) {
-    expect(body.enabled).toBe(true);
-    expect(body.available).toBe(true);
-    expect(Object.hasOwn(body, 'pricePiastres')).toBe(false);
-    expect(Object.hasOwn(body, 'inventoryQuantity')).toBe(false);
-  }
-  expect(f.patches.filter(({ body }) => body.inventoryMode === 'made_to_order')).toHaveLength(53);
+  await expect(page.locator('.gb-component-card')).toHaveCount(12);
+  expect(f.patches).toHaveLength(0);
+  expect(f.components.every(item => !item.enabled && !item.available)).toBe(true);
+  await expect(page.getByRole('button', { name: 'Review all component availability' })).toHaveCount(0);
+  const card=page.locator('.gb-component-card[data-component-id="box-2"]');
+  await card.locator('summary').first().click();
+  const form=card.locator('form');
+  await form.getByLabel('Available to make').check();
+  await form.getByText('Advanced inventory settings',{exact:true}).click();
+  await chooseOption(form.getByLabel('Inventory mode'), 'made_to_order');
+  await form.getByRole('button',{name:'Save component settings'}).click();
+  await expect.poll(()=>f.patches.length).toBe(1);
+  expect(f.patches[0].body).toMatchObject({expectedRevision:1,enabled:true,available:true,inventoryMode:'made_to_order'});
+  expect(f.patches[0].body).not.toHaveProperty('pricePiastres');
+  expect(f.patches[0].body).not.toHaveProperty('inventoryQuantity');
+  expect(f.components.filter(item=>item.enabled&&item.available).map(item=>item.componentId)).toEqual(['box-2']);
 });
+
 test('admin exposes only fixed editable settings and sends revisions and explicit complimentary intent', async ({ page }) => {
   const f = await fixture(page, { role: 'admin' }); await page.goto('/admin/gift-box/components');
+  await page.locator('.gb-component-card[data-component-id="box-2"]>summary').click();
   const form = page.locator('.gb-setting-editor').filter({ hasText: 'box-2 · box · revision' });
   await form.getByLabel('Display name', { exact: true }).fill('Renamed fixture box'); await form.getByLabel('Approved price (EGP)').fill('0'); await form.getByLabel('Explicitly approve this component as complimentary').check(); await form.getByRole('button', { name: 'Save component settings' }).click();
-  await expect(form.getByRole('status')).toHaveText('Component settings saved.');
+  await expect(page.getByText('Component settings saved.',{exact:true})).toBeVisible();
   expect(f.patches[0].body).toEqual({ expectedRevision: 1, displayName: 'Renamed fixture box', displayOrder: 2, enabled: true, available: true, pricePiastres: 0, confirmComplimentary: true });
   await expect(page.getByRole('button', { name: /Create|Delete|Replace image/ })).toHaveCount(0); await expect(page.locator('input[type=file]')).toHaveCount(0);
   await page.getByText('Reorder boxes', { exact: true }).click(); await page.getByRole('button', { name: 'Move box-3 up', exact: true }).click(); await page.getByRole('button', { name: 'Save category order' }).click();
@@ -70,7 +74,7 @@ test('admin exposes only fixed editable settings and sends revisions and explici
   await expect(page.locator('.gb-order').getByText(/unsaved changes are still here/)).toBeVisible();
 });
 test('admin conflict retains draft until deliberate reload, and customer cannot open the editor', async ({ page }) => {
-  await fixture(page, { role: 'admin', conflict: true }); await page.goto('/admin/gift-box/components'); const form = page.locator('.gb-setting-editor').first();
+  await fixture(page, { role: 'admin', conflict: true }); await page.goto('/admin/gift-box/components'); await page.locator('.gb-component-card').first().locator('summary').first().click(); const form = page.locator('.gb-setting-editor').first();
   await form.getByLabel('Display name', { exact: true }).fill('Keep this draft'); await form.getByRole('button', { name: 'Save component settings' }).click(); await expect(form.getByText(/unsaved changes are still here/)).toBeVisible(); await expect(form.getByLabel('Display name', { exact: true })).toHaveValue('Keep this draft');
   await form.getByRole('button', { name: 'Reload latest record' }).click(); await form.getByRole('button', { name: 'Confirm reload and discard draft' }).click(); await expect(form.getByLabel('Display name', { exact: true })).toHaveValue('Fixture box-1');
   await fixture(page, { role: 'customer' }); await page.reload(); await expect(page.locator('.gb-setting-editor')).toHaveCount(0);

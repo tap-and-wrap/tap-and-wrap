@@ -20,6 +20,7 @@ import { fingerprint } from '../src/commerce/pricing.js';
 import { setGiftBoxCartPoliciesForDisposableTest, quoteGiftBoxCartLine } from '../src/gift-box/cart-pricing.js';
 import { startTestDatabase } from './helpers/database.js';
 import { giftCartConfiguration, giftCartInput, giftCartPolicy, seedGiftCartSettings } from './helpers/gift-box-cart-fixtures.js';
+import { identifyGiftBoxConfiguration } from '../src/gift-box/commerce-contract.js';
 
 const ROOT = '/api/v1/commerce';
 let database, server, base, admin, product;
@@ -122,6 +123,33 @@ test('cart operation retries recover one line without repeating quantity and con
   const changed = { ...input, configuration: giftCartConfiguration({ message: 'Conflicting retry' }) };
   const conflict = await browser.request('/cart/items', { method: 'POST', body: changed });
   assert.equal(conflict.status, 409); assert.equal(conflict.body.error.code, 'CART_OPERATION_CONFLICT');
+  assert.equal((await Cart.findOne().lean()).addOperations.length, 1);
+});
+
+test('new blank or invisible gift cards are rejected without writes through the HTTP cart boundary', async () => {
+  const browser = client();
+  for (const message of ['', ' \n\t', '\u200b\u200d\ufeff', '\u064e\u0651']) {
+    const response = await browser.request('/cart/items', { method: 'POST', body: giftCartInput(giftCartConfiguration({ message })) });
+    assert.equal(response.status, 409, JSON.stringify(response.body));
+    assert.equal(response.body.error.code, 'GIFT_BOX_CONFIGURATION_INVALID');
+    assert.equal((await Cart.findOne().lean())?.items.length ?? 0, 0);
+  }
+});
+
+test('legacy blank-card operation receipts replay unchanged without a second charge or new line', async () => {
+  const owner = `guest:${'4'.repeat(64)}`, raw = giftCartInput(giftCartConfiguration({ message: '' }));
+  const { configuration, configurationId } = identifyGiftBoxConfiguration(raw.configuration);
+  const input = { ...raw, configuration }, lineId = randomUUID();
+  await Cart.collection.insertOne({ owner, expiresAt: new Date(Date.now() + 60000),
+    items: [{ id: lineId, kind: 'gift_box_v2', identity: configurationId, configurationId, configuration, name: 'Build Your Gift Box', quantity: 1 }],
+    addOperations: [{ key: input.operationKey, requestHash: fingerprint(input) }] });
+  let added = 0;
+  const recovered = await addCartItem(owner, raw, { onAdded: async () => { added += 1; } });
+  assert.equal(recovered.cart.items.length, 1);
+  assert.equal(recovered.cart.items[0].id, lineId);
+  assert.equal(recovered.cart.items[0].quantity, 1);
+  assert.equal(recovered.cart.items[0].giftBox.giftCard.message, '');
+  assert.equal(added, 0);
   assert.equal((await Cart.findOne().lean()).addOperations.length, 1);
 });
 

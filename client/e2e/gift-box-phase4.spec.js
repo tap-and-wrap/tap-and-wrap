@@ -8,7 +8,11 @@ test.beforeEach(async ({ page }) => {
   page.__phase4Errors = errors;
 });
 test.afterEach(async ({ page }) => { expect(page.__phase4Errors).toEqual([]); });
-const editor = (page, id) => page.locator('.gb-setting-editor').filter({ hasText: `${id} · ` });
+const editor = async (page, id) => {
+  const card = page.locator(`.gb-component-card[data-component-id="${id}"]`);
+  if (!await card.evaluate(node => node.open)) await card.locator('summary').first().click();
+  return card.locator('.gb-setting-editor');
+};
 const save = form => form.getByRole('button', { name: 'Save component settings', exact: true }).click();
 
 test('all 21 bow choices retain API names, prices and six-at-a-time choices, and the selected bow can move', async ({ page }) => {
@@ -36,27 +40,27 @@ test('all 21 bow choices retain API names, prices and six-at-a-time choices, and
   await expect(page.locator('.gb-options-ribbon .gb-option')).toHaveCount(21);
   await expect(ribbon).toHaveAttribute('aria-pressed', 'true');
   await ribbon.click();
+  await page.getByRole('button',{name:'Remove item',exact:true}).click();
   await expect(page.getByRole('button', { name: 'Move Fixture final ribbon' })).toHaveCount(0);
   await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
   expect(fixture.media.every(path => !/ribbon|card/.test(path))).toBe(true);
 });
 
-test('selected gift card charges the API price with blank or Unicode message and stays out of checkout', async ({ page }) => {
+test('gift card is charged only for meaningful text at its unchanged API price', async ({ page }) => {
   const fixture = await giftBoxFixture(page, { componentOverrides: { 'gift-card-1': { displayName: 'Fixture keepsake card', pricePiastres: 1875 } } });
   await beginGiftBox(page); await page.locator('.gb-progress button').nth(5).click();
-  const toggle = page.locator('.gb-finishing summary'), message = page.getByLabel('Your message');
-  await toggle.click();
-  await expect(message).toHaveValue('');
+  const message = page.getByLabel('Your message');
+  for (const empty of ['', '   ', '\u200b\u200d']) {
+    await message.fill(empty);
+    await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
+    expect(fixture.estimates.at(-1).giftCard).toBeNull();
+  }
+  await message.fill('\u{1f490}'.repeat(500));
+  await message.press('x'); await expect(message).toHaveValue('\u{1f490}'.repeat(500));
+  await expect.poll(() => fixture.estimates.at(-1)?.giftCard?.message).toBe('\u{1f490}'.repeat(500));
   await expect(page.locator('.gb-live-total strong')).toContainText('28.75');
-  expect(fixture.estimates.at(-1).giftCard).toEqual({ componentId: 'gift-card-1', message: '' });
-  await page.locator('.gb-your-gift summary').click();
-  await expect(page.locator('.gb-item-list')).toContainText('Gift card');
-  await message.fill('💐'.repeat(500));
-  await message.press('x'); await expect(message).toHaveValue('💐'.repeat(500));
-  await expect.poll(() => fixture.estimates.at(-1)?.giftCard?.message).toBe('💐'.repeat(500));
-  await page.getByRole('button',{name:'Remove gift card'}).click(); await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
+  await message.fill(''); await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
   expect(fixture.estimates.at(-1).giftCard).toBeNull();
-  await toggle.click(); await expect(message).toHaveValue('💐'.repeat(500));
   await page.getByRole('button', { name: 'Next: Review' }).click();
   await expect(page.getByRole('button', { name: 'Add Your Gift to Cart', exact: true })).toBeDisabled();
   expect(fixture.calls.every(call => !/submit|convert|order/.test(call.path))).toBe(true);
@@ -75,7 +79,7 @@ test('tracked roses stop at stock, while made-to-order plush has no old two-toy 
   await rose.click(); await page.locator('.gb-your-gift summary').click(); await page.getByRole('button', { name: 'Add one Fixture rose-red', exact: true }).click();
   await expect(rose).toBeDisabled(); await expect(rose).toContainText('All available stock added');
   await expect(page.getByRole('button', { name: 'Add one Fixture rose-red', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Remove one Fixture rose-red', exact: true }).click();
+  await page.getByRole('button', { name: 'Remove one Fixture rose-red', exact: true }).click(); await page.getByRole('button',{name:'Remove item',exact:true}).click();
   await expect(rose).toBeEnabled(); await rose.click();
   await page.locator('.gb-progress button').nth(2).click();
   const plush = page.getByRole('button', { name: 'Add Fixture plush-1', exact: true });
@@ -88,7 +92,7 @@ test('tracked roses stop at stock, while made-to-order plush has no old two-toy 
 test('unavailable finishing settings remain visible and disabled', async ({ page }) => {
   await giftBoxFixture(page, { componentOverrides: { 'gift-card-1': { inventoryQuantity: 0 }, 'ribbon-white': { available: false } } });
   await beginGiftBox(page); await page.locator('.gb-progress button').nth(5).click();
-  await page.locator('.gb-finishing summary').click(); await expect(page.getByLabel('Your message')).toHaveCount(0);
+   await expect(page.getByLabel('Your message')).toBeDisabled();
   await expect(page.locator('.gb-finishing')).toContainText('unavailable');
   await expect(page.getByRole('button', { name: 'Choose Fixture ribbon-white', exact: true })).toBeDisabled();
   await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
@@ -96,9 +100,9 @@ test('unavailable finishing settings remain visible and disabled', async ({ page
 
 test('admin EGP drafts save exact piastres, reject invalid decimals and require explicit complimentary intent', async ({ page }) => {
   const fixture = await giftBoxFixture(page, { role: 'admin' }); await page.goto('/admin/gift-box/components');
-  const form = editor(page, 'box-2'), price = form.getByLabel('Approved price (EGP)');
+  const form = await editor(page, 'box-2'), price = form.getByLabel('Approved price (EGP)');
   await expect(price).toHaveValue('10'); await price.fill('123.45'); await save(form);
-  await expect(form.getByText('Component settings saved.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Component settings saved.', { exact: true })).toBeVisible();
   expect(fixture.patches.at(-1).body.pricePiastres).toBe(12345);
   expect(fixture.patches.at(-1).body.expectedRevision).toBe(1);
   for (const invalid of ['-1', '1e3', '1.234', 'NaN']) {
@@ -118,9 +122,9 @@ test('admin EGP drafts save exact piastres, reject invalid decimals and require 
 test('admin mode transitions preserve made-to-order stock and explicitly confirm returning to tracked; ribbons omit inventory writes', async ({ page }, info) => {
   const fixture = await giftBoxFixture(page, { role: 'admin', componentOverrides: { 'box-2': { inventoryQuantity: 7 } } });
   await page.goto('/admin/gift-box/components');
-  const form = editor(page, 'box-2'), mode = form.getByLabel('Inventory mode');
+  const form = await editor(page, 'box-2'), mode = form.getByLabel('Inventory mode');
   await form.getByText('Advanced inventory settings',{exact:true}).click(); await chooseOption(mode, 'made_to_order'); await expect(form.getByLabel('Stock quantity')).toHaveCount(0); await save(form);
-  await expect(form.getByText('Component settings saved.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Component settings saved.', { exact: true })).toBeVisible();
   expect(fixture.patches.at(-1).body).toMatchObject({ inventoryMode: 'made_to_order', expectedRevision: 1 });
   expect(fixture.patches.at(-1).body).not.toHaveProperty('inventoryQuantity'); expect(fixture.components.find(item => item.componentId === 'box-2').inventoryQuantity).toBe(7);
   await chooseOption(mode, 'tracked'); await form.getByLabel('Stock quantity', { exact: true }).fill('3'); await save(form); expect(fixture.patches).toHaveLength(1);
@@ -128,7 +132,7 @@ test('admin mode transitions preserve made-to-order stock and explicitly confirm
   await expect.poll(() => fixture.patches.length).toBe(2);
   expect(fixture.patches.at(-1).body).toMatchObject({ expectedRevision: 2, inventoryMode: 'tracked', inventoryQuantity: 3, confirmInventoryQuantity: true });
   await chooseOption(page.getByLabel('Component category'), 'ribbon');
-  const ribbon = editor(page, 'ribbon-cream-ivory');
+  const ribbon = await editor(page, 'ribbon-cream-ivory');
   await expect(ribbon.getByLabel('Inventory mode')).toHaveCount(0); await expect(ribbon.getByLabel('Stock quantity')).toHaveCount(0);
   await ribbon.getByLabel('In stock', { exact: true }).uncheck(); await save(ribbon);
   await expect.poll(() => fixture.patches.length).toBe(3);
@@ -140,7 +144,7 @@ test('admin mode transitions preserve made-to-order stock and explicitly confirm
 
 test('revision conflicts preserve price, inventory and availability drafts until explicit reload', async ({ page }) => {
   await giftBoxFixture(page, { role: 'admin', conflict: true }); await page.goto('/admin/gift-box/components');
-  const form = editor(page, 'box-2');
+  const form = await editor(page, 'box-2');
   await form.getByText('Advanced inventory settings',{exact:true}).click(); await form.getByLabel('Approved price (EGP)').fill('22.29'); await form.getByLabel('Stock quantity').fill('8');
   await form.getByLabel('Available to make', { exact: true }).uncheck(); await save(form);
   await expect(form.getByText(/unsaved changes are still here/)).toBeVisible();
@@ -156,7 +160,7 @@ for (const width of [320, 390, 768, 1440]) test(`finishing choices and inventory
   await page.setViewportSize({ width, height: 1000 }); await page.emulateMedia({ reducedMotion: 'reduce' });
   await giftBoxFixture(page, { role: 'admin' }); await beginGiftBox(page); await page.locator('.gb-progress button').nth(5).click();
   for (let i=0;i<3;i++) await page.getByRole('button', { name: /Show 6 more/ }).click(); await page.getByRole('button', { name: 'Choose Fixture ribbon-peach', exact: true }).click();
-  await page.locator('.gb-finishing summary').click(); await page.getByLabel('Your message').fill('Synthetic review message.');
+   await page.getByLabel('Your message').fill('Synthetic review message.');
   await expect(page.locator('.gb-live-total strong')).toContainText('30.00');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const order = await page.evaluate(() => {
@@ -173,5 +177,5 @@ for (const width of [320, 390, 768, 1440]) test(`finishing choices and inventory
   }
   await page.goto('/admin/gift-box/components'); await expect(page.locator('.gb-setting-editor')).toHaveCount(12);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await editor(page, 'box-2').screenshot({ path: info.outputPath(`admin-inventory-${width}.png`) });
+  await (await editor(page, 'box-2')).screenshot({ path: info.outputPath(`admin-inventory-${width}.png`) });
 });

@@ -18,7 +18,6 @@ async function build(page, box, photo = null) {
   await page.getByRole('button',{name:'Add Synthetic rose-red',exact:true}).click();
   if (photo) {
     await page.getByRole('button',{name:'Make It Personal',exact:true}).click();
-    await page.locator('.gb-personal-section').first().locator('summary').click();
     await page.getByLabel('Choose your photos').setInputFiles(Array.isArray(photo) ? photo : {name:photo,mimeType:'image/png',buffer:png});
   }
   await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();

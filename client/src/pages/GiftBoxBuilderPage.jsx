@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Maximize2, X } from 'lucide-react';
+import { Pencil, ArrowRight, X } from 'lucide-react';
 import useModalDialog from '../components/useModalDialog.js';
 import { FREE_PRESENTATION,LEGACY_FREE_PRESENTATION } from '../gift-box/free-presentation.mjs';
 import { BUILDER_STEPS, getFixedComponent } from '../../../shared/gift-box/definitions.mjs';
@@ -10,6 +10,9 @@ import { countBuilderCategories, exceedingBuilderCategories, resolveBoxCategoryL
 import { canAdd, codePointCount, componentCanSupply, componentLabel, counts, estimateSelection, validMessage } from '../gift-box/state.mjs';
 import { getCatalog, getEstimate, getGiftBoxPersonalizationOptions, getGiftBoxPersonalizationQuote } from '../gift-box/api.js';
 import { commerceError, money, uploadPrivateFile } from '../commerce/api.js';
+import BuilderStepper from '../gift-box/BuilderStepper.jsx';
+import ConfirmRemoval from '../gift-box/ConfirmRemoval.jsx';
+import { hasGiftCardMessage } from '../../../shared/gift-box/card-message.mjs';
 import ArrangementCanvas from '../gift-box/ArrangementCanvas.jsx';
 import Options from '../gift-box/Options.jsx';
 import { useSession } from '../auth/SessionProvider.jsx';
@@ -25,14 +28,22 @@ import '../gift-box/gift-box.css';
 const categories = ['box', 'flower', 'plush', 'chocolate', null, 'ribbon'];
 const LAST_STEP = BUILDER_STEPS.length - 1;
 
-function ExpandedArrangement({ onClose, children }) {
-  const { dialogRef, dialogProps } = useModalDialog({ onClose });
-  return createPortal(<dialog ref={dialogRef} {...dialogProps} className="gb-arrangement-dialog" aria-labelledby="gb-expanded-title"><header><h2 id="gb-expanded-title">Your arrangement</h2><button type="button" data-gb-preview-control aria-label="Close expanded preview" onClick={onClose}><X size={22}/></button></header>{children}</dialog>,document.body);
+function revealPersonalField(field = document.activeElement) {
+  if (!(field instanceof HTMLElement) || !field.closest('.gb-personal-section') || !window.matchMedia('(max-width:900px)').matches) return;
+  requestAnimationFrame(() => {
+    if (!field.isConnected || document.activeElement !== field) return;
+    const viewport = window.visualViewport;
+    const offset = viewport?.offsetTop || 0;
+    const top = Math.max(offset, document.querySelector('.site-header-stack')?.getBoundingClientRect().bottom || 0) + 16;
+    const bottom = offset + (viewport?.height || window.innerHeight) - 16;
+    const rect = field.getBoundingClientRect();
+    if (rect.top < top || rect.bottom > bottom) window.scrollBy({ top: rect.top - Math.max(top, top + (bottom - top - rect.height) / 2), behavior: 'instant' });
+  });
 }
 
-function ResetGiftDialog({onClose,onReset}) {
-  const {dialogRef,dialogProps}=useModalDialog({onClose});
-  return createPortal(<dialog ref={dialogRef} {...dialogProps} className="gb-reset-dialog" aria-labelledby="gb-reset-title"><h2 id="gb-reset-title">Start a new gift?</h2><p>This clears your unfinished design and selected photos. Your cart stays saved.</p><div><button type="button" className="button button-secondary" onClick={onClose}>Keep editing</button><button type="button" className="button button-primary" onClick={onReset}>Start new gift</button></div></dialog>,document.body);
+function ExpandedArrangement({ onClose, children }) {
+  const { dialogRef, dialogProps } = useModalDialog({ onClose, restoreFocus: false });
+  return createPortal(<dialog ref={dialogRef} {...dialogProps} className="gb-arrangement-dialog" aria-labelledby="gb-expanded-title"><header><h2 id="gb-expanded-title">Your gift box</h2><button type="button" data-gb-preview-control aria-label="Close expanded preview" onClick={onClose}><X size={22} aria-hidden="true"/></button></header>{children}</dialog>,document.body);
 }
 
 export default function GiftBoxBuilderPage() {
@@ -40,12 +51,17 @@ export default function GiftBoxBuilderPage() {
   const cart = useCart();
   const navigateCart = useNavigate();
   const draft=useGiftBoxDraft();
-  const {history,dispatch,personal,step,setStep,review,setReview,revealed,setRevealed,cardOpen,setCardOpen,selectedId,setSelectedId,
+  const {history,dispatch,personal,step,setStep,review,setReview,revealed,setRevealed,reached,setReached,selectedId,setSelectedId,
     printOptionsByPhoto,setPrintOptionsByPhoto,surfaceOptionsByEngraving,addingGift,setAddingGift,uploadCache,uploadIds,pendingGiftOperation,latest,setPhotoAspectRatios}=draft;
   const catalog = useQuery({ queryKey: ['gift-box', 'catalog'], queryFn: ({ signal }) => getCatalog(signal), retry: false, staleTime: 0 });
-  const [notice,setNotice]=useState(''),[expanded,setExpanded]=useState(false),[resetOpen,setResetOpen]=useState(false);
+  const [notice,setNotice]=useState(''),[expanded,setExpanded]=useState(false),[removal,setRemoval]=useState(null);
   const mounted=useRef(false);
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
+  useEffect(() => {
+    const reveal = () => revealPersonalField();
+    window.visualViewport?.addEventListener('resize', reveal);
+    return () => window.visualViewport?.removeEventListener('resize', reveal);
+  }, []);
   useEffect(()=>{setPhotoAspectRatios(catalog.data?.photoAspectRatios === true);},[catalog.data?.photoAspectRatios,setPhotoAspectRatios]);
   const personalizationOptions = useQuery({
     queryKey: ['private', session.ownerKey, 'gift-box-personalization-options'],
@@ -61,7 +77,7 @@ export default function GiftBoxBuilderPage() {
   const draftSignature = giftBoxPersonalDraftSignature(state.boxId, personal, printOptionsByPhoto, surfaceOptionsByEngraving);
   // Draft placement is safe in the browser; order conversion remains separately server-authorized.
   const study = true;
-  const titleRef = useRef(null), shouldFocus = useRef(false), stepsRef = useRef(null), pageRef = useRef(null);
+  const titleRef = useRef(null), shouldFocus = useRef(false), pageRef = useRef(null);
   const quantities = counts(state.instances);
   const publishedBoxLimits = catalog.data?.boxLimits;
   const activeLimits = resolveBoxCategoryLimits(state.boxId, publishedBoxLimits);
@@ -89,13 +105,28 @@ export default function GiftBoxBuilderPage() {
     : currentEstimate ? money(currentEstimate.componentSubtotalPiastres)
       : unavailableSelection ? 'Selection unavailable' : selection && estimate.isFetching ? 'Calculating…' : 'Awaiting estimate';
   useEffect(() => {
-    if (!stepsRef.current) return undefined;
-    const element = stepsRef.current;
-    const observer = new ResizeObserver(() => pageRef.current?.style.setProperty('--gb-step-height', `${element.getBoundingClientRect().height}px`));
-    observer.observe(element); return () => observer.disconnect();
-  }, [catalog.isSuccess]);
-  useEffect(() => { if (shouldFocus.current) { titleRef.current?.focus({ preventScroll: true }); titleRef.current?.scrollIntoView({ block: 'start', behavior: 'instant' }); shouldFocus.current = false; } }, [step, review]);
-  function navigate(next, showReview = false) { shouldFocus.current = true; setStep(next); setReview(showReview); }
+    if (!shouldFocus.current) return;
+    shouldFocus.current = false;
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    titleRef.current?.focus({ preventScroll: true });
+  }, [step, review]);
+  function navigate(next, showReview = false) {
+    if (addingGift || next === step && showReview === review) return;
+    shouldFocus.current = true;
+    setReached(value => Math.max(value, next + (showReview ? 1 : 0)));
+    setStep(next); setReview(showReview);
+  }
+  function requestRemoval(target) {
+    if (!removal && !addingGift) setRemoval({ ...target, opener: document.activeElement });
+  }
+  function confirmRemoval() {
+    if (!removal) return;
+    if (removal.photo) personal.removePhoto(removal.id);
+    else if (removal.id === 'ribbon') {
+      if (state.ribbonId === removal.componentId) dispatch({ type: 'ribbon', id: null });
+    } else dispatch({ type: 'remove', id: removal.id });
+    setRemoval(null);
+  }
   function finishAdded(signature) {
     if (!draft.isCurrent()) return;
     if (latest.current.sourceSignature === signature) draft.resetDraft();
@@ -156,7 +187,10 @@ export default function GiftBoxBuilderPage() {
       if (id !== state.boxId) personal.resetPhotoPositions();
       dispatch({ type: 'box', id, presentationVersion:state.presentationVersion || (catalog.data?.supportedPresentationVersions?.includes(FREE_PRESENTATION) ? FREE_PRESENTATION : catalog.data?.presentationVersion === LEGACY_FREE_PRESENTATION ? LEGACY_FREE_PRESENTATION : undefined) });
       setNotice('');
-    } else if (item.category === 'ribbon') dispatch({ type: 'ribbon', id:state.ribbonId === id ? null : id });
+    } else if (item.category === 'ribbon') {
+      if (state.ribbonId === id) requestRemoval({ id: 'ribbon', componentId: id, label: componentLabel(item) });
+      else dispatch({ type: 'ribbon', id });
+    }
     else if (canAdd(state, id, draftMode ? undefined : item, publishedBoxLimits, { study, flexible: !draftMode })) { dispatch({ type: 'add', id, instanceId: crypto.randomUUID(), study, flexible: !draftMode, component: draftMode ? undefined : item, boxLimits: publishedBoxLimits }); setNotice(''); }
     else setNotice('This item is unavailable. Reduce the quantity or choose another item.');
   }
@@ -180,31 +214,34 @@ export default function GiftBoxBuilderPage() {
   const canvasProps = {state,components,dispatch,personal,undo:()=>dispatch({type:'undo'}),canUndo:history.past.length > 0,selectedId,onSelect:setSelectedId};
   return <main className={`gb-page gb-shopping ${review ? 'gb-final-review' : ''}`} ref={pageRef} aria-busy={catalog.isPending}>
     <h1 className="sr-only">Build your gift box</h1>
-    {state.boxId && <button type="button" className="gb-new-gift" disabled={addingGift} onClick={()=>setResetOpen(true)}>Start a new gift</button>}
-    {resetOpen && <ResetGiftDialog onClose={()=>setResetOpen(false)} onReset={()=>{draft.resetDraft();setNotice('');setResetOpen(false);}}/>}
+    {removal && <ConfirmRemoval target={removal} onCancel={() => setRemoval(null)} onConfirm={confirmRemoval}/>}
     {catalog.isPending ? <p role="status">Loading your choices...</p> : catalog.error ? <div className="gb-empty"><p role="alert">{commerceError(catalog.error)}</p><button className="button button-secondary" onClick={() => catalog.refetch()}>Retry choices</button></div> : <>
-      <nav className="gb-progress" ref={stepsRef} aria-label="Gift builder steps">{BUILDER_STEPS.map((item,index) => <button key={item.id} type="button" aria-label={item.title} title={item.title} aria-current={step === index && !review ? 'step' : undefined} disabled={index > 0 && !state.boxId} onClick={() => navigate(index)}><span className={index <= step ? 'is-complete' : ''}/><span className="sr-only">{item.title}</span></button>)}</nav>
+      <BuilderStepper step={step} reached={reached} review={review} boxSelected={Boolean(state.boxId)} onNavigate={navigate}/>
       <div className="gb-workspace">
-        <section className="gb-preview" aria-label="Your gift box"><div className="gb-preview-heading"><h2>{review ? 'Made by you' : 'Your arrangement'}</h2><button className="gb-expand" type="button" data-gb-preview-control aria-label="Expand preview" aria-haspopup="dialog" aria-expanded={expanded} onClick={() => setExpanded(true)}><Maximize2 size={19} aria-hidden="true"/></button></div>
-          {!expanded && <ArrangementCanvas {...canvasProps}/>}
-          {expanded && <ExpandedArrangement onClose={()=>setExpanded(false)}><ArrangementCanvas {...canvasProps}/></ExpandedArrangement>}
+        <section className="gb-preview" aria-label="Your gift box">
+          {!expanded && <ArrangementCanvas {...canvasProps} onExpand={() => setExpanded(true)}/>}
+          {expanded && <ExpandedArrangement onClose={()=>{ setExpanded(false); requestAnimationFrame(() => pageRef.current?.querySelector('.gb-expand')?.focus({ preventScroll: true })); }}><ArrangementCanvas {...canvasProps}/></ExpandedArrangement>}
         </section>
-        <section className="gb-choices" aria-label="Build your gift"><header className="gb-step-intro"><p className="gb-progress-message">{review ? 'Ready for a final look' : `${step + 1} of ${BUILDER_STEPS.length}${step > 0 ? ' - Optional' : ''}`}</p><h2 ref={titleRef} tabIndex={-1}>{review ? 'Review your gift' : BUILDER_STEPS[step].title}</h2></header>
+        <section className="gb-choices" aria-label="Build your gift" onFocusCapture={event => revealPersonalField(event.target)}><header className="gb-step-intro"><p className="eyebrow">{review ? 'Made by you' : step === 0 ? 'A thoughtful beginning' : 'Make it yours'}</p><h2 ref={titleRef} tabIndex={-1}>{review ? 'Review your gift' : BUILDER_STEPS[step].title}</h2></header>
+          {!review && reached > LAST_STEP && <button className="gb-return-review" type="button" onClick={() => navigate(LAST_STEP, true)}>Return to review <ArrowRight size={16} aria-hidden="true"/></button>}
           {review ? <div className="gb-review">
             <p className="gb-review-dedication">A thoughtful gift, made your way.</p>
             <ul className="gb-review-highlights"><li>{label(state.boxId)}</li>{Object.entries(quantities).map(([id,quantity])=><li key={id}>{quantity} × {label(id)}</li>)}{state.ribbonId && <li>{label(state.ribbonId)}</li>}{personal.photos.length > 0 && <li>{personal.photos.length} photo prints</li>}{personal.sticker.enabled && <li>Personalized sticker: <bdi>{personal.sticker.text}</bdi></li>}</ul>
             {personal.hasContent && personalPriceEstimate === null && <p role="alert">Personalization is unavailable or incomplete. Review your photos and sticker before adding to cart.</p>}
             {!canPurchase && <p className="gb-purchase-unavailable">Online ordering for this gift is currently unavailable.</p>}
-            <button className="gb-edit-gift" type="button" disabled={addingGift} onClick={()=>navigate(0)}>Edit your gift</button>
+            <div className="gb-review-edit"><h3><Pencil size={17} aria-hidden="true"/> Edit your gift</h3><div>{[['Box',0],['Contents',1],['Personalization',4],['Finishing touches',5]].map(([title,index]) => <button key={title} type="button" disabled={addingGift} onClick={() => navigate(index)}>{title}<ArrowRight size={16} aria-hidden="true"/></button>)}</div></div>
           </div> : <>
             {category && <Options draftMode={draftMode} category={category} components={options} revealed={revealed[category] || 6} onReveal={() => setRevealed(current => ({ ...current, [category]: (current[category] || 6) + 6 }))} onChoose={choose} selectedId={category === 'box' ? state.boxId : state.ribbonId} quantities={quantities} boxSelected={Boolean(state.boxId)} canAddItem={item => canAdd(state,item.componentId,item,publishedBoxLimits,{study,flexible:true})}/>}
-            {step === 4 && <PersonalizationEditor boxId={state.boxId} personal={personal} options={approvedOptions} printSelections={printOptionsByPhoto} onPrintSelection={(id,value) => setPrintOptionsByPhoto(current => ({ ...current,[id]:value }))}/>}
-            {step === LAST_STEP && <details className="gb-personal-section gb-finishing" open={cardOpen} onToggle={event=>{const open=event.currentTarget.open;setCardOpen(open);if(open && componentCanSupply(card)) dispatch({type:'card',enabled:true});}}><summary><span>Add a gift card</span><small>{componentCanSupply(card) ? money(card.pricePiastres) : 'Currently unavailable'}</small></summary><div className="gb-personal-body">{state.cardEnabled ? <><label htmlFor="gb-card-message">Your message (optional)</label><textarea id="gb-card-message" value={state.message} rows={3} aria-invalid={!validMessage(state.message)} onChange={event => { if (codePointCount(event.target.value) <= 500) dispatch({ type:'message',message:event.target.value }); }}/>{!validMessage(state.message) && <p role="alert">Use up to 500 characters without unsupported control characters.</p>}<button type="button" className="gb-edit-gift" onClick={()=>{dispatch({type:'card',enabled:false});setCardOpen(false);}}>Remove gift card</button></> : <p>This gift card is currently unavailable.</p>}</div></details>}
+            {step === 4 && <PersonalizationEditor boxId={state.boxId} personal={personal} options={approvedOptions} printSelections={printOptionsByPhoto} onRemovePhoto={(id,label) => requestRemoval({id,label,photo:true})} onPrintSelection={(id,value) => setPrintOptionsByPhoto(current => ({ ...current,[id]:value }))}/>}
+            {step === LAST_STEP && <section className="gb-personal-section gb-finishing" aria-labelledby="gb-card-heading"><header><div><p className="eyebrow">Optional</p><h3 id="gb-card-heading">Add a gift card</h3></div><small>{componentCanSupply(card) ? money(card.pricePiastres) : 'Currently unavailable'}</small></header><div className="gb-personal-body">
+              <label htmlFor="gb-card-message">Your message</label><textarea id="gb-card-message" value={state.message} dir="auto" rows={4} disabled={!componentCanSupply(card) && !state.message} aria-invalid={!validMessage(state.message)} aria-describedby="gb-card-hint" onChange={event => { if (codePointCount(event.target.value) <= 500) dispatch({ type:'message',message:event.target.value }); }}/>
+              <p id="gb-card-hint" className="gb-field-hint">{!validMessage(state.message) ? 'Use up to 500 characters without unsupported control characters.' : hasGiftCardMessage(state.message) ? 'Gift card added to your gift.' : 'Leave empty to continue without a card.'}</p>
+            </div></section>}
           </>}
           <details className="gb-your-gift"><summary>Your Gift <span>{state.instances.length} items{state.boxId ? ' + box' : ''}</span></summary><ul className="gb-item-list">{state.boxId && <li><span>{label(state.boxId)}</span><span>{currentEstimate ? money(currentEstimate.items?.find(item => item.componentId === state.boxId)?.lineSubtotalPiastres) : 'Pending'}</span></li>}
-            {Object.entries(quantities).map(([id,quantity]) => <li key={id}><span>{label(id)} × {quantity}</span><div><button type="button" aria-label={`Remove one ${label(id)}`} onClick={() => dispatch({ type:'remove',id:state.instances.findLast(item => item.componentId === id).id })}>−</button><button type="button" aria-label={`Add one ${label(id)}`} disabled={!canAdd(state,id,components.find(item => item.componentId === id),publishedBoxLimits,{study,flexible:true})} onClick={() => choose(id)}>+</button></div><span>{currentEstimate ? money(currentEstimate.items?.find(item => item.componentId === id)?.lineSubtotalPiastres) : 'Pending'}</span></li>)}
+            {Object.entries(quantities).map(([id,quantity]) => <li key={id}><span>{label(id)} × {quantity}</span><div><button type="button" aria-label={`Remove one ${label(id)}`} onClick={() => requestRemoval({ id:state.instances.findLast(item => item.componentId === id).id, label:label(id) })}>−</button><button type="button" aria-label={`Add one ${label(id)}`} disabled={!canAdd(state,id,components.find(item => item.componentId === id),publishedBoxLimits,{study,flexible:true})} onClick={() => choose(id)}>+</button></div><span>{currentEstimate ? money(currentEstimate.items?.find(item => item.componentId === id)?.lineSubtotalPiastres) : 'Pending'}</span></li>)}
             {state.ribbonId && <li><span>{label(state.ribbonId)}</span><span>{money(components.find(item => item.componentId === state.ribbonId)?.pricePiastres)}</span></li>}
-            {state.cardEnabled && <li><span>Gift card</span><span>{money(card?.pricePiastres)}</span></li>}
+            {hasGiftCardMessage(state.message) && <li><span>Gift card</span><span>{money(card?.pricePiastres)}</span></li>}
             {personal.photos.length > 0 && <li><span>{personal.photos.length} photo prints</span><span>{photoSubtotal === null ? 'Choose print types' : money(photoSubtotal)}</span></li>}
             {personal.sticker.enabled && <li><span>Personalized sticker: <bdi>{personal.sticker.text}</bdi></span><span>{money(approvedOptions.find(option => option.optionId === personal.sticker.optionId)?.pricePiastres)}</span></li>}
           </ul></details>

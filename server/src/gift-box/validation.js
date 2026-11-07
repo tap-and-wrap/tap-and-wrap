@@ -1,3 +1,4 @@
+import { hasGiftCardMessage } from '../../../shared/gift-box/card-message.mjs';
 import { z } from 'zod';
 import { FIXED_COMPONENTS, GIFT_CARD_POLICY } from '../../../shared/gift-box/definitions.mjs';
 import { commerceError } from '../commerce/errors.js';
@@ -51,4 +52,9 @@ export const estimateInput = z.object({
 }).strict().superRefine((input, context) => {
   if (new Set(input.items.map(item => item.componentId)).size !== input.items.length) context.addIssue({ code: 'custom', path: ['items'], message: 'Combine quantities for each component in one line.' });
   if (input.items.reduce((sum, item) => sum + item.quantity, 0) > MAX_ADDITIONAL_ITEMS) context.addIssue({ code: 'custom', path: ['items'], message: 'The selection exceeds the computational item limit.' });
+});
+// Public estimates are new selections; internal legacy quote/snapshot readers
+// retain estimateInput so existing paid blank-card identities do not change.
+export const shoppingEstimateInput = estimateInput.refine(value => !value.giftCard || hasGiftCardMessage(value.giftCard.message), {
+  message: 'Enter a message to add a gift card.', path: ['giftCard', 'message'],
 });

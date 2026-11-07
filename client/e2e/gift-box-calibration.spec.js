@@ -12,13 +12,11 @@ test.beforeEach(async({page})=>{
 });
 async function personalize(page) {
   await page.getByRole('button',{name:'Make It Personal',exact:true}).click();
-  await page.locator('.gb-personal-section').first().locator('summary').click();
   await page.getByLabel('Choose your photos').setInputFiles(isolatedImageFile('synthetic.png'));
-  await page.locator('.gb-personal-section').last().locator('summary').click();
   await page.getByLabel('Write a name, special date, or heartfelt message').fill('Nour, with love');
   await page.getByRole('radio',{name:'Gold',exact:true}).check();
 }
-test('SPA navigation preserves photos, all choices, poses and review; explicit reset revokes only discarded previews',async({page})=>{
+test('SPA navigation and targeted editing preserve photos, all choices, poses and review',async({page})=>{
   const {fixture,audit}=await localCheckoutFixture(page,{personalized:true});await beginGiftBox(page);
   await page.getByRole('button',{name:'Fill With Flowers',exact:true}).click();
   await page.getByRole('button',{name:'Add Fixture rose-red',exact:true}).click();
@@ -28,8 +26,8 @@ test('SPA navigation preserves photos, all choices, poses and review; explicit r
   await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();
   while(!await page.getByRole('button',{name:'Choose Fixture ribbon-navy',exact:true}).count()) await page.getByRole('button',{name:'Show 6 more'}).click();
   await page.getByRole('button',{name:'Choose Fixture ribbon-navy',exact:true}).click();
-  await page.locator('.gb-finishing summary').click();
-  await page.getByLabel('Your message (optional)').fill('For your special day');
+
+  await page.getByLabel('Your message').fill('For your special day');
   await page.getByRole('button',{name:'Next: Review'}).click();
   const poses=await page.locator('.gb-placed').evaluateAll(els=>els.map(el=>el.getAttribute('style')));
   await page.getByRole('banner').getByRole('link',{name:'Tap and Wrap home',exact:true}).click();await page.goBack();
@@ -37,20 +35,15 @@ test('SPA navigation preserves photos, all choices, poses and review; explicit r
   await expect(page.locator('.gb-free-photo img')).toHaveAttribute('src',url);
   expect(await page.locator('.gb-placed').evaluateAll(els=>els.map(el=>el.getAttribute('style')))).toEqual(poses);
   expect(await page.evaluate(()=>window.revokedGiftUrls)).not.toContain(url);
-  await page.getByRole('button',{name:'Edit your gift',exact:true}).click();
+  await page.locator('.gb-review-edit').getByRole('button',{name:'Box',exact:true}).click();
   await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();
-  await expect(page.getByLabel('Your message (optional)')).toHaveValue('For your special day');
+  await expect(page.getByLabel('Your message')).toHaveValue('For your special day');
   await expect(page.getByRole('button',{name:'Choose Fixture ribbon-navy',exact:true})).toHaveAttribute('aria-pressed','true');
   await page.getByRole('button',{name:'Make It Personal',exact:true}).click();
-  await page.locator('.gb-personal-section').last().locator('summary').click();
   await expect(page.getByLabel('Write a name, special date, or heartfelt message')).toHaveValue('Nour, with love');
   await expect(page.getByRole('radio',{name:'Gold',exact:true})).toBeChecked();
-  await page.getByRole('button',{name:'Start a new gift',exact:true}).click();
-  await page.getByRole('button',{name:'Keep editing'}).click();await expect(page.locator('.gb-free-photo img')).toHaveAttribute('src',url);
-  await page.getByRole('button',{name:'Start a new gift',exact:true}).click();
-  await page.getByRole('dialog').getByRole('button',{name:'Start new gift'}).click();
-  await expect(page.locator('.gb-placed')).toHaveCount(0);await expect(page.locator('.gb-preview-empty')).toBeVisible();
-  expect(await page.evaluate(()=>window.revokedGiftUrls)).toContain(url);
+  await expect(page.getByRole('button',{name:'Start a new gift',exact:true})).toHaveCount(0);
+  expect(await page.evaluate(()=>window.revokedGiftUrls)).not.toContain(url);
   expect(fixture.uploads).toHaveLength(0);expect(audit.adds).toHaveLength(0);
 });
 
@@ -150,14 +143,13 @@ test('outside pointer clears selection while arrows, Undo, fullscreen and delete
   await page.setViewportSize({width:390,height:844});await item.focus();await page.getByRole('button',{name:'Expand preview'}).click();await expect(page.getByRole('button',{name:'Delete selected item'})).toBeEnabled();
   await page.getByRole('button',{name:'Move down',exact:true}).click();await page.getByRole('button',{name:'Close expanded preview'}).click();
   await page.setViewportSize({width:1440,height:1000});await item.focus();await item.press('Escape');await expect(page.getByRole('button',{name:'Delete selected item'})).toBeDisabled();
-  await item.click();await page.getByRole('button',{name:'Delete selected item'}).click();await expect(page.locator('.gb-placed')).toHaveCount(0);
+  await item.click();await page.getByRole('button',{name:'Delete selected item'}).click(); await page.getByRole('button',{name:'Remove item',exact:true}).click();await expect(page.locator('.gb-placed')).toHaveCount(0);
 });
 test('sticker input is readable and charges once; generic legacy toy names are normalized in options and cart',async({page})=>{
   const {fixture}=await localCheckoutFixture(page,{personalized:true});fixture.components.find(item=>item.componentId==='plush-1').displayName='Plush 1';
   await beginGiftBox(page);await page.getByRole('button',{name:'Add Soft Toys',exact:true}).click();
   await page.getByRole('button',{name:'Add Soft Toy 1',exact:true}).click();await expect(page.getByRole('button',{name:'Move Soft Toy 1',exact:true})).toBeVisible();
-  await page.getByRole('button',{name:'Make It Personal',exact:true}).click();await page.locator('.gb-personal-section').last().locator('summary').click();
-  const input=page.getByLabel('Write a name, special date, or heartfelt message');
+  await page.getByRole('button',{name:'Make It Personal',exact:true}).click();const input=page.getByLabel('Write a name, special date, or heartfelt message');
   const styles=await input.evaluate(el=>{const s=getComputedStyle(el);return {height:el.getBoundingClientRect().height,border:s.borderTopWidth,color:s.color,background:s.backgroundColor};});
   expect(styles.height).toBeGreaterThanOrEqual(44);expect(parseFloat(styles.border)).toBeGreaterThan(0);expect(styles.color).not.toBe(styles.background);
   await expect(page.locator('.gb-live-total strong')).toContainText('20.00');await input.fill('Nour');await expect(page.locator('.gb-live-total strong')).toContainText('40.00');

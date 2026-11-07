@@ -1,3 +1,4 @@
+import BoxPhoto from './BoxPhoto.jsx';
 import Artwork from './Artwork.jsx';
 import RibbonBow from './RibbonBow.jsx';
 import { componentCanSupply, componentLabel } from './state.mjs';
@@ -17,11 +18,13 @@ export default function Options({ draftMode = false, category, components, revea
       const repeatable = !['box', 'ribbon'].includes(category);
       const limitReached = repeatable && boxSelected && !unavailable && !canAddItem(item);
       const disabled = unavailable || (repeatable && !boxSelected) || limitReached;
-      return <button className={`gb-option ${selectedId === item.componentId ? 'is-selected' : ''}`} type="button" key={item.componentId}
+      return <div key={item.componentId} className={`gb-option-card ${category === 'box' ? 'gb-box-option-card' : ''} ${selectedId === item.componentId ? 'is-selected' : ''}`}>
+        {category === 'box' && <BoxPhoto componentId={item.componentId} label={label}/>}
+        <button className={`gb-option ${selectedId === item.componentId ? 'is-selected' : ''}`} type="button" key={item.componentId}
         disabled={disabled} aria-label={`${category === 'box' || category === 'ribbon' ? 'Choose' : 'Add'} ${label}`}
         aria-pressed={category === 'box' || category === 'ribbon' ? selectedId === item.componentId : undefined} onClick={() => onChoose(item.componentId)}>
         {/* Use the actual transparent builder assets for every pictured choice, including chocolates. */}
-        {['box', 'flower', 'plush', 'chocolate'].includes(category) && <span className="gb-option-photo"><Artwork key={item.componentId} componentId={item.componentId} role="placement"/></span>}
+        {['flower', 'plush', 'chocolate'].includes(category) && <span className="gb-option-photo"><Artwork key={item.componentId} componentId={item.componentId} role="placement"/></span>}
         {category === 'ribbon' && (import.meta.env.DEV || configuredGiftBoxMedia({
           baseUrl: import.meta.env.VITE_GIFT_BOX_MEDIA_BASE_URL, releaseId: import.meta.env.VITE_GIFT_BOX_MEDIA_RELEASE,
         })) && <span className="gb-option-photo gb-ribbon-option-photo"><RibbonBow key={item.componentId} componentId={item.componentId}/></span>}
@@ -30,7 +33,7 @@ export default function Options({ draftMode = false, category, components, revea
         {!draftMode && !unavailable && item.inventoryMode === 'tracked' && <span className="gb-option-stock">{limitReached && (quantities[item.componentId] || 0) >= item.inventoryQuantity ? 'All available stock added' : `${item.inventoryQuantity} available`}</span>}
         {limitReached && (item.inventoryMode !== 'tracked' || (quantities[item.componentId] || 0) < item.inventoryQuantity) && <span className="gb-option-stock">Selection limit reached</span>}
         {(selectedId === item.componentId || quantities[item.componentId]) && <span className="gb-option-check">{selectedId === item.componentId ? '✓ Selected' : `${quantities[item.componentId]} added`}</span>}
-      </button>;
+      </button></div>;
     })}
   </div>{revealed < components.length && <button className="button button-secondary gb-load-more" type="button" onClick={onReveal}>Show 6 more</button>}
   {!components.length && <p className="gb-empty">{category === 'ribbon' ? 'Ribbon colors are awaiting approval.' : 'This collection is awaiting approval.'}</p>}</>;

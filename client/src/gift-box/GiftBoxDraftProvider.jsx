@@ -15,7 +15,7 @@ export function GiftBoxDraftProvider({ownerKey,children}) {
 function OwnedGiftBoxDraft({ownerKey,children}) {
   const [history,dispatch]=useReducer(reducer,null,initialHistory);
   const [step,setStep]=useState(0),[review,setReview]=useState(false),[revealed,setRevealed]=useState({});
-  const [cardOpen,setCardOpen]=useState(false),[selectedId,setSelectedId]=useState(null);
+  const [reached,setReached]=useState(0),[selectedId,setSelectedId]=useState(null);
   const [printOptionsByPhoto,setPrintOptionsByPhoto]=useState({});
   const [surfaceOptionsByEngraving]=useState({});
   const [photoAspectRatios,setPhotoAspectRatios]=useState(false),[addingGift,setAddingGift]=useState(false);
@@ -30,10 +30,10 @@ function OwnedGiftBoxDraft({ownerKey,children}) {
   latest.current={ownerKey,draftSignature,arrangementSignature,sourceSignature:`${ownerKey}:${arrangementSignature}:${draftSignature}`};
   useEffect(()=>{const cache=uploadCache.current;active.current=true;return()=>{active.current=false;cache.clear();uploadIds.current=[];pendingGiftOperation.current=null;};},[]);
   function resetDraft() {
-    personal.reset();dispatch({type:'reset'});setStep(0);setReview(false);setRevealed({});setCardOpen(false);setSelectedId(null);setPrintOptionsByPhoto({});
+    personal.reset();dispatch({type:'reset'});setStep(0);setReview(false);setRevealed({});setReached(0);setSelectedId(null);setPrintOptionsByPhoto({});
     uploadCache.current.clear();uploadIds.current=[];pendingGiftOperation.current=null;
   }
-  return <DraftContext.Provider value={{history,dispatch,personal,step,setStep,review,setReview,revealed,setRevealed,cardOpen,setCardOpen,selectedId,setSelectedId,
+  return <DraftContext.Provider value={{history,dispatch,personal,step,setStep,review,setReview,revealed,setRevealed,reached,setReached,selectedId,setSelectedId,
     printOptionsByPhoto,setPrintOptionsByPhoto,surfaceOptionsByEngraving,setPhotoAspectRatios,addingGift,setAddingGift,uploadCache,uploadIds,pendingGiftOperation,latest,
     isCurrent:()=>active.current && sessionOwner() === ownerKey,resetDraft}}>{children}</DraftContext.Provider>;
 }

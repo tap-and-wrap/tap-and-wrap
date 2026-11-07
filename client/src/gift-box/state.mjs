@@ -1,3 +1,4 @@
+import { hasGiftCardMessage, validGiftCardMessage } from '../../../shared/gift-box/card-message.mjs';
 import { isFreePresentation,verticalSceneScale,sceneY,ribbonFootprint } from '../../../shared/gift-box/presentation.mjs';
 import { customerGiftComponentName } from '../../../shared/gift-box/customer-label.mjs';
 import { ARTWORK_METRICS } from './artwork-metrics.mjs';
@@ -13,9 +14,7 @@ export const initialArrangement = () => ({ boxId: null, instances: [], ribbonId:
 export const componentLabel = item => customerGiftComponentName(item) || `${item.category === 'flower' ? 'Rose' : item.category === 'plush' ? 'Soft Toy' : item.category[0].toUpperCase() + item.category.slice(1)} ${item.componentId.replace(/^[^-]+-/, '')} · name pending`;
 export const counts = instances => instances.reduce((result, item) => ({ ...result, [item.componentId]: (result[item.componentId] || 0) + 1 }), {});
 export const codePointCount = text => Array.from(text).length;
-export function validMessage(text) {
-  return text.isWellFormed() && codePointCount(text) <= 500 && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(text);
-}
+export const validMessage = validGiftCardMessage;
 // Illustrative layout-study sizes only. They never become approved physical scale.
 export function clampPosition(position, size) {
   return { x: Math.min(1 - size, Math.max(0, position.x)), y: Math.min(1 - size, Math.max(0, position.y)) };
@@ -93,8 +92,8 @@ export function changeArrangement(state, action) {
     case 'remove': return { ...state, instances: state.instances.filter(item => item.id !== action.id) };
     case 'clear': return { ...state, instances: [] };
     case 'ribbon': return { ...state, ribbonId: action.id, ...(state.freePlacement ? { ribbonPosition: state.ribbonPosition || { x: state.presentationVersion ? .385 : .32, y: sceneY(state.presentationVersion ? .67 : .65,state.presentationVersion), zone: 'inside' } } : {}) };
-    case 'card': return { ...state, cardEnabled: action.enabled };
-    case 'message': return { ...state, message: action.message };
+    case 'card': return { ...state, cardEnabled: action.enabled && hasGiftCardMessage(state.message) };
+    case 'message': return { ...state, message: action.message, cardEnabled: hasGiftCardMessage(action.message) };
     default: return state;
   }
 }
@@ -108,9 +107,10 @@ export function arrangementReducer(history, action) {
   return { present: next, past: [...history.past.slice(-29), history.present] };
 }
 export function estimateSelection(state, cardId) {
-  if (!state.boxId || (state.cardEnabled && (!cardId || !validMessage(state.message)))) return null;
+  const cardSelected = hasGiftCardMessage(state.message);
+  if (!state.boxId || !validMessage(state.message) || cardSelected && !cardId) return null;
   return { boxId: state.boxId, items: Object.entries(counts(state.instances)).sort(([a], [b]) => a.localeCompare(b)).map(([componentId, quantity]) => ({ componentId, quantity })),
-    ribbonId: state.ribbonId, giftCard: state.cardEnabled ? { componentId: cardId, message: state.message } : null };
+    ribbonId: state.ribbonId, giftCard: cardSelected ? { componentId: cardId, message: state.message } : null };
 }
 
 export function freeFootprint(boxId, componentId, presentationVersion) {

@@ -8,7 +8,7 @@ import { assertDatabaseWriteAllowed } from '../config/database-safety.js';
 import { assertExpectedRevision } from '../utils/admin-revision.js';
 import { recordAdminAudit } from '../commerce/audit.js';
 import { approvedPrice, calculateEstimate, requireComponent, selectionLines } from './pricing.js';
-import { builderError, catalogQuery, reorderInput, settingPatch } from './validation.js';
+import { builderError, catalogQuery, reorderInput, settingPatch, shoppingEstimateInput } from './validation.js';
 import { applyInventoryPatch, inventoryEligibility } from './inventory.js';
 import { publishedBoxSelectionLimits, assertBoxSelectionLimits } from './limits.js';
 import { giftBoxRuntimeCommerceOpen, giftBoxFlexibleMadeToOrderOpen } from './runtime-commerce.js';
@@ -132,7 +132,7 @@ export async function reorderBuilderCategory(raw, actor) {
 }
 export async function estimateBuilderSelection(raw) {
   await ensureBuilderBackend();
-  const { input, lines } = selectionLines(raw);
+  const { input, lines } = selectionLines(shoppingEstimateInput.parse(raw));
   const session = await mongoose.startSession();
   try {
     let result;

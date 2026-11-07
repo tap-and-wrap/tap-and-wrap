@@ -57,7 +57,7 @@ test('admin can create a pending photo-print option without silently publishing 
   await mockCommerce(page, { role: 'admin' });
   const fixture = await mockPersonalizationAdmin(page);
   await page.goto('/admin/gift-box/personalization-options');
-  await expect(page.getByRole('heading', { name: 'Gift Box Personalization', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Gift Box', exact: true })).toBeVisible();
   await page.getByLabel('Option ID').fill('synthetic-small-print');
   await page.getByRole('button', { name: 'Prepare new option' }).click();
   const editor = page.locator('form.gb-opt-editor');
@@ -104,7 +104,7 @@ test('customer session cannot open or mutate the admin personalization registry'
   await mockCommerce(page, { role: 'customer' });
   const fixture = await mockPersonalizationAdmin(page, [baseRecord()]);
   await page.goto('/admin/gift-box/personalization-options');
-  await expect(page.getByRole('heading', { name: 'Gift Box Personalization', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Gift Box', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Save option' })).toHaveCount(0);
   expect(fixture.writes).toHaveLength(0);
 });

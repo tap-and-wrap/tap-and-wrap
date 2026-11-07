@@ -3,7 +3,7 @@ import { GiftBoxComponentSetting } from '../models/GiftBoxComponentSetting.js';
 import { env } from '../config/env.js';
 import { assertDatabaseWriteAllowed } from '../config/database-safety.js';
 import { deepFreeze, getFixedComponent } from '../../../shared/gift-box/definitions.mjs';
-import { cartLineKind, giftCartConfigurationInput } from '../commerce/cart-contract.js';
+import { cartLineKind, giftCartConfigurationInput, shoppingGiftCartConfigurationInput } from '../commerce/cart-contract.js';
 import { ensureBuilderBackend } from './catalog.js';
 import { identifyGiftBoxConfiguration } from './commerce-contract.js';
 import { prepareGiftBoxV2CommerceQuote } from './commerce-quote.js';
@@ -120,7 +120,7 @@ export function quoteGiftBoxCartLine(line, context, { stored = true } = {}) {
   try {
     cartLineKind(line);
     if (context?.error) throw context.error;
-    const { configuration, configurationId } = identifyGiftBoxConfiguration(giftCartConfigurationInput.parse(line.configuration));
+    const { configuration, configurationId } = identifyGiftBoxConfiguration((stored ? giftCartConfigurationInput : shoppingGiftCartConfigurationInput).parse(line.configuration));
     if (stored && (!z.uuid().safeParse(line.id).success || line.configurationId !== configurationId || line.identity !== configurationId)) {
       throw builderError(409, 'GIFT_BOX_CONFIGURATION_STALE', 'This saved gift configuration needs review. Remove it and create it again.');
     }

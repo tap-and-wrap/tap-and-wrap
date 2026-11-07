@@ -36,9 +36,7 @@ test('cold cart return has eager font faces and no route-specific sticker CSS re
 test('personalized Add, cart reload and normal return use the production lazy bundles',async({page})=>{
   const {fixture}=await localCheckoutFixture(page,{personalized:true});await beginGiftBox(page);
   await page.getByRole('button',{name:'Make It Personal',exact:true}).click();
-  await page.locator('.gb-personal-section').first().locator('summary').click();
   await page.getByLabel('Choose your photos').setInputFiles(isolatedImageFile('loading-fixture.png'));
-  await page.locator('.gb-personal-section').last().locator('summary').click();
   await page.getByLabel('Write a name, special date, or heartfelt message').fill('Loading check');
   await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();await page.getByRole('button',{name:'Next: Review'}).click();
   await expect(page.getByRole('button',{name:'Add Your Gift to Cart'})).toBeEnabled();await page.getByRole('button',{name:'Add Your Gift to Cart'}).click();await expect(page).toHaveURL(/\/cart$/);
@@ -51,9 +49,8 @@ test('personalized Add, cart reload and normal return use the production lazy bu
 
 test('a transient unrelated lazy CSS failure emits preloadError without reloading or losing the private draft',async({page})=>{
   const {fixture}=await localCheckoutFixture(page,{personalized:true});await beginGiftBox(page);
-  await page.getByRole('button',{name:'Make It Personal',exact:true}).click();await page.locator('.gb-personal-section').first().locator('summary').click();
-  await page.getByLabel('Choose your photos').setInputFiles(isolatedImageFile('keep-in-memory.png'));
-  await page.locator('.gb-personal-section').last().locator('summary').click();await page.getByLabel('Write a name, special date, or heartfelt message').fill('Keep this draft');
+  await page.getByRole('button',{name:'Make It Personal',exact:true}).click();await page.getByLabel('Choose your photos').setInputFiles(isolatedImageFile('keep-in-memory.png'));
+  await page.getByLabel('Write a name, special date, or heartfelt message').fill('Keep this draft');
   const photo=await page.locator('.gb-free-photo img').getAttribute('src'),boot=await page.evaluate(()=>window.loadingBoot);
   let failures=0;
   await page.route('**/assets/service-requests-*.css',route=>{failures++;return failures===1 ? route.abort('failed') : route.continue();});
