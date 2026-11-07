@@ -3,6 +3,11 @@ import { cartWithProduct,isolatedImageFile } from './commerce-fixtures.js';
 import { localCheckoutFixture } from './gift-box-checkout-fixture.js';
 import { beginGiftBox } from './gift-box-fixtures.js';
 
+async function returnToGiftBox(page) {
+  await page.getByRole('banner').getByRole('link',{name:'Customize',exact:true}).click();
+  await page.locator('main a[href="/customize/gift-box"]').click();
+}
+
 test.beforeEach(async({page,context})=>{
   await context.route('**/*',route=>{
     const url=new URL(route.request().url());
@@ -16,11 +21,11 @@ test.beforeEach(async({page,context})=>{
 
 test('cold cart return has eager font faces and no route-specific sticker CSS request',async({page},info)=>{
   await localCheckoutFixture(page,{initialCart:cartWithProduct()});await page.goto('/cart');
-  await page.getByRole('link',{name:'Build another Gift Box',exact:true}).waitFor();
+  await expect(page.getByRole('heading',{name:'Your Cart',exact:true})).toBeVisible();
   let legacyRequests=0;
   await page.route('**/assets/sticker-fonts-*.css',route=>{legacyRequests++;return route.abort('failed');});
   try {
-    await page.getByRole('link',{name:'Build another Gift Box',exact:true}).click();
+    await returnToGiftBox(page);
     await expect(page.getByRole('button',{name:'Choose Fixture box-2',exact:true})).toBeVisible();
     expect(legacyRequests).toBe(0);
     const families=await page.evaluate(()=>[...document.styleSheets].flatMap(sheet=>{
@@ -41,7 +46,7 @@ test('personalized Add, cart reload and normal return use the production lazy bu
   await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();await page.getByRole('button',{name:'Next: Review'}).click();
   await expect(page.getByRole('button',{name:'Add Your Gift to Cart'})).toBeEnabled();await page.getByRole('button',{name:'Add Your Gift to Cart'}).click();await expect(page).toHaveURL(/\/cart$/);
   expect(fixture.uploads).toHaveLength(1);
-  await page.reload();await page.getByRole('link',{name:'Build another Gift Box',exact:true}).click();
+  await page.reload();await returnToGiftBox(page);
   await expect(page.locator('.gb-preview-empty')).toBeVisible();
   await page.getByRole('button',{name:'Choose Fixture box-3',exact:true}).click();
   expect(await page.evaluate(()=>window.preloadFailures)).toEqual([]);

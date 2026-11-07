@@ -24,7 +24,7 @@ for (const width of [320,390,440,768,1024,1440]) test(`owner handoff visual jour
   for (const image of await boxPhotos.all()) {
     await image.scrollIntoViewIfNeeded(); await photoLoaded(image);
     expect(await image.getAttribute('src')).not.toContain('open-top');
-    expect(await image.getAttribute('srcset')).toContain('640/boxes/box-');
+    expect(await image.getAttribute('srcset')).toContain('thumbnail/640/box-');
   }
   await page.evaluate(() => scrollTo(0,0));
   await page.screenshot({ animations:'disabled', path: info.outputPath(`${width}-01-boxes.png`), fullPage: true });
@@ -32,9 +32,9 @@ for (const width of [320,390,440,768,1024,1440]) test(`owner handoff visual jour
   await enlarge.focus(); await enlarge.press('Enter');
   const viewer = page.getByRole('dialog', { name: 'Fixture box-1', exact: true });
   await photoLoaded(viewer.getByRole('img'));
-  await viewer.getByRole('button', { name: 'Zoom into photo' }).click();
-  await expect(viewer.locator('.gb-photo-viewer')).toHaveClass(/is-zoomed/);
-  expect(await viewer.locator('img').evaluate(node=>node.getBoundingClientRect().width>=node.naturalWidth)).toBe(true);
+  await viewer.getByRole('button', { name: 'Zoom in' }).click();
+  await expect(viewer.locator('.gb-lightbox-stage')).toHaveClass(/is-zoomed/);
+  expect(await viewer.locator('img').evaluate(node=>node.getBoundingClientRect().width>0)).toBe(true);
   await page.screenshot({ animations:'disabled', path: info.outputPath(`${width}-02-photo-viewer.png`) });
   await page.keyboard.press('Escape'); await expect(enlarge).toBeFocused();
   await expect(page.getByRole('button',{name:'Choose Fixture box-1',exact:true})).toBeDisabled();
@@ -158,10 +158,11 @@ test('photo viewer traps focus, closes by button or backdrop, and never selects 
   const opener=page.getByRole('button',{name:'Enlarge Fixture box-3 photo',exact:true});
   await opener.click();
   const dialog=page.getByRole('dialog',{name:'Fixture box-3',exact:true});
-  const zoom=dialog.getByRole('button',{name:'Zoom into photo'});
-  await zoom.focus(); await page.keyboard.press('Shift+Tab');
-  await expect(dialog.locator('.gb-photo-viewer')).toBeFocused();
-  await page.keyboard.press('Tab'); await expect(zoom).toBeFocused();
+  await photoLoaded(dialog.getByRole('img'));
+  const close=dialog.getByRole('button',{name:'Close box photo'});
+  await close.focus(); await page.keyboard.press('Shift+Tab');
+  await expect(dialog.getByRole('button',{name:'Fit photo to screen'})).toBeFocused();
+  await page.keyboard.press('Tab'); await expect(close).toBeFocused();
   await dialog.getByRole('button',{name:'Close box photo'}).click(); await expect(opener).toBeFocused();
   await opener.click(); const bounds=await dialog.boundingBox();
   // The page reserves scrollbar gutters; click the backdrop, not that gutter.

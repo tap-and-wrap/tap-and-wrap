@@ -73,6 +73,23 @@ async function quoteCartCore(owner, { session, strict = false } = {}, capability
     const item = items.find(line => line.id === id);
     Object.assign(item, { valid: false, error: error.message, errorCode: error.code, unitPricePiastres: null, lineTotalPiastres: null });
   }
+  // Advisory UI bounds only. Every mutation and checkout still reprice and
+  // validate stock on the server, including aggregate Gift Box demand.
+  for (const item of items.filter(line => line.valid)) {
+    if (item.kind === 'gift_box_v2') {
+      item.maxQuantity = Math.min(99, ...item.giftComponents.map(component => {
+        const setting = giftContext.settings.get(component.componentId);
+        if (setting.inventoryMode !== 'tracked') return 99;
+        const otherDemand = items.filter(line => line.valid && line.kind === 'gift_box_v2' && line.id !== item.id)
+          .reduce((sum, line) => sum + (line.giftComponents.find(value => value.componentId === component.componentId)?.quantityForLine || 0), 0);
+        return Math.max(1, Math.floor((setting.inventoryQuantity - otherDemand) / component.quantityPerBox));
+      }));
+    } else if (item.kind === 'product') {
+      const otherDemand = items.filter(line => line.valid && line.kind === 'product' && line.id !== item.id
+        && String(line.productId) === String(item.productId) && line.variantKey === item.variantKey).reduce((sum,line) => sum + line.quantity,0);
+      item.maxQuantity = item.stockQuantityLimit === null ? 99 : Math.min(99, Math.max(1, item.stockQuantityLimit - otherDemand));
+    }
+  }
   return { document: cart, items, subtotalPiastres: checkedMoney(items.reduce((sum, item) => sum + (item.valid ? item.lineTotalPiastres : 0), 0)), quantity: items.reduce((sum, item) => sum + item.quantity, 0) };
 }
 export async function cartResponse(owner) {
@@ -83,7 +100,7 @@ export async function cartResponse(owner) {
   const hasGifts = items.some(item => item.kind === 'gift_box_v2');
   const paths = await attachProductPaths(items.filter(item => item.kind === 'product' && item.slug).map(item => ({ _id: item.productId, slug: item.slug })));
   const byProduct = new Map(paths.map(product => [String(product._id), product.publicPath]));
-  return { cart: { items: items.map(item => item.kind === 'product' && item.slug && byProduct.get(String(item.productId)) ? { ...item, publicPath: byProduct.get(String(item.productId)) } : item), subtotalPiastres: quote.subtotalPiastres, quantity: quote.quantity }, mixedCheckout, checkoutEnabled: env.checkoutEnabled === true && !mixedCheckout && (!hasEngraving || env.engravingEnabled === true) && (!hasGifts || giftBoxRuntimeCommerceOpen(env) && items.every(item => item.valid && item.checkoutAllowed === true)), giftBoxCheckoutBlocked: hasGifts && (!giftBoxRuntimeCommerceOpen(env) || items.some(item => item.kind === 'gift_box_v2' && item.checkoutAllowed !== true)),
+  return { cart: { items: items.map(item => item.kind === 'product' && item.slug && byProduct.get(String(item.productId)) ? { ...item, publicPath: byProduct.get(String(item.productId)) } : item), subtotalPiastres: quote.subtotalPiastres, quantity: quote.quantity }, mixedCheckout, checkoutEnabled: env.checkoutEnabled === true && items.every(item => item.valid) && !mixedCheckout && (!hasEngraving || env.engravingEnabled === true) && (!hasGifts || giftBoxRuntimeCommerceOpen(env) && items.filter(item => item.kind === 'gift_box_v2').every(item => item.checkoutAllowed === true)), giftBoxCheckoutBlocked: hasGifts && (!giftBoxRuntimeCommerceOpen(env) || items.some(item => item.kind === 'gift_box_v2' && item.checkoutAllowed !== true)),
     // A UI scope identifier only, never an authorization credential or raw owner.
     checkoutOwnerKey: createHash('sha256').update(`checkout-context:${owner}`).digest('hex') };
 }

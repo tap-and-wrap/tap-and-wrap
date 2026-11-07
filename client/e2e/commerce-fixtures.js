@@ -73,7 +73,7 @@ export async function mockCommerce(page, options = {}) {
     if (path === '/auth/logout') { state.user = null; state.cart = blankCart(); return success(route, {}); }
     if (path === '/admin/ping') return state.user?.role === 'admin' ? success(route, { authorized: true }) : failure(route, 'Administrator access required.', 403);
     if (path === '/commerce/engraving/types') return success(route, { enabled: false, types: [], fonts: [], icons: [] });
-    if (path === '/commerce/cart' && method === 'GET') return options.failCartRefreshAfterOrder && orders.length ? failure(route, 'Synthetic cart refresh outage.', 503) : success(route, { cart: state.cart, checkoutEnabled: options.checkoutEnabled === true, checkoutOwnerKey: state.user ? '1'.repeat(64) : (options.guestOwnerKey || '0'.repeat(64)) });
+    if (path === '/commerce/cart' && method === 'GET') return options.failCartRefreshAfterOrder && orders.length ? failure(route, 'Synthetic cart refresh outage.', 503) : success(route, { cart: state.cart, checkoutEnabled: options.checkoutEnabled === true, mixedCheckout: options.mixedCheckout === true, checkoutOwnerKey: state.user ? '1'.repeat(64) : (options.guestOwnerKey || '0'.repeat(64)) });
     if (path === '/commerce/cart' && method === 'DELETE') { state.cart = blankCart(); return success(route, { cart: state.cart }); }
     if (path === '/commerce/cart/merge') return success(route, { cart: state.cart });
     if (path === '/commerce/cart/items' && method === 'POST') {

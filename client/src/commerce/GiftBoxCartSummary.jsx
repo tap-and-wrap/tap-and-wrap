@@ -1,5 +1,7 @@
 import { customerGiftComponentName } from '../../../shared/gift-box/customer-label.mjs';
 import { money } from './api.js';
+import { stickerStyle } from '../../../shared/gift-box/sticker-styles.mjs';
+import { ENGRAVING_COLORS, LETTERING_STYLES } from '../../../shared/gift-box/lettering-styles.mjs';
 const groups = [['flower', 'Flowers'], ['plush', 'Soft Toys'], ['chocolate', 'Chocolates']];
 
 export default function GiftBoxCartSummary({ giftBox }) {
@@ -10,9 +12,6 @@ export default function GiftBoxCartSummary({ giftBox }) {
   const cardSelected = giftBox.giftCard?.selected === true;
   const message = typeof giftBox.giftCard?.message === 'string' ? giftBox.giftCard.message : '';
   return <div className="commerce-gift-summary">
-    <p className="commerce-gift-description">{items.length ? items.map(item=>`${item.quantity} ${customerGiftComponentName(item) || item.category}`).join(' · ') : giftBox.box?.displayName || 'Your chosen box'}</p>
-    <div className="commerce-gift-indicators">{ribbon && <span>Ribbon</span>}{cardSelected && <span>Gift card</span>}{giftBox.personalization?.photoCount > 0 && <span>{giftBox.personalization.photoCount} photos</span>}{giftBox.personalization?.sticker && <span>Personalized sticker</span>}</div>
-    <details className="commerce-design-details"><summary>View design and details</summary>
     <dl>
       <div><dt>Box</dt><dd>{giftBox.box?.displayName || 'Saved box details unavailable'}</dd></div>
       {groups.map(([category, label]) => {
@@ -22,10 +21,10 @@ export default function GiftBoxCartSummary({ giftBox }) {
       <div><dt>Ribbon</dt><dd className="commerce-gift-ribbon">{ribbonColor && <span aria-hidden="true" className="commerce-gift-swatch" style={{ backgroundColor: ribbonColor }} />}{ribbon ? (ribbon.displayName || 'Saved ribbon details unavailable') : 'No ribbon selected'}</dd></div>
       <div><dt>Gift card</dt><dd>{cardSelected ? 'Selected' : 'Not selected'}</dd></div>
     </dl>
-    {cardSelected && (message ? <details className="commerce-gift-message"><summary>View gift-card message</summary><p>{message}</p></details> : <p className="commerce-muted">Gift card without a message.</p>)}
+    {cardSelected && <p className="commerce-gift-message" dir="auto">{message || 'Gift card without a message.'}</p>}
     {giftBox.personalization?.photoCount > 0 && <p>Photo prints: {giftBox.personalization.photoCount}</p>}
     {giftBox.personalization && <p>Personal touches per box: {money(giftBox.personalization.unitAdjustmentPiastres)}</p>}
-    {giftBox.personalization?.sticker && <p>Personalized sticker: <bdi>{giftBox.personalization.sticker.text}</bdi> - Apply to exterior front</p>}
-    </details>
+    {giftBox.personalization?.sticker && <p>Personalized sticker: <bdi>{giftBox.personalization.sticker.text}</bdi> · {stickerStyle(giftBox.personalization.sticker.styleId)?.label || 'Saved font'} · {ENGRAVING_COLORS.find(color=>color.id===giftBox.personalization.sticker.colorId)?.label || 'Saved color'} · Apply to exterior front</p>}
+    {giftBox.personalization?.engravings?.map((entry,index)=><p key={index}>Engraving: <bdi>{entry.text}</bdi> · {LETTERING_STYLES.find(style=>style.id===entry.styleId)?.label || 'Saved font'} · {ENGRAVING_COLORS.find(color=>color.id===entry.colorId)?.label || 'Saved color'}</p>)}
   </div>;
 }

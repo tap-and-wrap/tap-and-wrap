@@ -142,8 +142,8 @@ test('three photo orientations reconstruct unchanged after real isolated checkou
   const before=await page.locator('.gb-free-photo').evaluateAll(nodes=>nodes.map(node=>({width:node.style.width,height:node.style.height,left:node.style.left,top:node.style.top})));
   await add(page);
   const current=await cart(context);expect(current.items[0].giftBox.design.photos.map(photo=>photo.aspectRatio)).toEqual([2/3,1.5,1]);
-  await expect(page.locator('.commerce-gift-photo .gb-free-photo')).toHaveCount(3);
-  expect(await page.locator('.commerce-gift-photo .gb-free-photo').evaluateAll(nodes=>nodes.map(node=>({width:node.style.width,height:node.style.height,left:node.style.left,top:node.style.top})))).toEqual(before);
+  await expect(page.locator('.cart-v2-photo .gb-free-photo')).toHaveCount(3);
+  expect(await page.locator('.cart-v2-photo .gb-free-photo').evaluateAll(nodes=>nodes.map(node=>({width:node.style.width,height:node.style.height,left:node.style.left,top:node.style.top})))).toEqual(before);
   await page.getByRole('link',{name:'Proceed to Checkout',exact:true}).click();
   await page.getByLabel('Full name',{exact:true}).fill('Synthetic photo buyer');await page.getByLabel('Email',{exact:true}).fill('photo-buyer@example.test');
   await page.getByLabel('Egyptian mobile number').fill('01012345678');await chooseOption(page.getByLabel('Governorate',{exact:true}), 'cairo');await page.getByLabel('Delivery address',{exact:true}).fill('10 Synthetic Photo Street');

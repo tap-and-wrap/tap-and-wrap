@@ -48,9 +48,12 @@ test('successful product-card adds update the real cart, survive refresh, and su
   await expect(page.getByRole('heading', { name: commerceProduct.name, exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading', { name: commerceProduct.name, exact: true })).toBeVisible();
-  await chooseOption(page.getByRole('combobox', { name: /^Quantity/ }), '3');
+  await page.getByRole('button', { name: `Increase quantity for ${commerceProduct.name}` }).click();
+  await expect.poll(() => fixture.state.cart.quantity).toBe(2);
+  await page.getByRole('button', { name: `Increase quantity for ${commerceProduct.name}` }).click();
   await expect.poll(() => fixture.state.cart.quantity).toBe(3);
   await page.getByRole('button', { name: `Remove ${commerceProduct.name}`, exact: true }).click();
+  await page.getByRole('button', {name:'Remove item',exact:true}).click();
   await expect(page.getByText('Your cart is empty.', { exact: true })).toBeVisible();
 });
 
@@ -486,7 +489,7 @@ for (const width of [320, 390, 768, 1440]) {
       // font downloads included by the browser's document load event.
       await page.goto(route, { waitUntil: 'domcontentloaded' });
       await expect(page.locator('main h1')).toBeVisible();
-      if (route === '/cart') await expect(page.locator('.commerce-cart-item')).toBeVisible();
+      if (route === '/cart') await expect(page.locator('.cart-v2-line')).toBeVisible();
       if (route === '/checkout') await expect(page.getByLabel('Full name', { exact: true })).toBeVisible();
       if (route.endsWith('/customize')) await expect(page.locator('.commerce-configurator')).toBeVisible();
       await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

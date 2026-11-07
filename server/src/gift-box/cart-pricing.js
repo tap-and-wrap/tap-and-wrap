@@ -191,7 +191,7 @@ export function giftBoxCartStockErrors(quotes, context) {
 }
 
 export function publicGiftBoxCartLine(quote) {
-  return { id: quote.id, kind: 'gift_box_v2', name: 'Build Your Gift Box', quantity: quote.quantity,
+  return { id: quote.id, kind: 'gift_box_v2', name: 'Gift Box', quantity: quote.quantity, maxQuantity: quote.maxQuantity,
     valid: quote.valid, ...(quote.error ? { error: quote.error, errorCode: quote.errorCode } : {}),
     unitPricePiastres: quote.valid ? quote.unitPricePiastres : null, lineTotalPiastres: quote.valid ? quote.lineTotalPiastres : null,
     giftBox: quote.giftBox ? { ...quote.giftBox, ...(quote.giftPersonalization ? { personalization: {

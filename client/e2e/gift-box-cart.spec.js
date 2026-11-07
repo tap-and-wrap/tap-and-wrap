@@ -5,7 +5,7 @@ import { giftBoxFixture, beginGiftBox } from './gift-box-fixtures.js';
 import { prepareGiftBoxCartPayload, prepareGiftBoxCommerceConfiguration } from '../src/gift-box/commerce-payload.mjs';
 
 const message = 'Private fixture message <b>shown as text</b> 🌹';
-const giftLine = () => ({ id: '10000000-0000-4000-8000-000000000001', kind: 'gift_box_v2', name: 'Build Your Gift Box',
+const giftLine = () => ({ id: '10000000-0000-4000-8000-000000000001', kind: 'gift_box_v2', name: 'Gift Box',
   quantity: 1, valid: true, unitPricePiastres: 96000, lineTotalPiastres: 96000,
   giftBox: { box: { componentId: 'box-2', displayName: 'Fixture Box Two' },
     items: [{ componentId: 'rose-red', category: 'flower', displayName: 'Fixture Red Rose', quantity: 3 },
@@ -22,24 +22,21 @@ for (const width of [320, 390, 768, 1440]) test(`mixed cart presents one configu
   await page.setViewportSize({ width, height: 1000 });
   await mockCommerce(page, { cart: mixedCart(), checkoutEnabled: false });
   await page.goto('/cart');
-  const gift = page.getByRole('article', { name: 'Build Your Gift Box', exact: true });
-  await expect(gift.getByRole('heading', { name: 'Build Your Gift Box' })).toBeVisible();
+  const gift = page.getByRole('article', { name: 'Gift Box', exact: true });
+  await expect(gift.getByRole('heading', { name: 'Gift Box' })).toBeVisible();
   await expect(page.getByRole('heading', { name: commerceProduct.name, exact: true })).toBeVisible();
-  await gift.getByText('View design and details', {exact:true}).click();
+  await gift.getByText('View Design Details', {exact:true}).click();
   for (const text of ['Fixture Box Two', 'Fixture Red Rose × 3', 'Fixture Plush One × 1', 'Fixture Chocolate One × 2', 'Fixture Navy Ribbon', 'Selected']) await expect(gift.getByText(text, { exact: true })).toBeVisible();
-  await expect(gift.getByText(message, { exact: true })).toBeHidden();
-  const disclosure = gift.getByText('View gift-card message', { exact: true });
-  await disclosure.focus(); await page.keyboard.press('Enter');
   await expect(gift.getByText(message, { exact: true })).toBeVisible();
   await expect(gift.locator('b')).toHaveCount(0);
-  await page.keyboard.press('Enter');
+  await gift.getByRole('button',{name:'Hide details'}).click();
   await expect(gift.getByText(message, { exact: true })).toBeHidden();
   await expect(gift.getByText('Gift box preview unavailable', { exact: true })).toHaveCount(0);
   await expect(gift.locator('img')).toHaveCount(1);
-  await expect(gift.getByRole('combobox', { name: 'Quantity for Build Your Gift Box' })).toHaveAttribute('data-selected-value', '1');
+  await expect(gift.locator('output')).toHaveText('1');
   await expect(page.getByRole('link', { name: 'Proceed to Checkout', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Checkout unavailable', exact: true })).toBeDisabled();
-  await expect(gift.getByText('View design and details')).toBeVisible();
+  await expect(gift.getByText('View Design Details')).toBeVisible();
   await expect(page.locator('.commerce-summary')).toContainText('1,210.00');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.evaluate(() => window.scrollTo(0, 0));
@@ -49,38 +46,45 @@ for (const width of [320, 390, 768, 1440]) test(`mixed cart presents one configu
 test('gift quantity and removal use existing cart operations while the ordinary product remains intact', async ({ page }) => {
   const fixture = await mockCommerce(page, { cart: mixedCart(), checkoutEnabled: true });
   await page.goto('/cart');
-  await chooseOption(page.getByRole('combobox', { name: 'Quantity for Build Your Gift Box' }), '3');
+  await page.getByRole('button',{name:'Increase quantity for Gift Box'}).click();
+  await expect(page.getByRole('article',{name:'Gift Box'}).locator('output')).toHaveText('2');
+  await page.getByRole('button',{name:'Increase quantity for Gift Box'}).click();
   await expect.poll(() => fixture.state.cart.items.find(item => item.kind === 'gift_box_v2').quantity).toBe(3);
-  await expect(page.getByRole('article', { name: 'Build Your Gift Box' })).toContainText('EGP 2,880.00');
-  await page.getByRole('button', { name: 'Remove Build Your Gift Box', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Build Your Gift Box', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('article', { name: 'Gift Box' })).toContainText('EGP 2,880.00');
+  await page.getByRole('button', { name: 'Remove Gift Box', exact: true }).click();
+  await page.getByRole('button',{name:'Remove item',exact:true}).click();
+  await expect(page.getByRole('heading', { name: 'Gift Box', exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: commerceProduct.name, exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Proceed to Checkout', exact: true })).toBeVisible();
-  expect(fixture.calls.filter(call => call.method === 'PATCH' && call.path.includes('/cart/items/')).map(call => call.body)).toEqual([{ quantity: 3 }]);
+  expect(fixture.calls.filter(call => call.method === 'PATCH' && call.path.includes('/cart/items/')).map(call => call.body)).toEqual([{quantity:2},{quantity:3}]);
   expect(fixture.state.cart.items).toHaveLength(1);
   expect(fixture.state.cart.items[0].productId).toBe(commerceProduct._id);
 });
 
-test('unavailable saved gift remains visible without invented prices and can be removed or cleared', async ({ page }) => {
+test('unavailable saved gift remains visible without invented prices and confirms removal without clearing other items', async ({ page }) => {
   const unavailable = { ...giftLine(), valid: false, unitPricePiastres: null, lineTotalPiastres: null,
     error: 'A selected gift component is unavailable. Review your selection.', errorCode: 'GIFT_BOX_COMPONENT_UNAVAILABLE',
     giftBox: { ...giftLine().giftBox, artwork: { status: 'historical_unavailable' } } };
   await mockCommerce(page, { cart: { ...mixedCart(), items: [...cartWithProduct().items, unavailable], subtotalPiastres: commerceProduct.pricePiastres } });
   await page.goto('/cart');
-  const gift = page.getByRole('article', { name: 'Build Your Gift Box' });
+  const gift = page.getByRole('article', { name: 'Gift Box' });
   await expect(gift.getByRole('alert')).toHaveText(unavailable.error);
-  await expect(gift.getByRole('combobox', { name: /^Quantity/ })).toBeDisabled();
-  await expect(gift.getByText('Unavailable', { exact: true })).toBeVisible();
+  await expect(gift.getByRole('button',{name:'Increase quantity for Gift Box'})).toBeDisabled();
+  await expect(gift.locator('.cart-v2-total')).toContainText('Unavailable');
   await expect(gift.getByText(/per completed gift box/)).toHaveCount(0);
-  await page.getByRole('button', { name: 'Clear cart', exact: true }).click();
-  await expect(page.getByText('Your cart is empty.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Clear cart', exact: true })).toHaveCount(0);
+  await gift.getByRole('button',{name:'Remove Gift Box',exact:true}).click();
+  await page.getByRole('button',{name:'Remove item',exact:true}).click();
+  await expect(gift).toHaveCount(0);
+  await expect(page.getByRole('heading',{name:commerceProduct.name,exact:true})).toBeVisible();
 });
 
 test('ordinary historical product row keeps its original link, price and quantity control', async ({ page }) => {
   await mockCommerce(page, { cart: cartWithProduct(), checkoutEnabled: true });
   await page.goto('/cart');
-  await expect(page.getByRole('link', { name: commerceProduct.name, exact: true }).filter({ has: page.getByRole('heading', { name: commerceProduct.name, exact: true }) })).toBeVisible();
-  await expect(page.getByRole('combobox', { name: 'Quantity', exact: true })).toBeEnabled();
+  await expect(page.getByRole('heading',{name:commerceProduct.name,exact:true})).toBeVisible();
+  await expect(page.getByRole('link',{name:`View ${commerceProduct.name}`,exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:`Increase quantity for ${commerceProduct.name}`})).toBeEnabled();
   await expect(page.getByRole('link', { name: 'Proceed to Checkout', exact: true })).toBeVisible();
   await expect(page.getByText(/Gift-box checkout is unavailable/)).toHaveCount(0);
 });

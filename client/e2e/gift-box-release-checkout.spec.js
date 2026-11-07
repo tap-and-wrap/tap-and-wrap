@@ -27,8 +27,8 @@ test('priced flexible gift with roses, chocolate and no ribbon goes from builder
   await expect(page.locator('.gb-live-total strong')).toContainText('40.00');
   await page.getByRole('button', { name: 'Add Your Gift to Cart' }).click();
   await expect(page).toHaveURL(/\/cart$/);
-  const gift = page.getByRole('article', { name: 'Build Your Gift Box' });
-  await gift.getByText('View design and details', {exact:true}).click();
+  const gift = page.getByRole('article', { name: 'Gift Box' });
+  await gift.getByText('View Design Details', {exact:true}).click();
   await expect(gift).toContainText('Fixture rose-red × 2');
   await expect(gift).toContainText('Fixture chocolate-1 × 1');
   await expect(gift).toContainText('No ribbon selected');
@@ -64,7 +64,7 @@ test('box-only no-ribbon gift can check out alongside an ordinary priced product
   await review(page);
   await page.getByRole('button', { name: 'Add Your Gift to Cart' }).click();
   await expect(page).toHaveURL(/\/cart$/);
-  await expect(page.getByRole('article', { name: 'Build Your Gift Box' })).toContainText('10.00');
+  await expect(page.getByRole('article', { name: 'Gift Box' })).toContainText('10.00');
   await expect(page.getByRole('heading', { name: 'Isolated Commerce Gift' })).toBeVisible();
   await page.getByRole('link', { name: 'Proceed to Checkout' }).click();
   await fillCheckout(page);

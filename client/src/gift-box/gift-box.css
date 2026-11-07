@@ -265,11 +265,12 @@
 .gb-shopping .gb-option-check{position:absolute;top:8px;right:8px;background:white;border:1px solid var(--tw-border);border-radius:10px;padding:3px 7px;margin:0;pointer-events:none}
 .gb-box-option-card{border:1px solid var(--tw-border);border-radius:12px;overflow:hidden;background:var(--tw-surface)}
 .gb-box-option-card.is-selected{border-color:var(--tw-button);box-shadow:0 0 0 1px var(--tw-button)}
-.gb-box-option-card>.gb-option{height:auto;border:0!important;border-radius:0;padding:10px!important;background:transparent;text-align:left;position:static}
-.gb-box-choice-photo{position:relative;display:block;width:100%;aspect-ratio:1;border:0;padding:0;background:var(--tw-bg);cursor:zoom-in;color:var(--tw-ink)}
+.gb-box-option-card>.gb-option{height:100%;border:0!important;border-radius:0;padding:10px!important;background:transparent;text-align:left;position:static}
+.gb-box-choice-photo{position:relative;display:block;width:100%;aspect-ratio:1;border:0;padding:0;background:var(--tw-bg);cursor:pointer;color:var(--tw-ink);margin-bottom:10px}
 .gb-box-choice-photo img{width:100%;height:100%;object-fit:contain;display:block}
-.gb-photo-enlarge{position:absolute;bottom:8px;right:8px;display:grid;place-items:center;width:44px;height:44px;background:var(--tw-surface);border:1px solid var(--tw-border);border-radius:50%;opacity:0;transition:opacity .2s}
-.gb-box-choice-photo:hover .gb-photo-enlarge,.gb-box-choice-photo:focus-visible .gb-photo-enlarge{opacity:1}
+.gb-photo-enlarge{position:absolute;z-index:2;top:0;right:0;display:grid;place-items:center;width:44px;height:44px;background:var(--tw-surface);color:var(--tw-ink);border:1px solid var(--tw-border);border-radius:50%;opacity:0;transition:opacity .2s;cursor:zoom-in}
+.gb-box-option-card:hover .gb-photo-enlarge,.gb-box-option-card:focus-within .gb-photo-enlarge{opacity:1}
+.gb-shopping .gb-box-option-card .gb-option-check{left:8px;right:auto;max-width:calc(100% - 70px);font-size:.6rem}
 .gb-shopping .gb-ribbon-color{height:5px;margin:0 0 10px;border:0}
 .gb-your-gift{border-block:1px solid var(--tw-border);margin-top:24px;font-size:.85rem}
 .gb-your-gift summary{display:flex;justify-content:space-between;cursor:pointer;min-height:48px;align-items:center;gap:12px}
@@ -328,16 +329,24 @@
 .gb-add-gift{width:100%;min-height:54px}
 .gb-customer-design{min-width:0;margin:24px 0}.gb-customer-design .gb-free-preview{max-width:640px}.gb-customer-design .gb-canvas{max-width:640px}
 .gb-customer-design .gb-placed{cursor:default;pointer-events:none}
-.gb-arrangement-dialog,.gb-photo-dialog{position:fixed;inset:0;margin:auto;box-sizing:border-box;width:min(960px,calc(100% - 32px));max-width:100%;max-height:calc(100dvh - 32px);border:1px solid var(--tw-border);border-radius:16px;background:var(--tw-bg);color:var(--tw-ink);padding:20px;overflow:auto}
-.gb-photo-dialog{width:calc(100% - 32px);height:calc(100dvh - 32px)}
-.gb-arrangement-dialog::backdrop,.gb-photo-dialog::backdrop,.gb-confirm-dialog::backdrop{background:#39292299;backdrop-filter:blur(4px)}
-.gb-arrangement-dialog>header,.gb-photo-dialog>header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
-.gb-arrangement-dialog h2,.gb-photo-dialog h2{margin:0;font:500 1.65rem/1.2 var(--tw-font-display)}
+.gb-arrangement-dialog{position:fixed;inset:0;margin:auto;box-sizing:border-box;width:min(960px,calc(100% - 32px));max-width:100%;max-height:calc(100dvh - 32px);border:1px solid var(--tw-border);border-radius:16px;background:var(--tw-bg);color:var(--tw-ink);padding:20px;overflow:auto}
+.gb-arrangement-dialog::backdrop,.gb-confirm-dialog::backdrop,.gb-lightbox::backdrop{background:#241b18bd;backdrop-filter:blur(4px)}
+.gb-arrangement-dialog>header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+.gb-arrangement-dialog h2{margin:0;font:500 1.65rem/1.2 var(--tw-font-display)}
 .gb-arrangement-dialog>header button{display:grid;place-items:center;min-height:44px;min-width:44px;background:white;border:1px solid var(--tw-border);border-radius:50%;color:inherit;cursor:pointer}
-.gb-photo-dialog header>div{display:flex;gap:8px}
-.gb-photo-viewer{height:calc(100% - 60px);overflow:auto;display:grid;place-items:center;border-radius:10px;background:var(--tw-surface)}
-.gb-photo-viewer img{display:block;width:100%;height:100%;object-fit:contain;max-height:100%}
-.gb-photo-viewer.is-zoomed{display:block}.gb-photo-viewer.is-zoomed img{width:max(160%,640px);max-width:none;height:auto;max-height:none;object-fit:contain}
+.gb-lightbox{position:fixed;inset:0;box-sizing:border-box;margin:auto;width:min(1000px,calc(100% - 64px));height:min(900px,calc(100dvh - 64px));max-width:100%;max-height:100dvh;padding:16px 24px;border:1px solid var(--tw-border);border-radius:14px;background:var(--tw-bg);color:var(--tw-ink);overflow:hidden}
+.gb-lightbox[open]{display:grid;grid-template-rows:48px minmax(0,1fr) 64px;gap:12px}
+.gb-lightbox header,.gb-lightbox footer{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
+.gb-lightbox h2{font:500 1.45rem/1.2 var(--tw-font-display);margin:0;overflow-wrap:anywhere}
+.gb-lightbox button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:44px;min-height:44px;padding:8px;border:1px solid var(--tw-border);border-radius:8px;background:var(--tw-surface);color:var(--tw-ink);font:inherit;font-size:.75rem;cursor:pointer}
+.gb-lightbox button:disabled{opacity:.4;cursor:default}.gb-lightbox header button{border-radius:50%}
+.gb-lightbox-stage{position:relative;display:grid;place-items:center;min-height:0;min-width:0;overflow:hidden;background:var(--tw-surface);border-radius:8px;touch-action:none;user-select:none;isolation:isolate}
+.gb-lightbox-stage img{position:absolute;display:block;max-width:none;max-height:none;object-fit:contain;transform-origin:center;pointer-events:none;will-change:transform;transition:transform .15s ease-out}
+.gb-lightbox-stage:active img{transition:none}
+.gb-lightbox-stage.is-zoomed{cursor:grab}.gb-lightbox-stage.is-zoomed:active{cursor:grabbing}
+.gb-lightbox footer>div{display:flex;align-items:center;gap:8px}.gb-lightbox output{min-width:44px;text-align:center;font-size:.75rem}.gb-lightbox small{font-size:.7rem;color:var(--tw-rose-dark);text-align:right}
+.gb-lightbox :focus-visible{outline:2px solid var(--tw-button);outline-offset:3px}
+@media(max-width:600px){.gb-lightbox{width:100%;height:100dvh;max-height:100dvh;border:0;border-radius:0;padding:12px; padding-bottom:max(12px,env(safe-area-inset-bottom))}.gb-lightbox[open]{gap:8px;grid-template-rows:44px minmax(0,1fr) 86px}.gb-lightbox footer{flex-direction:column;justify-content:center;gap:4px}.gb-lightbox footer>div{gap:6px}}
 .gb-arrangement-dialog .gb-free-preview{width:100%;max-width:min(100%,calc((100dvh - 220px)*var(--gb-scene-aspect,1)));margin:auto}
 .gb-arrangement-dialog .gb-canvas{width:100%;scroll-margin:0}
 .gb-confirm-dialog{box-sizing:border-box;width:min(440px,calc(100% - 32px));padding:28px;border:1px solid var(--tw-border);border-radius:16px;background:var(--tw-bg);color:var(--tw-ink)}
@@ -355,7 +364,7 @@
  /* Editing controls stay clear of the keyboard and the purchase overlay. */
  .gb-shopping .gb-choices:has(.gb-personal-section :focus) .gb-purchase-bar{position:static}
  .gb-shopping .gb-live-total{padding:12px 0}
- .gb-arrangement-dialog,.gb-photo-dialog{width:100%;height:100dvh;max-height:100dvh;margin:0;border:0;border-radius:0;padding:16px;overscroll-behavior:contain}
+ .gb-arrangement-dialog{width:100%;height:100dvh;max-height:100dvh;margin:0;border:0;border-radius:0;padding:16px;overscroll-behavior:contain}
 }
 @media(max-width:480px){
  .gb-progress ol{position:relative;align-items:flex-start;padding-bottom:32px}
@@ -369,4 +378,4 @@
  .gb-sticker-style-list button span{font-size:1.5rem}
 }
 @media(max-width:360px){.gb-arrangement-dialog{padding:8px}.gb-shopping{padding-inline:14px}.gb-shopping .gb-options{grid-template-columns:repeat(2,minmax(0,1fr))}.gb-free-tools{column-gap:4px}.gb-arrows{gap:2px}.gb-free-tools button{min-width:44px}.gb-arrows button{min-width:44px}.gb-free-tools .gb-expand span{display:inline}.gb-review-edit button{font-size:.73rem;padding:10px}.gb-photo-thumbnails{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(prefers-reduced-motion:reduce){.gb-shopping *,.gb-photo-dialog *,.gb-confirm-dialog *,.gb-arrangement-dialog *{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+@media(prefers-reduced-motion:reduce){.gb-shopping *,.gb-lightbox *,.gb-confirm-dialog *,.gb-arrangement-dialog *{scroll-behavior:auto!important;transition:none!important;animation:none!important}}

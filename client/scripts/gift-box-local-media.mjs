@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { ASSET_VERSION, FIXED_COMPONENTS, ASSET_ISSUES } from '../../shared/gift-box/definitions.mjs';
 import { readBox1OverlayDerivative, BOX1_OVERLAY_URL } from './box1-overlay-local.mjs';
 import { BOX1_OVERLAY } from '../../shared/gift-box/box1-overlay.mjs';
+import boxPhotos from '../../shared/gift-box/box-photos.v1.json' with { type: 'json' };
 
 export const MEDIA_PREFIX = `/__gift-box-local/${ASSET_VERSION}/`;
 const root = fileURLToPath(new URL(`../.gift-box-assets/${ASSET_VERSION}/webp-v1/`, import.meta.url));
@@ -39,7 +40,7 @@ export async function readLocalDerivative(relative) {
 export default function giftBoxLocalMedia() {
   return { name: 'gift-box-local-media', apply: 'serve', configureServer(server) {
     server.middlewares.use(async (req, res, next) => {
-      if (!req.url.startsWith('/__gift-box-local/') && !req.url.startsWith('/__gift-box-box1-overlay/')) return next();
+      if (!req.url.startsWith('/__gift-box-local/') && !req.url.startsWith('/__gift-box-box1-overlay/') && !req.url.startsWith('/__gift-box-photos/')) return next();
       res.setHeader('Cache-Control', 'private, no-store'); res.setHeader('X-Robots-Tag', 'noindex, nofollow');
       res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
       try {
@@ -47,6 +48,16 @@ export default function giftBoxLocalMedia() {
         if (!loopback(req.socket.remoteAddress) || !loopback(new URL(`http://${req.headers.host}`).hostname)
           || !['GET', 'HEAD'].includes(req.method) || url.search
           || (req.headers.origin && req.headers.origin !== `http://${req.headers.host}`)) throw new Error('Local access only.');
+        if (url.pathname.startsWith('/__gift-box-photos/')) {
+          const entry=boxPhotos.entries.find(item=>url.pathname===`/__gift-box-photos/${boxPhotos.releaseId}/${item.file}`);
+          if(!entry)throw new Error('Unknown selection photograph.');
+          const file=fileURLToPath(new URL(`../.gift-box-assets/${boxPhotos.releaseId}/${entry.file}`,import.meta.url));
+          let cursor=file;
+          while(true){if((await lstat(cursor)).isSymbolicLink())throw new Error('Linked photo.');const parent=path.dirname(cursor);if(parent===cursor)break;cursor=parent;}
+          const bytes=await readFile(file);
+          if(bytes.length!==entry.bytes||hash(bytes)!==entry.sha256)throw new Error('Photo integrity mismatch.');
+          res.setHeader('Content-Type','image/webp');res.setHeader('X-Content-Type-Options','nosniff');res.statusCode=200;res.end(req.method==='HEAD'?undefined:bytes);return;
+        }
         const isBox1Overlay = url.pathname.startsWith('/__gift-box-box1-overlay/');
         if (!isBox1Overlay && !url.pathname.startsWith(MEDIA_PREFIX)) throw new Error('Wrong local media version.');
         if (isBox1Overlay && url.pathname !== BOX1_OVERLAY_URL) throw new Error('Unknown Box 1 overlay.');

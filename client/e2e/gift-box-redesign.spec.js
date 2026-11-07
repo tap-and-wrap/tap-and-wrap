@@ -212,10 +212,10 @@ for(const width of [320,390,1440]) test(`polished arrangement, review, cart and 
   await page.evaluate(()=>{document.activeElement?.blur();window.scrollTo(0,0);});
   await page.screenshot({path:info.outputPath(`review-${width}.png`),fullPage:true});
   await page.getByRole('button',{name:'Add Your Gift to Cart'}).click(); await expect(page).toHaveURL(/\/cart$/);
-  await expect(page.locator('.commerce-gift-photo .gb-placed')).toHaveCount(2);
+  await expect(page.locator('.cart-v2-photo .gb-placed')).toHaveCount(2);
   await expect(page.getByText('Gift box preview unavailable')).toHaveCount(0);
-  await page.getByText('View design and details',{exact:true}).click();
-  await expect(page.getByText('Personalized sticker: For Nour - Apply to exterior front')).toBeVisible();
+  await page.getByText('View Design Details',{exact:true}).click();
+  await expect(page.getByText(/Personalized sticker: For Nour.*Apply to exterior front/)).toBeVisible();
   await page.screenshot({path:info.outputPath(`cart-${width}.png`),fullPage:true});
   await page.getByRole('link',{name:'Proceed to Checkout'}).click(); await fillCheckout(page);
   await expect(page.getByRole('radio',{name:/Cash on Delivery/})).toHaveCount(0);

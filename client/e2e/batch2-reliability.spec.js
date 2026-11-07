@@ -517,7 +517,7 @@ test('a late initial cart read cannot replace the successful add snapshot', asyn
     await expect(cartLink).toBeVisible();
     await cartLink.click();
     await expect(page.getByRole('heading', { name: commerceProduct.name, exact: true })).toBeVisible();
-    await expect(page.getByRole('combobox', { name: 'Quantity', exact: true })).toHaveAttribute('data-selected-value', '1');
+    await expect(page.getByRole('group', { name: `Quantity for ${commerceProduct.name}`, exact: true }).locator('output')).toHaveText('1');
     expect(fixture.state.cart.quantity).toBe(1);
   } finally { releaseRead(); page.off('requestfinished', finish); page.off('requestfailed', finish); }
 });

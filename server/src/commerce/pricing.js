@@ -92,7 +92,8 @@ export async function quoteCartLine(line, owner, { session, context } = {}) {
     sku: variant?.sku || product.sku || '', description: product.description || '',
     categoryId: String(product.categoryId), subcategoryId: product.subcategoryId ? String(product.subcategoryId) : null,
     variantLabel: variant?.attributes?.map(attribute => `${attribute.name}: ${attribute.value}`).join(', ') || null,
-    quantity: line.quantity, mainImageUrl: mediaUrlForKey(product.mainImageKey), unitPricePiastres,
+    quantity: line.quantity, stockQuantityLimit: stock.mode === 'tracked' ? stock.quantity : null,
+    maxQuantity: stock.mode === 'tracked' ? Math.min(99, stock.quantity) : 99, mainImageUrl: mediaUrlForKey(product.mainImageKey), unitPricePiastres,
     requiresPersonalization: product.personalization?.requiredBeforePurchase === true,
     personalizationDefinitions: definitions.map(field => ({ key: field.key, label: field.label, type: field.type })),
     lineTotalPiastres: checkedMoney(unitPricePiastres * line.quantity), customizationSnapshot: customization, uploadIds,
@@ -102,6 +103,6 @@ export async function quoteCartLine(line, owner, { session, context } = {}) {
   };
 }
 export function publicCartLine(quote) {
-  const { inventoryClaims, identity, priceVersion, customizationSnapshot, description, ...line } = quote;
+  const { inventoryClaims, identity, priceVersion, customizationSnapshot, description, stockQuantityLimit, ...line } = quote;
   return { ...line, customization: customizationSnapshot || line.customization };
 }

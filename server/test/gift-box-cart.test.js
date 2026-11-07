@@ -97,7 +97,7 @@ test('unknown kinds and strict gift inputs reject browser prices, identity, poli
 test('gift configuration persists canonically without authoritative client prices or fabricated Product identity', async () => {
   const input = giftCartInput(), result = await add(client(), input);
   assert.equal(result.items.length, 1); assert.equal(result.items[0].kind, 'gift_box_v2');
-  assert.equal(result.items[0].name, 'Build Your Gift Box'); assert.equal(result.items[0].unitPricePiastres, 99000);
+  assert.equal(result.items[0].name, 'Gift Box'); assert.equal(result.items[0].unitPricePiastres, 99000);
   const stored = (await Cart.findOne().lean()).items[0];
   assert.equal(stored.productId, undefined); assert.equal(stored.kind, 'gift_box_v2');
   assert.match(stored.configurationId, /^gift-box-configuration-v1:[a-f0-9]{64}$/);
