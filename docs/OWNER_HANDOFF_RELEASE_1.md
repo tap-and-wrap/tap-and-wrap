@@ -100,7 +100,7 @@ payments, inventory writes or fulfillment are used for smoke testing.
 
 Completed verification: 407 default storefront browser cases, 117 enabled Gift
 Box cases, 15 focused photo/cart cases, 13 typography/navigation journeys,
-three production-bundle cases, five repeated drawer regressions, 67 SEO/font/
+three production-bundle cases, five repeated drawer regressions, 68 SEO/font/
 asset tests, 19 focused server tests, and two connected API/browser journeys.
 Server syntax checks covered 284 JavaScript files; frontend lint passed.
 All passed. Screenshot review covered 123 final isolated screenshots at 320,
@@ -112,3 +112,15 @@ final release report. Local detailed evidence and the screenshot gallery are
 kept under ignored `local-data/handoff-r1/`. Responsive Edge and touch emulation do not constitute
 physical iOS/Safari certification. Mixed engraving checkout, inspection-aware
 payment and COD policy remain a separate commerce milestone.
+
+## Live-discovered product routing correction
+
+Direct product documents returned 503 even though the public address authority
+returned 200. The unchanged resolver used Fetch's `redirect: 'error'`, which
+Cloudflare/workerd rejects before issuing a request. An actual local Worker
+runtime reproduced the TypeError; Node-only fetch mocks had hidden it.
+The focused correction uses `manual` and retains the existing `response.ok`
+check, so 301/302/303/307/308 responses still fail closed without being followed.
+The new regression checks runtime-compatible redirect options, one request only,
+no visitor headers and no-store failure responses. Authority ownership checks,
+timeouts, withdrawal rules and indexing/checkout flags are unchanged.

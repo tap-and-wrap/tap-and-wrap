@@ -55,7 +55,9 @@ async function resolveAddresses(env, paths, timeoutMs = 4000) {
   try {
     // Zero positive/negative cache TTL: no stale visibility or ownership grants.
     // No visitor headers, cookies, query strings or credentials leave the Worker.
-    const options = { signal: controller.signal, redirect: 'error', cache: 'no-store', cf: { cacheTtlByStatus: { '100-599': -1 } } };
+    // Workers supports manual/follow, not the browser's redirect:error mode.
+    // Manual preserves the trust boundary: every redirect is rejected below.
+    const options = { signal: controller.signal, redirect: 'manual', cache: 'no-store', cf: { cacheTtlByStatus: { '100-599': -1 } } };
     const response = await (env.ADDRESS_SERVICE ? env.ADDRESS_SERVICE.fetch(url.href, options) : fetch(url.href, options));
     if (!response.ok) throw new Error('Address authority unavailable');
     if (Number(response.headers.get('Age')) > 0 || /^(?:HIT|STALE|UPDATING)$/i.test(response.headers.get('CF-Cache-Status') || '')) throw new Error('Cached address authority rejected');

@@ -30,6 +30,22 @@ test('UI font licenses and provenance are real assets and unknown font documents
   assert.equal((await get('/fonts/ui-v1/not-a-license.txt')).status,404);
 });
 
+test('edge-compatible authority fetch never follows redirects or forwards visitor credentials',async()=>{
+  const f=fixture(),fetch=f.env.ADDRESS_SERVICE.fetch;
+  f.env.ADDRESS_SERVICE.fetch=async(input,options)=>{
+    // Match workerd's accepted redirect modes; Node fetch accepts error too.
+    assert.ok(['manual','follow'].includes(options.redirect));
+    assert.equal(options.redirect,'manual');assert.equal(options.headers,undefined);
+    return fetch(input,options);
+  };
+  assert.equal((await f.get('/products/draft')).status,200);
+  for(const status of [301,302,303,307,308]){
+    let calls=0;
+    f.env.ADDRESS_SERVICE.fetch=async(input,options)=>{calls++;assert.equal(options.redirect,'manual');return new Response(null,{status,headers:{Location:'https://untrusted.example'}});};
+    const response=await f.get('/products/draft');assert.equal(response.status,503);assert.equal(calls,1);assert.match(response.headers.get('cache-control'),/no-store/);
+  }
+});
+
 test('F06: expired former map and an ordinary map-free cold start preserve canonical 200 and permanent 308 GET/HEAD queries',async()=>{
   const f=fixture();f.env.SEO_INDEXING_ENABLED='false';
   f.manifest.productCompatibility={version:1,source:'reviewed-registered-public-product-addresses',origin:f.manifest.origin,generatedAt:'2020-01-01',expiresAt:'2020-01-02',products:[{canonicalPath:'/products/draft',aliases:['/products/old-draft']}]};f.save();
