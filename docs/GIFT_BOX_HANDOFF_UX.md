@@ -76,6 +76,7 @@ Existing assertions were migrated from removed customer disclosures and immediat
 | Full default client `npm.cmd test` | 394 passed |
 | Full enabled Gift Box browser configuration | 115 passed |
 | Final affected browser rerun after the short-viewport focus correction | 54 passed, including two additional short-viewport cases; this overlaps the preceding full Gift Box run |
+| Final review-overlay correction | 29 affected browser tests passed, including all six viewport overlap assertions; lint and production build passed again |
 | Connected shopping fixture | 8 passed against real local React/API and a fresh disposable replica set |
 | Connected gift-card fixture | 1 passed in its own fresh disposable replica set |
 | Connected Engraving Studio V2 regression | 1 passed |
@@ -99,6 +100,8 @@ Read-only HTTPS retrieval verified all 24 production selection derivatives again
 Before release, public API catalog inspection returned 74 selectable components and 12 orderable boxes, with direct/flexible commerce already enabled. The initial health request timed out; subsequent branded and Render health requests both returned 200. No production capabilities or settings were changed.
 
 ## Release and preservation
+
+Final live screenshot inspection caught the mobile sticky purchase footer covering the review edit heading and first row. The footer now flows normally on review; regression assertions at all six widths verify its static position and that all edit actions precede it without overlap. Builder-step purchase behavior is preserved. The live photo captures wait for image decoding; initial immediate captures were taken before decoding completed. The only resource failures in the restricted live smoke check were its intentionally blocked Cloudflare analytics beacon.
 
 Only named source, tests/configuration and this document belong to the release. Preserve all pre-existing untracked patch folders, backup files, scripts and reports. No historical installer was executed. No dependency, price, inventory, merchant record, database schema, storage object, order, payment, checkout gate, email/tracking setting or logo was changed.
 

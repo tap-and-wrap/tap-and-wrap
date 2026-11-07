@@ -351,7 +351,7 @@
  .gb-progress{margin-bottom:20px}.gb-step-name{font-size:.76rem;max-width:92px}.gb-progress li:after{margin:0 6px}
  .gb-shopping .gb-options{grid-template-columns:repeat(3,minmax(0,1fr))}
  .gb-photo-enlarge{opacity:1}
- .gb-shopping .gb-purchase-bar{position:sticky;bottom:0;z-index:90;background:var(--tw-bg);padding:0 0 max(12px,env(safe-area-inset-bottom));border-top:1px solid var(--tw-border);margin-top:16px}
+ .gb-shopping:not(.gb-final-review) .gb-purchase-bar{position:sticky;bottom:0;z-index:90;background:var(--tw-bg);padding:0 0 max(12px,env(safe-area-inset-bottom));border-top:1px solid var(--tw-border);margin-top:16px}
  /* Editing controls stay clear of the keyboard and the purchase overlay. */
  .gb-shopping .gb-choices:has(.gb-personal-section :focus) .gb-purchase-bar{position:static}
  .gb-shopping .gb-live-total{padding:12px 0}

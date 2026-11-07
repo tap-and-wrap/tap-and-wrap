@@ -84,6 +84,8 @@ for (const width of [320,390,440,768,1024,1440]) test(`owner handoff visual jour
   await page.getByRole('button',{name:'Next: Review'}).click();
   await expect.poll(()=>page.evaluate(()=>scrollY)).toBe(0);
   await expect(page.getByRole('button',{name:'Add Your Gift to Cart'})).toBeEnabled();
+  await expect(page.locator('.gb-final-review .gb-purchase-bar')).toHaveCSS('position','static');
+  expect(await page.evaluate(() => document.querySelector('.gb-review-edit').getBoundingClientRect().bottom <= document.querySelector('.gb-purchase-bar').getBoundingClientRect().top)).toBe(true);
   await page.screenshot({ animations:'disabled', path:info.outputPath(`${width}-review.png`), fullPage:true });
   await page.locator('.gb-review-edit').getByRole('button',{name:'Personalization',exact:true}).click();
   await expect(page.getByLabel('Write a name, special date, or heartfelt message')).toHaveValue('هَدِيَّة لَكِ');
