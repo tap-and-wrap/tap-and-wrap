@@ -263,14 +263,17 @@
 .gb-shopping .gb-option-price{font-size:.76rem;font-weight:500}
 .gb-shopping .gb-option-stock{font-size:.65rem}
 .gb-shopping .gb-option-check{position:absolute;top:8px;right:8px;background:white;border:1px solid var(--tw-border);border-radius:10px;padding:3px 7px;margin:0;pointer-events:none}
-.gb-box-option-card{border:1px solid var(--tw-border);border-radius:12px;overflow:hidden;background:var(--tw-surface)}
+.gb-box-option-card{position:relative;container-type:inline-size;border:1px solid var(--tw-border);border-radius:12px;overflow:hidden;background:var(--tw-surface)}
 .gb-box-option-card.is-selected{border-color:var(--tw-button);box-shadow:0 0 0 1px var(--tw-button)}
-.gb-box-option-card>.gb-option{height:100%;border:0!important;border-radius:0;padding:10px!important;background:transparent;text-align:left;position:static}
-.gb-box-choice-photo{position:relative;display:block;width:100%;aspect-ratio:1;border:0;padding:0;background:var(--tw-bg);cursor:pointer;color:var(--tw-ink);margin-bottom:10px}
-.gb-box-choice-photo img{width:100%;height:100%;object-fit:contain;display:block}
-.gb-photo-enlarge{position:absolute;z-index:2;top:0;right:0;display:grid;place-items:center;width:44px;height:44px;background:var(--tw-surface);color:var(--tw-ink);border:1px solid var(--tw-border);border-radius:50%;opacity:0;transition:opacity .2s;cursor:zoom-in}
-.gb-box-option-card:hover .gb-photo-enlarge,.gb-box-option-card:focus-within .gb-photo-enlarge{opacity:1}
-.gb-shopping .gb-box-option-card .gb-option-check{left:8px;right:auto;max-width:calc(100% - 70px);font-size:.6rem}
+.gb-shopping .gb-box-option-card>.gb-option{height:100%;border:0;border-radius:0;padding:5px 10px;background:transparent;text-align:left;position:static}
+.gb-box-option-card .gb-option-name{display:block;min-height:44px;line-height:44px;padding-right:40px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700}
+.gb-box-option-card .gb-option-price{margin-top:0}
+.gb-box-choice-photo{position:relative;display:block;width:100%;aspect-ratio:1;border:0;padding:0;background:var(--tw-bg);cursor:pointer;color:var(--tw-ink);margin-bottom:0}
+.gb-box-choice-photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block}
+.gb-photo-enlarge{position:absolute;z-index:2;top:calc(100cqw - 14px);right:4px;display:grid;place-items:center;width:44px;height:44px;background:transparent;color:var(--tw-rose-dark);border:0;border-radius:8px;cursor:zoom-in;transition:background .18s,color .18s}
+.gb-photo-enlarge:hover{background:var(--tw-soft);color:var(--tw-ink)}
+.gb-shopping .gb-box-option-card .gb-option-check{left:8px;right:auto;max-width:calc(100% - 16px);font-size:.65rem;white-space:nowrap}
+@container(max-width:130px){.gb-box-option-card .gb-option-check-label{display:none}.gb-shopping .gb-box-option-card .gb-option-check{display:grid;place-items:center;width:24px;height:24px;padding:0;border-radius:50%}}
 .gb-shopping .gb-ribbon-color{height:5px;margin:0 0 10px;border:0}
 .gb-your-gift{border-block:1px solid var(--tw-border);margin-top:24px;font-size:.85rem}
 .gb-your-gift summary{display:flex;justify-content:space-between;cursor:pointer;min-height:48px;align-items:center;gap:12px}
@@ -353,13 +356,11 @@
 .gb-confirm-dialog h2{font:500 2rem/1.15 var(--tw-font-display);margin:8px 0 14px;overflow-wrap:anywhere}
 .gb-confirm-dialog p{line-height:1.6}.gb-dialog-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}.gb-dialog-actions .button{flex:1;min-width:125px}
 .gb-shopping button:focus-visible,.gb-photo-dialog :focus-visible,.gb-confirm-dialog button:focus-visible,.gb-arrangement-dialog button:focus-visible{outline:2px solid var(--tw-button);outline-offset:3px}
-@media(hover:none),(pointer:coarse){.gb-photo-enlarge{opacity:1}}
 @media(max-width:900px){
  .gb-shopping{padding:20px 20px 36px}.gb-shopping .gb-workspace{grid-template-columns:1fr;gap:28px}
  .gb-shopping .gb-preview{position:static}.gb-shopping .gb-free-preview{max-width:380px;width:100%}
  .gb-progress{margin-bottom:20px}.gb-step-name{font-size:.76rem;max-width:92px}.gb-progress li:after{margin:0 6px}
  .gb-shopping .gb-options{grid-template-columns:repeat(3,minmax(0,1fr))}
- .gb-photo-enlarge{opacity:1}
  .gb-shopping:not(.gb-final-review) .gb-purchase-bar{position:sticky;bottom:0;z-index:90;background:var(--tw-bg);padding:0 0 max(12px,env(safe-area-inset-bottom));border-top:1px solid var(--tw-border);margin-top:16px}
  /* Editing controls stay clear of the keyboard and the purchase overlay. */
  .gb-shopping .gb-choices:has(.gb-personal-section :focus) .gb-purchase-bar{position:static}

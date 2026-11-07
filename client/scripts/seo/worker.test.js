@@ -22,6 +22,14 @@ function fixture() {
   return {env,manifest,owners,assets,seen,calls,save,get};
 }
 
+test('UI font licenses and provenance are real assets and unknown font documents remain 404',async()=>{
+  const {assets,get}=fixture();
+  for(const name of ['Kalam-OFL.txt','Amiri-OFL.txt','SOURCE.md','manifest.json']){
+    const path=`/fonts/ui-v1/${name}`;assets.set(path,'licensed fixture');const response=await get(path);assert.equal(response.status,200);assert.equal(await response.text(),'licensed fixture');
+  }
+  assert.equal((await get('/fonts/ui-v1/not-a-license.txt')).status,404);
+});
+
 test('F06: expired former map and an ordinary map-free cold start preserve canonical 200 and permanent 308 GET/HEAD queries',async()=>{
   const f=fixture();f.env.SEO_INDEXING_ENABLED='false';
   f.manifest.productCompatibility={version:1,source:'reviewed-registered-public-product-addresses',origin:f.manifest.origin,generatedAt:'2020-01-01',expiresAt:'2020-01-02',products:[{canonicalPath:'/products/draft',aliases:['/products/old-draft']}]};f.save();

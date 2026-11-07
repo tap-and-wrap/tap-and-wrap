@@ -95,7 +95,7 @@
 .commerce-history { padding-left: 22px; }
 .commerce-history li { padding: 10px 0; }
 .commerce-history time { margin-left: 12px; font-size: .85rem; color: #80665b; }
-.commerce-order-configuration h4 { font: 600 .9rem 'DM Sans', sans-serif; margin: 14px 0 8px; }
+.commerce-order-configuration h4 { font: 600 .9rem var(--tw-font-body); margin: 14px 0 8px; }
 .commerce-order-configuration dl { margin: 0; font-size: .88rem; }
 .commerce-order-configuration dl > div { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
 .commerce-order-configuration dt { text-transform: capitalize; }
@@ -171,7 +171,7 @@
 .commerce-summary-item:has(>.commerce-personalization-summary){flex-wrap:wrap}
 .commerce-summary-item>.commerce-personalization-summary{flex-basis:100%}
 .product-customization-form h3,.product-customization-form p{margin:0;overflow-wrap:anywhere}
-.product-customization-form h3{font-family:var(--tw-font-display,'Cormorant Garamond',serif);font-size:1.8rem}
+.product-customization-form h3{font-family:var(--tw-font-display);font-size:1.8rem}
 .product-customization-form .commerce-fields{display:grid;gap:18px}
 .product-customization-form :is(input,select,textarea){max-width:100%;min-width:0}
 .product-customization-form input[type=file]{width:100%;font-size:.85rem}

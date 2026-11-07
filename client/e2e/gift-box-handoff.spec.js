@@ -24,7 +24,7 @@ for (const width of [320,390,440,768,1024,1440]) test(`owner handoff visual jour
   for (const image of await boxPhotos.all()) {
     await image.scrollIntoViewIfNeeded(); await photoLoaded(image);
     expect(await image.getAttribute('src')).not.toContain('open-top');
-    expect(await image.getAttribute('srcset')).toContain('thumbnail/640/box-');
+    expect(await image.getAttribute('srcset')).toContain('/640/boxes/box-');
   }
   await page.evaluate(() => scrollTo(0,0));
   await page.screenshot({ animations:'disabled', path: info.outputPath(`${width}-01-boxes.png`), fullPage: true });

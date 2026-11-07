@@ -143,12 +143,16 @@ test('mobile navigation supports keyboard containment, padding, backdrop, Escape
   await dialog.click({ position: { x: 6, y: 300 } }); await expect(dialog).toBeVisible();
   await page.keyboard.press('Escape'); await expect(dialog).toHaveCount(0); await expect(trigger).toBeFocused();
   expect(await page.evaluate(() => document.body.style.overflow)).not.toBe('hidden');
+  // Phones use the approved fullscreen panel. A tablet leaves a genuine
+  // backdrop to the LEFT of the right-hand drawer, clear of scrollbar gutters.
+  await page.setViewportSize({ width: 768, height: 844 });
   await trigger.click();
+  await dialog.evaluate(element => Promise.all(element.getAnimations().map(animation => animation.finished)));
   const bounds = await dialog.boundingBox();
-  const documentRight = await page.evaluate(() => document.documentElement.getBoundingClientRect().right);
-  expect(documentRight - bounds.x - bounds.width, 'An actual clickable backdrop remains inside the document, clear of scrollbar gutters').toBeGreaterThan(0);
-  const backdropX = (bounds.x + bounds.width + documentRight) / 2;
-  expect(backdropX).toBeGreaterThan(bounds.x + bounds.width);
+  const documentLeft = await page.evaluate(() => document.documentElement.getBoundingClientRect().left + 16);
+  expect(bounds.x - documentLeft, 'A clickable tablet backdrop remains clear of scrollbar gutters').toBeGreaterThan(0);
+  const backdropX = (bounds.x + documentLeft) / 2;
+  expect(backdropX).toBeLessThan(bounds.x);
   await page.mouse.click(backdropX, 400); await expect(dialog).toHaveCount(0); await expect(trigger).toBeFocused();
   await trigger.click(); await dialog.getByRole('link', { name: 'About Us' }).click();
   await expect(page).toHaveURL(/\/about$/); await expect(dialog).toHaveCount(0);

@@ -3,7 +3,7 @@
 .service-request-layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:28px;align-items:start}
 .service-request-fields{display:grid;gap:24px;border:0;margin:0;padding:0;min-width:0}
 .service-request-card,.service-request-receipt{background:#fff;border:1px solid #EADAD5;border-radius:12px;padding:24px;min-width:0}
-.service-request-card h2{font-family:'Cormorant Garamond',serif;margin-top:0}
+.service-request-card h2{font-family:var(--tw-font-display);margin-top:0}
 .service-request-card :is(input,select,textarea){max-width:100%;min-width:0}
 .service-request-card input[type=file]{width:100%}
 .service-request-card .commerce-field{margin:14px 0}

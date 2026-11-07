@@ -21,15 +21,20 @@ async function cartFixture(page){
 }
 for(const width of widths)test(`premium photos select separately from inspection at ${width}`,async({page},info)=>{
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
-  await page.setViewportSize({width,height:900});await giftBoxFixture(page,{componentOverrides:{'box-3':{inventoryQuantity:0}}});await page.goto('/customize/gift-box');
+  await page.setViewportSize({width,height:900});await giftBoxFixture(page,{componentOverrides:Object.fromEntries(Array.from({length:12},(_,i)=>[`box-${i+1}`,{displayName:`Box ${i+1}`,...(i===2?{inventoryQuantity:0}:{})}]))});await page.goto('/customize/gift-box');
   await page.getByRole('button',{name:'Show 6 more',exact:true}).click();
   const photos=page.locator('.gb-box-choice-photo img');await expect(photos).toHaveCount(12);
-  for(const photo of await photos.all()){await photo.scrollIntoViewIfNeeded();await decoded(photo);expect(await photo.evaluate(node=>node.naturalWidth>0&&/thumbnail\/(320|640)\//.test(node.currentSrc))).toBe(true);}
+  for(const photo of await photos.all()){await photo.scrollIntoViewIfNeeded();await decoded(photo);expect(await photo.evaluate(node=>node.naturalWidth>0&&/\/(320|640)\/boxes\/box-/.test(node.currentSrc)&&node.naturalHeight>node.naturalWidth)).toBe(true);}
   await page.evaluate(()=>scrollTo(0,0));await shot(page,info,`${width}-box-grid`);
-  const card=page.getByRole('button',{name:'Choose Fixture box-2',exact:true});
+  const card=page.getByRole('button',{name:'Choose Box 2',exact:true});
   await card.locator('img').evaluate(node=>node.scrollIntoView({block:'center'}));await card.locator('img').click();await expect(card).toHaveAttribute('aria-pressed','true');await expect(page.getByRole('dialog')).toHaveCount(0);
-  const enlarge=page.getByRole('button',{name:'Enlarge Fixture box-3 photo',exact:true});await enlarge.focus();await shot(page,info,`${width}-focus-enlarge`);await enlarge.click();
-  const viewer=page.getByRole('dialog',{name:'Fixture box-3',exact:true});await decoded(viewer.getByRole('img'));await expect(card).toHaveAttribute('aria-pressed','true');
+  const selected=card.locator('..'),selectedPhoto=await card.locator('img').boundingBox(),selectedName=await card.locator('.gb-option-name').boundingBox(),inspection=await selected.getByRole('button',{name:/^Enlarge/}).boundingBox();
+  expect(inspection.y).toBeGreaterThanOrEqual(selectedPhoto.y+selectedPhoto.height);
+  expect(Math.abs(inspection.y+inspection.height/2-selectedName.y-selectedName.height/2)).toBeLessThan(4);
+  expect(inspection.width).toBeGreaterThanOrEqual(44);expect(inspection.height).toBeGreaterThanOrEqual(44);
+  expect(await card.locator('.gb-option-check').evaluate(node=>getComputedStyle(node).whiteSpace)).toBe('nowrap');
+  const enlarge=page.getByRole('button',{name:'Enlarge Box 3 photo',exact:true});await enlarge.focus();await shot(page,info,`${width}-focus-enlarge`);await enlarge.click();
+  const viewer=page.getByRole('dialog',{name:'Box 3',exact:true});await decoded(viewer.getByRole('img'));await expect(card).toHaveAttribute('aria-pressed','true');
   const image=viewer.locator('img'),stage=viewer.locator('.gb-lightbox-stage');
   expect(await image.evaluate(node=>node.naturalWidth)).toBe(960);
   const bounds=await stage.boundingBox(),fit=await image.boundingBox();expect(fit.width).toBeLessThanOrEqual(bounds.width+.1);expect(fit.height).toBeLessThanOrEqual(bounds.height+.1);
@@ -40,8 +45,8 @@ for(const width of widths)test(`premium photos select separately from inspection
   await viewer.getByRole('button',{name:'Fit photo to screen'}).click();await expect(viewer.locator('output')).toHaveText('100%');
   await stage.hover();await page.mouse.wheel(0,-200);await expect(stage).toHaveClass(/is-zoomed/);
   await viewer.getByRole('button',{name:'Zoom out',exact:true}).click();await viewer.getByRole('button',{name:'Fit photo to screen'}).click();
-  await page.keyboard.press('Escape');await expect(enlarge).toBeFocused();await expect(page.getByRole('button',{name:'Choose Fixture box-3',exact:true})).toBeDisabled();
-  const wholeCard=page.getByRole('button',{name:'Choose Fixture box-4',exact:true}),box=await wholeCard.boundingBox();
+  await page.keyboard.press('Escape');await expect(enlarge).toBeFocused();await expect(page.getByRole('button',{name:'Choose Box 3',exact:true})).toBeDisabled();
+  const wholeCard=page.getByRole('button',{name:'Choose Box 4',exact:true}),box=await wholeCard.boundingBox();
   expect(await wholeCard.evaluate(node=>node.getBoundingClientRect().height>=node.parentElement.getBoundingClientRect().height-2.1)).toBe(true);
   await wholeCard.click({position:{x:8,y:box.height-5}});await expect(wholeCard).toHaveAttribute('aria-pressed','true');await expect(page.getByRole('dialog')).toHaveCount(0);
   await overflow(page);expect(errors).toEqual([]);

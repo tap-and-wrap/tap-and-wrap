@@ -1,0 +1,30 @@
+{
+  "version": "ui-v1",
+  "entries": [
+    {
+      "file": "amiri-arabic-400.woff2",
+      "bytes": 108560,
+      "sha256": "9abf8a10b4a2f27b698740522c9beec9ded7728aeef0738ac0d6e175bf6249d7"
+    },
+    {
+      "file": "amiri-arabic-700.woff2",
+      "bytes": 99968,
+      "sha256": "c775d9f8c3a7cf0d0c2bb5246dd699e8c09bf6f8758e1be0b98939331b18bcce"
+    },
+    {
+      "file": "kalam-latin-300.woff2",
+      "bytes": 21476,
+      "sha256": "19f8586a22fbcb870f9d2490381d76b9f2e868c56e44b7bbc28d9efe05522a41"
+    },
+    {
+      "file": "kalam-latin-400.woff2",
+      "bytes": 22336,
+      "sha256": "954410601a823f37e219f7930b7446f86afa15621326a7078d56fb9c910135cb"
+    },
+    {
+      "file": "kalam-latin-700.woff2",
+      "bytes": 22144,
+      "sha256": "252063af6ade8b9a744cde4ddad0fc21ea53b8ba711eed121a0c2e8610ea9c93"
+    }
+  ]
+}

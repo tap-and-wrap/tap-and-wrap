@@ -57,7 +57,7 @@ export function PhotoViewer({ src, label, onClose }) {
 
 export function BoxThumbnail({componentId,label}) {
   const small=boxPhotoUrl(componentId,'thumbnail',320),large=boxPhotoUrl(componentId,'thumbnail',640);
-  return <span className="gb-box-choice-photo"><img src={small} srcSet={small&&large?`${small} 320w, ${large} 640w`:undefined} sizes="(max-width:400px) 140px, (max-width:900px) 200px, 180px" width="640" height="640" alt={label} loading="lazy" decoding="async"/></span>;
+  return <span className="gb-box-choice-photo"><img src={small} srcSet={small&&large?`${small} 320w, ${large} 640w`:undefined} sizes="(max-width:400px) 140px, (max-width:900px) 200px, 180px" width="640" height="853" alt={label} loading="lazy" decoding="async"/></span>;
 }
 export default function BoxPhoto({componentId,label}) {
   const [open,setOpen]=useState(false);

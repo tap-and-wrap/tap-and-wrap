@@ -28,7 +28,6 @@ html:has(.home-media-hero) { scrollbar-gutter: stable; }
 .drawer-account-actions .catalog-text-button, .drawer-account-actions .icon-button { min-height: 44px; }
 .drawer-account-actions .catalog-text-button { display: inline-flex; align-items: center; }
 .drawer-account-actions .icon-button { width: 44px; flex: 0 0 44px; display: grid; place-items: center; }
-.navigation-drawer { overscroll-behavior: contain; width: min(400px, calc(100vw - 64px)); }
 
 .hero { padding: clamp(58px, 7vw, 96px) clamp(20px, 5vw, 76px) 52px; min-height: 0; }
 .hero > .eyebrow { margin: 0 0 20px; }
@@ -73,8 +72,8 @@ html:has(.home-media-hero) { scrollbar-gutter: stable; }
   .site-header .site-logo { width: clamp(166px, 15vw, 210px); }
   .site-header .desktop-navigation { display: block; justify-self: center; min-width: 0; }
   .desktop-navigation ul { display: flex; gap: clamp(10px, 1.4vw, 24px); align-items: center; list-style: none; margin: 0; padding: 0; }
-  .desktop-navigation a { display: inline-flex; align-items: center; min-height: 44px; white-space: nowrap; font-size: .825rem; font-weight: 500; border-bottom: 2px solid transparent; }
-  .desktop-navigation a:hover, .desktop-navigation a.active { color: var(--tw-rose-dark); border-bottom-color: var(--tw-rose-dark); }
+  .desktop-navigation a { display: inline-flex; align-items: center; min-height: 44px; white-space: nowrap; font-size: .825rem; font-weight: 500; }
+  .desktop-navigation a:hover, .desktop-navigation a.active { color: var(--tw-rose-dark); }
   .header-signout { display: inline-flex; align-items: center; min-height: 44px; padding: 8px; border: 0; border-radius: 8px; background: transparent; color: var(--tw-ink); font-size: .75rem; white-space: nowrap; }
   .header-signout:hover { background: var(--tw-soft); }
   .website-trust dl { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 32px; }

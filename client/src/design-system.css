@@ -2,8 +2,12 @@
    White-led, premium gifting aesthetic inspired by supplied Hedeytyy references.
    Imported after styles.css; the supplied transparent logo is used unchanged.
 */
-/* Brand fonts are discovered directly in index.html, not through a late CSS
-   import. Optional display preserves fallback stability on slow first visits. */
+/* Licensed, self-hosted UI fonts; personalized design fonts remain independent. */
+@font-face{font-family:Kalam;src:url('/fonts/ui-v1/kalam-latin-300.woff2') format('woff2');font-style:normal;font-weight:300;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:Kalam;src:url('/fonts/ui-v1/kalam-latin-400.woff2') format('woff2');font-style:normal;font-weight:400;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:Kalam;src:url('/fonts/ui-v1/kalam-latin-700.woff2') format('woff2');font-style:normal;font-weight:700;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'TapWrap Arabic';src:url('/fonts/ui-v1/amiri-arabic-400.woff2') format('woff2');font-style:normal;font-weight:400;font-display:swap;unicode-range:U+0600-06FF,U+0750-077F,U+0870-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC,U+102E0-102FB,U+10E60-10E7E,U+10EC2-10EC7,U+10EC9-10EEE,U+10EF0-10EFF,U+1EE00-1EEFF}
+@font-face{font-family:'TapWrap Arabic';src:url('/fonts/ui-v1/amiri-arabic-700.woff2') format('woff2');font-style:normal;font-weight:700;font-display:swap;unicode-range:U+0600-06FF,U+0750-077F,U+0870-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC,U+102E0-102FB,U+10E60-10E7E,U+10EC2-10EC7,U+10EC9-10EEE,U+10EF0-10EFF,U+1EE00-1EEFF}
 
 :root {
   --tw-bg: #FFFCFB;
@@ -20,8 +24,10 @@
   --tw-focus: #915B50;
   --tw-success: #35644D;
   --tw-error: #A33B43;
-  --tw-font-display: 'Cormorant Garamond', Georgia, serif;
-  --tw-font-body: 'DM Sans', Arial, sans-serif;
+  --tw-font-ui: Kalam, 'TapWrap Arabic', sans-serif;
+  --tw-font-display: var(--tw-font-ui);
+  --tw-font-heading: var(--tw-font-display);
+  --tw-font-body: var(--tw-font-ui);
   font-family: var(--tw-font-body);
   color: var(--tw-ink);
   background: var(--tw-bg);
@@ -29,11 +35,12 @@
 
 html { background: var(--tw-bg); scrollbar-gutter: stable both-edges; }
 body { background: var(--tw-bg); color: var(--tw-ink); font-family: var(--tw-font-body); }
-h1, h2, h3 { font-family: var(--tw-font-display); color: var(--tw-ink); font-weight: 500; }
-h1 { font-size: clamp(2.75rem, 5.7vw, 4.85rem); line-height: 1.05; }
-h2 { font-size: clamp(2.3rem, 4vw, 3.5rem); line-height: 1.1; }
+h1, h2, h3, h4, h5, h6 { font-family: var(--tw-font-display); color: var(--tw-ink); font-weight: 700; }
+h1 { font-size: clamp(2.4rem, 5.2vw, 4.35rem); line-height: 1.2; }
+h2 { font-size: clamp(2rem, 3.6vw, 3rem); line-height: 1.25; }
 h3 { font-size: clamp(1.7rem, 2.5vw, 2.35rem); }
 p { line-height: 1.65; }
+button, input, select, textarea { font-family: inherit; }
 :focus-visible { outline: 2px solid var(--tw-focus); outline-offset: 3px; }
 
 .announcement {
@@ -95,14 +102,6 @@ p { line-height: 1.65; }
 .site-footer a:hover { color: var(--tw-rose-dark); }
 .site-footer a:not(.footer-logo) { min-height: 24px; display: inline-flex; align-items: center; }
 .footer-bottom { border-top: 1px solid var(--tw-border); color: var(--tw-muted); }
-.navigation-drawer { background: var(--tw-surface); color: var(--tw-ink); box-shadow: 12px 0 40px rgba(98,72,63,.12); }
-.navigation-drawer[open] { animation: drawer-enter .22s ease-out; }
-.navigation-drawer::backdrop { background: rgba(37,27,25,.42); animation: backdrop-enter .22s ease-out; }
-.drawer-header { border-bottom: 1px solid var(--tw-border); }
-.drawer-nav a { font-weight: 500; transition: background-color .18s ease, color .18s ease; }
-.drawer-nav a:hover, .drawer-nav a.active { background: var(--tw-soft); color: var(--tw-rose-dark); }
-.drawer-nav a.active { box-shadow: inset 3px 0 var(--tw-logo-rose); }
-@keyframes drawer-enter { from { transform: translateX(-100%); } to { transform: translateX(0); } }
 @keyframes backdrop-enter { from { opacity: 0; } to { opacity: 1; } }
 
 /* For upcoming product card component. */
@@ -125,5 +124,4 @@ p { line-height: 1.65; }
 }
 @media (prefers-reduced-motion: reduce) {
   .button, .service-card { transition: none !important; transform: none !important; }
-  .navigation-drawer, .navigation-drawer::backdrop { animation: none !important; }
 }

@@ -1,10 +1,10 @@
 .admin-bell{position:relative;display:flex;align-items:center}
 .admin-bell-trigger{position:relative;border:0;background:transparent;cursor:pointer;color:inherit}
-.admin-bell-count{position:absolute;right:0;top:-1px;min-width:17px;height:17px;padding:0 3px;background:#915b50;color:#fff;border-radius:999px;display:grid;place-items:center;font:700 10px/1 'DM Sans',sans-serif;border:1px solid #fff}
+.admin-bell-count{position:absolute;right:0;top:-1px;min-width:17px;height:17px;padding:0 3px;background:#915b50;color:#fff;border-radius:999px;display:grid;place-items:center;font:700 10px/1 var(--tw-font-body);border:1px solid #fff}
 .admin-notification-popover{position:fixed;left:auto;right:24px;top:calc(var(--site-header-height,80px) + 10px);bottom:auto;margin:0;width:min(400px,calc(100vw - 32px));max-width:calc(100vw - 24px);max-height:min(75dvh,650px);padding:0;border:1px solid #eadad5;border-radius:14px;background:#fffdfb;color:#62483f;box-shadow:0 18px 60px #62483f2b;overflow:auto;overflow-wrap:anywhere}
 .admin-notification-popover::backdrop{background:#62483f12}
 .admin-notification-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:22px 22px 12px}
-.admin-notification-heading h2{font-family:'Cormorant Garamond',serif;font-size:28px;line-height:1.1;margin:0 0 7px}
+.admin-notification-heading h2{font-family:var(--tw-font-display);font-size:28px;line-height:1.1;margin:0 0 7px}
 .admin-notification-heading span{font-size:11px;color:#80675f}
 .admin-notification-popover p{font-size:12px;line-height:1.6;margin:6px 0}
 .admin-notification-read{display:flex;align-items:center;gap:8px;min-height:40px;padding:8px 22px;background:transparent;color:#795045;border:0;font-size:11px;cursor:pointer}

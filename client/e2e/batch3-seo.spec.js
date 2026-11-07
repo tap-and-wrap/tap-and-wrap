@@ -129,6 +129,7 @@ for (const width of [320, 390, 768, 1440]) {
   test(`blocked-font and synthetic local-font handoff preserve intrinsic logo/image geometry at ${width}px`, async ({ page }, testInfo) => {
     await mockCatalog(page);
     await page.setViewportSize({ width, height: 900 });
+    await page.route('**/fonts/ui-v1/*.woff2', route => route.abort('blockedbyclient'));
     await page.goto(`/products/${detail.slug}`);
     await expect(page.getByRole('heading', { level: 1, name: detail.name })).toBeVisible();
     const logo = page.locator('header .site-logo img');
@@ -136,7 +137,7 @@ for (const width of [320, 390, 768, 1440]) {
     const actualLogo = logo;
     const picture = page.locator('.product-main-image');
     const before = { logo: await actualLogo.boundingBox(), picture: await picture.boundingBox() };
-    await page.addStyleTag({ content: '@font-face { font-family:"DM Sans";src:local("Arial");font-display:optional } @font-face { font-family:"Cormorant Garamond";src:local("Georgia");font-display:optional }' });
+    await page.addStyleTag({ content: '@font-face { font-family:Kalam;src:local("Arial");font-weight:300 700;font-display:swap }' });
     await page.evaluate(() => document.fonts.ready);
     const after = { logo: await actualLogo.boundingBox(), picture: await picture.boundingBox() };
     for (const part of ['logo', 'picture']) {

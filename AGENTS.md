@@ -9,7 +9,7 @@
 ## Visual conventions
 - `client/src/main.jsx` imports `styles.css` for layout, then `design-system.css` for brand tokens and visual overrides, followed by scoped catalog/admin styles. Keep that order and use the existing tokens.
 - Use white-led surfaces: background `#FFFCFB`, white `#FFFFFF`, brand rose `#DA9B8D`, rose-brown `#915B50`, text `#62483F`, primary button `#795045`, borders `#EADAD5`. Avoid large pink sections.
-- Preserve Cormorant Garamond for headings and DM Sans for body/UI.
+- Use the self-hosted Kalam UI tokens for English headings, body text and controls, with the licensed Amiri Arabic fallback. Preserve explicitly selected engraving/sticker fonts, technical monospace text and the original logo artwork. See `docs/OWNER_HANDOFF_RELEASE_1.md`.
 - Reuse `client/public/tap-wrap-logo.webp` unchanged. Its intrinsic size is 2000 × 667; provide those image dimensions and keep height auto. Never redraw, crop, stretch, or replace it with a wordmark.
 - Desktop headers use the original logo on the left, visible primary links in the middle and actions on the right; mobile uses a native modal drawer. Session-dependent destinations come only from the verified shared session. The sticky header's measured height coordinates anchor/focus/overlay offsets; the announcement may scroll away.
 - Public shop filters have exactly three native accordions: Category, Availability and Price. Price uses raw decimal EGP text drafts, converted to integer piastres only after validation on Apply. Keep nested category URLs/relationships, visible locked category context, URL history and Clear All preserving search/sort. Do not restore a slider or a separate public subcategory control.

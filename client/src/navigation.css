@@ -1,0 +1,39 @@
+/* Staggered entrance inspired by React Bits' public visual reference.
+   Original CSS implementation; no upstream code, animation library or assets. */
+.desktop-navigation>ul{gap:clamp(10px,2vw,30px)}
+.desktop-navigation>ul>li>a{position:relative;font-size:15px;letter-spacing:0;padding-block:14px}
+.desktop-navigation>ul>li>a::after{content:'';position:absolute;left:12px;right:12px;bottom:7px;height:2px;background:var(--tw-logo-rose);transform:scaleX(0);transform-origin:left;transition:transform .2s}
+.desktop-navigation>ul>li>a:hover::after,.desktop-navigation>ul>li>a[aria-current]::after{transform:scaleX(1)}
+.menu-glyph{position:relative;display:block;width:24px;height:24px}
+.menu-glyph>span{position:absolute;left:0;top:8px;width:24px;height:2px;background:currentColor;border-radius:2px;transition:transform .2s}
+.menu-glyph>span+span{top:15px;width:18px}
+.menu-icon:hover .menu-glyph>span+span{transform:translateX(6px)}
+.menu-close .menu-glyph>span{top:11px;transform:rotate(45deg)}
+.menu-close .menu-glyph>span+span{width:24px;transform:rotate(-45deg)}
+.navigation-drawer{position:fixed;inset:0 0 0 auto;width:min(680px,calc(100vw - 24px));max-width:none;height:100dvh;max-height:none;margin:0;border:0;border-left:8px solid var(--tw-logo-rose);padding:0;background:var(--tw-bg);color:var(--tw-ink);overflow:hidden;overscroll-behavior:contain;box-shadow:-20px 0 80px #39292230}
+.navigation-drawer[open]{display:flex;flex-direction:column;animation:menu-panel-in .42s cubic-bezier(.2,.8,.2,1) both}
+.navigation-drawer::backdrop{background:#39292288;backdrop-filter:blur(3px);animation:menu-backdrop-in .3s both}
+.navigation-drawer.is-closing{animation:menu-panel-out .18s ease-in both}
+.navigation-drawer.is-closing::backdrop{animation:menu-backdrop-out .18s both}
+.drawer-header{display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:12px;padding:24px 28px;border-bottom:1px solid var(--tw-border)}
+.drawer-header h2{font-size:18px;font-weight:400;line-height:1.5;margin:0;color:var(--tw-rose-dark)}
+.drawer-header .icon-button{width:48px;height:48px;border:1px solid var(--tw-border);border-radius:50%}
+.drawer-nav{position:relative;flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:28px;scroll-padding-block:16px}
+.drawer-nav ul{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.drawer-nav>ul>li{animation:menu-link-in .42s cubic-bezier(.2,.8,.2,1) calc(.1s + var(--nav-index)*.035s) both}
+.navigation-drawer .drawer-nav :is(a,summary){display:flex;align-items:center;gap:14px;min-height:58px;padding:10px 14px;border-radius:8px;color:var(--tw-ink);font:400 clamp(26px,5vw,42px)/1.4 var(--tw-font-ui);letter-spacing:0;text-decoration:none;transition:background .18s,color .18s;overflow-wrap:anywhere}
+.navigation-drawer .drawer-nav :is(a:hover,a[aria-current],summary:hover,.is-active){background:var(--tw-soft);color:var(--tw-rose-dark)}
+.navigation-drawer .drawer-nav a[aria-current]{box-shadow:inset 3px 0 var(--tw-logo-rose)}
+.navigation-drawer .admin-drawer-nav :is(a,summary){font-size:clamp(22px,4vw,30px);min-height:54px}
+.navigation-drawer .admin-drawer-nav summary>svg:last-child{margin-left:auto}
+.navigation-drawer .admin-customization-menu>ul{position:static;min-width:0;border:0;box-shadow:none;background:transparent;margin:0 0 8px 22px;padding:0}
+.navigation-drawer .admin-customization-menu>ul a{font-size:20px;min-height:48px}
+.drawer-signature{flex-shrink:0;margin:0;padding:18px 28px 24px;border-top:1px solid var(--tw-border);font-size:14px;color:var(--tw-rose-dark)}
+@keyframes menu-panel-in{from{transform:translateX(105%)}to{transform:translateX(0)}}
+@keyframes menu-panel-out{to{transform:translateX(105%)}}
+@keyframes menu-link-in{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}
+@keyframes menu-backdrop-in{from{opacity:0}to{opacity:1}}
+@keyframes menu-backdrop-out{to{opacity:0}}
+@media(max-width:480px){.navigation-drawer{width:100%;border-left-width:5px}.drawer-header{padding:16px}.drawer-nav{padding:16px}.drawer-signature{padding:16px;font-size:13px}}
+@media(max-height:540px){.drawer-header{padding-block:8px}.drawer-nav{padding-block:8px}.navigation-drawer .drawer-nav :is(a,summary){font-size:24px;min-height:48px;padding-block:6px}.drawer-signature{padding-block:10px}}
+@media(prefers-reduced-motion:reduce){.navigation-drawer[open],.navigation-drawer.is-closing,.navigation-drawer::backdrop,.drawer-nav>ul>li{animation:none}.menu-glyph>span,.desktop-navigation>ul>li>a::after{transition:none}}

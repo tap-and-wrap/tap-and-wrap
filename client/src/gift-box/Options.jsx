@@ -33,7 +33,7 @@ export default function Options({ draftMode = false, category, components, revea
         <span className="gb-option-name">{label}</span><span className="gb-option-price">{draftMode ? (defective ? 'Artwork under review' : 'Preview · price pending') : defective ? 'Artwork under review' : unavailable ? item.inventoryStatus === 'insufficient_stock' || item.inventoryQuantity === 0 && item.inventoryMode === 'tracked' ? 'Unavailable · out of stock' : 'Unavailable · approval pending' : money(item.pricePiastres)}</span>
         {!draftMode && !unavailable && item.inventoryMode === 'tracked' && <span className="gb-option-stock">{limitReached && (quantities[item.componentId] || 0) >= item.inventoryQuantity ? 'All available stock added' : `${item.inventoryQuantity} available`}</span>}
         {limitReached && (item.inventoryMode !== 'tracked' || (quantities[item.componentId] || 0) < item.inventoryQuantity) && <span className="gb-option-stock">Selection limit reached</span>}
-        {(selectedId === item.componentId || quantities[item.componentId]) && <span className="gb-option-check">{selectedId === item.componentId ? '✓ Selected' : `${quantities[item.componentId]} added`}</span>}
+        {(selectedId === item.componentId || quantities[item.componentId]) && <span className="gb-option-check">{selectedId === item.componentId ? <><span aria-hidden="true">✓</span><span className="gb-option-check-label"> Selected</span></> : `${quantities[item.componentId]} added`}</span>}
       </button></div>;
     })}
   </div>{revealed < components.length && <button className="button button-secondary gb-load-more" type="button" onClick={onReveal}>Show 6 more</button>}

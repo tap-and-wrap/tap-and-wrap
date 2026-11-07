@@ -200,11 +200,11 @@ test('the actual metadata decision preserves only a matching approved initial sn
 test('brand fonts are discovered in HTML without a nested CSS-import waterfall or invented font assets', async () => {
   const html = await readFile(path.join(CLIENT_DIRECTORY, 'index.html'), 'utf8');
   const css = await readFile(path.join(CLIENT_DIRECTORY, 'src', 'design-system.css'), 'utf8');
-  assert.match(html, /rel="preconnect" href="https:\/\/fonts.gstatic.com" crossorigin/);
-  assert.match(html, /family=Cormorant\+Garamond.*family=DM\+Sans.*display=optional/);
+  assert.match(html, /rel="preload" href="\/fonts\/ui-v1\/kalam-latin-400.woff2" as="font" type="font\/woff2" crossorigin/);
+  assert.equal(html.includes('fonts.googleapis.com'), false);
   assert.equal(css.includes("@import url('https://fonts.googleapis.com"), false);
-  assert.match(css, /--tw-font-display: 'Cormorant Garamond', Georgia, serif/);
-  assert.match(css, /--tw-font-body: 'DM Sans', Arial, sans-serif/);
+  assert.match(css, /--tw-font-ui: Kalam, 'TapWrap Arabic', sans-serif/);
+  assert.match(css, /--tw-font-body: var\(--tw-font-ui\)/);
 });
 
 test('post-commit finalization failure reports its committed state while complete new immutable HTML remains readable', async () => {
