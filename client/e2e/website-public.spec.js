@@ -36,7 +36,7 @@ test('homepage orders actual sections and displays only approved fixture content
   await expect(page.getByText('Approved review fixture only.')).toHaveCount(0);
   await expect(page.getByText('Is this a real merchant claim?')).toHaveCount(0);
   await page.getByRole('button', { name: 'How do I place an order?' }).click();
-  await expect(page.getByText(/Gift Box and Engraving start with a request/)).toBeVisible();
+  await expect(page.getByText(/Gift Boxes and standalone engraving can share one cart and one order/)).toBeVisible();
   await expect(page.locator('.home-service-media video')).toHaveCount(2);
   await expect(page.locator('.hero-film video, .hero-film img.hero-film-poster')).toHaveCount(1);
   if (await page.locator('.hero-film video').count()) await expect(page.getByRole('button', { name: /Play hero video|Pause hero video/ })).toBeVisible();

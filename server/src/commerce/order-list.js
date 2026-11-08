@@ -1,5 +1,5 @@
 /** Read-only projections and filters for the unified owner workspace. */
-export const closedOrderStates = ['delivered', 'cancelled', 'returned'];
+export const closedOrderStates = ['delivered', 'cancelled', 'returned', 'completed_with_changes'];
 export const attentionConditions = () => [
   { initialContactAt: null, serviceRequestId: null },
   { responseState: 'requires_action' },
@@ -13,12 +13,13 @@ export const attentionConditions = () => [
 export function ownerOrderView(view) {
   if (view === 'requires_action') return { $or: [
     { fulfillmentState: { $nin: closedOrderStates }, $or: attentionConditions() },
+    { 'financialSummary.refundReviewRequired': true },
     { 'engraving.items': { $elemMatch: { inCustody: true, stage: { $ne: 'returned_to_customer' } } } },
   ] };
-  if (view === 'unpaid') return { fulfillmentState: { $nin: ['cancelled', 'returned'] }, paymentState: { $in: ['unpaid', 'awaiting_transfer', 'partially_paid'] } };
+  if (view === 'unpaid') return { fulfillmentState: { $nin: ['cancelled', 'returned'] }, paymentState: { $in: ['unpaid', 'awaiting_transfer', 'partially_paid'] }, $or:[{accountingVersion:{$ne:2}},{'financialSummary.outstandingPiastres':{$gt:0}}] };
   if (view === 'verification') return { $or: [{ proofReviewRequired: true }, { paymentState: 'awaiting_verification' }] };
   if (view === 'preparing') return { fulfillmentState: 'preparing' };
-  if (view === 'completed') return { fulfillmentState: 'delivered' };
+  if (view === 'completed') return { fulfillmentState: { $in: ['delivered','completed_with_changes'] } };
   if (view === 'cancelled') return { fulfillmentState: 'cancelled' };
   return {};
 }
@@ -26,8 +27,8 @@ export function orderItemTypes(order) {
   return [...new Set((order.lines || []).map(line => line.kind === 'gift_box_v2' ? 'gift_box' : line.kind === 'engraving_service_v1' ? 'engraving' : 'product'))];
 }
 export function orderActionLabel(order) {
-  if (closedOrderStates.includes(order.fulfillmentState)) return (order.engraving?.items || []).some(item => item.inCustody === true) ? 'Return customer item' : null;
   if (order.financialSummary?.refundReviewRequired) return 'Review refund';
+  if (closedOrderStates.includes(order.fulfillmentState)) return (order.engraving?.items || []).some(item => item.inCustody === true) ? 'Return customer item' : null;
   if (order.cancellationRequestedAt) return 'Review cancellation';
   if (order.proofReviewRequired || order.paymentState === 'awaiting_verification') return 'Verify payment';
   if (order.paymentState === 'rejected') return 'Contact about payment';

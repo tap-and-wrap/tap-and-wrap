@@ -19,18 +19,23 @@ export function groupMethod(order, group) {
 }
 export function groupBalances(order, netFor, reductionFor) {
   return (order.paymentGroups || []).map(group => {
-    const amount = Math.max(0, group.amountPiastres - reductionFor(group.id));
+    // Inspection is not a chargeable engraving service. A wholly declined,
+    // unworked group returned before collection authorization has no service due.
+    // Keep the original quoted snapshot and explicit custody/inspection history.
+    const notProvided = group.id === 'engraving' && !order.engraving?.collectionAuthorized && order.engraving?.items.length > 0
+      && order.engraving.items.every(item => item.stage === 'returned_to_customer' && !item.history?.some(entry => entry.action === 'complete'));
+    const amount = notProvided ? 0 : Math.max(0, group.amountPiastres - reductionFor(group.id));
     const collected = netFor(group.id), authorized = groupAuthorized(order, group.id);
     return { ...group, method: groupMethod(order, group), authorized, payablePiastres: amount, collectedPiastres: collected,
       outstandingPiastres: Math.max(0, amount - collected),
       codCommitted: group.id === 'engraving' && order.engraving?.codCommitment?.customerAccepted === true && authorized,
-      status: !authorized ? group.id === 'engraving' ? 'deferred' : 'return_review' : collected >= amount ? 'paid' : collected > 0 ? 'partially_paid' : group.id === 'engraving' && order.engraving?.codCommitment?.customerAccepted ? 'cod_committed' : 'unpaid' };
+      status: notProvided ? 'not_provided' : !authorized ? group.id === 'engraving' ? 'deferred' : 'return_review' : collected >= amount ? 'paid' : collected > 0 ? 'partially_paid' : group.id === 'engraving' && order.engraving?.codCommitment?.customerAccepted ? 'cod_committed' : 'unpaid' };
   });
 }
 export function groupedPaymentState(order, summary) {
   const net = summary.collectedPiastres - summary.refundedPiastres;
   if (summary.refundedPiastres > 0 && net === 0) return 'refunded';
-  if (summary.groups.every(group => group.authorized && group.outstandingPiastres === 0) && summary.outstandingPiastres === 0) return 'paid';
+  if (summary.agreedTotalPiastres > 0 && summary.groups.every(group => (group.authorized || group.status === 'not_provided') && group.outstandingPiastres === 0) && summary.outstandingPiastres === 0) return 'paid';
   if (net > 0) return 'partially_paid';
   if (order.proofReviewRequired) return 'awaiting_verification';
   return 'unpaid';
@@ -46,7 +51,8 @@ export function overallFulfillment(order, engraving = order.engraving, merchandi
   if (!engraving) return merchandise || 'received';
   const hasMerchandise = order.paymentGroups?.some(group => group.id === 'merchandise');
   const servicesDone = !engraving || engraving.items.every(item => item.stage === 'returned_to_customer');
-  if ((!hasMerchandise || merchandise === 'delivered') && servicesDone) return 'delivered';
+  if (servicesDone && hasMerchandise && merchandise === 'returned') return 'completed_with_changes';
+  if ((!hasMerchandise || merchandise === 'delivered') && servicesDone) return engraving.items.every(item => item.history?.some(entry => entry.action === 'complete')) ? 'delivered' : 'completed_with_changes';
   if (engraving?.items.some(item => ['engraving_in_progress','engraving_completed','return_arranged','return_dispatched'].includes(item.stage)) || merchandise && merchandise !== 'received') return 'preparing';
   return 'received';
 }
@@ -69,5 +75,5 @@ export function groupedAccountingSummary(order, settlements) {
     agreedTotalPiastres:sum(scopes.map(scope => scope.amountPiastres)), outstandingPiastres:closed ? 0 : sum(scopes.map(scope => scope.outstandingPiastres)),
     overpaymentPiastres:sum(scopes.map(scope => Math.max(0, net(scope.id) - scope.amountPiastres))),
     unresolvedCharges:charges.filter(charge => ['pending','offered','declined'].includes(charge.state)).length,
-    refundReviewRequired:closed && sum(collections.map(entry => entry.amountPiastres)) > sum(refunds.map(entry => entry.amountPiastres))};
+    refundReviewRequired:closed ? sum(collections.map(entry => entry.amountPiastres)) > sum(refunds.map(entry => entry.amountPiastres)) : order.merchandiseFulfillment === 'returned' && net('merchandise') > 0};
 }
