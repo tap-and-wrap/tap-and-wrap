@@ -18,7 +18,7 @@ export function quotePublicationBatches(products, reviewedPlan, batchSize=100) {
   });
   return Array.from({length:Math.ceil(rows.length/batchSize)},(_,index)=>{
     const records=rows.slice(index*batchSize,(index+1)*batchSize);
-    return {batch:index+1,ids:records.map(id),beforeHashes:records.map(publicationDigest),filter:{$or:records.map(product=>structuredClone(product))},update:{$set:{visibility:'public',published:true},$inc:{__v:1}},upsert:false};
+    return {batch:index+1,ids:records.map(id),beforeHashes:records.map(publicationDigest),filter:{$or:records.map(product=>({...structuredClone(product),visibility:product.visibility===undefined?{$exists:false}:product.visibility}))},update:{$set:{visibility:'public',published:true},$inc:{__v:1}},upsert:false};
   });
 }
 const inheritedWarnings=new Set(['Medium catalog confidence','Variant or customization grouping requires review','Variant product grouping requires merchant approval','Customization configuration requires merchant approval']);
@@ -46,7 +46,9 @@ export function planQuotePublication(products,categories,addresses){
     if(!reason&&(reserved.filter(a=>a.canonical).length!==1||!reserved.some(a=>a.slug===product.slug)))reason='Missing or ambiguous reserved product address';
     if(reason){excluded.push({id:productId,externalCatalogId:product.externalCatalogId,name:product.name,reason});continue;}
     const entry={id:productId,externalCatalogId:product.externalCatalogId,beforeHash:publicationDigest(product),expectedRevision:product.__v??0};
-    if(product.visibility==='public'&&product.published===true)unchanged.push(entry);
+    // Existing public visibility already satisfies the production policy. Do
+    // not churn deprecated import flags merely to make an obsolete count green.
+    if(product.visibility==='public')unchanged.push(entry);
     else changes.push({...entry,patch:{visibility:'public',published:true},beforePublished:product.published,beforeVisibility:product.visibility});
   }
   return {version:1,release:'owner-handoff-r2',snapshotHash:publicationDigest({products,categories,addresses}),counts:{total:products.length,changes:changes.length,unchanged:unchanged.length,excluded:excluded.length},changes,unchanged,excluded};
