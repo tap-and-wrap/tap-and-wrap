@@ -143,19 +143,19 @@ test('guest merge transfers exact private owner and cart binding; rotated guest 
   assert.equal((await Upload.findById(entry.specification.itemPhotoUploadId)).owner,account);
   assert.equal((await cartResponse(other)).cart.items.length,0);
 });
-test('configuration change invalidates cart; mixed checkout rejects without mutation', async () => {
+test('configuration changes still invalidate engraving in mixed carts without mutation', async () => {
   const entry=await input(); await addCartItem(owner,entry);
   const {version,revision,...old}=config;void version; await publishConfiguration({...old,pricePiastres:15000},revision,admin);
   assert.equal((await cartResponse(owner)).cart.items[0].valid,false);
   const cart=await Cart.findOne({owner}); cart.items.push({id:randomUUID(),kind:'product',identity:'fixture',productId:new mongoose.Types.ObjectId(),quantity:1}); await cart.save();
-  await assert.rejects(prepareCheckout(owner,{checkoutKey:randomUUID(),paymentMethod:'instapay',governorate:'cairo'}),{code:'ENGRAVING_MIXED_CHECKOUT'}); assert.equal((await readCart(owner)).items.length,2);
+  await assert.rejects(prepareCheckout(owner,{checkoutKey:randomUUID(),paymentMethod:'instapay',governorate:'cairo'}),{code:'ENGRAVING_REVIEW_REQUIRED'}); assert.equal((await readCart(owner)).items.length,2);
 });
 test('checkout preserves priced unpaid snapshot and blocks every early payment/work path', async () => {
   const {order}=await orderFor(); assert.equal(order.totals.totalPiastres,10000); assert.equal(order.paymentState,'unpaid'); assert.deepEqual(order.inventoryClaims,[]);
   assert.equal(presentOrder(order).paymentInstructions,null); assert.equal((await orderAccounting(order)).amountDueNowPiastres,0);
   await assert.rejects(mutateOrderAccounting(String(order._id),null,{revision:order.revision,action:'quote_charge',kind:'addon',label:'Font surcharge',pricing:'quoted',amountPiastres:500,collectionMethod:'instapay'},admin),{code:'ACCOUNTING_REVIEW_REQUIRED'});
-  await assert.rejects(signUpload(owner,{purpose:'payment_proof',orderId:String(order._id),mimeType:'image/png',sizeBytes:png.length}),{code:'ENGRAVING_PAYMENT_NOT_AUTHORIZED'});
-  for(const action of ['submit_proof','collection']) await assert.rejects(mutateOrderAccounting(String(order._id),owner,{revision:0,action},action==='collection'?admin:null),{code:'ENGRAVING_PAYMENT_NOT_AUTHORIZED'});
+  await assert.rejects(signUpload(owner,{purpose:'payment_proof',paymentScope:'engraving',orderId:String(order._id),mimeType:'image/png',sizeBytes:png.length}),{code:'PAYMENT_NOT_AUTHORIZED'});
+  for(const action of ['submit_proof','collection']) await assert.rejects(mutateOrderAccounting(String(order._id),owner,{revision:0,action},action==='collection'?admin:null),{code:'ACCOUNTING_REVIEW_REQUIRED'});
   await assert.rejects(act(order,'start'),{code:'ENGRAVING_WORKFLOW_CONFLICT'});
   await assert.rejects(act(order,'authorize_payment'),{code:'ENGRAVING_WORKFLOW_CONFLICT'});
   const event=await NotificationEvent.findOne({orderId:order._id,event:'order_received'}).lean();
@@ -170,7 +170,7 @@ test('inspection, current acceptance, payment authorization and safe unengraved 
   const {order}=await orderFor(); await act(order,'receive',{condition:'Intact',accessories:'Cap'}); await act(order,'inspect'); await act(order,'propose',{placementId:'front'});
   await assert.rejects(act(order,'accept',{proposalVersion:1,customerConfirmed:true}),{code:'ENGRAVING_WORKFLOW_CONFLICT'});
   await act(order,'accept',{proposalVersion:1,customerConfirmed:true,internalNote:'Actual fixture customer confirmation'});
-  const authorized=await act(order,'authorize_payment'); assert.equal(authorized.paymentState,'awaiting_transfer'); assert.ok(presentOrder(authorized).paymentInstructions);
+  const authorized=await act(order,'authorize_payment'); assert.equal(authorized.paymentState,'unpaid'); assert.equal(presentOrder(authorized).paymentInstructionsByGroup[0].scope,'engraving');
   await assert.rejects(act(order,'start'),{code:'ENGRAVING_WORKFLOW_CONFLICT'});
   await mutateOrderAccounting(String(order._id),null,{revision:authorized.revision,action:'cancel',reconciled:true,reason:'Actual fixture cancellation'},admin);
   const cancelled=await Order.findById(order._id).lean(); assert.equal(cancelled.engraving.items[0].inCustody,true);

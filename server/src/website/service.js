@@ -207,7 +207,7 @@ export async function websiteAnalytics(now = new Date()) {
   const since = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const [result] = await Order.aggregate([
     { $match: { createdAt: { $gte: since, $lte: now } } },
-    { $project: { paymentState: 1, fulfillmentState: 1, total: '$totals.totalPiastres', ledgerCollected: { $cond: [{ $eq: ['$accountingVersion', 1] }, { $subtract: [{ $ifNull: ['$financialSummary.collectedPiastres', 0] }, { $ifNull: ['$financialSummary.refundedPiastres', 0] }] }, null] } } },
+    { $project: { paymentState: 1, fulfillmentState: 1, total: '$totals.totalPiastres', ledgerCollected: { $cond: [{ $in: ['$accountingVersion', [1, 2]] }, { $subtract: [{ $ifNull: ['$financialSummary.collectedPiastres', 0] }, { $ifNull: ['$financialSummary.refundedPiastres', 0] }] }, null] } } },
     { $group: { _id: null, orders: { $sum: 1 }, paidOrders: { $sum: { $cond: [{ $eq: ['$paymentState', 'paid'] }, 1, 0] } }, deliveredOrders: { $sum: { $cond: [{ $eq: ['$fulfillmentState', 'delivered'] }, 1, 0] } }, cancelledOrders: { $sum: { $cond: [{ $eq: ['$fulfillmentState', 'cancelled'] }, 1, 0] } }, collectedPiastres: { $sum: { $ifNull: ['$ledgerCollected', { $cond: [{ $eq: ['$paymentState', 'paid'] }, '$total', 0] }] } }, awaitingVerificationPiastres: { $sum: { $cond: [{ $eq: ['$paymentState', 'awaiting_verification'] }, '$total', 0] } } } },
   ]).option({ maxTimeMS: TIMEOUT });
   const { _id: _id, ...summary } = result || { orders: 0, paidOrders: 0, deliveredOrders: 0, cancelledOrders: 0, collectedPiastres: 0, awaitingVerificationPiastres: 0 };

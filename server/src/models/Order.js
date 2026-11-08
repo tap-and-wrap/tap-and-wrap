@@ -3,6 +3,8 @@ import mongoose from 'mongoose';
 import { validOrderLineKinds } from '../gift-box/order-snapshot.js';
 const schema = new mongoose.Schema({
   cartAddOperations: { type: [mongoose.Schema.Types.Mixed], default: [], immutable: true },
+  paymentGroups: { type: [mongoose.Schema.Types.Mixed], default: undefined, immutable: true },
+  merchandiseFulfillment: { type: String, enum: ['received', 'confirmed', 'preparing', 'out_for_delivery', 'delivered', 'delivery_failed', 'returned', 'cancelled'] },
   engraving: { type: mongoose.Schema.Types.Mixed, default: null },
   orderNumber: { type: String, required: true, unique: true, match: /^[1-9][0-9]{5}$/ },
   owner: { type: String, required: true }, userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
@@ -40,6 +42,16 @@ const schema = new mongoose.Schema({
   restockedAt: { type: Date, default: null }, revision: { type: Number, default: 0 },
 }, { timestamps: true, strict: 'throw', optimisticConcurrency: true });
 schema.pre('validate', function () {
+  if (this.accountingVersion === 2) {
+    const groups = this.paymentGroups || [];
+    if (!groups.length || groups.length > 2 || new Set(groups.map(group => group.id)).size !== groups.length
+      || groups.some(group => !['merchandise','engraving'].includes(group.id) || !['cod','instapay'].includes(group.method) || !Number.isSafeInteger(group.amountPiastres) || group.amountPiastres < 0)
+      || groups.reduce((sum, group) => sum + group.amountPiastres, 0) !== this.totals?.totalPiastres
+      || !this.allowedPaymentMethods.includes(this.paymentMethod)) this.invalidate('paymentGroups', 'Payment obligations must exactly allocate the immutable order total');
+    const engravingAmount = this.lines.filter(line => line.kind === 'engraving_service_v1').reduce((sum, line) => sum + line.lineTotalPiastres, 0);
+    if ((groups.find(group => group.id === 'engraving')?.amountPiastres || 0) !== engravingAmount) this.invalidate('paymentGroups', 'Engraving must retain its exact approved service amount');
+    return;
+  }
   if (this.accountingVersion !== 1) return;
   if (!this.allowedPaymentMethods.includes(this.paymentMethod)) this.invalidate('paymentMethod', 'Use an accepted available payment method');
   if (this.orderChannel === 'owner_quotation') {

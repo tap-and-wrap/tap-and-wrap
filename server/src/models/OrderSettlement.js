@@ -11,6 +11,7 @@ const schema = new mongoose.Schema({
   method: { type: String, enum: ['cod', 'instapay'], required: true, immutable: true },
   reference: { type: String, required: true, maxlength: 120, immutable: true },
   referenceKey: { type: String, required: true, unique: true, immutable: true },
+  proofUploadId: { type: mongoose.Schema.Types.ObjectId, ref: 'Upload', immutable: true },
   refundOf: { type: mongoose.Schema.Types.ObjectId, ref: 'OrderSettlement', immutable: true },
   recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, immutable: true },
   reason: { type: String, required: true, maxlength: 500, immutable: true },

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { ShoppingBag, UserRound, Home, ChevronDown } from 'lucide-react';
+import { ShoppingBag, UserRound, Home, ChevronDown, X } from 'lucide-react';
 import { adminLinks } from '../admin/navigation.js';
 import { useCart } from '../commerce/CartContext.jsx';
 import { useSession } from '../auth/SessionProvider.jsx';
@@ -9,8 +9,6 @@ import { commerceError } from '../commerce/api.js';
 import useModalDialog from './useModalDialog.js';
 import AdminNotificationBell from './AdminNotificationBell.jsx';
 import useStaggeredMenuMotion from './useStaggeredMenuMotion.js';
-import { publicContacts } from '../../../shared/storefront-content.mjs';
-import { whatsappUrl } from '../utils/contact.js';
 
 const primaryLinks = [
   { to: '/', text: 'Home', end: true },
@@ -26,7 +24,7 @@ function AnnouncementBar() {
   </div>;
 }
 
-function NavigationLinks({ links, onClose, admin = false, numbered = false }) {
+function NavigationLinks({ links, onClose, admin = false }) {
   const location = useLocation();
   const root = useRef(null);
   useEffect(() => { root.current?.querySelectorAll('details[open]').forEach(element => { element.open = false; }); }, [location.key]);
@@ -37,7 +35,7 @@ function NavigationLinks({ links, onClose, admin = false, numbered = false }) {
   }, []);
   return <ul ref={root}>{links.map((item,index) => {
     const Icon = item.icon;
-    const label=<>{numbered&&<span className="sm-link-number" aria-hidden="true">{String(index+1).padStart(2,'0')}</span>}<span className="sm-link-label"><span>{item.text}</span></span></>;
+    const label=<span className="sm-link-label"><span>{item.text}</span></span>;
     return <li key={item.to} style={{'--nav-index':index}}>{item.children ? <details className="admin-customization-menu" onKeyDown={event => { if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus(); event.stopPropagation(); } }}>
       <summary className={/^\/admin\/(customization|gift-box|engraving)/.test(location.pathname) ? 'is-active' : ''}>{admin && Icon && <Icon size={18} aria-hidden="true"/>}{label}<ChevronDown size={14} aria-hidden="true"/></summary>
       <ul>{item.children.map(child => <li key={child.to}><NavLink to={child.to} onClick={event => { event.currentTarget.closest('details').open = false; onClose?.(event,child); }}>{child.text}</NavLink></li>)}</ul>
@@ -50,13 +48,11 @@ function NavigationDrawer({ links, onClose, admin, returnFocus }) {
   const { dialogRef, dialogProps } = useModalDialog({ onClose:()=>dismiss.current(), initialFocus:'.menu-close', returnFocus });
   const {closing,close}=useStaggeredMenuMotion(dialogRef,onClose);dismiss.current=close;
   const follow=(event,item)=>{if(event.button!==0||event.metaKey||event.ctrlKey||event.altKey||event.shiftKey)return;event.preventDefault();close(()=>navigate(item.to));};
-  return <dialog ref={dialogRef} {...dialogProps} id="navigation-drawer" className={`navigation-drawer ${closing?'is-closing':''}`} aria-labelledby="navigation-title" aria-modal="true">
+  return <dialog ref={dialogRef} {...dialogProps} id="navigation-drawer" className={`navigation-drawer ${closing?'is-closing':''}`} aria-label={admin?'Administration menu':'Main menu'} aria-modal="true">
     <div className="sm-prelayer sm-prelayer-rose" aria-hidden="true"/><div className="sm-prelayer sm-prelayer-blush" aria-hidden="true"/><div className="sm-prelayer sm-prelayer-beige" aria-hidden="true"/>
     <div className="sm-panel">
-      <div className="drawer-header"><Link className="drawer-logo" to={admin?'/admin':'/'} onClick={event=>follow(event,{to:admin?'/admin':'/'})} aria-label="Tap and Wrap home"><img src="/tap-wrap-logo.webp" alt="Tap & Wrap" width="2000" height="667"/></Link><button type="button" className="menu-toggle menu-close" onClick={()=>close()} aria-label="Close menu" autoFocus><span className="menu-text" aria-hidden="true"><span className="menu-text-inner"><span>Menu</span><span>Close</span></span></span><span className="menu-glyph" aria-hidden="true"><span/><span/></span></button></div>
-      <h2 id="navigation-title" className="drawer-eyebrow">{admin?'Your store':'Explore Tap & Wrap'}</h2>
-      <nav className={`drawer-nav ${admin ? 'admin-drawer-nav' : ''}`} aria-label={admin ? 'Administration' : 'Main navigation'}><NavigationLinks links={links} admin={admin} numbered onClose={follow}/></nav>
-      <div className="sm-socials"><p>{admin?'Thoughtfully managed.':'A little thought. A lasting memory.'}</p><div aria-label="Find Tap & Wrap">{/^https:\/\/www\.instagram\.com\/[a-zA-Z0-9._/-]+\/?$/.test(publicContacts.instagram||'')&&<a href={publicContacts.instagram} target="_blank" rel="noopener noreferrer">Instagram</a>}{whatsappUrl(publicContacts.whatsapp)&&<a href={whatsappUrl(publicContacts.whatsapp)} target="_blank" rel="noopener noreferrer">WhatsApp</a>}{/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(publicContacts.email||'')&&<a href={`mailto:${publicContacts.email}`}>Email</a>}</div></div>
+      <div className="drawer-header"><Link className="drawer-logo" to={admin?'/admin':'/'} onClick={event=>follow(event,{to:admin?'/admin':'/'})} aria-label="Tap and Wrap home"><img src="/tap-wrap-logo.webp" alt="Tap & Wrap" width="2000" height="667"/></Link><button type="button" className="menu-toggle menu-close" onClick={()=>close()} aria-label="Close menu" autoFocus><X size={24} aria-hidden="true"/></button></div>
+      <nav className={`drawer-nav ${admin ? 'admin-drawer-nav' : ''}`} aria-label={admin ? 'Administration' : 'Main navigation'}><NavigationLinks links={links} admin={admin} onClose={follow}/></nav>
     </div>
   </dialog>;
 }
@@ -103,7 +99,6 @@ export default function Header() {
       <Link className="site-logo" to={adminWorkspace ? '/admin' : '/'} aria-label={adminWorkspace ? 'Tap and Wrap dashboard' : 'Tap and Wrap home'}><img src="/tap-wrap-logo.webp" alt="Tap & Wrap" width="2000" height="667" /></Link>
       <nav className="desktop-navigation" aria-label={adminWorkspace ? 'Administration' : 'Main navigation'}><NavigationLinks links={links} admin={adminWorkspace}/></nav>
       <div className="header-actions">
-        {!adminWorkspace&&<button type="button" className="menu-toggle desktop-menu-opener" aria-label="Open menu" aria-haspopup="dialog" aria-controls={open?'navigation-drawer':undefined} aria-expanded={open} onClick={openMenu}><span aria-hidden="true">Menu</span><span className="menu-glyph" aria-hidden="true"><span/><span/></span></button>}
         {admin && <AdminNotificationBell />}
         {session.ready ? <Link className="icon-button" to={adminWorkspace ? '/' : accountDestination} aria-label={adminWorkspace ? 'Home — storefront' : 'Account'} title={adminWorkspace ? 'View storefront' : admin ? 'Admin dashboard' : session.user ? 'My account and orders' : 'Sign in'}>{adminWorkspace ? <Home size={20} aria-hidden="true"/> : <UserRound size={20} aria-hidden="true"/>}</Link> : <button className="icon-button" type="button" disabled aria-label={session.phase === 'error' ? 'Account unavailable' : 'Checking account'}><UserRound size={20} aria-hidden="true"/></button>}
         {!adminWorkspace && <Link className="icon-button" data-cart-anchor to="/cart" aria-label={`Cart${cart.quantity ? `, ${cart.quantity} items` : ''}`} title="Cart"><ShoppingBag size={20} aria-hidden="true"/>{cart.quantity > 0 && <span className="commerce-cart-count" aria-hidden="true">{cart.quantity > 99 ? '99+' : cart.quantity}</span>}</Link>}

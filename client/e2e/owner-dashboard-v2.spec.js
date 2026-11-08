@@ -31,7 +31,7 @@ test('eight primary destinations, drawer containment, customization and storefro
   await expect(page.getByRole('link', { name: 'Home — storefront' })).toHaveAttribute('href', '/');
   await page.setViewportSize({ width: 390, height: 900 });
   const opener = page.getByRole('button', { name: 'Open menu', exact: true }); await opener.click();
-  const dialog = page.getByRole('dialog', { name: 'Your store' });
+  const dialog = page.getByRole('dialog', { name: 'Administration menu' });
   await expect(dialog.locator('nav > ul > li')).toHaveCount(8);
   await dialog.getByText('Customization', { exact: true }).click();
   await expect(dialog.getByRole('link', { name: 'Gift Box', exact: true })).toBeVisible();

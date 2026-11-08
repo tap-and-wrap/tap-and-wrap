@@ -95,7 +95,7 @@ test('internal gift order consumes tracked builder quantities once, freezes one 
   assert.equal(saved.lines[0].giftBox.components.reduce((sum, item) => sum + item.lineSubtotalPiastres, 0), saved.totals.totalPiastres);
   assert.equal((await setting('rose-red')).inventoryQuantity, 14); assert.equal((await setting('chocolate-1')).inventoryQuantity, 18);
   assert.equal((await Product.findById(product._id)).inventory.quantity, 37);
-  assert.equal(saved.personalized, true); assert.deepEqual(saved.allowedPaymentMethods, ['instapay']); assert.equal(saved.paymentState, 'awaiting_transfer');
+  assert.equal(saved.personalized, true); assert.deepEqual(saved.allowedPaymentMethods, ['cod', 'instapay']); assert.equal(saved.paymentState, 'awaiting_transfer');
   assert.equal(saved.charges[0].amountPiastres, null); assert.equal(saved.charges[0].state, 'pending');
   assert.equal((await CheckoutIntent.findOne().lean()).state, 'consumed'); assert.equal(await Cart.countDocuments(), 0);
   for (const component of saved.lines[0].giftBox.components) { assert.equal(component.settingsRevision, 0); assert.equal(component.priceApprovedBy, String(admin._id)); assert.ok(component.priceApprovedAt); }
@@ -254,11 +254,12 @@ test('customer notification contains escaped immutable gift selection without me
   assert.match(rendered.text, /Delivery is separate/);
 });
 
-test('personalized payment and order-first proof restrictions also apply to configured gifts', async () => {
+test('authorized Gift Box COD stays unpaid and order-first proof rules remain enforced', async () => {
   await addGift(); const cod = await review(owner, { paymentMethod: 'cod' });
-  await assert.rejects(placeGiftBoxOrderForDisposableTest(owner, cod.input), { code: 'GIFT_BOX_PAYMENT_METHOD_UNAVAILABLE' });
+  const codOrder = await placeGiftBoxOrderForDisposableTest(owner, cod.input); assert.equal(codOrder.paymentState, 'unpaid'); assert.equal(codOrder.accountingVersion, 2);
+  await addGift();
   const { input } = await review(); await assert.rejects(placeGiftBoxOrderForDisposableTest(owner, { ...input, paymentProofId: new mongoose.Types.ObjectId().toString() }), { code: 'ORDER_FIRST_REQUIRED' });
-  assert.equal(await Order.countDocuments(), 0); assert.equal((await setting('rose-red')).inventoryQuantity, 20);
+  assert.equal(await Order.countDocuments(), 1); assert.equal((await setting('rose-red')).inventoryQuantity, 17);
 });
 
 test('public made-to-order checkout prices high-quantity gifts and saves InstaPay orders once', async () => {
@@ -339,7 +340,7 @@ test('prepared personalized gifts require inspection and restore only explicitly
   await addGift(); const { order } = await complete();
   // The accounting test starts from a prepared-order fixture; normal payment
   // and fulfillment transitions remain covered by the commerce regressions.
-  await Order.collection.updateOne({ _id: new mongoose.Types.ObjectId(order.id) }, { $set: { fulfillmentState: 'preparing' } });
+  await Order.collection.updateOne({ _id: new mongoose.Types.ObjectId(order.id) }, { $set: { fulfillmentState: 'preparing', merchandiseFulfillment:'preparing' } });
   await assert.rejects(accounting(order.id, { action: 'cancel', reconciled: true, reason: 'Prepared gift requires physical review' }));
   const saved = await Order.findById(order.id).lean();
   const quantities = saved.inventoryClaims.map(claim => claim.id === 'rose-red' ? 1 : 0);
@@ -350,7 +351,7 @@ test('prepared personalized gifts require inspection and restore only explicitly
 
 test('inspected partial return rejects incompatible inventory mode and restores the correct consumed builder units once', async () => {
   await addGift(owner, giftCartConfiguration(), 2); const { order } = await complete();
-  await Order.collection.updateOne({ _id: new mongoose.Types.ObjectId(order.id) }, { $set: { fulfillmentState: 'returned' } });
+  await Order.collection.updateOne({ _id: new mongoose.Types.ObjectId(order.id) }, { $set: { fulfillmentState: 'returned', merchandiseFulfillment:'returned' } });
   const saved = await Order.findById(order.id).lean();
   const quantities = saved.inventoryClaims.map(claim => claim.id === 'rose-red' ? 2 : claim.id === 'chocolate-1' ? 1 : 0);
   await assert.rejects(accounting(order.id, { action: 'inventory_return', quantities, inspected: false, reason: 'No inspection' }));
@@ -369,11 +370,11 @@ test('configured InstaPay orders retain order-bound private proof ownership and 
   try {
     await assert.rejects(signUpload(owner, { purpose: 'payment_proof', checkoutKey: randomUUID(), mimeType: 'image/png', sizeBytes: PNG.length }));
     await addGift(); const { order } = await complete();
-    await assert.rejects(signUpload(other, { purpose: 'payment_proof', orderId: order.id, mimeType: 'image/png', sizeBytes: PNG.length }));
-    const signed = await signUpload(owner, { purpose: 'payment_proof', orderId: order.id, mimeType: 'image/png', sizeBytes: PNG.length });
+    await assert.rejects(signUpload(other, { purpose: 'payment_proof', paymentScope: 'merchandise', orderId: order.id, mimeType: 'image/png', sizeBytes: PNG.length }));
+    const signed = await signUpload(owner, { purpose: 'payment_proof', paymentScope: 'merchandise', orderId: order.id, mimeType: 'image/png', sizeBytes: PNG.length });
     const upload = await Upload.findById(signed.upload.id).select('+temporaryKey'); storage.put(upload.temporaryKey, PNG);
     await completeUpload(signed.upload.id, owner);
-    const command = { revision: 0, action: 'submit_proof', uploadId: signed.upload.id };
+    const command = { revision: 0, action: 'submit_proof', scope: 'merchandise', uploadId: signed.upload.id };
     await assert.rejects(mutateOrderAccounting(order.id, other, command));
     await mutateOrderAccounting(order.id, owner, command);
     const saved = await Order.findById(order.id).lean(); assert.equal(saved.paymentState, 'awaiting_verification'); assert.equal(saved.proofReviewRequired, true);

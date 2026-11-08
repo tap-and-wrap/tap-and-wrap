@@ -35,8 +35,7 @@
   }
 
   @media (hover: hover) and (pointer: fine) {
-    .home-page .home-category:hover,
-    .catalog-card:hover {
+    .home-page .home-category:hover {
       transform: translateY(-3px);
     }
     .catalog-card:hover .catalog-card-image img {
@@ -44,8 +43,7 @@
     }
     .home-page .home-category:hover .home-category-cta,
     .home-page .button:hover:not(:disabled),
-    .home-page .home-slide-arrow:hover:not(:disabled),
-    .catalog-card .catalog-card-action:hover:not(:disabled) {
+    .home-page .home-slide-arrow:hover:not(:disabled) {
       transform: translateY(-2px);
     }
     .home-page .home-service-detail:hover > span svg {

@@ -71,12 +71,12 @@ export async function enqueueOrderEvent(order, event, { session, eventVersion } 
   writeGuard();
   await NotificationEvent.updateOne({ eventKey }, { $setOnInsert: {
     eventKey, orderId, event, recipient: recipient.toLowerCase(),
-    snapshot: { items: (order.lines || []).slice(0, 20).map(orderItemSnapshot), orderNumber, orderChannel: order.orderChannel || 'website', accountingVersion: order.accountingVersion || 0, shippingState: order.charges?.find(charge => charge.kind === 'shipping')?.state || null,
+    snapshot: { ...(order.accountingVersion === 2 ? {groupedPayments:true,mixedEngraving:order.lines.some(line => line.kind === 'engraving_service_v1') && order.lines.some(line => line.kind !== 'engraving_service_v1')} : {}), items: (order.lines || []).slice(0, 20).map(orderItemSnapshot), orderNumber, orderChannel: order.orderChannel || 'website', accountingVersion: order.accountingVersion || 0, shippingState: order.charges?.find(charge => charge.kind === 'shipping')?.state || null,
       engravingService: order.lines?.some(line => line.kind === 'engraving_service_v1') === true,
       engravingReviewPending: order.lines?.some(line => line.kind === 'engraving_service_v1') && order.engraving?.collectionAuthorized !== true,
       paymentState: order.paymentState,
       ...(order.orderChannel === 'owner_quotation' && Number.isSafeInteger(order.acceptedQuotation?.totalPiastres) ? { acceptedQuotationTotalPiastres: order.acceptedQuotation.totalPiastres } : {}),
-      ...(order.accountingVersion === 1 ? { financial: { collectedPiastres: order.financialSummary?.collectedPiastres, refundedPiastres: order.financialSummary?.refundedPiastres, outstandingPiastres: order.financialSummary?.outstandingPiastres } } : {}),
+      ...([1, 2].includes(order.accountingVersion) ? { financial: { collectedPiastres: order.financialSummary?.collectedPiastres, refundedPiastres: order.financialSummary?.refundedPiastres, outstandingPiastres: order.financialSummary?.outstandingPiastres } } : {}),
       charges: (order.charges || []).slice(0, 30).map(charge => ({ label: charge.label, amountPiastres: charge.amountPiastres, state: charge.state, pricing: charge.pricing, collectionMethod: charge.collectionMethod })),
       ...(Number.isSafeInteger(order?.totals?.totalPiastres) && order.totals.totalPiastres >= 0 ? { totalPiastres: order.totals.totalPiastres } : {}),
       ...(['cod', 'instapay'].includes(order?.paymentMethod) ? { paymentMethod: order.paymentMethod } : {}),

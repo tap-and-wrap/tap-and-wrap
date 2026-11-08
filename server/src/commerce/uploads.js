@@ -1,3 +1,4 @@
+import { groupedOrder, groupAuthorized, groupMethod } from './payment-groups.js';
 import { commerceOwnerContext } from './ownership.js';
 import { requireEngraving } from '../engraving/configuration.js';
 import { requireCollectionAuthorization } from '../engraving/payment-policy.js';
@@ -95,9 +96,15 @@ async function policyForUpload(owner, body) {
   }
   if (body.purpose === 'payment_proof') {
     if (!mongoose.isObjectIdOrHexString(body.orderId)) throw fail('ORDER_REQUIRED', 'Create an order before transferring and uploading proof.');
-    const order = await Order.findOne({ _id: body.orderId, owner, paymentMethod: 'instapay', orderChannel: { $ne: 'owner_quotation' }, accountingVersion: 1, fulfillmentState: { $nin: ['cancelled', 'returned', 'delivery_failed'] } }).select('_id lines engraving').lean();
+    const order = await Order.findOne({ _id: body.orderId, owner, orderChannel: { $ne: 'owner_quotation' }, accountingVersion: { $in: [1, 2] }, fulfillmentState: { $nin: ['cancelled', 'returned', 'delivery_failed'] } }).select('_id lines engraving accountingVersion paymentGroups paymentMethod charges').lean();
     if (!order) throw fail('ORDER_NOT_FOUND', 'No eligible owned order was found.', 404);
-    requireCollectionAuthorization(order);
+    if (groupedOrder(order)) {
+      const group = order.paymentGroups.find(group => group.id === body.paymentScope);
+      const charge = order.charges.find(charge => charge.id === body.paymentScope && charge.state === 'accepted' && charge.collectionMethod === 'instapay');
+      const chargeScope = Boolean(charge);
+      const authorized = group ? groupAuthorized(order, group.id) && groupMethod(order, group) === 'instapay' : chargeScope && groupAuthorized(order, body.paymentScope === 'return_shipping' ? 'engraving' : 'merchandise');
+      if (!authorized) throw fail('PAYMENT_NOT_AUTHORIZED', 'Choose an authorized InstaPay obligation.', 409);
+    } else { if (order.paymentMethod !== 'instapay') throw fail('PAYMENT_NOT_AUTHORIZED', 'This order does not accept InstaPay proof.', 409); requireCollectionAuthorization(order); }
     return { acceptedMimeTypes: UPLOAD_MIME_TYPES, maxBytes: 5 * 1024 * 1024, fieldKey: 'payment_proof' };
   }
   if (!mongoose.isObjectIdOrHexString(body.productId) || typeof body.fieldKey !== 'string'

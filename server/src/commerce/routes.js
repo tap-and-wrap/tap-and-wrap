@@ -169,7 +169,7 @@ commerceRoutes.post('/orders/track', trackingLimit, async (req, res) => {
   const phone = normalizePhone(input.phone);
   const order = await Order.findOne({ orderNumber: input.orderNumber, 'customer.phone': phone }).select('orderNumber fulfillmentState paymentState charges accountingVersion createdAt updatedAt').lean().maxTimeMS(3000);
   if (!order) throw commerceError(404, 'TRACKING_NOT_FOUND', 'No matching order was found. Check both details.');
-  res.json({ ok: true, data: { order: { orderNumber: order.orderNumber, fulfillmentState: order.fulfillmentState, paymentState: order.paymentState, shippingStatus: order.accountingVersion === 1 ? order.charges?.find(charge => charge.kind === 'shipping')?.state : 'legacy', createdAt: order.createdAt, updatedAt: order.updatedAt } } });
+  res.json({ ok: true, data: { order: { orderNumber: order.orderNumber, fulfillmentState: order.fulfillmentState, paymentState: order.paymentState, shippingStatus: [1, 2].includes(order.accountingVersion) ? order.charges?.find(charge => charge.kind === 'shipping')?.state : 'legacy', createdAt: order.createdAt, updatedAt: order.updatedAt } } });
 });
 commerceRoutes.get('/orders', requireAuth, async (req, res) => { const query = pageSchema.parse(req.query); res.json({ ok: true, data: await listOrders({ ...orderFilter(query), userId: req.user._id }, query, false) }); });
 commerceRoutes.get('/orders/:id', async (req, res) => {
@@ -177,7 +177,7 @@ commerceRoutes.get('/orders/:id', async (req, res) => {
   res.json({ ok: true, data: { order: { ...presentOrder(order), accounting: await orderAccounting(order) }, tracking: await optionalPurchaseReceipt(order, req) } });
 });
 commerceRoutes.post('/orders/:id/accounting', async (req, res) => { const order = await mutateOrderAccounting(id.parse(req.params.id), req.commerceOwner, accountingInput.parse(req.body), req.user); res.json({ ok: true, data: { order: { ...presentOrder(order), accounting: await orderAccounting(order) } } }); });
-commerceRoutes.post('/orders/:id/cancel', async (req, res) => { const input = z.object({ revision: states.shape.revision, reason: states.shape.reason }).strict().parse(req.body); const record = await getOwnedOrder(id.parse(req.params.id), req.commerceOwner); const order = record.accountingVersion === 1 ? presentOrder(await mutateOrderAccounting(record._id, req.commerceOwner, { ...input, action: 'request_cancel' }, req.user)) : await changeOrderState(record._id, req.commerceOwner, { ...input, fulfillmentState: 'cancelled' }, req.user); res.json({ ok: true, data: { order } }); });
+commerceRoutes.post('/orders/:id/cancel', async (req, res) => { const input = z.object({ revision: states.shape.revision, reason: states.shape.reason }).strict().parse(req.body); const record = await getOwnedOrder(id.parse(req.params.id), req.commerceOwner); const order = [1, 2].includes(record.accountingVersion) ? presentOrder(await mutateOrderAccounting(record._id, req.commerceOwner, { ...input, action: 'request_cancel' }, req.user)) : await changeOrderState(record._id, req.commerceOwner, { ...input, fulfillmentState: 'cancelled' }, req.user); res.json({ ok: true, data: { order } }); });
 
 commerceRoutes.use(engravingRoutes);
 commerceRoutes.use(publicConfigurationRoutes);

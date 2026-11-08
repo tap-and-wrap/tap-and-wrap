@@ -19,7 +19,7 @@ for (const width of [320, 1440]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
     if (width < 1024) {
       await page.getByRole('button', { name: 'Open menu' }).click();
-      const drawer = page.getByRole('dialog', { name: 'Explore Tap & Wrap' });
+      const drawer = page.getByRole('dialog', { name: 'Main menu' });
       await expect(drawer).toBeVisible();
       await expect(drawer.locator('.drawer-account')).toHaveCount(0);
       await expect(drawer.getByRole('link', { name: 'Account' })).toHaveCount(0);

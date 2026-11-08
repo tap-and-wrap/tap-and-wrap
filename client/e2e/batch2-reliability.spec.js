@@ -288,7 +288,7 @@ test('mobile drawer navigation focuses a delayed destination after closing and u
   await expect(page.getByRole('heading', { name: 'Shop Our Gifts', exact: true })).toBeVisible();
   const originalOverflow = await page.locator('body').evaluate(node => node.style.overflow);
   await page.getByRole('button', { name: 'Open menu', exact: true }).click();
-  const drawer = page.getByRole('dialog', { name: 'Explore Tap & Wrap', exact: true });
+  const drawer = page.getByRole('dialog', { name: 'Main menu', exact: true });
   await expect(drawer).toBeVisible();
   await drawer.getByRole('link', { name: 'Track Order', exact: true }).click();
   await expect(drawer).toHaveCount(0);

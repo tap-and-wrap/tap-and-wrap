@@ -1,3 +1,4 @@
+import { groupedOrder, groupedAccountingSummary, groupedPaymentState, groupAuthorized } from './payment-groups.js';
 import { engravingCollectionAllowed, isEngravingOrder, requireCollectionAuthorization } from '../engraving/payment-policy.js';
 import { randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
@@ -21,6 +22,7 @@ export const pendingShipping = () => ({ id: 'shipping', kind: 'shipping', label:
 const sum = values => values.reduce((total, value) => checkedMoney(total + value), 0);
 const allocation = (entry, scope) => entry.allocations?.length ? sum(entry.allocations.filter(part => part.scope === scope).map(part => part.amountPiastres)) : entry.scope === scope ? entry.amountPiastres : 0;
 export function accountingSummary(order, settlements = []) {
+  if (groupedOrder(order)) return groupedAccountingSummary(order, settlements);
   const collections = settlements.filter(entry => entry.direction === 'collection'), refunds = settlements.filter(entry => entry.direction === 'refund');
   const netFor = scope => sum(collections.map(entry => allocation(entry, scope))) - sum(refunds.map(entry => allocation(entry, scope)));
   const reductionFor = scope => sum(refunds.filter(entry => entry.reducePayable).map(entry => allocation(entry, scope)));
@@ -47,7 +49,7 @@ export function accountingSummary(order, settlements = []) {
   };
 }
 export async function orderAccounting(order, { admin = false, session } = {}) {
-  if (order.accountingVersion !== 1) return null;
+  if (![1, 2].includes(order.accountingVersion)) return null;
   const entries = await OrderSettlement.find({ orderId: order._id }).session(session || null).sort({ createdAt: 1, _id: 1 }).lean().maxTimeMS(3000);
   return { ...accountingSummary(order, entries), settlements: entries.map(entry => ({ id: String(entry._id), direction: entry.direction, scope: entry.scope, amountPiastres: entry.amountPiastres, method: entry.method, createdAt: entry.createdAt,
     allocations: (entry.allocations || []).map(part => ({ scope: part.scope, amountPiastres: part.amountPiastres })), reducePayable: Boolean(entry.reducePayable),
@@ -65,10 +67,10 @@ export async function mutateOrderAccounting(id, owner, input, actor) {
     await session.withTransaction(async () => {
       const order = await Order.findOne({ _id: id, ...(admin ? {} : { owner }) }).session(session);
       if (!order) throw commerceError(404, 'ORDER_NOT_FOUND', 'Order not found.');
-      if (order.accountingVersion !== 1) fail('Legacy order requires a separately reviewed reconciliation; original totals remain unchanged.');
+      if (![1, 2].includes(order.accountingVersion)) fail('Legacy order requires a separately reviewed reconciliation; original totals remain unchanged.');
       if (order.serviceRequestId && ['quote_charge', 'accept_charge'].includes(input.action)) fail('Custom-service quotations are versioned in Requests. Reconcile the linked order before issuing a replacement quotation.');
-      if (isEngravingOrder(order) && ['submit_proof','collection'].includes(input.action) && !(admin && input.action === 'collection' && input.exceptionConfirmed && input.reconciled && input.reason)) requireCollectionAuthorization(order);
-      if (isEngravingOrder(order) && input.action === 'inventory_return') fail('Customer property never enters merchant inventory. Use the engraving return workflow.');
+      if (!groupedOrder(order) && isEngravingOrder(order) && ['submit_proof','collection'].includes(input.action) && !(admin && input.action === 'collection' && input.exceptionConfirmed && input.reconciled && input.reason)) requireCollectionAuthorization(order);
+      if (isEngravingOrder(order) && !groupedOrder(order) && input.action === 'inventory_return') fail('Customer property never enters merchant inventory. Use the engraving return workflow.');
       const entries = await OrderSettlement.find({ orderId: id }).session(session).lean();
       if (['collection', 'refund'].includes(input.action)) {
         const repeated = entries.find(entry => entry.operationKey === input.operationKey);
@@ -78,12 +80,35 @@ export async function mutateOrderAccounting(id, owner, input, actor) {
         }
       }
       if (input.action === 'request_cancel' && order.cancellationRequestedAt) { result = order.toObject(); return; }
+      if (groupedOrder(order) && input.action === 'submit_proof' && order.proofHistory.some(entry => String(entry.uploadId) === input.uploadId && entry.scope !== input.scope)) fail('This proof already belongs to another payment obligation.');
       if (input.action === 'submit_proof' && order.proofHistory.some(entry => String(entry.uploadId) === input.uploadId)) { result = order.toObject(); return; }
       if (order.revision !== input.revision) throw commerceError(409, 'ORDER_CHANGED', 'Reload the order before saving.');
       const charges = order.charges.map(charge => ({ ...charge }));
       if (isEngravingOrder(order) && input.action === 'quote_charge' && (input.chargeId ? charges.find(charge => charge.id === input.chargeId)?.kind !== 'shipping' : input.kind !== 'shipping')) fail('Standalone engraving permits separately agreed logistics charges only. Engraving options never add to the service price.');
       const closed = ['cancelled', 'returned', 'delivery_failed'].includes(order.fulfillmentState);
       const now = new Date();
+      let groupProof;
+      if (groupedOrder(order) && ['submit_proof', 'collection'].includes(input.action)) {
+        const financial = accountingSummary(order, entries);
+        const obligation = financial.groups.find(group => group.id === input.scope) || financial.charges.find(charge => charge.id === input.scope && charge.state === 'accepted');
+        if (closed || !obligation || !obligation.authorized) fail('This payment obligation is not authorized for collection.');
+        const method = obligation.method || obligation.collectionMethod;
+        if (input.action === 'submit_proof' && method !== 'instapay') fail('Choose an authorized InstaPay obligation for this proof.');
+        if (input.action === 'collection') {
+          if (input.method !== method || input.amountPiastres > obligation.outstandingPiastres || !obligation.outstandingPiastres) fail('Collection must match the agreed method and cannot exceed the outstanding balance for this obligation.');
+          if (method === 'instapay') {
+            groupProof = [...order.proofHistory].reverse().find(proof => proof.scope === input.scope);
+            if (!groupProof || groupProof.state !== 'submitted' || entries.some(entry => String(entry.proofUploadId) === String(groupProof.uploadId))) fail('Submit fresh private proof for this obligation; an already processed proof cannot be reused.');
+          }
+          if (method === 'cod') {
+            const dispatched = input.scope === 'engraving' || input.scope === 'return_shipping'
+              ? order.engraving?.items.every(item => ['return_dispatched','returned_to_customer'].includes(item.stage))
+              : ['out_for_delivery','delivered','delivery_failed'].includes(order.merchandiseFulfillment);
+            if (!dispatched) fail('Record cash only after the applicable dispatch or actual handoff.');
+          }
+        }
+      }
+
       let event = 'order_updated', publicReason = '', proofIds;
       if (input.action === 'quote_charge') {
         if (closed || ['out_for_delivery', 'delivered'].includes(order.fulfillmentState)) fail('Charges cannot be changed after dispatch or closure.');
@@ -112,7 +137,7 @@ export async function mutateOrderAccounting(id, owner, input, actor) {
         Object.assign(charge, { acceptedQuotationVersion: charge.quotationVersion, collectionMethod: method, acceptanceChannel: admin ? 'whatsapp' : 'website', acceptanceNote: admin ? input.reason : null, state: input.accepted ? 'accepted' : 'declined', acceptedAt: now, acceptedBy: admin ? 'admin' : 'customer' });
         event = 'charge_accepted';
       } else if (input.action === 'submit_proof') {
-        if (order.orderChannel === 'owner_quotation' || order.paymentMethod !== 'instapay' || closed) fail('This order cannot accept an InstaPay proof. Contact the store for reconciliation.');
+        if (order.orderChannel === 'owner_quotation' || (!groupedOrder(order) && order.paymentMethod !== 'instapay') || closed) fail('This order cannot accept an InstaPay proof. Contact the store for reconciliation.');
         if (order.proofHistory.length >= 30) fail('Proof history requires administrator review.');
         const upload = await Upload.findOne({ _id: input.uploadId, owner, purpose: 'payment_proof', proofOrderId: order._id }).session(session).select('_id').lean();
         if (!upload) fail('Proof does not belong to this order and shopping session.');
@@ -120,12 +145,13 @@ export async function mutateOrderAccounting(id, owner, input, actor) {
         await retainUploads([input.uploadId], owner, order._id, { session });
         proofIds = [...new Set([...order.uploadIds.map(String), input.uploadId])];
         order.paymentProofId = input.uploadId; order.proofReviewRequired = true;
-        order.proofHistory.push({ uploadId: input.uploadId, at: now, state: 'submitted' });
+        order.proofHistory.push({ uploadId: input.uploadId, at: now, state: 'submitted', ...(groupedOrder(order) ? {scope:input.scope} : {}) });
         if (!['paid', 'refunded'].includes(order.paymentState)) order.paymentState = 'awaiting_verification';
         event = 'proof_submitted';
       } else if (input.action === 'reject_proof') {
-        if (!order.paymentProofId || order.proofHistory.at(-1)?.state !== 'submitted') fail('No current proof awaits review.');
-        order.proofHistory.push({ uploadId: order.paymentProofId, at: now, state: 'rejected' });
+        const pending = groupedOrder(order) ? [...order.proofHistory].reverse().find(proof => proof.scope === input.scope) : order.proofHistory.at(-1);
+        if (!pending || pending.state !== 'submitted') fail('No current proof awaits review.');
+        order.proofHistory.push({ uploadId: pending.uploadId, at: now, state: 'rejected', ...(groupedOrder(order) ? {scope:input.scope} : {}) });
         order.proofReviewRequired = false;
         const collected = accountingSummary(order, entries).merchandiseCollectedPiastres;
         if (collected < order.totals.totalPiastres) order.paymentState = collected > 0 ? 'partially_paid' : 'rejected'; publicReason = input.publicReason || 'Payment evidence requires attention. Contact the store before making another transfer.'; event = 'payment_rejected';
@@ -133,11 +159,11 @@ export async function mutateOrderAccounting(id, owner, input, actor) {
         if (!input.reconciled) fail('Confirm the actual receiving/refund account or COD collection before recording money.');
         const charge = charges.find(value => value.id === input.scope);
         const combined = input.action === 'collection' && input.scope === 'all_agreed';
-        if (input.action === 'collection' && (combined || input.scope === 'merchandise') && order.orderChannel !== 'owner_quotation' && order.paymentMethod === 'instapay' && !order.paymentProofId && !((closed || isEngravingOrder(order) && !engravingCollectionAllowed(order)) && input.exceptionConfirmed)) fail('Ordinary website InstaPay orders require their secure order-bound proof before initial verification. Late closed-order funds need explicit exception reconciliation.');
-        if (input.action === 'collection' && !combined && input.scope !== 'merchandise' && charge?.state !== 'accepted') fail('Additional money requires an accepted, separately recorded charge.');
+        if (!groupedOrder(order) && input.action === 'collection' && (combined || input.scope === 'merchandise') && order.orderChannel !== 'owner_quotation' && order.paymentMethod === 'instapay' && !order.paymentProofId && !((closed || isEngravingOrder(order) && !engravingCollectionAllowed(order)) && input.exceptionConfirmed)) fail('Ordinary website InstaPay orders require their secure order-bound proof before initial verification. Late closed-order funds need explicit exception reconciliation.');
+        if (!groupedOrder(order) && input.action === 'collection' && !combined && input.scope !== 'merchandise' && charge?.state !== 'accepted') fail('Additional money requires an accepted, separately recorded charge.');
         const method = input.scope === 'merchandise' ? order.paymentMethod : charge?.collectionMethod;
-        if (input.action === 'collection' && !combined && input.method !== method && !input.exceptionConfirmed) fail('Actual collection differs from the agreement. Explicitly reconcile the exception without rewriting the agreed method.');
-        if (input.action === 'collection' && input.method === 'cod' && !['out_for_delivery', 'delivered', 'delivery_failed'].includes(order.fulfillmentState)) fail('Record COD only after dispatch and actual collection.');
+        if (!groupedOrder(order) && input.action === 'collection' && !combined && input.method !== method && !input.exceptionConfirmed) fail('Actual collection differs from the agreement. Explicitly reconcile the exception without rewriting the agreed method.');
+        if (!groupedOrder(order) && input.action === 'collection' && input.method === 'cod' && !['out_for_delivery', 'delivered', 'delivery_failed'].includes(order.fulfillmentState)) fail('Record COD only after dispatch and actual collection.');
         let refundOf;
         let allocations = [{ scope: input.scope, amountPiastres: input.amountPiastres }];
         if (input.action === 'refund') {
@@ -172,7 +198,7 @@ export async function mutateOrderAccounting(id, owner, input, actor) {
         const [entry] = await OrderSettlement.create([{ orderId: id, operationKey: input.operationKey, requestHash: fingerprint(input), direction: input.action, scope: input.action === 'collection' ? input.scope : allocations.length > 1 ? 'all_allocated' : allocations[0].scope,
           allocations, reducePayable: input.action === 'refund' && input.reducePayable === true,
           amountPiastres: input.amountPiastres, method: input.method, reference, referenceKey: fingerprint({ method: input.method, reference }),
-          refundOf: refundOf?._id, recordedBy: actor._id, reason: input.reason }], { session });
+          refundOf: refundOf?._id, ...(groupProof ? {proofUploadId:groupProof.uploadId} : {}), recordedBy: actor._id, reason: input.reason }], { session });
         entries.push(entry.toObject());
         const financial = accountingSummary(order, entries), net = financial.merchandiseCollectedPiastres;
         if (order.orderChannel === 'owner_quotation') {
@@ -180,15 +206,16 @@ export async function mutateOrderAccounting(id, owner, input, actor) {
           const received = financial.collectedPiastres - financial.refundedPiastres;
           order.paymentState = input.action === 'refund' && received === 0 ? 'refunded' : remaining === 0 ? 'paid' : received > 0 ? 'partially_paid' : order.paymentState;
         } else order.paymentState = input.action === 'refund' && allocations.some(part => part.scope === 'merchandise') && net === 0 ? 'refunded' : net >= financial.merchandisePayablePiastres ? 'paid' : net > 0 ? 'partially_paid' : order.paymentState;
-        if (input.action === 'collection') order.proofReviewRequired = false;
+        if (input.action === 'collection') { order.proofReviewRequired = false; if (groupProof) order.proofHistory.push({uploadId:groupProof.uploadId, scope:input.scope, state:'verified', at:now}); }
         event = input.action === 'refund' ? 'refund_recorded' : 'payment_confirmed';
       } else if (input.action === 'request_cancel') {
         if (!['received', 'confirmed'].includes(order.fulfillmentState)) fail('Contact the store to review cancellation or return after preparation begins.');
         order.cancellationRequestedAt ||= now; event = 'cancellation_requested';
       } else if (input.action === 'cancel') {
+        if (groupedOrder(order) && order.merchandiseFulfillment && !['received','confirmed','preparing'].includes(order.merchandiseFulfillment)) fail('Dispatched merchandise requires delivery/return reconciliation.');
         if (!['received', 'confirmed', 'preparing'].includes(order.fulfillmentState)) fail('Dispatched orders need delivery/return reconciliation.');
         if (order.paymentMethod === 'instapay' && !input.reconciled) fail('Reconcile potentially received transfers before cancellation.');
-        if (order.fulfillmentState === 'preparing') {
+        if (order.fulfillmentState === 'preparing' || groupedOrder(order) && order.merchandiseFulfillment && order.merchandiseFulfillment !== 'received') {
           if (!input.inspected || input.quantities?.length !== order.inventoryClaims.length) fail('Work has started. Inspect and record the actual resellable units before cancellation.');
           const claims = order.inventoryClaims.map((claim, index) => {
             const quantity = input.quantities[index];
@@ -200,7 +227,7 @@ export async function mutateOrderAccounting(id, owner, input, actor) {
         } else await restockInventory(order, session);
         order.fulfillmentState = 'cancelled'; event = 'cancelled'; publicReason = input.publicReason || 'Order cancelled after review. Contact the store about any refund reconciliation.';
       } else if (input.action === 'inventory_return') {
-        if (!['returned', 'delivery_failed'].includes(order.fulfillmentState) || order.restockedAt || !input.inspected || input.quantities?.length !== order.inventoryClaims.length) fail('Inspect returned goods and record every inventory claim before reconciliation.');
+        if (!['returned', 'delivery_failed'].includes(groupedOrder(order) && order.merchandiseFulfillment ? order.merchandiseFulfillment : order.fulfillmentState) || order.restockedAt || !input.inspected || input.quantities?.length !== order.inventoryClaims.length) fail('Inspect returned goods and record every inventory claim before reconciliation.');
         const claims = order.inventoryClaims.map((claim, index) => {
           const quantity = input.quantities[index];
           if (!Number.isSafeInteger(quantity) || quantity < 0 || quantity > claim.quantity) fail('Return quantities cannot exceed the original allocated quantities.');
@@ -219,6 +246,8 @@ export async function mutateOrderAccounting(id, owner, input, actor) {
         }
         event = 'discount_reversed';
       } else fail('Unsupported accounting operation.');
+      if (groupedOrder(order)) { const latest = new Map(order.proofHistory.map(proof => [proof.scope, proof])); order.proofReviewRequired = [...latest.values()].some(proof => proof.state === 'submitted'); }
+      if (groupedOrder(order)) { order.charges = charges; order.paymentState = groupedPaymentState(order, accountingSummary(order, entries)); }
       const changedCharge = ['quote_charge', 'accept_charge'].includes(input.action) ? charges.find(charge => charge.id === input.chargeId) || charges.at(-1) : null;
       const history = { at: now, event, actor: admin ? `admin:${actor._id}` : 'customer', publicReason,
         ...(admin ? { internalNote: input.reason || '', actionDetails: { action: input.action, chargeId: changedCharge?.id || input.chargeId,
@@ -233,7 +262,7 @@ export async function mutateOrderAccounting(id, owner, input, actor) {
       Object.assign(order, update); order.history.push(history); order.revision++;
       if (admin) await recordAdminAudit(actor, { action: `order.${input.action}`, resourceType: 'order', resourceId: order._id, details: { revision: order.revision } }, { session });
       await enqueueOrderEvent(order, event, { session, eventVersion: order.revision });
-      if (order.paymentState === 'paid' && order.paymentMethod === 'instapay') await recordOrderTracking(order, { session });
+      if (order.paymentState === 'paid' && (order.paymentMethod === 'instapay' || groupedOrder(order))) await recordOrderTracking(order, { session });
       result = order.toObject();
     });
   } catch (error) {

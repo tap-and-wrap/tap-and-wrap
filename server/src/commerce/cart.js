@@ -32,7 +32,6 @@ async function quoteCartCore(owner, { session, strict = false } = {}, capability
   if (capability) assertGiftBoxCheckoutCapability(capability, owner);
   const cart = await readCart(owner, { session });
   const lines = cart?.items || [];
-  if (strict && lines.some(line => line.kind === 'engraving_service_v1') && lines.some(line => line.kind !== 'engraving_service_v1')) throw commerceError(409, 'ENGRAVING_MIXED_CHECKOUT', 'Order engraving separately from products and Gift Boxes. Your cart has not changed.');
   // This gate is unconditional, including synthetic policy fixtures. Existing
   // checkout/order services use strict quotes and can never consume gift claims.
   if (strict && !capability && !giftBoxRuntimeCommerceOpen(env) && lines.some(line => line.kind === 'gift_box_v2')) throw commerceError(409, 'GIFT_BOX_CHECKOUT_DISABLED', 'Gift-box checkout is not available. Ordinary products can be ordered separately.');
@@ -100,7 +99,7 @@ export async function cartResponse(owner) {
   const hasGifts = items.some(item => item.kind === 'gift_box_v2');
   const paths = await attachProductPaths(items.filter(item => item.kind === 'product' && item.slug).map(item => ({ _id: item.productId, slug: item.slug })));
   const byProduct = new Map(paths.map(product => [String(product._id), product.publicPath]));
-  return { cart: { items: items.map(item => item.kind === 'product' && item.slug && byProduct.get(String(item.productId)) ? { ...item, publicPath: byProduct.get(String(item.productId)) } : item), subtotalPiastres: quote.subtotalPiastres, quantity: quote.quantity }, mixedCheckout, checkoutEnabled: env.checkoutEnabled === true && items.every(item => item.valid) && !mixedCheckout && (!hasEngraving || env.engravingEnabled === true) && (!hasGifts || giftBoxRuntimeCommerceOpen(env) && items.filter(item => item.kind === 'gift_box_v2').every(item => item.checkoutAllowed === true)), giftBoxCheckoutBlocked: hasGifts && (!giftBoxRuntimeCommerceOpen(env) || items.some(item => item.kind === 'gift_box_v2' && item.checkoutAllowed !== true)),
+  return { cart: { items: items.map(item => item.kind === 'product' && item.slug && byProduct.get(String(item.productId)) ? { ...item, publicPath: byProduct.get(String(item.productId)) } : item), subtotalPiastres: quote.subtotalPiastres, quantity: quote.quantity }, mixedCheckout, checkoutEnabled: env.checkoutEnabled === true && items.every(item => item.valid) && (!hasEngraving || env.engravingEnabled === true) && (!hasGifts || giftBoxRuntimeCommerceOpen(env) && items.filter(item => item.kind === 'gift_box_v2').every(item => item.checkoutAllowed === true)), giftBoxCheckoutBlocked: hasGifts && (!giftBoxRuntimeCommerceOpen(env) || items.some(item => item.kind === 'gift_box_v2' && item.checkoutAllowed !== true)),
     // A UI scope identifier only, never an authorization credential or raw owner.
     checkoutOwnerKey: createHash('sha256').update(`checkout-context:${owner}`).digest('hex') };
 }

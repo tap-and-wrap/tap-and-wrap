@@ -1,3 +1,4 @@
+import { groupedOrder, groupedAccountingSummary } from './payment-groups.js';
 import { engravingCollectionAllowed } from '../engraving/payment-policy.js';
 import { validEngravingLine } from '../engraving/contracts.js';
 import { orderItemTypes, orderActionLabel } from './order-list.js';
@@ -108,6 +109,7 @@ export function presentOrderHistory(history = [], { admin = false } = {}) {
   }));
 }
 export function presentOrder(order, { admin = false } = {}) {
+  const financial = groupedOrder(order) ? order.financialSummary || groupedAccountingSummary(order, []) : null;
   const rejected = order.paymentMethod === 'instapay' && order.paymentState === 'rejected';
   const publicRejection = rejected ? [...(order.history || [])].reverse().find(entry => (entry.to?.paymentState === 'rejected' || entry.event === 'payment_rejected') && typeof entry.publicReason === 'string' && entry.publicReason.trim())?.publicReason : null;
   const totals = { ...pick(order.totals, ['subtotalPiastres', 'discountPiastres', 'shippingPiastres', 'totalPiastres']),
@@ -115,17 +117,18 @@ export function presentOrder(order, { admin = false } = {}) {
   return { id: String(order._id), _id: String(order._id), orderNumber: order.orderNumber,
     customer: pick(order.customer, ['name', 'email', 'phone', 'governorate', 'address', 'notes']),
     lines: (order.lines || []).map(line => orderLine(line, { admin })),
-    collectionAuthorized: engravingCollectionAllowed(order),
-    engravingWorkflow: order.engraving ? { collectionAuthorized: order.engraving.collectionAuthorized === true, items: (order.engraving.items || []).map(item => ({ ...pick(item, ['itemKey','stage','inCustody','receivedAt','returnedAt','returnArrangement']), ...(admin ? pick(item, ['condition','accessories','inspectionApproved']) : {}), proposal: item.proposal ? { ...pick(item.proposal, ['version','placementLabel','publicDetails','acceptedAt']), ...(admin ? pick(item.proposal, ['privateEvidence']) : {}) } : null, history: (item.history || []).map(entry => ({ ...pick(entry, ['action','at','publicReason']), ...(admin ? pick(entry, ['internalNote']) : {}) })) })) } : null,
+    collectionAuthorized: financial ? financial.collectionAuthorized : engravingCollectionAllowed(order),
+    ...(financial ? {paymentObligations:financial.groups, merchandiseFulfillment:order.merchandiseFulfillment, paymentInstructionsByGroup:[...financial.groups, ...financial.charges.filter(charge => charge.state === 'accepted')].filter(group => group.authorized && (group.method || group.collectionMethod) === 'instapay' && group.outstandingPiastres > 0 && !['cancelled','returned'].includes(order.fulfillmentState)).map(group => ({scope:group.id,label:group.label,destination:'01060673073',amountPiastres:group.outstandingPiastres,orderReference:order.orderNumber}))} : {}),
+    engravingWorkflow: order.engraving ? { ...(groupedOrder(order) ? {collectionMethod:order.engraving.collectionMethod, codCommitment:order.engraving.codCommitment ? pick(order.engraving.codCommitment, ['ownerAuthorizedAt','offeredAt','customerAccepted','acceptedAt','channel']) : null} : {}), collectionAuthorized: order.engraving.collectionAuthorized === true, items: (order.engraving.items || []).map(item => ({ ...pick(item, ['itemKey','stage','inCustody','receivedAt','returnedAt','returnArrangement']), ...(admin ? pick(item, ['condition','accessories','inspectionApproved']) : {}), proposal: item.proposal ? { ...pick(item.proposal, ['version','placementLabel','publicDetails','acceptedAt']), ...(admin ? pick(item.proposal, ['privateEvidence']) : {}) } : null, history: (item.history || []).map(entry => ({ ...pick(entry, ['action','at','publicReason']), ...(admin ? pick(entry, ['internalNote']) : {}) })) })) } : null,
     proofStatus: order.proofHistory?.at(-1)?.state || null,
     orderChannel: order.orderChannel || 'website', ...(admin && order.serviceRequestId ? { serviceRequestId: String(order.serviceRequestId) } : {}), allowedPaymentMethods: order.allowedPaymentMethods || [], accountingVersion: order.accountingVersion || 0, followUpDueAt: order.followUpDueAt, cancellationRequestedAt: order.cancellationRequestedAt,
-    shipping: order.accountingVersion === 1 ? (order.charges || []).filter(charge => charge.kind === 'shipping').map(charge => pick(charge, ['id', 'state', 'amountPiastres', 'collectionMethod', 'acceptedAt']))[0] : null,
-    paymentInstructions: engravingCollectionAllowed(order) && order.accountingVersion === 1 && order.orderChannel !== 'owner_quotation' && order.paymentMethod === 'instapay' ? { destination: '01060673073', amountPiastres: order.totals.totalPiastres, orderReference: order.orderNumber } : null,
+    shipping: [1, 2].includes(order.accountingVersion) ? (order.charges || []).filter(charge => charge.kind === 'shipping').map(charge => pick(charge, ['id', 'state', 'amountPiastres', 'collectionMethod', 'acceptedAt']))[0] : null,
+    paymentInstructions: !groupedOrder(order) && engravingCollectionAllowed(order) && [1, 2].includes(order.accountingVersion) && order.orderChannel !== 'owner_quotation' && order.paymentMethod === 'instapay' ? { destination: '01060673073', amountPiastres: order.totals.totalPiastres, orderReference: order.orderNumber } : null,
     totals, paymentMethod: order.paymentMethod, paymentState: order.paymentState, fulfillmentState: order.fulfillmentState,
     history: presentOrderHistory(order.history, { admin }), createdAt: order.createdAt, updatedAt: order.updatedAt, revision: order.revision,
-    canCancel: ['received', 'confirmed'].includes(order.fulfillmentState) && (order.accountingVersion === 1 || order.paymentState !== 'paid'),
-    ...(rejected ? { paymentAttention: { code: 'PAYMENT_PROOF_REJECTED', message: 'Payment proof requires attention. Contact the store with your order reference before making another transfer.', publicReason: publicRejection || null, receiptReplacementEnabled: order.accountingVersion === 1 } } : {}),
-    ...(admin ? { proofAvailable: Boolean(order.paymentProofId), uploadIds: (order.uploadIds || []).map(String) } : {}),
+    canCancel: ['received', 'confirmed'].includes(order.fulfillmentState) && ([1, 2].includes(order.accountingVersion) || order.paymentState !== 'paid'),
+    ...(rejected ? { paymentAttention: { code: 'PAYMENT_PROOF_REJECTED', message: 'Payment proof requires attention. Contact the store with your order reference before making another transfer.', publicReason: publicRejection || null, receiptReplacementEnabled: [1, 2].includes(order.accountingVersion) } } : {}),
+    ...(admin ? { proofAvailable: Boolean(order.paymentProofId), ...(groupedOrder(order) ? {proofs:[...new Map((order.proofHistory || []).map(proof => [String(proof.uploadId),proof])).values()].map(proof => ({id:String(proof.uploadId),scope:proof.scope,state:proof.state}))} : {}), uploadIds: (order.uploadIds || []).map(String) } : {}),
   };
 }
 export function presentOrderSummary(order, { admin = false } = {}) {
