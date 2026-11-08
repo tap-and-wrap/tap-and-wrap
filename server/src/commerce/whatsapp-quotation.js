@@ -2,6 +2,15 @@ import { engravingCollectionAllowed } from '../engraving/payment-policy.js';
 const money = value => `EGP ${(value / 100).toFixed(2)}`;
 // Derived only from saved records. Opening the link never records send/delivery/acceptance.
 export function whatsappQuotation(order, accounting) {
+  if (order.accountingVersion === 2) {
+    const lines = [`Tap & Wrap | Order #${order.orderNumber}`];
+    for (const group of accounting?.groups || []) lines.push(`${group.label}: ${money(group.outstandingPiastres)} outstanding. ${!group.authorized ? 'Deferred until inspection, final design acceptance and payment authorization. Do not transfer this amount.' : group.method === 'cod' ? 'Cash at the agreed delivery / handoff. A commitment is not cash collected.' : 'Authorized InstaPay obligation. Transfer only its outstanding amount using your order reference.'}`);
+    for (const charge of accounting?.charges || []) lines.push(`${charge.label}: ${charge.state === 'accepted' ? `${money(charge.outstandingPiastres)} outstanding (${charge.collectionMethod})` : 'Pending customer agreement; not payable.'}`);
+    if (accounting?.amountDueNowPiastres > 0) lines.push(`Authorized InstaPay outstanding total: ${money(accounting.amountDueNowPiastres)}. Destination 01060673073. Submit proof against its payment obligation on your secure order page. Never pay deferred engraving or repeat a transfer after a failed response.`);
+    lines.push(`Recorded collections: ${money(accounting?.collectedPiastres || 0)}. Recorded refunds: ${money(accounting?.refundedPiastres || 0)}.`);
+    const text = lines.join('\n'), phone = String(order.customer?.phone || '').replace(/\D/g, '');
+    return {text,url:/^201[0125][0-9]{8}$/.test(phone) ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : null,deliveryConfirmed:false};
+  }
   if (!engravingCollectionAllowed(order)) {
     const text = `Tap & Wrap | Order #${order.orderNumber}\nEngraving service: ${money(order.totals.totalPiastres)}. Payment is not authorized. Do not transfer yet. Physical inspection and final design acceptance are required first.`;
     const phone = String(order.customer?.phone || '').replace(/\D/g, '');

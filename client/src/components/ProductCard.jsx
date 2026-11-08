@@ -17,7 +17,7 @@ export default function ProductCard({ product }) {
 
   return (
     <article ref={cardRef} className="catalog-card">
-      <Link className="catalog-card-image" to={detailUrl} aria-label={`View ${product.name}`}>
+      <div className="catalog-card-image">
         {product.mainImageUrl ? (
           <img src={product.mainImageUrl} alt={product.name} width="600" height="600" loading="lazy" decoding="async" />
         ) : <span className="catalog-image-placeholder" aria-hidden="true">Image coming soon</span>}
@@ -25,10 +25,10 @@ export default function ProductCard({ product }) {
           {!enquiryRequired && product.bestSeller === true && <span>Best Seller</span>}
           {enquiryRequired ? <span>{approvedPrice ? 'Confirm availability' : 'Price on Request'}</span> : !orderingAvailable && <span>Out of Stock</span>}
         </span>
-      </Link>
+      </div>
       <div className="catalog-card-body">
         {product.category?.name && <p className="catalog-card-category">{product.category.name}</p>}
-        <h3><Link to={detailUrl}>{product.name}</Link></h3>
+        <h3><Link className="catalog-card-link" to={detailUrl}><span className="catalog-card-title">{product.name}</span></Link></h3>
         <p className="catalog-price">
           <span>{approvedPrice ? formatCatalogPrice(product.pricePiastres) : 'Price on Request'}</span>
           {approvedPrice && Number.isSafeInteger(product.compareAtPiastres) && product.compareAtPiastres > product.pricePiastres && (

@@ -135,3 +135,5 @@
   .tw-ribbon-opening { display: none; }
   .tw-ribbon-opening * { animation: none !important; }
 }
+
+.tw-ribbon-opening:not(.is-playing) * { animation-play-state: paused; }

@@ -40,6 +40,7 @@ export function orderActionLabel(order) {
   if (stages.includes('return_arranged')) return 'Dispatch or hand over item';
   if (stages.includes('return_dispatched')) return 'Confirm item returned';
   if (stages.includes('final_design_confirmed') && order.engraving?.collectionAuthorized !== true) return 'Review payment authorization';
+  if (order.engraving?.collectionMethod === 'cod' && !order.engraving.codCommitment?.customerAccepted) return 'Awaiting COD arrangement acceptance';
   if (!order.initialContactAt && !order.serviceRequestId) return 'Contact customer';
   if (order.responseState === 'requires_action') return 'Respond to customer';
   if (orderItemTypes(order).includes('gift_box') && ['received', 'confirmed', 'preparing'].includes(order.fulfillmentState)) return 'Prepare Gift Box';

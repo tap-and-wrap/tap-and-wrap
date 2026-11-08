@@ -18,10 +18,6 @@ export default function useStaggeredMenuMotion(root, onClose) {
       [...dialog.querySelectorAll('.sm-prelayer')].forEach((node,index)=>animate(node,[{transform:'translateX(-105%)'},{transform:'translateX(0)'}],{duration:500,delay:index*70,easing}));
       animate(dialog.querySelector('.sm-panel'),[{transform:'translateX(-105%)'},{transform:'translateX(0)'}],{duration:650,delay:220,easing});
       [...dialog.querySelectorAll('.sm-link-label>span')].forEach((node,index)=>animate(node,[{transform:'translateY(140%) rotate(10deg)'},{transform:'translateY(0) rotate(0)'}],{duration:1000,delay:320+index*80,easing}));
-      [...dialog.querySelectorAll('.sm-link-number')].forEach((node,index)=>animate(node,[{opacity:0},{opacity:1}],{duration:600,delay:420+index*70,easing}));
-      animate(dialog.querySelector('.sm-socials'),[{opacity:0,transform:'translateY(25px)'},{opacity:1,transform:'translateY(0)'}],{duration:550,delay:480,easing});
-      animate(dialog.querySelector('.menu-close .menu-glyph'),[{transform:'rotate(0deg)'},{transform:'rotate(135deg)'}],{duration:650,easing});
-      animate(dialog.querySelector('.menu-close .menu-text-inner'),[{transform:'translateY(0)'},{transform:'translateY(-50%)'}],{duration:500,delay:80,easing});
     }
     const reduce=()=>{if(query.matches){animations.current.forEach(a=>{try{a.finish();}catch{a.cancel();}});if(closingRef.current)finish();}};
     query.addEventListener('change',reduce);
@@ -33,8 +29,6 @@ export default function useStaggeredMenuMotion(root, onClose) {
     const nodes=[...root.current.querySelectorAll('.sm-prelayer'),root.current.querySelector('.sm-panel')], positions=nodes.map(node=>getComputedStyle(node).transform);
     animations.current.forEach(a=>a.cancel());
     const exit=nodes.map((node,index)=>node.animate([{transform:positions[index]},{transform:'translateX(-105%)'}],{duration:320,easing:'cubic-bezier(.7,0,1,.5)',fill:'both'}));
-    exit.push(root.current.querySelector('.menu-close .menu-glyph').animate([{transform:'rotate(135deg)'},{transform:'rotate(0deg)'}],{duration:280,fill:'both'}));
-    exit.push(root.current.querySelector('.menu-close .menu-text-inner').animate([{transform:'translateY(-50%)'},{transform:'translateY(0)'}],{duration:280,fill:'both'}));
     animations.current=exit;Promise.allSettled(exit.map(a=>a.finished)).then(finish);
   }
   return {closing,close};

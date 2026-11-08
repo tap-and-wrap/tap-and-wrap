@@ -55,7 +55,7 @@ for (const width of [320, 375, 390, 440, 768, 1024, 1440, 1920]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     if (width >= 1024) {
       await expect(page.locator('.desktop-navigation')).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Open menu', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Open menu', exact: true })).toHaveCount(0);
       expect(box.x).toBeLessThan(width / 4);
       const nav = await page.locator('.desktop-navigation').boundingBox();
       const actions = await page.locator('.header-actions').boundingBox();
@@ -65,7 +65,7 @@ for (const width of [320, 375, 390, 440, 768, 1024, 1440, 1920]) {
       await expect(page.getByRole('button', { name: 'Open menu', exact: true })).toBeVisible();
       await expect(page.locator('.desktop-navigation')).toBeHidden();
       await page.getByRole('button', { name: 'Open menu', exact: true }).click();
-      const drawer = page.getByRole('dialog', { name: 'Explore Tap & Wrap' });
+      const drawer = page.getByRole('dialog', { name: 'Main menu' });
       await expect(drawer).toBeVisible();
       expect(await drawer.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
       await page.keyboard.press('Escape'); await expect(drawer).toHaveCount(0);
@@ -95,7 +95,7 @@ for (const role of [null, 'customer', 'admin']) {
       await expect(nav.getByRole('link', { name: 'Dashboard', exact: true })).toHaveCount(0);
       await expect(nav.getByRole('link', { name: 'Contact', exact: true })).toHaveCount(0);
       if (width < 1024) {
-        const drawer = page.getByRole('dialog', { name: 'Explore Tap & Wrap' });
+        const drawer = page.getByRole('dialog', { name: 'Main menu' });
         await expect(drawer).toBeVisible();
         await expect(drawer.getByRole('link', { name: 'Account', exact: true })).toHaveCount(0);
         await expect(drawer.getByRole('button', { name: 'Sign out', exact: true })).toHaveCount(0);
@@ -143,7 +143,7 @@ test('mobile navigation supports keyboard containment, padding, backdrop, Escape
   await page.setViewportSize({ width: 390, height: 844 }); await page.goto('/shop');
   const trigger = page.getByRole('button', { name: 'Open menu', exact: true });
   await trigger.click();
-  const dialog = page.getByRole('dialog', { name: 'Explore Tap & Wrap' });
+  const dialog = page.getByRole('dialog', { name: 'Main menu' });
   await expect(dialog).toBeVisible();
   expect(await page.evaluate(() => document.body.style.overflow)).toBe('hidden');
   for (let index = 0; index < 12; index++) await page.keyboard.press('Tab');
@@ -205,7 +205,7 @@ test('announcement marquee repeats only one message with no search or dashboard 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
   await page.getByRole('button', { name: 'Open menu', exact: true }).click();
-  const drawer = page.getByRole('dialog', { name: 'Explore Tap & Wrap' });
+  const drawer = page.getByRole('dialog', { name: 'Main menu' });
   await expect(drawer).toBeVisible();
   await expect(drawer.getByRole('link', { name: 'Account', exact: true })).toHaveCount(0);
   await expect(drawer.getByRole('button', { name: 'Sign out', exact: true })).toHaveCount(0);

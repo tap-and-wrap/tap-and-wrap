@@ -94,7 +94,7 @@ export async function captureAction(req, name, parameters, options) {
 export async function recordOrderTracking(order, { session } = {}) {
   if (!order.trackingConsentId || !trackingSettings().enabled) return null;
   const parameters = { ...orderMonetaryParameters(order.lines, order.totals.totalPiastres), payment_method: order.paymentMethod };
-  const qualifies = engravingCollectionAllowed(order) && (order.paymentMethod === 'cod' || order.paymentState === 'paid');
+  const qualifies = engravingCollectionAllowed(order) && (order.accountingVersion === 2 ? order.paymentState === 'paid' : order.paymentMethod === 'cod' || order.paymentState === 'paid');
   return recordQualifiedEvent(order.trackingConsentId, qualifies ? 'Purchase' : 'OrderSubmitted', parameters, { sourcePath: '/checkout', dedupKey: String(order._id), session });
 }
 export async function ownedPurchaseReceipt(order, req) {

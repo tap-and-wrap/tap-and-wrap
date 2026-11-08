@@ -33,8 +33,8 @@ export default function CartPage() {
         </CartLine>;
       })}</section>
       <aside className="commerce-summary"><h2>Order Summary</h2><dl><div><dt>Subtotal</dt><dd>{money(cart.subtotalPiastres)}</dd></div><div><dt>Delivery</dt><dd>Confirmed at checkout</dd></div></dl><p className="commerce-muted">Eligible discounts are applied at checkout.</p>
-        {mixedCheckout&&<><p role="alert">Engraving needs a separate order. Inspection and design acceptance come before payment.</p><p className="commerce-muted">Your cart is unchanged. To continue, keep either your engraving requests or your products and Gift Boxes in this cart.</p></>}
-        {gifts&&!mixedCheckout&&<p className="commerce-muted">Orders containing a Gift Box use InstaPay. Payment proof is reviewed before confirmation.</p>}
+        {mixedCheckout&&<p className="commerce-muted">One order, with engraving payment deferred until inspection and design acceptance.</p>}
+        {gifts&&!mixedCheckout&&<p className="commerce-muted">Gift Boxes support COD or InstaPay at checkout. Transfers are verified before preparation.</p>}
         {engraving&&!mixedCheckout&&<p className="commerce-muted">Submit your engraving request first. Payment is requested only after inspection, design review and your acceptance.</p>}
         {invalid&&<p className="form-error" role="alert">Review unavailable items before checkout.</p>}
         {checkoutEnabled&&!invalid?<Link className="button button-primary" to="/checkout">Proceed to Checkout</Link>:<><button className="button button-primary" disabled>Checkout unavailable</button>{!mixedCheckout&&!invalid&&<p className="commerce-muted">Online ordering is currently unavailable for this cart. Your items remain saved.</p>}</>}

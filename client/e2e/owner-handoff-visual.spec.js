@@ -21,7 +21,7 @@ for(const width of widths)test(`Kalam storefront and account navigation at ${wid
     await expect.poll(()=>fontUsed(page,'main h1')).toContain('Kalam');await noOverflow(page);await screenshot(page,info,`${width}-${name}`);
   }
   if(width<1024){
-    const opener=page.getByRole('button',{name:'Open menu',exact:true});await opener.click();const dialog=page.getByRole('dialog',{name:'Explore Tap & Wrap'});
+    const opener=page.getByRole('button',{name:'Open menu',exact:true});await opener.click();const dialog=page.getByRole('dialog',{name:'Main menu'});
     await expect(dialog).toBeVisible();await expect(dialog.getByRole('button',{name:'Close menu'})).toBeFocused();
     expect(await fontUsed(page,'.drawer-nav a')).toContain('Kalam');await screenshot(page,info,`${width}-menu`,false);
     await page.keyboard.press('Shift+Tab');expect(await dialog.evaluate(node=>node.contains(document.activeElement))).toBe(true);
@@ -44,7 +44,7 @@ for(const width of widths)test(`Kalam owner workspace and role menu at ${width}`
   await page.setViewportSize({width,height:900});await ownerFixture(page);
   for(const [path,name] of [['/admin','dashboard'],['/admin/products','admin-products'],['/admin/payment','admin-payment']]){await page.goto(path);await expect(page.locator('main h1').first()).toBeVisible();await page.evaluate(()=>document.fonts.load('400 18px Kalam'));await expect.poll(()=>fontUsed(page,'main h1')).toContain('Kalam');await noOverflow(page);if(name==='admin-products')expect(await page.locator('.admin-products-table tbody td').nth(1).evaluate(node=>getComputedStyle(node).whiteSpace)).toBe('nowrap');await screenshot(page,info,`${width}-${name}`);}
   await expect(page.getByRole('link',{name:'Home — storefront'})).toHaveAttribute('href','/');
-  if(width<1024){await page.getByRole('button',{name:'Open menu'}).click();const dialog=page.getByRole('dialog',{name:'Your store'});await expect(dialog.locator('nav>ul>li')).toHaveCount(8);await dialog.getByText('Customization',{exact:true}).click();await expect(dialog.getByRole('link',{name:'Standalone Engraving',exact:true})).toBeVisible();await screenshot(page,info,`${width}-admin-menu`,false);await page.keyboard.press('Escape');await expect(dialog).toHaveCount(1);await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);}
+  if(width<1024){await page.getByRole('button',{name:'Open menu'}).click();const dialog=page.getByRole('dialog',{name:'Administration menu'});await expect(dialog.locator('nav>ul>li')).toHaveCount(8);await dialog.getByText('Customization',{exact:true}).click();await expect(dialog.getByRole('link',{name:'Standalone Engraving',exact:true})).toBeVisible();await screenshot(page,info,`${width}-admin-menu`,false);await page.keyboard.press('Escape');await expect(dialog).toHaveCount(1);await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);}
   await page.goto('/');await expect(page.getByRole('link',{name:'Account',exact:true})).toHaveAttribute('href','/admin');
 });
 

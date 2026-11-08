@@ -59,6 +59,9 @@ export function initializePrerender(root, documentObject = document) {
   };
   const observer = new MutationObserver(ready);
   observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['aria-busy', 'hidden'] });
-  timer = setTimeout(reveal, 6000);
+  // An elapsed deadline is not proof that React produced usable content.
+  // Keep the ordinary, navigable static document if initialization fails;
+  // the decorative opening has its own independent bounded release.
+  timer = setTimeout(ready, 6000);
   return reveal;
 }

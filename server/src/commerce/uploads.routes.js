@@ -18,6 +18,7 @@ const signSchema = z.object({
   productId: z.string().regex(/^[a-f0-9]{24}$/i).optional(),
   giftBoxId: z.string().regex(/^box-(?:[1-9]|1[0-3])$/).optional(),
   fieldKey: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/).optional(),
+  paymentScope: z.string().min(1).max(80).optional(),
   orderId: z.string().regex(/^[a-f0-9]{24}$/i).optional(),
   checkoutKey: z.uuid().optional(),
   templateId: z.string().regex(/^[a-f0-9]{24}$/i).optional(),

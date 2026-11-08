@@ -185,7 +185,7 @@ for (const width of [320, 768, 1440]) {
     if (width >= 1024) {
       expect(box.x).toBeLessThan(width / 4);
       await expect(page.locator('.desktop-navigation')).toBeVisible();
-      await expect(page.locator('.desktop-menu-opener')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Open menu', exact: true })).toHaveCount(0);
     } else {
       await expect(page.getByRole('button', { name: 'Open menu', exact: true })).toBeVisible();
       expect(box.x).toBeLessThan(width / 2);

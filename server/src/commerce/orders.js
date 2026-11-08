@@ -1,3 +1,4 @@
+import { initialPaymentGroups, groupedOrder, groupedPaymentState, overallFulfillment } from './payment-groups.js';
 import { engravingSnapshot } from '../engraving/pricing.js';
 import { currentConfiguration } from '../engraving/configuration.js';
 import { initialEngravingWorkflow } from '../engraving/workflow.js';
@@ -42,7 +43,6 @@ export async function checkoutQuote(owner, input, options = {}) { return checkou
 async function checkoutQuoteCore(owner, input, { session, userId } = {}, capability = null) {
   if (capability) assertGiftBoxCheckoutCapability(capability, owner);
   const cart = capability ? await quoteCartForGiftBoxDisposableCheckout(owner, { session, capability }) : await quoteCart(owner, { session, strict: true });
-  if (cart.items.some(line => line.kind === 'engraving_service_v1') && input.paymentMethod !== 'instapay') throw commerceError(409, 'ENGRAVING_PAYMENT_METHOD', 'Engraving uses InstaPay after inspection and approval.');
   if (!cart.items.length) throw commerceError(400, 'CART_EMPTY', 'Add an eligible product before checking out.');
   const policyFences = await readGiftBoxCheckoutPolicyFences(cart.items, { session });
   const promotions = await calculatePromotions(cart.items, { code: input.discountCode, session, userId });
@@ -74,7 +74,7 @@ async function prepareCheckoutCore(owner, input, userId, capability = null) {
   assertDatabaseWriteAllowed(CheckoutIntent.db, env);
   await CheckoutIntent.updateOne({ owner, checkoutKey: input.checkoutKey, state: 'open' }, { $set: { fingerprint: quote.fingerprint, quote: quote.totals, paymentMethod: input.paymentMethod, expiresAt },
     $setOnInsert: { owner, checkoutKey: input.checkoutKey, state: 'open' } }, { upsert: true });
-  return { ...quote.totals, totals: quote.totals, fingerprint: quote.fingerprint, expiresAt };
+  return { ...quote.totals, totals: quote.totals, paymentGroups: initialPaymentGroups(quote.cart.items, quote.totals, input.paymentMethod), fingerprint: quote.fingerprint, expiresAt };
 }
 export async function placeOrder(owner, input, userId, { trackingConsentId = null } = {}) {
   return placeOrderCore(owner, input, userId, { trackingConsentId });
@@ -124,8 +124,7 @@ async function placeOrderCore(owner, input, userId, { trackingConsentId = null }
         for (const line of quote.cart.items.filter(line => line.kind === 'engraving_service_v1')) await currentConfiguration(line.specification.typeId, { session, fence: true });
         const hasGifts = quote.cart.items.some(line => line.kind === 'gift_box_v2');
         const personalized = hasEngraving || hasGifts || quote.cart.items.some(line => line.requiresPersonalization || Object.keys(line.personalization || {}).length > 0 || line.customizationSnapshot);
-        if (hasGifts && input.paymentMethod !== 'instapay') throw commerceError(409, 'GIFT_BOX_PAYMENT_METHOD_UNAVAILABLE', 'Configured gifts currently require InstaPay. No other payment method has been authorized.');
-        if (personalized && input.paymentMethod === 'cod') throw commerceError(409, 'QUOTATION_REQUIRED', 'Personalized COD requires an owner-authorized quotation before acceptance. Choose InstaPay or contact the store.');
+        if (quote.cart.items.some(line => !['gift_box_v2','engraving_service_v1'].includes(line.kind) && (line.requiresPersonalization || Object.keys(line.personalization || {}).length > 0 || line.customizationSnapshot)) && input.paymentMethod === 'cod') throw commerceError(409, 'QUOTATION_REQUIRED', 'Personalized COD requires an owner-authorized quotation before acceptance. Choose InstaPay or contact the store.');
         await runGiftBoxCheckoutTestHook(capability, owner, 'beforeInventory', { session, quote });
         const inventoryClaims = await consumeInventory(quote.cart.items, quote.totals.applied, session);
         await runGiftBoxCheckoutTestHook(capability, owner, 'afterInventory', { session, quote });
@@ -133,7 +132,7 @@ async function placeOrderCore(owner, input, userId, { trackingConsentId = null }
         await fenceGiftBoxCheckoutPolicies(quote.policyFences, session);
         await fenceGiftBoxPersonalization(quote.cart.items, session);
         const order = new Order({ ...(hasEngraving ? { cartAddOperations: quote.cart.document.addOperations } : {}), ...(hasEngraving ? { engraving: initialEngravingWorkflow(quote.cart.items) } : {}), owner, userId: userId || null, trackingConsentId, checkoutKey: input.checkoutKey, requestHash, orderNumber: generateOrderNumber(), customer: normalized.customer,
-          lines: quote.cart.items.map(snapshotOrderLine), totals: quote.totals, inventoryClaims, uploadIds, accountingVersion: 1, personalized, allowedPaymentMethods: personalized ? ['instapay'] : ['cod', 'instapay'], charges: [{ ...pendingShipping(), ...(hasEngraving ? { label: 'Return delivery' } : {}) }], followUpDueAt: new Date(Date.now() + 12 * 3600000),
+          lines: quote.cart.items.map(snapshotOrderLine), totals: quote.totals, inventoryClaims, uploadIds, accountingVersion: hasEngraving || hasGifts ? 2 : 1, ...((hasEngraving || hasGifts) ? { paymentGroups: initialPaymentGroups(quote.cart.items, quote.totals, input.paymentMethod), ...(quote.cart.items.some(line => line.kind !== 'engraving_service_v1') ? { merchandiseFulfillment: 'received' } : {}) } : {}), personalized, allowedPaymentMethods: personalized && !hasEngraving && !hasGifts ? ['instapay'] : ['cod', 'instapay'], charges: [...(quote.cart.items.some(line => line.kind !== 'engraving_service_v1') ? [pendingShipping()] : []), ...(hasEngraving ? [{ ...pendingShipping(), id: 'return_shipping', label: 'Item handoff / return' }] : [])], followUpDueAt: new Date(Date.now() + 12 * 3600000),
           paymentMethod: input.paymentMethod, paymentState: hasEngraving ? 'unpaid' : quote.totals.totalPiastres === 0 ? 'paid' : input.paymentMethod === 'instapay' ? 'awaiting_transfer' : 'unpaid',
           history: [{ at: new Date(), event: 'order_received', actor: userId ? 'customer' : 'guest' }] });
         for (const discount of quote.totals.applied.filter(value => value.kind === 'discount')) {
@@ -189,10 +188,32 @@ export async function changeOrderState(id, owner, input, actor) {
   await mongoose.connection.transaction(async session => {
     const order = await Order.findOne({ _id: id, ...(actor?.role === 'admin' ? {} : { owner }) }).session(session);
     if (!order) throw commerceError(404, 'ORDER_NOT_FOUND', 'Order not found.');
-    if (isEngravingOrder(order)) throw commerceError(409, 'ENGRAVING_WORKFLOW_REQUIRED', 'Use the dedicated customer-item workflow; order receipt is not physical receipt.');
+    if (groupedOrder(order)) {
+      if (actor?.role !== 'admin' || input.paymentState || !order.paymentGroups.some(group => group.id === 'merchandise') || !input.fulfillmentState || input.fulfillmentState === 'cancelled') throw commerceError(409, 'GROUP_ACTION_REQUIRED', 'Use merchandise fulfillment, engraving custody or reconciled accounting as appropriate.');
+      if (order.revision !== input.revision) throw commerceError(409, 'ORDER_CHANGED', 'Reload the order before saving.');
+      const current = order.merchandiseFulfillment || 'received', next = input.fulfillmentState;
+      if (!fulfillmentNext[current]?.includes(next)) throw commerceError(409, 'INVALID_ORDER_TRANSITION', 'This merchandise transition is not permitted.');
+      const financial = await orderAccounting(order, {session});
+      const group = financial.groups.find(group => group.id === 'merchandise');
+      if (!['returned','delivery_failed'].includes(next) && group.method === 'instapay' && group.outstandingPiastres > 0) throw commerceError(409, 'PAYMENT_VERIFICATION_REQUIRED', 'Verify the merchandise payment before preparing it. Engraving remains separate.');
+      if (['out_for_delivery','delivered'].includes(next) && financial.charges.some(charge => charge.id !== 'return_shipping' && (charge.state !== 'accepted' || charge.collectionMethod === 'instapay' && charge.outstandingPiastres > 0))) throw commerceError(409, 'CHARGE_ACCEPTANCE_REQUIRED', 'Resolve and collect any agreed InstaPay delivery charge before dispatch.');
+      if (['returned','delivery_failed'].includes(next) && !(input.publicReason || input.internalNote)?.trim()) throw commerceError(400, 'REASON_REQUIRED', 'Record the actual delivery or return circumstances.');
+      const fulfillmentState = overallFulfillment(order, order.engraving, next);
+      const future = {...order.toObject(),merchandiseFulfillment:next,fulfillmentState};
+      const financialSummary = await orderAccounting(future, {session});
+      const paymentState = groupedPaymentState(future, financialSummary);
+      const history = {at:new Date(), event:'merchandise_state_changed', actor:`admin:${actor._id}`, publicReason:input.publicReason || '', internalNote:input.internalNote || '', from:{fulfillmentState:current}, to:{fulfillmentState:next}};
+      const changed = await Order.updateOne({_id:order._id, revision:input.revision}, {$set:{merchandiseFulfillment:next, fulfillmentState, financialSummary, paymentState}, $inc:{revision:1}, $push:{history}}, {session,runValidators:true});
+      if (!changed.matchedCount) throw commerceError(409, 'ORDER_CHANGED', 'Reload the order before saving.');
+      order.merchandiseFulfillment = next; order.fulfillmentState = fulfillmentState; order.financialSummary = financialSummary; order.paymentState = paymentState; order.revision++;
+      await recordAdminAudit(actor, {action:'order.merchandise_state_changed',resourceType:'order',resourceId:order._id,details:{from:current,to:next}}, {session});
+      await enqueueOrderEvent(order, 'order_updated', {session,eventVersion:order.revision});
+      result = presentOrder(order.toObject(), {admin:true}); return;
+    }
+    if (isEngravingOrder(order) && !groupedOrder(order)) throw commerceError(409, 'ENGRAVING_WORKFLOW_REQUIRED', 'Use the dedicated customer-item workflow; order receipt is not physical receipt.');
     if (['returned', 'delivery_failed'].includes(input.fulfillmentState) && !(input.publicReason || input.internalNote || input.reason)?.trim()) throw commerceError(400, 'REASON_REQUIRED', 'Record the delivery/return circumstances before changing status.');
-    if (order.accountingVersion !== 1 && input.paymentState) throw commerceError(409, 'LEGACY_ACCOUNTING_REVIEW_REQUIRED', 'Reconcile this historical payment into the reviewed ledger procedure before changing its financial state.');
-    if (order.accountingVersion === 1) {
+    if (![1, 2].includes(order.accountingVersion) && input.paymentState) throw commerceError(409, 'LEGACY_ACCOUNTING_REVIEW_REQUIRED', 'Reconcile this historical payment into the reviewed ledger procedure before changing its financial state.');
+    if ([1, 2].includes(order.accountingVersion)) {
       if (input.paymentState || input.fulfillmentState === 'cancelled') throw commerceError(409, 'ACCOUNTING_ACTION_REQUIRED', 'Use the reconciled payment or cancellation operation.');
       if (['out_for_delivery', 'delivered'].includes(input.fulfillmentState)) { const financial = await orderAccounting(order, { session }); if (financial.unresolvedCharges) throw commerceError(409, 'CHARGE_ACCEPTANCE_REQUIRED', 'Resolve delivery and add-on quotations before dispatch.'); }
     }
@@ -212,7 +233,7 @@ export async function changeOrderState(id, owner, input, actor) {
     // immutable snapshots, including Mixed arrays, during a state transition.
     assertDatabaseWriteAllowed(Order.db, env);
     const updated = await Order.updateOne({ _id: order._id, revision: input.revision }, {
-      $set: { fulfillmentState: order.fulfillmentState, paymentState: order.paymentState, restockedAt: order.restockedAt, ...(order.accountingVersion === 1 ? { financialSummary: await orderAccounting(order, { session }) } : {}) },
+      $set: { fulfillmentState: order.fulfillmentState, paymentState: order.paymentState, restockedAt: order.restockedAt, ...([1, 2].includes(order.accountingVersion) ? { financialSummary: await orderAccounting(order, { session }) } : {}) },
       $inc: { revision: 1 }, $push: { history: entry },
     }, { session, runValidators: true });
     if (!updated.matchedCount) throw commerceError(409, 'ORDER_CHANGED', 'Reload the order before changing its state.');
