@@ -41,7 +41,7 @@ const paginationFor = (page, total) => ({ page: page.page, limit: page.limit, to
 export const reviewPresentation = (review) => ({ id: String(review._id), authorLabel: review.authorLabel?.trim() || null, rating: Number.isInteger(review.rating) && review.rating >= 1 && review.rating <= 5 ? review.rating : null, text: review.text, createdAt: review.createdAt });
 
 async function eligibleProductBySlug(slug) {
-  const product = await Product.findOne({ ...publicProductFilter(), ...await productIdentityFilter(slug) }).select('_id categoryId subcategoryId').lean().maxTimeMS(TIMEOUT);
+  const product = await Product.findOne({ ...displayProductFilter(), ...await productIdentityFilter(slug) }).select('_id categoryId subcategoryId').lean().maxTimeMS(TIMEOUT);
   if (!product) throw commerceError(404, 'PRODUCT_NOT_FOUND', 'Product not found.');
   const category = await Category.findOne({ _id: product.categoryId, active: true, parentId: null }).select('_id').lean().maxTimeMS(TIMEOUT);
   const child = !product.subcategoryId || await Category.findOne({ _id: product.subcategoryId, active: true, parentId: product.categoryId }).select('_id').lean().maxTimeMS(TIMEOUT);
@@ -51,7 +51,7 @@ async function eligibleProductBySlug(slug) {
 
 async function eligibleReviewProductIds(ids) {
   if (!ids.length) return new Set();
-  const products = await Product.find({ ...publicProductFilter(), _id: { $in: ids } }).select('_id categoryId subcategoryId').lean().maxTimeMS(TIMEOUT);
+  const products = await Product.find({ ...displayProductFilter(), _id: { $in: ids } }).select('_id categoryId subcategoryId').lean().maxTimeMS(TIMEOUT);
   return new Set((await attachEligibleCategories(products)).map((product) => String(product._id)));
 }
 

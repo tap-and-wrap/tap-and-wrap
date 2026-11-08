@@ -6,15 +6,16 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { realpath, mkdir, writeFile, rename, unlink } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { validateDatabaseUri, assertConnectedDatabase, databaseDiagnostic } from '../src/config/database-safety.js';
-import { publicProductFilter } from '../src/catalog/product-policy.js';
-import { mediaUrlForKey, inventoryCanOrder, productCanOrder } from '../src/catalog/public-presentation.js';
+import { displayProductFilter } from '../src/catalog/product-policy.js';
+import { mediaUrlForKey, publicProductDetail } from '../src/catalog/public-presentation.js';
 import { verifiedMediaEntries, MEDIA_VERIFICATION_SOURCE } from '../../client/src/seo/media-verification.js';
 
 export const SEO_PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 export const SEO_PAGE_SIZE = 20;
 export const SEO_MAX_PAGES = 200;
+export const SEO_PRODUCTION_HOST = 'taw-production.oialf4z.mongodb.net';
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const PRODUCT_FIELDS = { __v: 1, visibility: 1, _id: 1, name: 1, slug: 1, description: 1, categoryId: 1, subcategoryId: 1, mainImageKey: 1, pricePiastres: 1, compareAtPiastres: 1, priceApproved: 1, status: 1, published: 1, reviewRequired: 1, inventory: 1, variants: 1, updatedAt: 1 };
+const PRODUCT_FIELDS = { __v: 1, purchaseSetup: 1, personalization: 1, visibility: 1, _id: 1, name: 1, slug: 1, description: 1, categoryId: 1, subcategoryId: 1, mainImageKey: 1, pricePiastres: 1, compareAtPiastres: 1, priceApproved: 1, status: 1, published: 1, reviewRequired: 1, inventory: 1, variants: 1, updatedAt: 1 };
 const CATEGORY_FIELDS = { __v: 1, _id: 1, name: 1, slug: 1, parentId: 1, imageKey: 1, active: 1, updatedAt: 1 };
 
 export function parseSeoExportArguments(argv) {
@@ -26,6 +27,7 @@ export function parseSeoExportArguments(argv) {
     if (seen.has(flag)) throw new Error('Duplicate SEO export argument');
     seen.add(flag);
     if (flag === '--confirm-read') options.confirmRead = true;
+    else if (flag === '--confirm-production-read') options.confirmProductionRead = true;
     else if (flag === '--dry-run') options.dryRun = true;
     else if (flag === '--help') options.help = true;
     else if (values.has(flag)) {
@@ -34,8 +36,10 @@ export function parseSeoExportArguments(argv) {
       options[values.get(flag)] = value;
     } else throw new Error('Unknown SEO export argument');
   }
-  if (options.target && !['local', 'staging'].includes(options.target)) throw new Error('SEO exports allow only explicitly authorized local or staging targets');
-  if (options.confirmRead && (options.dryRun || !options.target || !options.output)) throw new Error('Reading requires --target local|staging --confirm-read --output local-data/file.json without --dry-run');
+  if (options.target && !['local', 'staging', 'production'].includes(options.target)) throw new Error('Unknown SEO export target');
+  if (options.target === 'production' && !options.confirmProductionRead) throw new Error('Production SEO reads require --confirm-production-read and exact production authorization');
+  if (options.confirmProductionRead && options.target !== 'production') throw new Error('Production read confirmation requires the production target');
+  if (options.confirmRead && (options.dryRun || !options.target || !options.output)) throw new Error('Reading requires --target local|staging|production --confirm-read --output local-data/file.json without --dry-run');
   if (options.contentOutput && !options.output) throw new Error('Content output requires a catalog output');
   return options;
 }
@@ -97,20 +101,22 @@ export function exportCategoryDto(category, mediaBaseUrl = '') {
 }
 
 export function exportProductDto(product, categories, mediaBaseUrl = '') {
-  if (!product?._id || product.visibility !== 'public' || product.status !== 'ready' || product.published !== true || product.priceApproved !== true || product.inventory?.approved !== true || product.reviewRequired !== false || !Number.isSafeInteger(product.pricePiastres) || product.pricePiastres <= 0 || !SLUG.test(product.slug || '') || !plain(product.name, 240)) return null;
+  if (!product?._id || product.visibility !== 'public' || !SLUG.test(product.slug || '') || !plain(product.name, 240)) return null;
   const variants = product.variants || [];
-  if (!Array.isArray(variants) || variants.some((variant) => variant.inventory?.approved !== true || variant.pricePiastres != null && (variant.priceApproved !== true || !Number.isSafeInteger(variant.pricePiastres) || variant.pricePiastres <= 0))) return null;
+  if (!Array.isArray(variants)) return null;
   const main = categories.get(String(product.categoryId));
   const child = product.subcategoryId ? categories.get(String(product.subcategoryId)) : null;
   if (!main?.active || main.parentId || product.subcategoryId && (!child?.active || child.parentId !== main._id)) return null;
   const presentation = (category) => category ? { _id: category._id, name: category.name, slug: category.slug } : null;
+  const detail = publicProductDetail(product);
   return {
     routingVersion: productRoutingVersion({ ...product, categoryId: { _id: main._id, __v: main.routingRevision }, subcategoryId: child ? { _id: child._id, __v: child.routingRevision } : null }),
     _id: String(product._id), name: plain(product.name, 240), slug: product.slug, description: plain(product.description, 10_000), category: presentation(main), subcategory: presentation(child),
-    mainImageUrl: mediaUrlForKey(product.mainImageKey, mediaBaseUrl), pricePiastres: product.pricePiastres, compareAtPiastres: Number.isSafeInteger(product.compareAtPiastres) && product.compareAtPiastres > product.pricePiastres ? product.compareAtPiastres : null,
-    priceApproved: true, orderingAvailable: productCanOrder(product), inventoryMode: product.inventory.mode,
-    variants: variants.map((variant) => ({ key: plain(variant.key, 120), attributes: (variant.attributes || []).map(({ name, value }) => ({ name: plain(name, 120), value: plain(value, 120) })), pricePiastres: variant.pricePiastres ?? product.pricePiastres, orderingAvailable: productCanOrder(product) && inventoryCanOrder(variant.inventory), inventoryMode: variant.inventory.mode })),
-    updatedAt: dateString(product.updatedAt), seoEligibility: { status: 'ready', published: true, inventoryApproved: true, reviewRequired: false, categoriesActive: true },
+    visibility: 'public', businessState: detail.businessState,
+    mainImageUrl: mediaUrlForKey(product.mainImageKey, mediaBaseUrl), pricePiastres: detail.pricePiastres, compareAtPiastres: detail.compareAtPiastres,
+    priceApproved: detail.priceApproved, orderingAvailable: detail.orderingAvailable, inventoryMode: product.inventory.mode,
+    variants: detail.variants.map(variant => ({ key: plain(variant.key,120), attributes: variant.attributes, pricePiastres: variant.pricePiastres, orderingAvailable: variant.orderingAvailable, stockConfirmed:variant.stockConfirmed, inventoryMode: variant.inventory.mode })),
+    updatedAt: dateString(product.updatedAt), seoEligibility: { visibility: 'public', published: true, categoriesActive: true },
   };
 }
 
@@ -199,7 +205,7 @@ export async function openReadOnlySeoSource(uri, settings) {
   // No dotenv import, global application connection, model initialization or index creation.
   const { default: mongoose } = await import('mongoose');
   const connection = mongoose.createConnection(uri, { dbName: settings.dbName, autoCreate: false, autoIndex: false, serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000, socketTimeoutMS: 10000, maxPoolSize: 2 });
-  const validate = () => assertConnectedDatabase(connection, { target: settings.target, nodeEnv: settings.nodeEnv });
+  const validate = () => assertConnectedDatabase(connection, settings);
   try { await connection.asPromise(); validate(); } catch (error) { await connection.close(); throw error; }
   const categoryIds = new Map();
   const page = async (collection, filter, projection, { after, limit }) => {
@@ -216,7 +222,7 @@ export async function openReadOnlySeoSource(uri, settings) {
     readProductPage: (params) => {
       const mainIds = [...params.categories.values()].filter((category) => !category.parentId).map((category) => categoryIds.get(category._id)).filter(Boolean);
       const childIds = [...params.categories.values()].filter((category) => category.parentId).map((category) => categoryIds.get(category._id)).filter(Boolean);
-      return page('products', { $and: [publicProductFilter(), { categoryId: { $in: mainIds } }, { $or: [{ subcategoryId: null }, { subcategoryId: { $in: childIds } }] }] }, PRODUCT_FIELDS, params);
+      return page('products', { $and: [displayProductFilter(), { categoryId: { $in: mainIds } }, { $or: [{ subcategoryId: null }, { subcategoryId: { $in: childIds } }] }] }, PRODUCT_FIELDS, params);
     },
     readProductAddressPage: params => page('productaddresses', { productId: { $in: params.productIds.map(id => new mongoose.Types.ObjectId(id)) } }, { slug: 1, productId: 1, canonical: 1 }, params),
     close: () => connection.close(),
@@ -237,7 +243,7 @@ async function writeExportFile(destination, value) {
 
 export async function runSeoCatalogExport(argv, { environment = process.env, log = console.log, openSource = openReadOnlySeoSource, writeOutput = writeExportFile } = {}) {
   const options = parseSeoExportArguments(argv);
-  if (options.help) { log('Offline default: npm run seo:export. Authorized read only: --target local|staging --confirm-read --output local-data/approved-seo-export.json [--content-output local-data/approved-site-content.json]. Uses explicit terminal MONGODB_URI; never loads .env, writes a database or creates indexes.'); return null; }
+  if (options.help) { log('Offline default: npm run seo:export. Authorized read only: --target local|staging|production --confirm-read --output local-data/approved-seo-export.json [--content-output local-data/approved-site-content.json]. Production additionally requires --confirm-production-read and the exact guarded production target. Uses explicit terminal MONGODB_URI; never loads .env, writes a database or creates indexes. Automated renewal uses the bounded public API instead.'); return null; }
   const output = options.output ? resolveSeoExportOutput(options.output) : null;
   const contentOutput = options.contentOutput ? resolveSeoExportOutput(options.contentOutput) : null;
   if (output && contentOutput === output) throw new Error('Catalog and content outputs must be different files');
@@ -245,11 +251,16 @@ export async function runSeoCatalogExport(argv, { environment = process.env, log
     const report = { mode: 'dry-run', databaseConnected: false, databaseWrites: false, filesWritten: false, target: options.target, pageSize: SEO_PAGE_SIZE, maximumPages: SEO_MAX_PAGES, dotenvLoaded: false };
     log(JSON.stringify(report)); return report;
   }
-  if (environment.NODE_ENV === 'production') throw new Error('Production SEO database access is disabled');
-  const settings = validateDatabaseUri(environment.MONGODB_URI, { target: options.target, nodeEnv: environment.NODE_ENV || 'development' });
+  if (environment.NODE_ENV === 'production' && options.target !== 'production') throw new Error('Production SEO reads require the exact production target');
+  const context = { target: options.target, nodeEnv: environment.NODE_ENV || 'development' };
+  if (options.target === 'production') {
+    if (environment.PRODUCTION_DATABASE_HOST !== SEO_PRODUCTION_HOST || environment.PRODUCTION_DATABASE_AUTHORIZED !== 'true' || environment.NODE_ENV !== 'production') throw new Error('Production SEO read context rejected');
+    Object.assign(context, { productionDatabaseAuthorized: true, productionDatabaseHost: SEO_PRODUCTION_HOST });
+  }
+  const settings = { ...context, ...validateDatabaseUri(environment.MONGODB_URI, context) };
   await assertRealExportPath(output);
   if (contentOutput) await assertRealExportPath(contentOutput);
-  const source = await openSource(environment.MONGODB_URI, { ...settings, nodeEnv: environment.NODE_ENV || 'development' });
+  const source = await openSource(environment.MONGODB_URI, settings);
   try {
     let mediaVerification;
     if (options.mediaVerification) {

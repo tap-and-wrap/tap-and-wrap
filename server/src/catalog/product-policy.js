@@ -5,54 +5,50 @@ export function displayProductFilter() {
 }
 
 export function approvedProductPriceFilter() {
-  return { priceApproved: true, pricePiastres: { $gt: 0 } };
+  return { pricePiastres: { $gt: 0 } };
 }
 
 export function publicProductFilter() {
   return {
     visibility: 'public',
-    status: { $in: ['draft', 'hold', 'ready'] }, priceApproved: true, pricePiastres: { $gt: 0 },
-    $and: [{ $or: [{ 'inventory.approved': true }, { 'purchaseSetup.version': 1, 'purchaseSetup.options': 'variants', 'variants.0': { $exists: true } }] }],
-    $or: [{ 'purchaseSetup.version': 1, 'purchaseSetup.options': { $in: ['single', 'variants'] } },
-      { purchaseSetup: { $exists: false }, status: 'ready', published: true, reviewRequired: false, $nor: [
-      { variants: { $elemMatch: { pricePiastres: { $ne: null }, priceApproved: { $ne: true } } } },
-      { variants: { $elemMatch: { pricePiastres: 0 } } },
-      { variants: { $elemMatch: { 'inventory.approved': { $ne: true } } } },
-    ] }],
+    pricePiastres: { $gt: 0 },
+    'purchaseSetup.options': { $ne: 'unresolved' },
+    $or: [{ 'inventory.approved': true }, { 'variants.0': { $exists: true } }],
+    $and: [{$or:[{purchaseSetup:null},{'purchaseSetup.version':1,'purchaseSetup.options':'single',$or:[{variants:{$size:0}},{variants:{$exists:false}}]},{'purchaseSetup.version':1,'purchaseSetup.options':'variants','variants.0':{$exists:true}}]}],
   };
 }
 export function purchaseSetupAllows(product) {
-  if (!product.purchaseSetup) return product.status === 'ready' && product.published === true && product.reviewRequired !== true;
+  if (!product.purchaseSetup) return true;
   return product.purchaseSetup.version === 1 && (product.purchaseSetup.options === 'single' && !product.variants?.length
     || product.purchaseSetup.options === 'variants' && product.variants?.length > 0);
 }
-export const ownerVariantStock = product => product.purchaseSetup?.version === 1 && product.purchaseSetup.options === 'variants' && product.variants?.length > 0;
+export const ownerVariantStock = product => product.variants?.length > 0;
 // A configured variant owns its stock counter; the parent availability switch
 // still disables the entire product, but its unused quantity cannot block variants.
-// Visibility and purchase eligibility are separate. A draft can be browsed, but not ordered.
+// Legacy import status never controls purchasing. Real inventory still does.
 export function orderableProductStockFilter() {
   const stock = { $or: [{ 'inventory.mode': 'made_to_order' }, { 'inventory.mode': 'tracked', 'inventory.quantity': { $gt: 0 } }] };
   return { $and: [
-    { 'inventory.available': true, $or: [{ 'inventory.approved': true }, { 'purchaseSetup.version': 1, 'purchaseSetup.options': 'variants', 'variants.0': { $exists: true } }] },
+    { 'inventory.available': true, $or: [{ 'inventory.approved': true }, { 'variants.0': { $exists: true } }] },
     { $or: [
-      { variants: { $elemMatch: { 'inventory.approved': true, 'inventory.available': true, ...stock } } },
+      { variants: { $elemMatch: { 'inventory.approved': true, 'inventory.available': true, ...stock, $and:[{$or:[{pricePiastres:null},{pricePiastres:{$gt:0}}]}] } } },
       { $and: [{ $or: [{ variants: { $size: 0 } }, { variants: { $exists: false } }] }, stock] },
     ] },
   ] };
+}
+export function soldOutProductStockFilter() {
+  return {$and:[publicProductFilter(),{$nor:[orderableProductStockFilter()]},{$or:[
+    {$and:[{$or:[{variants:{$size:0}},{variants:{$exists:false}}]},{'inventory.approved':true}]},
+    {'variants.0':{$exists:true},variants:{$not:{$elemMatch:{'inventory.approved':{$ne:true}}}}},
+  ]}]};
 }
 export function getPublicationIssues(product) {
   const issues = [];
   const add = (field, message) => issues.push({ field, message });
   for (const message of productPersonalizationIssues(product.personalization)) add('personalization.fields', message);
-  if (!product.priceApproved || !Number.isSafeInteger(product.pricePiastres) || product.pricePiastres <= 0) add('priceApproved', 'Ready products require a confirmed positive price');
-  if (!product.inventory?.approved) add('inventory.approved', 'Ready products require approved stock or an approved Made by Request mode');
-  if (product.reviewRequired) add('reviewRequired', 'Resolve catalog review flags before making a product Ready');
-  if (!product.categoryId) add('categoryId', 'Ready products require a main category');
-  if (!product.mainImageKey) add('mainImageKey', 'Ready products require a selected main image');
-  for (const variant of product.variants ?? []) {
-    if (variant.pricePiastres != null && (!variant.priceApproved || variant.pricePiastres <= 0)) add('variants', 'Variant prices must be confirmed and positive before publication');
-    if (!variant.inventory?.approved) add('variants', 'Variant inventory must be approved before publication');
-  }
+  if (product.priceApproved === true && (!Number.isSafeInteger(product.pricePiastres) || product.pricePiastres <= 0)) add('priceApproved', 'A supplied confirmed price must be positive');
+  if (!product.categoryId) add('categoryId', 'Published products require a main category');
+  if (!product.mainImageKey) add('mainImageKey', 'Published products require a selected main image');
   return issues;
 }
 export function getStockDeduction(inventory, requestedQuantity) {

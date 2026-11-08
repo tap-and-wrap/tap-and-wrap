@@ -15,8 +15,6 @@ export const env = {
   mongoUri: process.env.MONGODB_URI || '',
   databaseTarget: process.env.DATABASE_TARGET || 'local',
   stagingPreviewEnabled: process.env.STAGING_PREVIEW_ENABLED === 'true',
-  // Temporary read-only public showcase: does not approve prices, stock, or change database records.
-  catalogBrowsePreviewEnabled: process.env.CATALOG_BROWSE_PREVIEW_ENABLED === 'true',
   productAliasesEnabled: process.env.PRODUCT_ALIASES_ENABLED === 'true',
   // Foundation API only; does not enable customer submission, conversion or checkout.
   giftBoxBuilderBackendEnabled: process.env.GIFT_BOX_BUILDER_BACKEND_ENABLED === 'true',

@@ -16,9 +16,9 @@ const product = (patch = {}) => ({ _id: '222222222222222222222222', name: 'Fixtu
 test('display permission and purchase gates are separate and have no launch configuration dependency', () => {
   assert.deepEqual(displayProductFilter(), { visibility: 'public', status: { $in: ['draft', 'ready', 'hold'] } });
   assert.equal(publicProductFilter().visibility, 'public');
-  assert.equal(publicProductFilter().priceApproved, true);
-  assert.deepEqual(publicProductFilter().$and[0].$or, [{ 'inventory.approved': true }, { 'purchaseSetup.version': 1, 'purchaseSetup.options': 'variants', 'variants.0': { $exists: true } }]);
-  for (const patch of [{ visibility: 'hidden' }, { visibility: 'withdrawn' }, { visibility: undefined }, { status: 'draft' }, { status: 'hold' }, { reviewRequired: true }, { priceApproved: false }, { pricePiastres: 0 }, { inventory: { approved: false, available: true, mode: 'tracked', quantity: 10 } }]) {
+  assert.equal(publicProductFilter().priceApproved, undefined);
+  assert.deepEqual(publicProductFilter().$or, [{ 'inventory.approved': true }, { 'variants.0': { $exists: true } }]);
+  for (const patch of [{ visibility: 'hidden' }, { visibility: 'withdrawn' }, { visibility: undefined }, { pricePiastres: 0 }, { inventory: { approved: false, available: true, mode: 'tracked', quantity: 10 } }]) {
     assert.equal(productCanOrder(product(patch)), false, JSON.stringify(patch));
   }
   assert.equal(productCanOrder(product()), true);
@@ -29,11 +29,12 @@ test('confirmed positive prices display independently of stock, review or Ready 
     const detail = publicProductDetail(product({ status, reviewRequired: true, inventory: { approved: false, available: true, mode: 'tracked', quantity: 10 } }));
     assert.equal(detail.pricePiastres, 12345); assert.equal(detail.priceApproved, true);
     assert.equal(detail.orderingAvailable, false); assert.equal(detail.inventory.quantity, null);
-    assert.equal(productMetadata(detail, 'https://fixture.example', { checkoutEnabled: true }).structuredData.length, 0);
+    const schema=productMetadata({...detail,mainImageUrl:'https://fixture.example/gift.webp'}, 'https://fixture.example', { checkoutEnabled: true }).structuredData;
+    assert.equal(schema[0]['@type'],'Product'); assert.equal(schema[0].offers,undefined);
     assert.equal(productHref(detail), '/products/permanent-gift');
     assert.equal(detail.slug, 'fixture-gift-123');
   }
-  for (const patch of [{ priceApproved: false }, { pricePiastres: 0 }, { pricePiastres: null }]) {
+  for (const patch of [{ pricePiastres: 0 }, { pricePiastres: null }]) {
     const detail = publicProductDetail(product(patch));
     assert.equal(detail.pricePiastres, null); assert.equal(detail.compareAtPiastres, null); assert.equal(detail.orderingAvailable, false);
   }
@@ -55,7 +56,7 @@ test('variants disclose only confirmed prices and enforce selected availability 
   assert.deepEqual(detail.variants.map(v => v.pricePiastres), [12345, 12345]);
   assert.equal(publicProductDetail(product({ variants, inventory: { approved: true, available: false } })).variants[1].orderingAvailable, false);
   const unapproved = publicProductDetail(product({ variants: [{ ...variants[1], pricePiastres: 999999, priceApproved: false }] }));
-  assert.equal(unapproved.orderingAvailable, false); assert.equal(unapproved.variants[0].pricePiastres, null);
+  assert.equal(unapproved.orderingAvailable, true); assert.equal(unapproved.variants[0].pricePiastres, 999999);
 });
 
 test('new model records default hidden, strict admin contracts accept only explicit valid display dispositions', async () => {

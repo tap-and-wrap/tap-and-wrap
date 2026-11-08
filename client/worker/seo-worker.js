@@ -85,13 +85,26 @@ async function resolvePublicPaths(env, paths, withdrawn) {
   return resolved;
 }
 
+export function sitemapRoutePages(routes,manifest) {
+  const pages=[];let entries=[],dependencies=new Set();
+  for(const path of routes){
+    const needed=path.startsWith('/products/')?[path]:manifest.routeProducts?.[path]||[];
+    if(!Array.isArray(needed)||needed.length>20||needed.some(item=>!/^\/products\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(item)))throw new Error('Invalid sitemap dependencies');
+    const next=new Set([...dependencies,...needed]);
+    if(entries.length&&(entries.length>=20||next.size>20)){pages.push(entries);entries=[];dependencies=new Set();}
+    entries.push(path);for(const item of needed)dependencies.add(item);
+  }
+  if(entries.length)pages.push(entries);return pages;
+}
+
 async function routeRequest(request, env) {
   if (!env.ASSETS?.fetch) throw new Error('Missing assets');
   if (!['GET', 'HEAD'].includes(request.method)) return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' } });
   const url = new URL(request.url), pathname = url.pathname;
   if (pathname.startsWith('/assets/') || /\.(?:webp|png|jpe?g|svg|ico|woff2?|mp4|webm|css|js)$/i.test(pathname)
     || /^\/fonts\/gift-sticker\/(?:[a-z]+(?:\.ttf|-LICENSE\.txt)|SOURCE\.txt)$/.test(pathname)
-    || /^\/fonts\/ui-v1\/(?:Kalam-OFL\.txt|Amiri-OFL\.txt|SOURCE\.md|manifest\.json)$/.test(pathname)) return env.ASSETS.fetch(request);
+    || /^\/fonts\/ui-v1\/(?:Kalam-OFL\.txt|Amiri-OFL\.txt|SOURCE\.md|manifest\.json)$/.test(pathname)
+    || pathname === '/licenses/react-bits.txt') return env.ASSETS.fetch(request);
   const manifest = await manifestFor(env.ASSETS, request);
   const path = pathname === '/' ? '/' : pathname.replace(/\/+$/, '');
   const withdrawn = withdrawalPaths(env.SEO_WITHDRAWN_PATHS);
@@ -130,15 +143,16 @@ async function routeRequest(request, env) {
   const sitemapPage = /^\/sitemaps\/([1-9]\d{0,3})\.xml$/.exec(path);
   if (path === '/sitemap.xml' || sitemapPage) {
     const routes = canIndex ? manifest.indexableRoutes.filter(p => !withdrawn.has(p) && manifest.publicRoutes.includes(p)) : [];
+    const groups=sitemapRoutePages(routes,manifest);
     const escape = value => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
     const headers = { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' };
     if (!sitemapPage && canIndex) {
-      const pages = Array.from({ length: Math.ceil(routes.length / 20) }, (_, index) => '<sitemap><loc>' + escape(manifest.origin + '/sitemaps/' + (index + 1) + '.xml') + '</loc></sitemap>').join('');
+      const pages = groups.map((_, index) => '<sitemap><loc>' + escape(manifest.origin + '/sitemaps/' + (index + 1) + '.xml') + '</loc></sitemap>').join('');
       return new Response('<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + pages + '</sitemapindex>', { headers });
     }
     const page = sitemapPage ? Number(sitemapPage[1]) : 1;
-    if (canIndex && page > Math.ceil(routes.length / 20)) return missing();
-    const entries = routes.slice((page - 1) * 20, page * 20), dependencies = new Set();
+    if (canIndex && page > groups.length) return missing();
+    const entries = groups[page-1]||[], dependencies = new Set();
     for (const p of entries) {
       if (p.startsWith('/products/')) dependencies.add(p);
       else if (p === '/' || p === '/shop' || p.startsWith('/categories/')) {
@@ -146,7 +160,7 @@ async function routeRequest(request, env) {
         if (Array.isArray(paths) && paths.length <= 20) for (const path of paths) dependencies.add(path);
       }
     }
-    // At most 20 entries / 400 dependencies, plus the separately bounded
+    // At most 20 entries / 20 distinct dependencies, plus the separately bounded
     // emergency list (maximum 500). All checks share one four-second deadline.
     // Failed validation returns a retriable 503 for this sitemap only, never stale URLs.
     const resolved = await resolvePublicPaths(env, [...dependencies], withdrawn);

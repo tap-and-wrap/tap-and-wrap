@@ -73,7 +73,7 @@ describe('Phase 1B catalog API contracts', { concurrency: false }, () => {
       ready('mug-high', { name: 'Fixture Ceramic Mug High', pricePiastres: 2500 }),
       ready('mug-out', { name: 'Fixture Ceramic Mug Out', pricePiastres: 1500, inventory: { mode: 'tracked', quantity: 0, approved: true, available: true } }),
       ready('description-only', { name: 'Fixture unrelated name', description: 'Ceramic appears only in this description' }),
-      ready('draft-cheap', { name: 'Fixture Ceramic Draft', pricePiastres: 1, priceApproved: false, status: 'draft' }),
+      ready('draft-cheap', { name: 'Fixture Ceramic Draft', pricePiastres: null, priceApproved: false, status: 'draft' }),
     ]);
     const response = await request('/public/products?q=Ceramic&category=phase1b-fixture&subcategory=phase1b-child&availability=available&minPrice=1000&maxPrice=2000&sort=price_asc');
     assert.equal(response.status, 200);
@@ -83,8 +83,8 @@ describe('Phase 1B catalog API contracts', { concurrency: false }, () => {
     assert.equal(response.body.products[0].category.slug, main.slug);
     assert.equal(response.body.products[0].subcategory.slug, child.slug);
     const soldOut = await request('/public/products?q=Ceramic&availability=sold_out');
-    assert.deepEqual(soldOut.body.products.map((product) => product.slug), ['draft-cheap', 'mug-out']);
-    assert.equal(soldOut.body.products[0].pricePiastres, null);
+    assert.deepEqual(soldOut.body.products.map((product) => product.slug), ['mug-out']);
+    assert.equal(soldOut.body.products[0].pricePiastres, 1500);
     assert.equal(soldOut.body.products[0].orderingAvailable, false);
   });
 
@@ -114,7 +114,7 @@ describe('Phase 1B catalog API contracts', { concurrency: false }, () => {
 
   it('skips unused range aggregation while retaining filtered counts, category scope and pagination', async (context) => {
     await Product.create(Array.from({ length: 23 }, (_, index) => ready(`no-range-${index}`, { pricePiastres: 1000 + index })));
-    await Product.create(ready('no-range-draft', { status: 'draft', priceApproved: false }));
+    await Product.create(ready('no-range-draft', { status: 'draft', pricePiastres: null, priceApproved: false }));
     const originalAggregate = Product.aggregate.bind(Product);
     const aggregate = context.mock.method(Product, 'aggregate', (pipeline) => {
       assert.equal(pipeline.some(stage => stage.$group), false, 'Unused price range aggregation must not execute');
@@ -144,7 +144,7 @@ describe('Phase 1B catalog API contracts', { concurrency: false }, () => {
   it('paginates all selected best sellers in approved display order with bounded pages', async () => {
     await Product.create(Array.from({ length: 25 }, (_, index) => ready(`best-${String(index).padStart(2, '0')}`, { bestSeller: true, bestSellerOrder: index })));
     await Product.create(ready('not-selected'));
-    await Product.create(ready('best-draft', { bestSeller: true, status: 'draft', priceApproved: false }));
+    await Product.create(ready('best-draft', { bestSeller: true, status: 'draft', pricePiastres: null, priceApproved: false }));
     await Product.create(ready('best-out', { bestSeller: true, bestSellerOrder: 0, inventory: { mode: 'tracked', quantity: 0, approved: true, available: true } }));
     const response = await request('/public/products?bestSeller=true&availability=available&sort=best_sellers&limit=100');
     assert.equal(response.status, 200);

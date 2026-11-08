@@ -13,14 +13,14 @@ function PreviewNotice({ product, id }) {
         <div><p className="catalog-eyebrow">Authenticated product preview</p><h2>Review saved product</h2></div>
         <div className="admin-preview-actions"><Link className="catalog-secondary-button" to={`/admin/products/${encodeURIComponent(id)}/edit`}>Edit product</Link><Link className="catalog-secondary-button" to="/admin/products">Back to products</Link></div>
       </div>
-      <p>This view does not publish the product or enable ordering. Provisional prices remain hidden.</p>
+      <p>Inspect the saved product here. Customers use its public page; ordering is disabled in this private preview.</p>
       <dl className="admin-preview-facts">
-        <div><dt>Publication</dt><dd>{product.status || 'Not set'}</dd></div>
+        <div><dt>Publication</dt><dd>{product.published || product.visibility === 'public' ? 'Published' : 'Hidden'}</dd></div>
         <div><dt>Source ID</dt><dd>{product.externalCatalogId || 'No imported ID'}</dd></div>
         <div><dt>Catalog role</dt><dd>{product.catalogRole || 'Not provided'}</dd></div>
-        <div><dt>Price</dt><dd>{product.priceApproved ? 'Confirmed' : 'Price not confirmed yet'}</dd></div>
+        <div><dt>Price</dt><dd>{product.priceApproved ? 'Saved price' : 'Price on Request'}</dd></div>
         <div><dt>Inventory</dt><dd>{inventory.mode === 'made_to_order' ? 'Made by Request' : `Tracked quantity: ${inventory.quantity ?? 'Not set'}`} · {inventory.approved ? 'Confirmed' : 'Quantity needs verification'}</dd></div>
-        <div><dt>Catalog review</dt><dd>{product.preview?.reviewRequired ? 'Review required' : 'Review resolved'}</dd></div>
+        <div><dt>Original import notes</dt><dd>{product.preview?.reviewRequired ? 'Retained in the product editor' : 'No import warnings'}</dd></div>
         <div><dt>Category</dt><dd>{product.category ? `${product.category.name}${product.category.active === false ? ' · Inactive' : ''}` : 'Not set'}</dd></div>
         <div><dt>Subcategory</dt><dd>{product.subcategory ? `${product.subcategory.name}${product.subcategory.active === false ? ' · Inactive' : ''}` : 'Not set'}</dd></div>
         <div><dt>Image ordering</dt><dd>{imageCount} saved reference{imageCount === 1 ? '' : 's'}{imageCount > 0 && ' · Image 1 is the selected main photo'}</dd></div>

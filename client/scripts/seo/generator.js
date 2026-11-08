@@ -24,12 +24,14 @@ function safePathname(value) {
   return value === '/' || typeof value === 'string' && /^\/[a-z0-9-]+(?:\/[a-z0-9-]+)*$/.test(value);
 }
 
-function money(piastres) { return `EGP ${(piastres / 100).toFixed(2)}`; }
+function money(piastres) { return Number.isSafeInteger(piastres) && piastres > 0 ? `EGP ${(piastres / 100).toFixed(2)}` : 'Price on Request'; }
 function link(href, label) { return `<a href="${escapeHtml(href)}">${escapeHtml(label)}</a>`; }
 function paragraph(value) { return `<p>${escapeHtml(cleanText(value, 10_000))}</p>`; }
 
 function isApprovedProduct(product) {
   const gate = product?.seoEligibility;
+  if (product?.visibility && product.visibility !== 'public' || product?.preview?.enabled === true) return false;
+  if (gate?.visibility === 'public' && gate.categoriesActive === true && product.visibility === 'public') return true;
   return gate?.status === 'ready' && gate.published === true && gate.inventoryApproved === true && gate.reviewRequired === false && gate.categoriesActive === true && product.priceApproved === true && Number.isSafeInteger(product.pricePiastres) && product.pricePiastres > 0 && (!product.variants || Array.isArray(product.variants) && product.variants.every((variant) => variant.priceApproved !== false && variant.inventory?.approved !== false && Number.isSafeInteger(variant.pricePiastres) && variant.pricePiastres > 0));
 }
 
@@ -55,12 +57,14 @@ function sanitizeProduct(product, categories, mediaOrigins, verifiedMedia) {
   if (product.subcategory && !subcategory) return null;
   return {
     routingVersion: typeof product.routingVersion === 'string' && product.routingVersion.length <= 256 ? product.routingVersion : null,
+    routingAttestation: /^[a-f0-9]{64}$/.test(product.routingAttestation||'') ? product.routingAttestation : null,
     _id: String(product._id), name: cleanText(product.name, 160), slug: product.slug, publicPath: productHref(product), publicAliases: product.publicAliases || [], description: cleanText(product.description, 10_000), category, subcategory,
     mainImageUrl: publicImageUrl(product.mainImageUrl, mediaOrigins), mediaVerified: Boolean(verifiedMedia.get(publicImageUrl(product.mainImageUrl, mediaOrigins))), media: verifiedMedia.get(publicImageUrl(product.mainImageUrl, mediaOrigins)) || null,
-    pricePiastres: product.pricePiastres, priceApproved: true, orderingAvailable: product.orderingAvailable === true,
+    visibility: 'public', businessState: product.businessState,
+    pricePiastres: Number.isSafeInteger(product.pricePiastres) && product.pricePiastres > 0 ? product.pricePiastres : null, priceApproved: Number.isSafeInteger(product.pricePiastres) && product.pricePiastres > 0, orderingAvailable: product.orderingAvailable === true,
     compareAtPiastres: Number.isSafeInteger(product.compareAtPiastres) && product.compareAtPiastres > product.pricePiastres ? product.compareAtPiastres : null,
     inventoryMode: ['tracked', 'made_to_order'].includes(product.inventoryMode || product.inventory?.mode) ? product.inventoryMode || product.inventory.mode : null,
-    variants: (product.variants || []).filter((variant) => Number.isSafeInteger(variant.pricePiastres) && variant.pricePiastres > 0).map((variant) => ({ pricePiastres: variant.pricePiastres, orderingAvailable: variant.orderingAvailable === true, inventoryMode: ['tracked', 'made_to_order'].includes(variant.inventoryMode || variant.inventory?.mode) ? variant.inventoryMode || variant.inventory.mode : null })),
+    variants: (product.variants || []).map((variant) => ({ pricePiastres: Number.isSafeInteger(variant.pricePiastres) && variant.pricePiastres > 0 ? variant.pricePiastres : null, orderingAvailable: variant.orderingAvailable === true, stockConfirmed: variant.stockConfirmed !== false, inventoryMode: ['tracked', 'made_to_order'].includes(variant.inventoryMode || variant.inventory?.mode) ? variant.inventoryMode || variant.inventory.mode : null })),
     updatedAt: validDate(product.updatedAt),
   };
 }
@@ -145,7 +149,7 @@ export function buildSeoPlan({ catalog: input, siteOrigin, productCompatibility,
   if (publish && (!validDate(input.generatedAt) || Date.parse(input.generatedAt) > new Date(now).valueOf())) throw new Error('SEO source generation timestamp is required and must not be in the future');
   if (!Number.isSafeInteger(minimumCategoryProducts) || minimumCategoryProducts < 1 || minimumCategoryProducts > 20) throw new Error('SEO category minimum must be an integer from 1 to 20');
   const catalog = input ? validateCatalog(input, { now }) : { products: [], categories: [], checkoutEnabled: false, report: { sourceProducts: 0, sourceCategories: 0, excludedProducts: [], excludedCategories: [], mediaUnverifiedProducts: [] } };
-  if (publish && catalog.products.some(product => !product.routingVersion)) throw new Error('SEO source requires a newly reviewed export with routing revisions');
+  if (publish && catalog.products.some(product => !product.routingVersion && !product.routingAttestation)) throw new Error('SEO source requires a newly reviewed export with routing revisions or current authority attestations');
   if (productCompatibility !== undefined) {
     if (publish || !origin) throw new Error('SEO product compatibility requires a canonical origin and disabled indexing');
     const { owners } = validateProductCompatibility(productCompatibility, { origin, now });
@@ -183,6 +187,7 @@ export function buildSeoPlan({ catalog: input, siteOrigin, productCompatibility,
   for (const product of catalog.products) {
     const metadata = productMetadata(product, origin, { indexable: publish, checkoutEnabled: catalog.checkoutEnabled, mediaOrigins: catalog.mediaOrigins, mediaVerified: product.mediaVerified });
     metadata.routingVersion = product.routingVersion;
+    metadata.routingAttestation = product.routingAttestation;
     metadata.sourceFingerprint = stableDigest(product);
     metadata.imageDimensions = product.media ? { width: product.media.width, height: product.media.height } : null;
     add(metadata.pathname, { ...metadata, heading: product.name, updatedAt: product.updatedAt, body: `${product.mainImageUrl ? `<img src="${escapeHtml(product.mainImageUrl)}" alt="${escapeHtml(product.name)}" width="900" height="900" decoding="async">` : ''}${paragraph(money(product.pricePiastres))}${product.variants.length ? paragraph(`Configured variant prices: ${[...new Set(product.variants.map((variant) => money(variant.pricePiastres)))].join(', ')}.`) : ''}${product.compareAtPiastres ? `<p>Compare-at price: <del>${escapeHtml(money(product.compareAtPiastres))}</del></p>` : ''}${paragraph(product.description)}${link(categoryHref(product.category), product.category.name)}${product.subcategory ? ` ${link(categoryHref(product.subcategory), product.subcategory.name)}` : ''}${paragraph(catalog.checkoutEnabled ? product.orderingAvailable ? 'Ordering options are available in the product form.' : 'Currently unavailable for ordering.' : 'Checkout is currently disabled.')}` });
@@ -331,7 +336,7 @@ export async function writeSeoOutput({ outputDirectory = path.join(CLIENT_DIRECT
   const manifest = { version: 2, origin: plan.origin, indexingEnabled: plan.report.indexingEnabled, publicRoutes: [...plan.routes.values()].filter((route) => route.indexable || !PRIVATE_STATIC.includes(route.pathname) && route.pathname !== '/404').map((route) => route.pathname), indexableRoutes: [...plan.routes.values()].filter((route) => route.indexable).map((route) => route.pathname), productSlugs: plan.catalog.products.map(product => productHref(product).split('/').at(-1)), productRedirects: Object.fromEntries(plan.catalog.products.flatMap(product => [...new Set([product.slug, ...product.publicAliases])].filter(slug => `/products/${slug}` !== productHref(product)).map(slug => [`/products/${slug}`, productHref(product)]))), categorySlugs: plan.catalog.categories.map((category) => category.slug), categoryRedirects: Object.fromEntries(plan.catalog.categories.filter(category => categoryHref(category) !== `/categories/${category.slug}`).map(category => [`/categories/${category.slug}`, categoryHref(category)])), routeFiles, publication };
   for (const file of ['sitemap.xml', 'robots.txt', 'seo-manifest.json', 'seo-change-report.json', OWNED_FILE, '.assetsignore']) await assertRealLocation(resolvedOutput, path.join(resolvedOutput, file));
   manifest.productRouting = { version: 1, authority: 'catalog-api', cacheSeconds: 0 };
-  manifest.productSignatures = Object.fromEntries([...plan.routes.values()].filter(route => route.productSignature && route.routingVersion).map(route => [route.pathname, stableDigest([route.productSignature, plan.catalog.checkoutEnabled === true, route.routingVersion])]));
+  manifest.productSignatures = Object.fromEntries([...plan.routes.values()].filter(route => route.productSignature && (route.routingVersion || route.routingAttestation)).map(route => [route.pathname, route.routingAttestation || stableDigest([route.productSignature, plan.catalog.checkoutEnabled === true, route.routingVersion])]));
   manifest.routeProducts = Object.fromEntries([...plan.routes.values()].filter(route => route.pathname === '/' || route.pathname === '/shop' || route.pathname.startsWith('/categories/')).map(route => [route.pathname, plan.catalog.products.filter(product => !route.pathname.startsWith('/categories/') || [categoryHref(product.category), product.subcategory && categoryHref(product.subcategory)].includes(route.pathname)).slice(0,20).map(productHref)]));
   if (options.productCompatibility !== undefined) manifest.productCompatibility = options.productCompatibility;
   // No deploy happens here. Worker-visible publication switches only after every

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { inventoryCanOrder, mediaUrlForKey, publicProductCard, publicProductDetail } from '../src/catalog/public-presentation.js';
 
-test('enquiry products hide provisional quantities and variant prices while approved sold-out products remain unorderable', () => {
+test('enquiry products retain genuine saved prices but hide unconfirmed quantities', () => {
   const product = {
     _id: 'fixture', name: 'Gift', slug: 'gift', status: 'draft', published: false,
     categoryId: { _id: 'category', name: 'Gifts', slug: 'gifts', active: true },
@@ -12,9 +12,9 @@ test('enquiry products hide provisional quantities and variant prices while appr
   };
   const detail = publicProductDetail(product);
   assert.equal(detail.browseOnly, true);
-  assert.equal(detail.pricePiastres, null);
+  assert.equal(detail.pricePiastres, 999);
   assert.equal(detail.inventory.quantity, null);
-  assert.equal(detail.variants[0].pricePiastres, null);
+  assert.equal(detail.variants[0].pricePiastres, 555);
   assert.equal(detail.variants[0].inventory.quantity, null);
   assert.equal(detail.orderingAvailable, false);
   const soldOut = publicProductCard({ ...product, variants: [], status: 'ready', published: true, priceApproved: true, inventory: { ...product.inventory, approved: true, quantity: 0 } });
@@ -38,7 +38,7 @@ test('approved made-by-request inventory ignores quantity and unavailable stock 
   assert.equal(inventoryCanOrder({ mode: 'made_to_order', approved: true, available: false }), false);
 });
 
-test('public cards and details never return raw image keys or provisional prices', () => {
+test('public cards and details preserve positive prices without exposing raw image keys', () => {
   const product = {
     _id: 'fixture', name: 'Fixture item', slug: 'fixture-item', description: 'Fixture description',
     mainImageKey: 'Accessories/item.webp', galleryKeys: ['Accessories/item.webp'],
@@ -49,8 +49,8 @@ test('public cards and details never return raw image keys or provisional prices
     customization: { enabled: false, serviceEntryEligible: false }, variants: [],
   };
   const card = publicProductCard(product);
-  assert.equal(card.pricePiastres, null);
-  assert.equal(card.compareAtPiastres, null);
+  assert.equal(card.pricePiastres, 123);
+  assert.equal(card.compareAtPiastres, 200);
   assert.equal(card.requiresOptions, true);
   assert.equal('galleryKeys' in card, false);
   assert.equal('mainImageKey' in card, false);

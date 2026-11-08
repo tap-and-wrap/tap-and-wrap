@@ -10,7 +10,7 @@ import { listProducts, getPublicProduct } from '../src/catalog/service.js';
 // MongoDB fixture, provider, env file or database writes are used by this file.
 const main = { _id: '111111111111111111111111', name: 'Fixture', slug: 'fixture', active: true, parentId: null };
 const gift = { _id: '222222222222222222222222', name: 'Fixture gift', slug: 'legacy-gift-123', visibility: 'public', status: 'draft', published: false,
-  categoryId: main, mainImageKey: 'fixture/gift.webp', priceApproved: false, pricePiastres: 999999, inventory: { quantity: 10, approved: false, mode: 'tracked', available: true }, variants: [] };
+  categoryId: main, mainImageKey: 'fixture/gift.webp', priceApproved: false, pricePiastres: null, inventory: { quantity: 10, approved: false, mode: 'tracked', available: true }, variants: [] };
 function query(value) {
   const chain = { then: (resolve, reject) => Promise.resolve(value).then(resolve, reject) };
   for (const method of ['select', 'populate', 'sort', 'skip', 'limit', 'lean', 'session', 'maxTimeMS', 'option']) chain[method] = () => chain;
@@ -59,9 +59,9 @@ test('availability and price filters keep purchase approval distinct from displa
   const filter = captures.filters[0];
   assert.equal(filter.$and[0].$and[0].visibility, 'public');
   const serialized = JSON.stringify(filter);
-  assert.match(serialized, /"status":"ready"/); assert.match(serialized, /"inventory.approved":true/);
-  assert.match(serialized, /"priceApproved":true/);
-  assert.match(JSON.stringify(captures.pipelines.at(-1)), /"priceApproved":true/);
+  assert.doesNotMatch(serialized, /"status":"ready"/); assert.match(serialized, /"inventory.approved":true/);
+  assert.doesNotMatch(serialized, /"priceApproved":true/);
+  assert.doesNotMatch(JSON.stringify(captures.pipelines.at(-1)), /"priceApproved":true/);
 });
 
 test('price sorts retain enquiry records and sort with approved public amounts only', async t => {
@@ -71,6 +71,6 @@ test('price sorts retain enquiry records and sort with approved public amounts o
   const pipeline = captures.pipelines.find(pipeline => pipeline.some(stage => stage.$sort));
   assert.equal(pipeline[0].$match.$and[0].$and[0].visibility, 'public');
   assert.equal(pipeline.some(stage => stage.$limit === 20), true);
-  assert.match(JSON.stringify(pipeline), /"\$eq":\["\$priceApproved",true\]/);
+  assert.match(JSON.stringify(pipeline), /"\$gt":\["\$pricePiastres",0\]/);
   assert.equal(pipeline.find(stage => stage.$sort).$sort._hasPrice, -1);
 });

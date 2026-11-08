@@ -43,7 +43,7 @@ test('authorized draft preview preserves numbered image positions without publis
   await expect(page.locator('.product-main-image')).toHaveText('Image 2 · Media not configured');
   await page.getByRole('button', { name: 'View image 1 (main)', exact: true }).click();
   await expect(page.locator('.product-main-image')).toHaveText('Main image · Image 1 · Media not configured');
-  await expect(page.locator('.product-price')).toHaveText('Price awaiting approval');
+  await expect(page.locator('.product-price')).toHaveText('Price on Request');
   await expect(page.getByRole('button', { name: 'Ordering disabled', exact: true })).toBeDisabled();
   await expect(page.getByRole('link', { name: 'Customize This' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Upload Image$/ })).toBeDisabled();
@@ -71,7 +71,7 @@ test('preview uses safe configured gallery URLs in source order and hides provis
   await page.getByRole('button', { name: 'View image 2', exact: true }).click();
   await expect(page.locator('.product-main-image img')).toHaveAttribute('src', fixture.gallerySlots[1].url);
   await chooseOption(page.getByLabel('Choose size / color'), 'unapproved');
-  await expect(page.locator('.product-price')).toHaveText('Price awaiting approval');
+  await expect(page.locator('.product-price')).toHaveText('Price on Request');
   await expect(page.getByRole('button', { name: 'Ordering disabled', exact: true })).toBeDisabled();
 });
 

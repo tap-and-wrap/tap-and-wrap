@@ -107,10 +107,10 @@ describe('authenticated staging draft preview', { concurrency: false }, () => {
     assert.equal(preview.category.slug, 'preview-main');
     assert.equal(preview.subcategory.slug, 'preview-child');
     assert.deepEqual(preview.gallerySlots, [{ position: 1, url: null, isMain: true }, { position: 2, url: null, isMain: false }]);
-    assert.equal(preview.pricePiastres, null);
+    assert.equal(preview.pricePiastres, 1234);
     assert.equal(preview.compareAtPiastres, null);
-    assert.equal(preview.variants[0].pricePiastres, null);
-    assert.equal(preview.priceApproved, false);
+    assert.equal(preview.variants[0].pricePiastres, 2345);
+    assert.equal(preview.priceApproved, true);
     assert.equal(preview.inventory.quantity, 0);
     assert.equal(preview.inventory.approved, false);
     assert.equal(preview.orderingAvailable, false);
@@ -149,7 +149,7 @@ describe('authenticated staging draft preview', { concurrency: false }, () => {
       const publicList = await request('/public/products?limit=100');
       assert.equal(publicList.body.data.products.length, 1);
       assert.equal(publicList.body.data.products[0].orderingAvailable, false);
-      assert.equal(publicList.body.data.products[0].pricePiastres, null);
+      assert.equal(publicList.body.data.products[0].pricePiastres, 1234);
       assert.equal(publicList.body.data.pagination.limit, 20);
       const categories = await request('/public/categories?parent=preview-main');
       assert.equal(categories.body.data.categories[0].slug, 'preview-child');

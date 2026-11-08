@@ -34,7 +34,7 @@ export function adminProductPreviewPresentation(product) {
   const detail = publicProductDetail(product);
   return {
     ...detail,
-    pricePiastres: product.priceApproved && product.pricePiastres > 0 ? product.pricePiastres : null,
+    pricePiastres: detail.pricePiastres,
     externalCatalogId: product.externalCatalogId || null,
     catalogRole: product.catalogRole,
     status: product.status,
@@ -44,7 +44,6 @@ export function adminProductPreviewPresentation(product) {
     inventory: { ...detail.inventory, quantity: product.inventory.approved === true ? detail.inventory.quantity : 0, approved: product.inventory.approved === true, available: false },
     variants: detail.variants.map((variant, index) => ({
       ...variant,
-      priceApproved: product.variants[index].pricePiastres == null ? product.priceApproved === true : product.variants[index].priceApproved === true,
       inventory: { ...variant.inventory, approved: product.variants[index].inventory.approved === true, available: false },
       orderingAvailable: false,
     })),

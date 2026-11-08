@@ -64,7 +64,8 @@ test('real public query contract caps pages, counts filtered approvals and drive
   }
   const available = (await (await context.request.get(`${base}&availability=available`)).json()).data;
   const soldOut = (await (await context.request.get(`${base}&availability=sold_out`)).json()).data;
-  expect(available.pagination.total).toBe(24); expect(soldOut.pagination.total).toBe(3);
+  expect(available.pagination.total).toBe(24); expect(soldOut.pagination.total).toBe(1);
+  expect(soldOut.products.every(product => product.pricePiastres > 0 && product.businessState === 'out_of_stock')).toBe(true);
   expect(soldOut.products.every(product => product.orderingAvailable === false)).toBe(true);
   expect((await context.request.get(`${base}&minPrice=1500&maxPrice=1200`)).status()).toBe(400);
   expect((await context.request.get(`${base}&minPrice=-1`)).status()).toBe(400);
@@ -87,7 +88,7 @@ test('real public query contract caps pages, counts filtered approvals and drive
   expect(new URL(page.url()).searchParams.has('minPrice')).toBe(false);
 });
 
-test('real admin product edit rejects stale React drafts and unapproved publication without overwriting merchant fields', async ({ page, context, request }) => {
+test('real admin edit preserves conflicts, separates historic status from visibility and needs no price approval', async ({ page, context, request }) => {
   await login(page, 'admin', '/admin/products');
   const fixture = await fixtureState(request);
   const headers = await csrfHeaders(context);
@@ -106,16 +107,19 @@ test('real admin product edit rejects stale React drafts and unapproved publicat
   const persisted = (await (await context.request.get(`${api}/api/v1/admin/products/${product._id}`)).json()).data.product;
   expect(persisted.name).toBe('Contract stale draft'); expect(persisted.description).toBe('Newer synthetic admin edit');
   expect(persisted.pricePiastres).toBe(3); expect(persisted.priceApproved).toBe(false);
-  const forbidden = await context.request.patch(`${api}/api/v1/admin/products/${product._id}/publication`, { headers, data: { expectedRevision: current.revision, status: 'ready' } });
-  expect(forbidden.status()).toBe(400);
+  const legacyStatus = await context.request.patch(`${api}/api/v1/admin/products/${product._id}/publication`, { headers, data: { expectedRevision: current.revision, status: 'ready' } });
+  expect(legacyStatus.status()).toBe(200);
+  const afterLegacy = (await legacyStatus.json()).data.product;
+  expect(afterLegacy.visibility).toBe('hidden');
   const browsableDraft = await context.request.get(`${api}/api/v1/public/products/contract-stale-draft`);
   expect(browsableDraft.status()).toBe(404);
-  const displayed = await context.request.patch(api + '/api/v1/admin/products/' + product._id, { headers, data: { expectedRevision: current.revision, visibility: 'public' } });
+  const displayed = await context.request.patch(api + '/api/v1/admin/products/' + product._id, { headers, data: { expectedRevision: afterLegacy.revision, visibility: 'public' } });
   expect(displayed.status()).toBe(200);
   const publicDraft = (await (await context.request.get(api + '/api/v1/public/products/contract-stale-draft')).json()).data.product;
   expect(publicDraft.name).toBe('Contract stale draft');
-  expect(publicDraft.priceApproved).toBe(false);
-  expect(publicDraft.pricePiastres).toBeNull();
+  expect(publicDraft.priceApproved).toBe(true);
+  expect(publicDraft.pricePiastres).toBe(3);
+  expect(publicDraft.businessState).toBe('confirm_stock');
   expect(publicDraft.orderingAvailable).toBe(false);
   expect(publicDraft.mainImageKey).toBeUndefined();
   expect(publicDraft.galleryKeys).toBeUndefined();

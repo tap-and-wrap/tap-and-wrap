@@ -1,0 +1,54 @@
+name: Production SEO renewal
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 */6 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: tapandwrap-seo-publication
+  cancel-in-progress: false
+jobs:
+  renew:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci --prefix server --include=optional
+      - run: npm ci --prefix client --include=optional
+      - name: Verify renewal and Worker safeguards
+        run: npm run test:seo --prefix client
+      - name: Read current public catalog and verify actual media
+        env:
+          NODE_ENV: production
+          TAP_WRAP_SKIP_DOTENV: 'true'
+        run: node server/scripts/prepare-production-seo.js --prepare-authorized-production
+      - name: Seal and rebuild exact reviewed publication
+        env:
+          VITE_API_BASE_URL: https://api.tapandwrap.net/api/v1
+          VITE_SITE_URL: https://tapandwrap.net
+          VITE_GIFT_BOX_BUILDER_ENABLED: 'true'
+          VITE_GIFT_BOX_MEDIA_BASE_URL: https://media.tapandwrap.net
+          VITE_GIFT_BOX_MEDIA_RELEASE: gift-box-media-2026-10-31.1
+          VITE_META_ENABLED: 'false'
+          VITE_SEO_INDEXING_ENABLED: 'true'
+        run: |
+          node client/scripts/seal-seo-publication.js
+          npm run build --prefix client
+          node client/scripts/verify-seo-artifacts.js
+      - name: Fast-forward dedicated publication branch
+        env:
+          GH_PUBLICATION_TOKEN: ${{ github.token }}
+        run: node client/scripts/publish-seo-branch.js
+      - name: Verify native Cloudflare deployment and live crawl behavior
+        run: node client/scripts/verify-live-seo.js --wait

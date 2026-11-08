@@ -7,9 +7,9 @@ test('owner listing calls inherited stock unconfirmed and distinguishes enquiry-
   await mockCatalog(page, { role: 'admin' });
   await page.route('**/api/v1/admin/products?*', route => route.fulfill({ json: { ok: true, data: { products: [{ ...adminProduct, visibility: 'public', status: 'hold', reviewRequired: true, orderingAvailable: false, hasVariants: false, inventory: { mode: 'tracked', quantity: 10, approved: false, available: true } }], pagination: { page: 1, pages: 1, total: 1 } } } }));
   await page.setViewportSize({ width: 320, height: 900 }); await page.goto('/admin/products');
-  await expect(page.locator('table')).toContainText('Unconfirmed quantity: 10');
-  await expect(page.locator('table')).toContainText('Enquiries only');
-  await page.getByText('More filters', { exact: false }).click(); await expect(page.getByRole('combobox', { name: 'Original catalog status', exact: true })).toBeVisible();
+  await expect(page.locator('table')).toContainText('Confirm Stock');
+  await expect(page.locator('table')).toContainText('Price on Request');
+  await page.getByText('More filters', { exact: false }).click(); await expect(page.getByRole('combobox', { name: 'Original catalog status', exact: true })).toHaveCount(0);await expect(page.getByRole('combobox',{name:'Public display',exact:true})).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 

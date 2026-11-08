@@ -20,7 +20,7 @@ function outside(dialog, event) {
   return event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom;
 }
 
-export default function useModalDialog({ onClose, restoreFocus = true, returnFocus }) {
+export default function useModalDialog({ onClose, restoreFocus = true, returnFocus, initialFocus }) {
   const dialogRef = useRef(null);
   const closeRef = useRef(onClose);
   const backdropDown = useRef(false);
@@ -32,13 +32,14 @@ export default function useModalDialog({ onClose, restoreFocus = true, returnFoc
     const opener = returnFocus || document.activeElement;
     if (!dialog) return undefined;
     if (!dialog.open) dialog.showModal();
+    if (initialFocus) dialog.querySelector(initialFocus)?.focus({ preventScroll: true });
     const unlock = lockScroll(dialog);
     return () => {
       if (dialog.open) dialog.close();
       unlock();
       if (restoreFocus && opener instanceof HTMLElement && opener.isConnected && !opener.matches(':disabled') && !opener.closest('[inert]')) opener.focus({ preventScroll: true });
     };
-  }, [restoreFocus, returnFocus]);
+  }, [restoreFocus, returnFocus, initialFocus]);
   const dialogProps = {
     onCancel: (event) => { event.preventDefault(); event.stopPropagation(); closeRef.current(); },
     onKeyDown: (event) => {

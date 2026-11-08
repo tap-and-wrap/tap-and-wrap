@@ -67,11 +67,12 @@ function ProductContentBody({ product, relatedProducts = [], preview = false, pr
   const variant = variants.find((item) => item.key === variantKey);
   const price = variant ? variant.pricePiastres : product.pricePiastres;
   const approvedPrice = (variant ? variant.priceApproved !== false && (variant.priceApproved === true || product.priceApproved === true) : product.priceApproved === true) && Number.isSafeInteger(price) && price > 0;
-  const enquiryRequired = !preview && (product.browseOnly === true || !approvedPrice || product.orderingAvailable !== true || variant?.orderingAvailable === false);
+  const outOfStock = approvedPrice && (variant ? variant.inventory?.quantity === 0 && product.businessState !== 'confirm_stock' : product.businessState === 'out_of_stock');
+  const enquiryRequired = !preview && !outOfStock && (product.browseOnly === true || !approvedPrice || product.orderingAvailable !== true || variant?.orderingAvailable === false);
   const orderingAvailable = !preview && !enquiryRequired && approvedPrice && product.orderingAvailable === true && (!variant || variant.orderingAvailable === true);
   const enquiryUrl = `https://wa.me/201508216472?text=${encodeURIComponent(`Hello Tap & Wrap, please confirm the price and availability of ${product.name}: https://tapandwrap.net${productHref(product)}`)}`;
   const maximumQuantity = quantityLimit(variant?.inventory || product.inventory);
-  const displayPrice = approvedPrice ? formatCatalogPrice(price) : preview ? 'Price awaiting approval' : 'Price on request';
+  const displayPrice = approvedPrice ? formatCatalogPrice(price) : 'Price on Request';
   const personalizationFields = product.personalization?.fields || [];
   const requiresPersonalization = product.personalization?.requiredBeforePurchase === true;
   const personalizationValid = !Object.keys(validateConfiguredFields(personalizationFields, personalization)).length;
@@ -142,7 +143,7 @@ function ProductContentBody({ product, relatedProducts = [], preview = false, pr
           {product.category?.name && <p className="catalog-eyebrow">{product.category.name}</p>}
           <ProductHeading id="product-title">{product.name}</ProductHeading>
           <p className="catalog-price product-price"><span>{displayPrice}</span>{approvedPrice && Number.isSafeInteger(product.compareAtPiastres) && product.compareAtPiastres > price && <del>{formatCatalogPrice(product.compareAtPiastres)}</del>}</p>
-          <p className={`product-stock-status ${orderingAvailable ? '' : 'is-unavailable'}`}>{preview ? 'Preview only · Ordering disabled' : enquiryRequired ? approvedPrice ? 'Online purchase unavailable · Enquire on WhatsApp' : 'Price and availability on request' : orderingAvailable ? (variant?.inventory || product.inventory)?.mode === 'made_to_order' ? 'Made by Request' : 'Available' : 'Currently unavailable'}</p>
+          <p className={`product-stock-status ${orderingAvailable ? '' : 'is-unavailable'}`}>{preview ? 'Preview only · Ordering disabled' : outOfStock ? 'Out of Stock' : enquiryRequired ? approvedPrice ? 'Online purchase unavailable · Enquire on WhatsApp' : 'Price and availability on request' : orderingAvailable ? (variant?.inventory || product.inventory)?.mode === 'made_to_order' ? 'Made by Request' : 'Available' : 'Currently unavailable'}</p>
           <form ref={purchaseRef} className="product-purchase-section" aria-label="Product options" onSubmit={addProduct} noValidate aria-busy={adding}>
             {variants.length > 0 && <div className="commerce-field"><label htmlFor={variantId}>Choose size / color</label>
               <Select id={variantId} value={variantKey} disabled={adding || uncertain} {...fieldErrorProps(variantId, fieldErrors.variant)} required onChange={(event) => {
@@ -170,7 +171,7 @@ function ProductContentBody({ product, relatedProducts = [], preview = false, pr
               {complete && <><p className="commerce-muted">Your personalization is ready. Photos are still private on this device until Add to Cart.</p><PersonalizationSummary values={personalization} definitions={personalizationFields} /></>}
             </>}
             {enquiryRequired ? <a className="button button-dark product-purchase-button" href={enquiryUrl} target="_blank" rel="noopener noreferrer">Enquire on WhatsApp</a>
-              : (!requiresPersonalization || complete || preview) && <button type="submit" className="button button-dark product-purchase-button" disabled={!orderingAvailable || adding || cart.pending || requiresPersonalization && !personalizationValid && !uncertain} aria-describedby="product-ordering-notice">{preview ? 'Ordering disabled' : adding ? 'Adding…' : uncertain ? 'Retry same Add to Cart' : orderingAvailable ? 'Add to Cart' : 'Sold Out'}</button>}
+              : (!requiresPersonalization || complete || preview) && <button type="submit" className="button button-dark product-purchase-button" disabled={!orderingAvailable || adding || cart.pending || requiresPersonalization && !personalizationValid && !uncertain} aria-describedby="product-ordering-notice">{preview ? 'Ordering disabled' : adding ? 'Adding…' : uncertain ? 'Retry same Add to Cart' : orderingAvailable ? 'Add to Cart' : 'Out of Stock'}</button>}
             {uncertain && <p role="alert">The add response is unconfirmed. Retry the same request or review your cart before adding another item. Reloading clears this local retry; check the cart first.</p>}
             {addError && <p role="alert" className="error-text">{addError}</p>}
             {adding && <p className="upload-progress" role="status"><progress aria-label="Adding your gift"/>{uploadStatus || 'Preparing your item…'}</p>}
@@ -192,7 +193,7 @@ function ProductContentBody({ product, relatedProducts = [], preview = false, pr
         {enquiryRequired ? <a className="button button-dark" href={enquiryUrl} target="_blank" rel="noopener noreferrer">Enquire on WhatsApp</a>
           : orderingAvailable && requiresPersonalization ? <button type="button" className="button button-dark" disabled={adding || uncertain} onClick={() => complete ? focusOptions() : setCustomizing(true)}>{complete ? 'Review personalization' : 'Customize This'}</button>
           : orderingAvailable && product.requiresOptions ? <button type="button" className="button button-dark" onClick={focusOptions}>Choose Options</button>
-          : <button type="button" className="button button-dark" disabled={!orderingAvailable || adding || cart.pending} onClick={() => purchaseRef.current.requestSubmit()}>{orderingAvailable ? 'Add to Cart' : 'Sold Out'}</button>}
+          : <button type="button" className="button button-dark" disabled={!orderingAvailable || adding || cart.pending} onClick={() => purchaseRef.current.requestSubmit()}>{orderingAvailable ? 'Add to Cart' : 'Out of Stock'}</button>}
       </div>}
     </Container>
   );

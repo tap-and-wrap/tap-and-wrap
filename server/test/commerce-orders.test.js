@@ -229,7 +229,7 @@ test('required photo counts, upload ownership and cart attachments are enforced 
 });
 
 test('draft, provisional-price, provisional-stock and inactive-category products never enter a public cart', async () => {
-  for (const update of [{ status: 'draft' }, { priceApproved: false }, { 'inventory.approved': false }]) {
+  for (const update of [{ visibility: 'hidden' }, { pricePiastres: null }, { 'inventory.approved': false }]) {
     const candidate = await makeProduct();
     await Product.updateOne({ _id: candidate._id }, { $set: update });
     const result = await browserClient().request(`${ROOT}/cart/items`, { method: 'POST', body: { productId: String(candidate._id), quantity: 1 } });
@@ -263,7 +263,7 @@ test('checkout is disabled by default and rejects unapproved products after cart
   assert.equal(disabled.status, 403);
   env.checkoutEnabled = true;
   const intent = await review(guest);
-  await Product.updateOne({ _id: product._id }, { $set: { priceApproved: false } });
+  await Product.updateOne({ _id: product._id }, { $set: { pricePiastres: null, priceApproved: false } });
   const blocked = await submit(guest, intent);
   assert.ok([400, 404, 409].includes(blocked.status), JSON.stringify(blocked.body));
   assert.equal(await Order.countDocuments(), 0);

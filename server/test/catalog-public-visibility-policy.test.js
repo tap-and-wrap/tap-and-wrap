@@ -2,14 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { publicProductFilter, getPublicationIssues, getStockDeduction } from '../src/catalog/product-policy.js';
 
-test('purchasable product filter requires strictly positive, confirmed price', () => {
+test('purchase candidate filter separates positive prices from legacy readiness', () => {
   const filter = publicProductFilter();
   assert.deepEqual(filter.pricePiastres, { $gt: 0 });
-  assert.deepEqual(filter.status, { $in: ['draft', 'hold', 'ready'] });
-  assert.equal(filter.$or[1].status, 'ready'); assert.equal(filter.$or[1].published, true); assert.equal(filter.$or[1].reviewRequired, false);
-  assert.equal(filter.$or[1].$nor.length, 3);
-  assert.equal(filter.$or[0]['purchaseSetup.version'], 1);
-  assert.equal(filter.priceApproved, true);
+  assert.equal(filter.status, undefined);
+  assert.equal(filter.priceApproved, undefined);
+  assert.equal(filter['purchaseSetup.options'].$ne, 'unresolved');
+  assert.deepEqual(filter.$or, [{ 'inventory.approved': true }, { 'variants.0': { $exists: true } }]);
 });
 
 test('a zero price is rejected for ready publication even if incorrectly approved', () => {

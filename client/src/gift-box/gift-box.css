@@ -295,7 +295,8 @@
 .gb-photo-thumbnails{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}
 .gb-photo-thumbnails>div{position:relative;min-width:0}
 .gb-photo-thumbnails img{display:block;width:100%;height:130px;object-fit:contain;border:1px solid var(--tw-border);border-radius:8px;background:var(--tw-bg)}
-.gb-photo-thumbnails button{position:absolute;right:0;top:0;border:1px solid var(--tw-border);background:white;min-height:44px;min-width:44px;border-radius:50%;display:grid;place-items:center}
+.gb-photo-thumbnails .gb-photo-remove{position:absolute;right:0;top:0;border:1px solid var(--tw-border);background:white;min-height:44px;min-width:44px;border-radius:50%;display:grid;place-items:center}
+.gb-photo-thumbnails .image-upload-button{width:100%;margin-top:8px;font-size:.8rem;padding:6px;min-height:44px}
 .gb-photo-thumbnails label{display:block;font-size:.7rem}
 .gb-sticker-editor{border:0;padding:0;margin:0;min-width:0;display:grid;gap:12px}
 .gb-sticker-editor input{width:100%;min-width:0}

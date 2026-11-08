@@ -52,7 +52,7 @@ async function order(who = owner, userId) {
 test('ready requires valid template-free personalization configuration; drafts remain safely editable', async () => {
   const base = product.toObject(); delete base._id; delete base.__v;
   await assert.rejects(Product.create({ ...base, slug: 'invalid-fields', personalization: { requiredBeforePurchase: true, fields: [] } }));
-  const draft = await Product.create({ ...base, slug: 'draft-fields', status: 'draft', personalization: { requiredBeforePurchase: true, fields: [] } });
+  const draft = await Product.create({ ...base, slug: 'draft-fields', visibility:'hidden', status: 'draft', personalization: { requiredBeforePurchase: true, fields: [] } });
   assert.equal(publicProductDetail(draft.toObject()).orderingAvailable, false);
   const malformed = { ...product.toObject(), personalization: { requiredBeforePurchase: true, fields: [{ key: 'choice', label: 'Choice', type: 'select', choices: [] }] } };
   assert.equal(publicProductDetail(malformed).orderingAvailable, false);

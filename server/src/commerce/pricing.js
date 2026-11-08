@@ -71,7 +71,7 @@ export async function quoteCartLine(line, owner, { session, context } = {}) {
   const stock = variant?.inventory || product.inventory;
   if (!inventoryCanOrder(stock) || (stock.mode === 'tracked' && stock.quantity < line.quantity)) throw commerceError(409, 'INSUFFICIENT_STOCK', 'The requested quantity is unavailable.');
   const basePrice = variant?.pricePiastres == null ? product.pricePiastres : variant.pricePiastres;
-  if (variant?.pricePiastres != null && !variant.priceApproved) throw commerceError(409, 'PRICE_UNAPPROVED', 'The selected price is not approved.');
+  if (!Number.isSafeInteger(basePrice) || basePrice <= 0) throw commerceError(409, 'PRICE_REQUIRED', 'Request the price of this selection before ordering.');
   const definitions = productPersonalizationFields(product.personalization);
   const personalized = await validateFields(definitions, line.personalization || {}, owner, { productId: product._id, session, context });
   let adjustment = 0, customization = null, customValues = null, componentClaims = [], extraUploads = [];

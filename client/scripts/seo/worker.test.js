@@ -1,7 +1,15 @@
 ﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { handleSeoRequest } from '../../worker/seo-worker.js';
+import { handleSeoRequest, sitemapRoutePages } from '../../worker/seo-worker.js';
+
+test('category sitemap pages bound distinct live dependencies as well as URL counts',()=>{
+  const routes=Array.from({length:20},(_,i)=>'/categories/group-'+i),routeProducts=Object.fromEntries(routes.map((p,i)=>[p,Array.from({length:20},(_,j)=>'/products/item-'+i+'-'+j)]));
+  const pages=sitemapRoutePages(routes,{routeProducts});assert.equal(pages.length,20);
+  for(const page of pages)assert.ok(new Set(page.flatMap(path=>routeProducts[path])).size<=20);
+  assert.deepEqual(sitemapRoutePages(['/shop','/categories/same'],{routeProducts:{'/shop':['/products/one'],'/categories/same':['/products/one']}}),[['/shop','/categories/same']]);
+  assert.throws(()=>sitemapRoutePages(['/shop'],{routeProducts:{'/shop':['https://private.example/secret']}}));
+});
 
 function fixture() {
   const id = 'a'.repeat(64), origin = 'https://shop.example', createdAt = Date.now();
@@ -28,6 +36,7 @@ test('UI font licenses and provenance are real assets and unknown font documents
     const path=`/fonts/ui-v1/${name}`;assets.set(path,'licensed fixture');const response=await get(path);assert.equal(response.status,200);assert.equal(await response.text(),'licensed fixture');
   }
   assert.equal((await get('/fonts/ui-v1/not-a-license.txt')).status,404);
+  assets.set('/licenses/react-bits.txt','licensed navigation');assert.equal((await get('/licenses/react-bits.txt')).status,200);assert.equal((await get('/licenses/private.txt')).status,404);
 });
 
 test('edge-compatible authority fetch never follows redirects or forwards visitor credentials',async()=>{

@@ -31,6 +31,16 @@ async function navigationFixture(page, initialRole) {
   return { catalog, calls, switchRole(next) { role = next; } };
 }
 
+test('owner storefront header keeps the logo centered and all actions separate at every release viewport',async({page},info)=>{
+  await navigationFixture(page,'admin');await page.goto('/');
+  for(const width of [320,390,440,768,1024,1440]){
+    await page.setViewportSize({width,height:900});const logo=await page.locator('.site-logo').boundingBox(),actions=await page.locator('.header-actions').boundingBox();
+    expect(logo.x+logo.width).toBeLessThanOrEqual(actions.x);
+    if(width<1024){const opener=await page.getByRole('button',{name:'Open menu',exact:true}).boundingBox();expect(opener.x+opener.width).toBeLessThanOrEqual(logo.x);}
+    await page.locator('.site-logo img').evaluate(n=>n.decode());await page.screenshot({path:info.outputPath(width+'-owner-header.png'),animations:'disabled'});
+  }
+});
+
 for (const width of [320, 375, 390, 440, 768, 1024, 1440, 1920]) {
   test(`storefront stays contained with original logo and sticky navigation at ${width}px`, async ({ page }) => {
     await mockCatalog(page);
@@ -45,7 +55,7 @@ for (const width of [320, 375, 390, 440, 768, 1024, 1440, 1920]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     if (width >= 1024) {
       await expect(page.locator('.desktop-navigation')).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Open menu', exact: true })).toBeHidden();
+      await expect(page.getByRole('button', { name: 'Open menu', exact: true })).toBeVisible();
       expect(box.x).toBeLessThan(width / 4);
       const nav = await page.locator('.desktop-navigation').boundingBox();
       const actions = await page.locator('.header-actions').boundingBox();
@@ -140,19 +150,19 @@ test('mobile navigation supports keyboard containment, padding, backdrop, Escape
   expect(await dialog.evaluate(element => element.contains(document.activeElement))).toBe(true);
   for (let index = 0; index < 12; index++) await page.keyboard.press('Shift+Tab');
   expect(await dialog.evaluate(element => element.contains(document.activeElement))).toBe(true);
-  await dialog.click({ position: { x: 6, y: 300 } }); await expect(dialog).toBeVisible();
+  await dialog.click({ position: { x: 24, y: 8 } }); await expect(dialog).toBeVisible();
   await page.keyboard.press('Escape'); await expect(dialog).toHaveCount(0); await expect(trigger).toBeFocused();
   expect(await page.evaluate(() => document.body.style.overflow)).not.toBe('hidden');
   // Phones use the approved fullscreen panel. A tablet leaves a genuine
-  // backdrop to the LEFT of the right-hand drawer, clear of scrollbar gutters.
+  // backdrop to the RIGHT of the left-hand drawer, clear of scrollbar gutters.
   await page.setViewportSize({ width: 768, height: 844 });
   await trigger.click();
   await dialog.evaluate(element => Promise.all(element.getAnimations().map(animation => animation.finished)));
   const bounds = await dialog.boundingBox();
-  const documentLeft = await page.evaluate(() => document.documentElement.getBoundingClientRect().left + 16);
-  expect(bounds.x - documentLeft, 'A clickable tablet backdrop remains clear of scrollbar gutters').toBeGreaterThan(0);
-  const backdropX = (bounds.x + documentLeft) / 2;
-  expect(backdropX).toBeLessThan(bounds.x);
+  const documentRight = await page.evaluate(() => document.documentElement.getBoundingClientRect().right - 16);
+  expect(documentRight-bounds.x-bounds.width, 'A clickable tablet backdrop remains clear of scrollbar gutters').toBeGreaterThan(0);
+  const backdropX = (bounds.x+bounds.width+documentRight) / 2;
+  expect(backdropX).toBeGreaterThan(bounds.x+bounds.width);
   await page.mouse.click(backdropX, 400); await expect(dialog).toHaveCount(0); await expect(trigger).toBeFocused();
   await trigger.click(); await dialog.getByRole('link', { name: 'About Us' }).click();
   await expect(page).toHaveURL(/\/about$/); await expect(dialog).toHaveCount(0);

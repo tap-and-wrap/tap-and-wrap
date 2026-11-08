@@ -58,7 +58,7 @@ test('COD mobile checkout shows merchandise-only amount and Pending Confirmation
   expect(fixture.uploads).toHaveLength(0); expect(fixture.submissions[0].paymentProofId).toBeUndefined();
   expect(errors).toEqual([]);
 });
-test('InstaPay creates order before revealing instructions or uploading order-bound proof', async ({ page }) => {
+test('InstaPay creates order before revealing instructions or uploading order-bound proof', async ({ page },info) => {
   const fixture = await foundation(page);
   await page.goto('/checkout'); await fillCheckout(page);
   await page.getByRole('radio', { name: /InstaPay/ }).check();
@@ -68,6 +68,7 @@ test('InstaPay creates order before revealing instructions or uploading order-bo
   await expect(page.getByText('01060673073', { exact: true })).toBeVisible();
   expect(fixture.submissions).toHaveLength(1); expect(fixture.uploads).toHaveLength(0);
   await chooseImageFiles(page, page, /^InstaPay payment proof/, isolatedImageFile());
+  for(const width of [320,390,440,768,1024,1440]){await page.setViewportSize({width,height:900});const panel=page.getByRole('heading',{name:'Submit or replace private payment proof',exact:true}).locator('..');await panel.locator('img').evaluate(n=>n.decode());await panel.screenshot({path:info.outputPath(width+'-private-proof.png')});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);}
   await page.getByRole('button', { name: 'Submit proof for this order', exact: true }).click();
   await expect(page.getByText('Proof submitted. Payment awaits account reconciliation.', { exact: true })).toBeVisible();
   expect(fixture.uploads[0].orderId).toBe(fixture.order.id);

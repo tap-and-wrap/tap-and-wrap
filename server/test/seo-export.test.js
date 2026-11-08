@@ -71,11 +71,20 @@ test('default export command is offline and does not load dotenv, connect, or wr
   assert.equal(logs.join('').includes('secret'), false);
 });
 
-test('argument parser rejects production, unconfirmed reads, duplicates and ambiguous modes', () => {
-  assert.throws(() => parseSeoExportArguments(['--target', 'production']), /local or staging/);
+test('argument parser requires explicit production confirmation and rejects unconfirmed/ambiguous reads', () => {
+  assert.throws(() => parseSeoExportArguments(['--target', 'production']), /confirm-production-read/);
   assert.throws(() => parseSeoExportArguments(['--confirm-read']), /Reading requires/);
   assert.throws(() => parseSeoExportArguments(['--target', 'staging', '--confirm-read', '--output', 'local-data/file.json', '--dry-run']), /Reading requires/);
   assert.throws(() => parseSeoExportArguments(['--dry-run', '--dry-run']), /Duplicate/);
+});
+
+test('authorized production SEO export remains read-only and exact-host fenced',async()=>{
+ const args=['--target','production','--confirm-read','--confirm-production-read','--output','local-data/seo-export-test-not-written.json'];
+ let connections=0;const environment={NODE_ENV:'production',PRODUCTION_DATABASE_AUTHORIZED:'true',PRODUCTION_DATABASE_HOST:'taw-production.oialf4z.mongodb.net',MONGODB_URI:'mongodb+srv://synthetic:synthetic@taw-production.oialf4z.mongodb.net/tapandwrap_production'};
+ const result=await runSeoCatalogExport(args,{environment,openSource:async(_uri,settings)=>{connections++;assert.equal(settings.target,'production');assert.equal(settings.productionDatabaseAuthorized,true);return sourceFixture().source;},writeOutput:async()=>{},log:()=>{}});
+ assert.equal(result.databaseWrites,false);assert.equal(result.indexesCreated,false);assert.equal(connections,1);
+ for(const patch of [{PRODUCTION_DATABASE_AUTHORIZED:'false'},{PRODUCTION_DATABASE_HOST:'other.example'},{MONGODB_URI:'mongodb+srv://synthetic:synthetic@other.example/tapandwrap_production'}])await assert.rejects(runSeoCatalogExport(args,{environment:{...environment,...patch},openSource:async()=>{throw Error('Must not connect');},log:()=>{}}));
+ assert.equal(connections,1);
 });
 
 test('export output cannot escape local-data or use credentials/project files', () => {
@@ -102,8 +111,8 @@ test('product DTO preserves stable public identity while dropping galleries, pri
   for (const value of ['galleryKeys', 'personalization', 'customization', 'merchantReviewNotes', 'do-not-export', 'Private/customer']) assert.equal(JSON.stringify(dto).includes(value), false);
 });
 
-test('drafts, provisional prices/inventory, unresolved reviews and category mismatches cannot be exported', () => {
-  for (const change of [{ visibility: 'hidden' }, { visibility: 'withdrawn' }, { visibility: undefined }, { status: 'draft' }, { published: false }, { priceApproved: false }, { pricePiastres: null }, { pricePiastres: 0 }, { inventory: { ...product.inventory, approved: false } }, { reviewRequired: true }, { subcategoryId: 'missing' }]) assert.equal(exportProductDto({ ...product, ...change }, categories), null);
+test('hidden products and invalid categories cannot be exported; unpriced public products can', () => {
+  for (const change of [{ visibility: 'hidden' }, { visibility: 'withdrawn' }, { visibility: undefined }, { subcategoryId: 'missing' }]) assert.equal(exportProductDto({ ...product, ...change }, categories), null);
   assert.equal(exportProductDto(product, new Map([[main._id, { ...categories.get(main._id), active: false }], [child._id, categories.get(child._id)]])), null);
   assert.equal(exportProductDto(product, new Map([[main._id, categories.get(main._id)], [child._id, { ...categories.get(child._id), parentId: 'wrong-main' }]])), null);
 });
@@ -113,7 +122,7 @@ test('variant price approval and independent variant stock remain authoritative'
   const dto = exportProductDto({ ...product, inventory: { ...product.inventory, quantity: 0 }, variants: [variant] }, categories);
   assert.equal(dto.orderingAvailable, true);
   assert.equal(dto.variants[0].pricePiastres, 15000);
-  assert.equal(exportProductDto({ ...product, variants: [{ ...variant, priceApproved: false }] }, categories), null);
+  assert.equal(exportProductDto({ ...product, variants: [{ ...variant, priceApproved: false }] }, categories).variants[0].pricePiastres,15000);
 });
 
 test('media mapping rejects unsafe origins and local filesystem paths', () => {

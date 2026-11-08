@@ -17,7 +17,7 @@ test('confirmed prices remain visible with WhatsApp-only unavailable products on
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/products/permanent-gift');
     await expect(page.locator('.product-price')).toContainText('250.00');
-    await expect(page.getByRole('link', { name: 'Enquire on WhatsApp', exact: true }).first()).toHaveAttribute('href', /permanent-gift/);
+    await expect(page.getByRole('button', { name: 'Out of Stock', exact: true })).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Add to Cart', exact: true })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
@@ -27,15 +27,15 @@ test('confirmed prices remain visible with WhatsApp-only unavailable products on
   expect(errors).toEqual([]);
 });
 
-test('approved draft price is displayed but an unapproved amount is never disclosed', async ({ page }) => {
+test('historical import status does not block real stock and removing a price restores enquiry', async ({ page }) => {
   await mockCommerce(page, { checkoutEnabled: true, product: product({ status: 'draft', published: false }) });
   await page.goto('/products/permanent-gift');
   await expect(page.locator('.product-price')).toContainText('250.00');
-  await expect(page.getByRole('link', { name: 'Enquire on WhatsApp', exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add to Cart', exact: true })).toBeEnabled();
   await page.unroute('**/api/v1/**');
-  await mockCommerce(page, { checkoutEnabled: true, product: product({ priceApproved: false, pricePiastres: 987654321 }) });
+  await mockCommerce(page, { checkoutEnabled: true, product: product({ priceApproved: false, pricePiastres: null }) });
   await page.reload();
-  await expect(page.locator('.product-price')).toHaveText('Price on request');
+  await expect(page.locator('.product-price')).toHaveText('Price on Request');
   await expect(page.locator('script[type="application/ld+json"]')).toHaveCount(0);
   await expect(page.locator('body')).not.toContainText('9876543');
 });
@@ -86,7 +86,7 @@ test('unpriced public draft and hold products retain names, canonical WhatsApp e
     await page.route('https://fixture.invalid/**', route => route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600"><rect width="600" height="600" fill="white"/></svg>' }));
     await page.goto('/products/permanent-gift');
     await expect(page.getByRole('heading', { name: p.name, exact: true })).toBeVisible();
-    await expect(page.locator('.product-price')).toHaveText('Price on request');
+    await expect(page.locator('.product-price')).toHaveText('Price on Request');
     const enquiry = page.getByRole('link', { name: 'Enquire on WhatsApp', exact: true }).first();
     const url = new URL(await enquiry.getAttribute('href'));
     expect(url.searchParams.get('text')).toContain(p.name);
@@ -100,7 +100,7 @@ test('unpriced public draft and hold products retain names, canonical WhatsApp e
 
 test('homepage fallback and Shop render unpriced public Draft and Hold cards without owner picks', async ({ page }) => {
   await mockCatalog(page);
-  const products = ['draft', 'hold'].map((status, index) => ({ ...product({ name: 'Browse ' + status + ' gift', status, reviewRequired: status === 'hold', published: false, priceApproved: false }),
+  const products = ['draft', 'hold'].map((status, index) => ({ ...product({ name: 'Browse ' + status + ' gift', status, reviewRequired: status === 'hold', published: false, priceApproved: false, pricePiastres: null }),
     _id: String(index + 900).padStart(24, '0'), slug: 'browse-' + status, publicPath: '/products/browse-' + status, bestSeller: false,
     mainImageUrl: 'https://fixture.invalid/browse.svg' }));
   await page.route('**/api/v1/public/products?*', route => {
@@ -113,7 +113,7 @@ test('homepage fallback and Shop render unpriced public Draft and Hold cards wit
     await expect(grid.locator('.catalog-card')).toHaveCount(2);
     for (const p of products) {
       const card = grid.locator('.catalog-card').filter({ has: page.getByRole('heading', { name: p.name, exact: true }) });
-      await expect(card).toContainText('Price on request');
+      await expect(card).toContainText('Price on Request');
       const enquiry = card.getByRole('link', { name: 'Enquire on WhatsApp about ' + p.name });
       const url = new URL(await enquiry.getAttribute('href'));
       expect(url.searchParams.get('text')).toContain(p.name); expect(url.searchParams.get('text')).toContain('https://tapandwrap.net' + p.publicPath);

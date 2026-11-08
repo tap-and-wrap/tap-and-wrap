@@ -113,7 +113,7 @@ test('AddToCart fires only after successful server-priced add and never on rejec
   assert.equal(accepted[0].name, 'AddToCart'); assert.equal(accepted[0].parameters.value, 240);
   const before = await MetaEvent.countDocuments();
   assert.equal((await add(browser, { pricePiastres: 1 })).status, 400);
-  await Product.updateOne({ _id: product._id }, { $set: { status: 'draft', priceApproved: false } });
+  await Product.updateOne({ _id: product._id }, { $set: { status: 'draft', pricePiastres:null, priceApproved: false } });
   assert.equal((await add(browser)).status, 409);
   assert.equal(await MetaEvent.countDocuments(), before);
 });
@@ -132,7 +132,7 @@ test('catalog views support draft browsing without emitting unconfirmed monetary
   assert.equal((await browser.request('/public/products', { headers: { 'x-search-event-id': randomUUID() } })).status, 400);
   assert.equal((await browser.request('/public/products?q=Isolated', { headers: { 'x-search-event-id': 'invalid' } })).status, 400);
   assert.equal(await MetaEvent.countDocuments({ name: 'Search' }), 1);
-  await Product.updateOne({ _id: product._id }, { $set: { status: 'draft', priceApproved: false } });
+  await Product.updateOne({ _id: product._id }, { $set: { status: 'draft', pricePiastres:null, priceApproved: false } });
   const originalBrowsePreview = env.catalogBrowsePreviewEnabled;
   env.catalogBrowsePreviewEnabled = true;
   let draftView;

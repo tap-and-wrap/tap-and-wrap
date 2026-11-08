@@ -19,8 +19,9 @@ export function ownerInventory(current, input) {
 export function ownerProductInput(input, current = {}) {
   if (input.ownerWorkflow !== true) return input;
   const { ownerWorkflow: _workflow, optionStructure, ...patch } = input;
-  patch.purchaseSetup = { version: 1, options: optionStructure ?? current.purchaseSetup?.options ?? 'unresolved' };
+  patch.purchaseSetup = { version: 1, options: optionStructure ?? current.purchaseSetup?.options ?? (current.variants?.length ? 'variants' : 'single') };
   if (Object.hasOwn(input, 'pricePiastres')) patch.priceApproved = Number.isSafeInteger(input.pricePiastres) && input.pricePiastres > 0;
+  if (Object.hasOwn(input, 'pricePiastres') && !patch.priceApproved) patch.compareAtPiastres = null;
   if (input.inventory) patch.inventory = ownerInventory(current.inventory, input.inventory);
   if (input.variants) patch.variants = input.variants.map(variant => ({ ...variant,
     priceApproved: variant.pricePiastres != null ? Number.isSafeInteger(variant.pricePiastres) && variant.pricePiastres > 0 : false,

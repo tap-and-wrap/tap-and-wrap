@@ -125,7 +125,7 @@ describe('catalog API with an isolated MongoDB database', { concurrency: false }
         env.checkoutEnabled = checkout; env.catalogBrowsePreviewEnabled = preview;
         const visible = await request('/public/products?limit=20');
         assert.deepEqual(visible.body.products.map(product => product.slug), [draft.slug]);
-        assert.equal(visible.body.products[0].pricePiastres, null);
+        assert.equal(visible.body.products[0].pricePiastres, 12000);
         assert.equal(visible.body.products[0].orderingAvailable, false);
         assert.equal((await request('/public/products/hidden-draft')).status, 404);
       }
@@ -223,19 +223,19 @@ describe('catalog API with an isolated MongoDB database', { concurrency: false }
     assert.equal((await request('/public/categories/child-fixture/products')).status, 404);
   });
 
-  it('refuses publication until price and stock are approved', async () => {
+  it('publishes unpriced products and enables purchase after one price and real-stock save', async () => {
     const product = await Product.create(productInput('approval-fixture'));
     const path = `/admin/products/${product._id}`;
-    assert.equal((await request(`${path}/publication`, { method: 'PATCH', headers: adminHeaders, body: { status: 'ready' } })).status, 400);
-    assert.equal((await Product.findById(product._id)).status, 'draft');
-    const approved = await request(path, { method: 'PATCH', headers: adminHeaders, body: { priceApproved: true, inventory: { approved: true, quantity: 10 }, visibility: 'public', status: 'ready' } });
+    const approved = await request(path, { method: 'PATCH', headers: adminHeaders, body: { ownerWorkflow:true, pricePiastres:null, visibility:'public' } });
     assert.equal(approved.status, 200);
-    assert.equal((await request('/public/products/approval-fixture')).status, 200);
-    assert.equal((await request(path, { method: 'PATCH', headers: adminHeaders, body: { pricePiastres: 13000 } })).status, 400);
-    assert.equal((await Product.findById(product._id)).pricePiastres, 12000);
-    const edited = await request(path, { method: 'PATCH', headers: adminHeaders, body: { pricePiastres: 13000, status: 'draft' } });
+    let publicItem = (await request('/public/products/approval-fixture')).body.product;
+    assert.equal(publicItem.pricePiastres,null);assert.equal(publicItem.businessState,'price_on_request');
+    const edited = await request(path, { method: 'PATCH', headers: adminHeaders, body: { ownerWorkflow:true, pricePiastres:13000, inventory:{mode:'tracked',quantity:2,available:true} } });
     assert.equal(edited.status, 200);
-    assert.equal(edited.body.product.priceApproved, false);
+    publicItem = (await request('/public/products/approval-fixture')).body.product;
+    assert.equal(publicItem.pricePiastres,13000);assert.equal(publicItem.orderingAvailable,true);
+    assert.equal((await Product.findById(product._id)).status,'draft','no second readiness promotion');
+    assert.equal((await request(path, { method:'PATCH',headers:adminHeaders,body:{ownerWorkflow:true,pricePiastres:null} })).status,200);
     const browseOnly = await request('/public/products/approval-fixture');
     assert.equal(browseOnly.status, 200);
     assert.equal(browseOnly.body.product.pricePiastres, null);

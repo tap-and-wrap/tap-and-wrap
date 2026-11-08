@@ -8,7 +8,7 @@ export const PUBLIC_STATIC_ROUTES = Object.freeze({
   '/': { title: 'Tap & Wrap | Thoughtful Gifts & Personalization', description: 'Explore Tap & Wrap gifts, product personalization, gift-box building and configured laser engraving.', heading: HERO_HEADLINE },
   '/shop': { title: 'Shop Gifts | Tap & Wrap', description: 'Browse approved Tap & Wrap gifts by category, availability and price.', heading: 'Shop Our Gifts' },
   '/customize': { title: 'Personalized Gifts | Tap & Wrap', description: 'Explore Build Your Gift Box and Laser Engraving, with options configured for eligible products.', heading: 'Make It Yours' },
-  '/customize/gift-box': { title: 'Build Your Gift Box | Tap & Wrap', description: 'Request a bespoke gift box without upfront payment, with a reviewed quotation shared through WhatsApp.', heading: 'Build Your Gift Box' },
+  '/customize/gift-box': { title: 'Build Your Gift Box | Tap & Wrap', description: 'Arrange your own Gift Box, choose thoughtful finishing touches and preview your complete design.', heading: 'Build Your Gift Box' },
   '/customize/laser-engraving': { title: 'Laser Engraving | Tap & Wrap', description: 'Personal engraving for an item you already own. Physical inspection and final design approval before payment.', heading: 'Laser Engraving' },
 });
 export const CONTENT_ROUTES = Object.freeze(['/about', '/contact', '/privacy-policy', '/refund-policy', '/shipping-policy', '/terms-of-service']);
@@ -60,12 +60,9 @@ export function offerAvailability(product) {
 }
 
 export function productMetadata(product, origin, { indexable = true, checkoutEnabled = false, mediaOrigins, mediaVerified } = {}) {
-  const explicitlyPrivate = product?.browseOnly === true || product?.visibility && product.visibility !== 'public' || product?.preview?.enabled === true || product?.status && product.status !== 'ready' || product?.published === false || product?.reviewRequired === true || product?.inventory?.approved === false || product?.variants?.some((variant) => variant.priceApproved === false || variant.inventory?.approved === false);
-  const eligible = !explicitlyPrivate && product?.priceApproved === true && Number.isSafeInteger(product.pricePiastres) && product.pricePiastres > 0 && SLUG.test(product.slug || '') && Boolean(cleanText(product.name));
-  // In the explicitly enabled, non-purchasable catalog showcase, drafts have real
-  // titles and URLs but must never generate indexable Product or Offer markup.
-  const previewDisplay = product?.browseOnly === true && product?.preview?.enabled !== true && SLUG.test(product?.slug || '') && Boolean(cleanText(product?.name));
-  const displayable = eligible || previewDisplay;
+  const explicitlyPrivate = product?.visibility && product.visibility !== 'public' || product?.preview?.enabled === true || product?.category?.active === false || product?.subcategory?.active === false;
+  const eligible = !explicitlyPrivate && SLUG.test(product?.slug || '') && Boolean(cleanText(product?.name));
+  const displayable = eligible;
   const pathname = displayable ? productHref(product) : '/products/unavailable';
   const imageUrl = displayable ? publicImageUrl(product.mainImageUrl, mediaOrigins) : null;
   const title = displayable ? `${cleanText(product.name, 120)} | Tap & Wrap` : 'Product unavailable | Tap & Wrap';
@@ -74,17 +71,19 @@ export function productMetadata(product, origin, { indexable = true, checkoutEna
   const structuredData = [];
   const indexEligible = eligible && Boolean(imageUrl) && mediaVerified !== false;
   if (indexEligible && indexable && url) {
-    const schema = { '@context': 'https://schema.org', '@type': 'Product', name: cleanText(product.name, 160), description, url, brand: { '@type': 'Brand', name: BRAND_NAME } };
+    const schema = { '@context': 'https://schema.org', '@type': 'Product', name: cleanText(product.name, 160), description, url };
     if (imageUrl) schema.image = [imageUrl];
     // A disabled checkout is not an offer. No merchant price is advertised as purchasable until launch authorization.
-    if (checkoutEnabled) {
-      const variantOffers = (product.variants || []).filter((variant) => Number.isSafeInteger(variant.pricePiastres) && variant.pricePiastres > 0);
+    if (checkoutEnabled && Number.isSafeInteger(product.pricePiastres) && product.pricePiastres > 0 && !['confirm_stock','options_required'].includes(product.businessState)) {
+      const variantOffers = (product.variants || []).filter((variant) => variant.stockConfirmed !== false && Number.isSafeInteger(variant.pricePiastres) && variant.pricePiastres > 0);
+      if (!product.variants?.length || variantOffers.length) {
       const prices = variantOffers.length ? variantOffers.map((variant) => variant.pricePiastres) : [product.pricePiastres];
       schema.offers = { '@type': prices.length > 1 ? 'AggregateOffer' : 'Offer', url, priceCurrency: 'EGP' };
       const states = (variantOffers.length ? variantOffers : [product]).map((entry) => offerAvailability(product.orderingAvailable === true ? entry : { ...entry, orderingAvailable: false }));
       if (states.every((state) => state && state === states[0])) schema.offers.availability = states[0];
       if (prices.length > 1) Object.assign(schema.offers, { lowPrice: (Math.min(...prices) / 100).toFixed(2), highPrice: (Math.max(...prices) / 100).toFixed(2), offerCount: prices.length });
       else schema.offers.price = (prices[0] / 100).toFixed(2);
+      }
     }
     structuredData.push(schema);
     const entries = [{ name: 'Home', pathname: '/' }, { name: 'Shop', pathname: '/shop' }];

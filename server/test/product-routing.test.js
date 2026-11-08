@@ -39,7 +39,7 @@ test('actual API and Worker lifecycle: creation, rename, aliases, withdrawal, de
 });
 
 test('public enquiry, approved purchase, zero stock and hidden states produce only current opaque attestations',async()=>{
- const p=await create(), w=worker();let r=await resolution('legacy-source-123');assert.equal(r.status,200);assert.deepEqual(Object.keys(r.body.data.products[0]).sort(),['canonicalPath','requestedPath','seoSignature']);assert.equal(r.body.data.products[0].seoSignature,null);assert.equal(r.headers.get('cache-control'),'private, no-store');
+ const p=await create(), w=worker();let r=await resolution('legacy-source-123');assert.equal(r.status,200);assert.deepEqual(Object.keys(r.body.data.products[0]).sort(),['canonicalPath','requestedPath','seoSignature']);assert.match(r.body.data.products[0].seoSignature,/^[a-f0-9]{64}$/);assert.equal(r.headers.get('cache-control'),'private, no-store');
  assert.doesNotMatch(JSON.stringify(r.body),/Permanent Test Gift|pricePiastres|quantity|fixtures|_id/);
  await updateProduct(p._id,{expectedRevision:0,status:'ready',priceApproved:true,pricePiastres:45000,inventory:{mode:'tracked',quantity:1,approved:true,available:true}},{actor});
  r=await resolution('permanent-test-gift');const signature=r.body.data.products[0].seoSignature;assert.match(signature,/^[a-f0-9]{64}$/);

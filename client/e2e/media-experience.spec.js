@@ -31,7 +31,7 @@ async function personalize(page) {
   await page.goto(`/products/${product.slug}`); await page.getByRole('button', { name: 'Customize This', exact: true }).click();
   await page.getByLabel(/^Gift name/).fill('Keep this name'); return fixture;
 }
-test('chooser precedes native selection, traps focus, Escape/Cancel/Back preserve the parent and form at 320px', async ({ page }) => {
+test('chooser precedes native selection and Escape/Cancel preserve focus and form without changing browser history at 320px', async ({ page }) => {
   await personalize(page); await page.setViewportSize({ width: 320, height: 740 });
   let native = 0; page.on('filechooser', () => native++);
   const trigger = page.getByRole('button', { name: 'Your photo: Upload Image', exact: true }); await trigger.click();
@@ -41,7 +41,9 @@ test('chooser precedes native selection, traps focus, Escape/Cancel/Back preserv
   await expect(chooser.getByRole('button', { name: 'Close choose image source' })).toBeFocused();
   await page.keyboard.press('Escape'); await expect(chooser).toHaveCount(0); await expect(trigger).toBeFocused();
   await expect(page.getByRole('dialog', { name: 'Customize This', exact: true })).toBeVisible();
-  await trigger.click(); await expect(chooser).toBeVisible(); await page.goBack(); await expect(chooser).toHaveCount(0);
+  const historyLength=await page.evaluate(()=>history.length);
+  await trigger.click(); await expect(chooser).toBeVisible();expect(await page.evaluate(()=>history.length)).toBe(historyLength);
+  await chooser.getByRole('button',{name:'Cancel',exact:true}).click();await expect(chooser).toHaveCount(0);
   await expect(page.getByLabel(/^Gift name/)).toHaveValue('Keep this name');
   await trigger.click(); await expect(chooser).toBeVisible();
   await chooser.screenshot({ path: 'test-results/remediation-2/chooser-320.png' });
@@ -79,8 +81,8 @@ test('unsupported HEIC, empty and oversized selections preserve a valid draft an
 test('a broken local preview can be replaced with a valid image using the same filename', async ({ page }) => {
   const fixture = await personalize(page);
   await chooseImageFiles(page, page, 'Your photo', { name: 'same.png', mimeType: 'image/png', buffer: Buffer.from('not a valid image') });
-  await expect(page.getByRole('alert')).toContainText('could not be previewed');
-  await chooseImageFiles(page, page, 'Replace same.png', isolatedImageFile('same.png'));
+  await expect(page.getByRole('alert')).toContainText('unsupported format');
+  await chooseImageFiles(page, page, 'Your photo', isolatedImageFile('same.png'));
   const preview = page.getByAltText('Selected your photo 1');
   await expect(preview).toBeVisible(); await expect.poll(() => preview.evaluate(img => img.naturalWidth)).toBeGreaterThan(0);
   await expect(page.getByRole('alert')).toHaveCount(0); expect(fixture.uploads).toHaveLength(0);

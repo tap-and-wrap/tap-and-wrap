@@ -8,7 +8,8 @@ export default function ProductCard({ product }) {
   const cardRef = useRef(null);
   const cart = useCart();
   const approvedPrice = product.priceApproved === true && Number.isSafeInteger(product.pricePiastres) && product.pricePiastres > 0;
-  const enquiryRequired = product.browseOnly === true || !approvedPrice || product.orderingAvailable !== true;
+  const outOfStock = approvedPrice && product.businessState === 'out_of_stock';
+  const enquiryRequired = !outOfStock && (product.browseOnly === true || !approvedPrice || product.orderingAvailable !== true);
   const orderingAvailable = !enquiryRequired && product.orderingAvailable === true;
   const enquiryUrl = `https://wa.me/201508216472?text=${encodeURIComponent(`Hello Tap & Wrap, please confirm the price and availability of ${product.name}: https://tapandwrap.net${productHref(product)}`)}`;
   const action = !orderingAvailable ? 'Sold Out' : product.requiresOptions ? 'Choose Options' : 'Add to Cart';
@@ -22,14 +23,14 @@ export default function ProductCard({ product }) {
         ) : <span className="catalog-image-placeholder" aria-hidden="true">Image coming soon</span>}
         <span className="catalog-card-badges">
           {!enquiryRequired && product.bestSeller === true && <span>Best Seller</span>}
-          {enquiryRequired ? <span>Ask for details</span> : !orderingAvailable && <span>Sold Out</span>}
+          {enquiryRequired ? <span>{approvedPrice ? 'Confirm availability' : 'Price on Request'}</span> : !orderingAvailable && <span>Out of Stock</span>}
         </span>
       </Link>
       <div className="catalog-card-body">
         {product.category?.name && <p className="catalog-card-category">{product.category.name}</p>}
         <h3><Link to={detailUrl}>{product.name}</Link></h3>
         <p className="catalog-price">
-          <span>{approvedPrice ? formatCatalogPrice(product.pricePiastres) : 'Price on request'}</span>
+          <span>{approvedPrice ? formatCatalogPrice(product.pricePiastres) : 'Price on Request'}</span>
           {approvedPrice && Number.isSafeInteger(product.compareAtPiastres) && product.compareAtPiastres > product.pricePiastres && (
             <del>{formatCatalogPrice(product.compareAtPiastres)}</del>
           )}

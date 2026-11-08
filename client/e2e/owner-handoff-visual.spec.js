@@ -51,9 +51,9 @@ for(const width of widths)test(`Kalam owner workspace and role menu at ${width}`
 test('staggered motion has bounded entry/exit, traps focus and fits a short phone',async({page},info)=>{
   await mockCatalog(page);await page.setViewportSize({width:320,height:400});await page.emulateMedia({reducedMotion:'no-preference'});await page.goto('/');
   const opener=page.getByRole('button',{name:'Open menu'});await opener.click();const dialog=page.getByRole('dialog');
-  expect(await dialog.locator('nav>ul>li').first().evaluate(node=>getComputedStyle(node).animationName)).toBe('menu-link-in');
+  expect(await dialog.locator('.sm-panel').evaluate(node=>node.getAnimations().length)).toBeGreaterThan(0);
   await page.waitForTimeout(650);await screenshot(page,info,'320-short-menu',false);await noOverflow(page);
-  await dialog.getByRole('link',{name:'Track Order',exact:true}).focus();await page.keyboard.press('Tab');await expect(dialog.getByRole('button',{name:'Close menu'})).toBeFocused();
+  await dialog.getByRole('link',{name:'Track Order',exact:true}).focus();await page.keyboard.press('Tab');expect(await dialog.evaluate(node=>node.contains(document.activeElement))).toBe(true);
   await dialog.getByRole('button',{name:'Close menu'}).click();await expect(dialog).toHaveClass(/is-closing/);await expect(dialog).toHaveCount(0);await expect(opener).toBeFocused();
   await page.emulateMedia({reducedMotion:'reduce'});await opener.click();expect(await dialog.evaluate(node=>getComputedStyle(node).animationName)).toBe('none');await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);
 });

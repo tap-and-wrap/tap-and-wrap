@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { FONT_REGISTRY, ICON_REGISTRY, ICON_CATEGORIES } from '../../../shared/engraving/definitions.mjs';
 import { authGeneration } from '../services/api.js';
 import CatalogDialog from '../components/CatalogDialog.jsx';
+import ImageSourceChooser from '../components/ImageSourceChooser.jsx';
 
 export function LocalPhoto({ file, alt, className = '' }) {
   const [source, setSource] = useState(null);
@@ -15,14 +16,14 @@ export function LocalPhoto({ file, alt, className = '' }) {
 
 export function StudioUpload({ label, file, onChange, required = false, error }) {
   const id=useId(), [localError,setLocalError]=useState('');
-  function select(event) {
-    const selected=event.target.files?.[0]; event.target.value=''; if(!selected)return;
+  function select(files) {
+    const selected=files[0]; if(!selected)return;
     if(!['image/jpeg','image/png','image/webp'].includes(selected.type)||!selected.size||selected.size>8388608){setLocalError('Choose a JPEG, PNG or WebP image up to 8 MB.');return;}
     setLocalError('');onChange(selected);
   }
   return <div className={`studio-upload ${file ? 'has-photo' : ''}`}>
     {file && <div className="studio-upload-photo"><LocalPhoto file={file} alt={label}/></div>}
-    <div><p className="studio-upload-label">{label}{required?' *':''}</p><div className="studio-upload-actions"><label><input className="studio-file-input" type="file" accept="image/jpeg,image/png,image/webp" aria-label={label} aria-invalid={Boolean(localError||error)} aria-describedby={`${id}-help${localError||error?` ${id}-error`:''}`} onChange={select}/><span>{file?'Replace image':'Choose photo'}</span></label><label><input className="studio-file-input" type="file" capture="environment" accept="image/jpeg,image/png,image/webp" aria-label={`Use camera for ${label}`} onChange={select}/><span>Camera</span></label>{file&&<button type="button" onClick={()=>{setLocalError('');onChange(undefined);}}>Remove image</button>}</div>
+    <div><p className="studio-upload-label">{label}{required?' *':''}</p><div className="studio-upload-actions"><ImageSourceChooser onError={setLocalError} label={file?'Replace image':'Choose photo'} context={label} inputLabel={label} maxBytes={8388608} describedBy={`${id}-help${localError||error?` ${id}-error`:''}`} invalid={Boolean(localError||error)} onSelect={select}/>{file&&<button type="button" onClick={()=>{setLocalError('');onChange(undefined);}}>Remove image</button>}</div>
       <small id={`${id}-help`}>{file ? 'Private reference · ready on this device' : 'JPG, PNG or WebP · up to 8 MB'}</small>{(localError||error)&&<p id={`${id}-error`} role="alert">{localError||error}</p>}</div>
   </div>;
 }

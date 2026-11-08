@@ -7,6 +7,7 @@ import { productSeoSignature } from '../../../shared/product-seo.mjs';
 import { listProducts, getPublicProduct, listCategories, getPublicCategory } from '../catalog/service.js';
 import { captureAction, monetaryParameters } from '../tracking/service.js';
 import { parseInput, parseSlug, publicProductQuerySchema, categoryQuerySchema } from '../catalog/validation.js';
+import { publicSeoPublicationPage } from '../catalog/seo-publication.js';
 
 export function requireCatalogDatabase(req, res, next) {
   if (mongoose.connection.readyState !== 1) {
@@ -18,6 +19,12 @@ export function requireCatalogDatabase(req, res, next) {
 const router = Router();
 router.use(requireCatalogDatabase);
 
+router.get('/seo-publication',async(req,res)=>{
+  const query=parseInput(z.object({kind:z.enum(['products','categories']).optional(),after:z.string().regex(/^[a-f0-9]{24}$/).optional()}).strict(),req.query);
+  res.set({'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow, noarchive'});
+  res.json({ok:true,data:await publicSeoPublicationPage(query)});
+});
+
 // Address/status attestation, not a catalog/SEO export. No cookies, tracking,
 // financial values, storage keys or private product identities are returned.
 router.get('/product-addresses', async (req, res) => {
@@ -26,7 +33,7 @@ router.get('/product-addresses', async (req, res) => {
     const requestedPath = `/products/${slug}`;
     try {
       const product = await getPublicProduct(slug, { includeRelated: false, includeRoutingVersion: true });
-      return { requestedPath, canonicalPath: product.publicPath, seoSignature: product.browseOnly ? null : createHash('sha256').update(JSON.stringify([productSeoSignature(product), env.checkoutEnabled === true, product.routingVersion])).digest('hex') };
+      return { requestedPath, canonicalPath: product.publicPath, seoSignature: createHash('sha256').update(JSON.stringify([productSeoSignature(product), env.checkoutEnabled === true, product.routingVersion])).digest('hex') };
     } catch (error) {
       if (error.status !== 404) throw error;
       return { requestedPath, notFound: true };

@@ -288,7 +288,7 @@ test('customization service listing includes only approved eligible products wit
   const box = await template('gift-box', { kind: 'gift_box' });
   const customization = { enabled: true, serviceEntryEligible: true, serviceKind: 'gift_box', templateId: box._id };
   await product('ready-box', { customization });
-  await product('draft-box', { customization, status: 'draft', priceApproved: false });
+  await product('draft-box', { customization, status: 'draft', pricePiastres:null, priceApproved: false });
   const wrongParent = await Category.create({ name: 'Other main', slug: 'other-main', active: true });
   const otherChild = await Category.create({ name: 'Other child', slug: 'other-child', parentId: wrongParent._id, active: true });
   await product('inactive-box', { customization, subcategoryId: otherChild._id });

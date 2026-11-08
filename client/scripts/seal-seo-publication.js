@@ -1,0 +1,10 @@
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { sealPublication } from './seo/renewal.js';
+const catalog = JSON.parse(await readFile('local-data/seo-renewal-catalog.json', 'utf8'));
+const content = JSON.parse(await readFile('local-data/seo-renewal-content.json', 'utf8'));
+const sourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+const lock = sealPublication({ catalog, content, sourceCommit });
+await mkdir('seo-publication', { recursive: true });
+for (const [name, value] of Object.entries({ catalog, content, lock })) await writeFile(`seo-publication/${name}.json`, JSON.stringify(value) + '\n');
+console.log(JSON.stringify({ sealed: true, sourceCommit, publicationId: lock.publicationId, expiresAt: lock.expiresAt, products: catalog.products.length }));

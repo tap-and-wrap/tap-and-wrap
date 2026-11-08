@@ -113,22 +113,23 @@ describe('catalog model validation', () => {
     await rejectsValidation({ galleryKeys: [mainImage, ...Array.from({ length: 23 }, (_, i) => `catalog/image-${i}.webp`)] });
   });
 
-  it('requires price and stock approval before Ready publication', async () => {
-    await rejectsValidation({ visibility: 'public', status: 'ready' });
+  it('publishes unpriced pages independently of confirmed purchase stock', async () => {
+    await new Product(productData({ visibility: 'public', status: 'ready' })).validate();
     const withoutPrice = new Product(approvedData({ priceApproved: false }));
-    await assert.rejects(withoutPrice.validate());
+    await withoutPrice.validate();
     const withoutStock = new Product(approvedData({ inventory: { mode: new Product(productData()).inventory.mode, quantity: 10, available: true, approved: false } }));
-    await assert.rejects(withoutStock.validate());
+    await withoutStock.validate();
     const product = new Product(approvedData());
     await product.validate();
     assert.equal(product.published, true);
     assert.deepEqual(getPublicationIssues(product), []);
   });
 
-  it('keeps unresolved review items from becoming Ready', async () => {
+  it('retains import warnings without blocking public information pages', async () => {
     const product = new Product(approvedData({ reviewRequired: true, reviewReasons: ['Catalog role needs review.'] }));
-    await assert.rejects(product.validate());
-    assert.ok(getPublicationIssues(product).length > 0);
+    await product.validate();
+    assert.equal(product.published, true);
+    assert.deepEqual(getPublicationIssues(product), []);
   });
 
   it('records typed required personalization fields and rejects duplicate field keys', async () => {
@@ -153,7 +154,7 @@ describe('catalog model validation', () => {
     assert.equal(String(product.customization.templateId), String(templateId));
   });
 
-  it('rejects duplicate variant keys and requires variant price approval for publication', async () => {
+  it('rejects duplicate variant keys while price bookkeeping does not gate publication', async () => {
     const variant = {
       key: 'size_small',
       attributes: [{ name: 'Size', value: 'Small' }],
@@ -165,8 +166,8 @@ describe('catalog model validation', () => {
     const product = new Product(approvedData({ variants: [variant] }));
     await product.validate();
     product.variants[0].priceApproved = false;
-    await assert.rejects(product.validate());
-    assert.ok(getPublicationIssues(product).length > 0);
+    await product.validate();
+    assert.deepEqual(getPublicationIssues(product), []);
   });
 
   it('keeps component roles in the separate component collection', async () => {
@@ -231,14 +232,14 @@ describe('catalog uniqueness and visibility in an isolated local database', () =
     assert.equal(await Category.countDocuments({ nameNormalized: 'cards' }), 2);
   });
 
-  it('returns only approved Ready products from the public visibility filter', async () => {
+  it('purchase candidates require price and real stock, independently of historical import status', async () => {
     const draft = await Product.create(productData());
     const hold = await Product.create(approvedData({ status: 'hold' }));
     const ready = await Product.create(approvedData());
     const results = await Product.find(publicProductFilter()).lean();
-    assert.deepEqual(results.map((product) => String(product._id)), [String(ready._id)]);
+    assert.deepEqual(results.map((product) => String(product._id)), [String(hold._id),String(ready._id)]);
     assert.equal(draft.published, false);
-    assert.equal(hold.published, false);
+    assert.equal(hold.published, true);
   });
 
   it('excludes unapproved legacy documents even if their stored publication flags say Ready', async () => {

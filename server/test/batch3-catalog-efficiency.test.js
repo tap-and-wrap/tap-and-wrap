@@ -21,7 +21,7 @@ const ready = (index, extra = {}) => ({ name: `Synthetic ${index}`, slug: `synth
 
 test('one authoritative category graph read preserves approval/hierarchy gates and twenty-item pagination', async context => {
   await Product.insertMany(Array.from({ length: 23 }, (_, index) => ready(index)));
-  await Product.create(ready(24, { priceApproved: false, status: 'draft' }));
+  await Product.create(ready(24, { pricePiastres:null, priceApproved: false, status: 'draft' }));
   await Product.create(ready(25, { categoryId: inactive._id, subcategoryId: null }));
   await Product.create(ready(26, { categoryId: root._id, subcategoryId: new mongoose.Types.ObjectId() }));
   const find = Category.find.bind(Category);

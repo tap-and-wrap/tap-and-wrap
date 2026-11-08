@@ -7,6 +7,7 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXM
 const file = name => ({ name, mimeType: 'image/png', buffer: png });
 const cors = { 'Access-Control-Allow-Origin': 'http://127.0.0.1:5191', 'Access-Control-Allow-Credentials': 'true', 'Access-Control-Allow-Headers': 'content-type,x-csrf-token', 'Access-Control-Allow-Methods': 'GET,POST,PATCH,OPTIONS' };
 async function mediaFixture(page, { duplicate = false } = {}) {
+  await page.route('https://fixture.invalid/**',route=>route.fulfill({contentType:'image/png',body:png}));
   let fail = false, count = 0;
   await page.route('**/api/v1/admin/media**', async route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
@@ -17,7 +18,7 @@ async function mediaFixture(page, { duplicate = false } = {}) {
   });
   return { fail: value => { fail = value; } };
 }
-test('product multiple uploads, primary replacement and gallery order preserve imports and revision on mobile', async ({ page }) => {
+test('product multiple uploads, primary replacement and gallery order preserve imports and revision on mobile', async ({ page },info) => {
   const fixture = await mockCatalog(page, { role: 'admin' }); await mediaFixture(page);
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto(`/admin/products/${adminProduct._id}/edit`);
@@ -32,9 +33,9 @@ test('product multiple uploads, primary replacement and gallery order preserve i
   await gallery.getByRole('button', { name: 'Upload selected images', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Save changes', exact: true })).toBeEnabled();
   await gallery.getByRole('button', { name: 'Move image 4 up' }).click();
-  for (const width of [1440, 768, 320]) {
+  for (const width of [320,390,440,768,1024,1440]) {
     await page.setViewportSize({ width, height: 900 });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);await page.evaluate(()=>{document.activeElement?.blur();const el=document.querySelector('.admin-media');scrollTo(0,el.getBoundingClientRect().top+scrollY-parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--site-header-height'))-20);});await page.screenshot({path:info.outputPath(width+'-admin-gallery.png'),animations:'disabled'});
   }
   await gallery.screenshot({ path: 'test-results/batch2-gallery-320.png' });
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
@@ -88,7 +89,7 @@ test('duplicate selection is not added twice and stale save retains the uploaded
   await page.goto(`/admin/products/${adminProduct._id}/edit`);
   const gallery = page.getByRole('region', { name: 'Product images', exact: true });
   await chooseImageFiles(page, gallery, 'Add images', Array.from({ length: 24 }, (_, index) => file(`${index}.png`)));
-  await expect(gallery.getByRole('alert')).toContainText('at most 23');
+  await expect(gallery.getByRole('alert')).toContainText('no more than 21');
   await chooseImageFiles(page, gallery, 'Add images', [file('same.png'), file('same-again.png')]);
   await gallery.getByRole('button', { name: 'Upload selected images' }).click();
   await expect(gallery.getByRole('alert')).toContainText('duplicate was not added');

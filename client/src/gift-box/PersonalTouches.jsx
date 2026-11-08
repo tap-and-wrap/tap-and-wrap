@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import ImageSourceChooser from '../components/ImageSourceChooser.jsx';
 import { LETTERING_STYLES, ENGRAVING_COLORS, getEngravingColor, MAX_GIFT_PHOTOS, MAX_ENGRAVING_LINES, MAX_ENGRAVING_CODEPOINTS } from '../../../shared/gift-box/lettering-styles.mjs';
 
 export function PersonalPreview({ personal, showPhotoStack = true }) {
@@ -30,11 +31,7 @@ export default function PersonalTouches({ personal }) {
     <div className="gb-personal-group">
       <h3>Your special photos</h3>
       <p>Add photo prints and move them inside or beside the box. The browser has a memory/performance safety budget, not a physical packing allowance.</p>
-      <label className="gb-photo-field">Choose photos · {photos.length} selected (local preview safety maximum: {MAX_GIFT_PHOTOS})
-        <input aria-label="Add special photos" type="file" accept="image/jpeg,image/png,image/webp" multiple
-          disabled={photos.length>=MAX_GIFT_PHOTOS}
-          onChange={event => { personal.addPhotos(event.target.files); event.target.value=''; }}/>
-      </label>
+      <div className="gb-photo-field"><span>Choose photos · {photos.length} selected</span><ImageSourceChooser label="Add special photos" inputLabel="Add special photos" multiple maxBytes={8388608} maxFiles={MAX_GIFT_PHOTOS-photos.length} disabled={photos.length>=MAX_GIFT_PHOTOS} onSelect={personal.addPhotos}/></div>
       {photos.length>0 && <ol className="gb-photo-order" aria-label="Selected photo order">{photos.map((photo,index)=><li key={photo.id}>
         <img src={photo.url} alt=""/><span>Photo {index+1} · {photo.name}</span>
         <button type="button" aria-label={`Move photo ${index+1} earlier`} disabled={index===0} onClick={()=>personal.movePhoto(photo.id,-1)}>↑</button>

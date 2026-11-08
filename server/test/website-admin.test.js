@@ -153,7 +153,7 @@ test('retired review editing cannot republish, hide or alter an authentic histor
 
 test('public product reviews require approved public products and active category relationships', async () => {
   const published = await product('reviewed-product');
-  const draft = await product('draft-product', { status: 'draft', priceApproved: false });
+  const draft = await product('draft-product', { visibility:'hidden',status: 'draft', pricePiastres:null, priceApproved: false });
   await review({ productId: published._id, featured: true });
   await review({ productId: draft._id, featured: true });
   await review({ productId: published._id, status: 'draft', approved: false });

@@ -1,6 +1,7 @@
 import { isSafeImageReference } from './fields.js';
-import { purchaseSetupAllows, ownerVariantStock } from './product-policy.js';
-import { productPersonalizationFields, productPersonalizationIssues } from '../../../shared/product-personalization.mjs';
+import { ownerVariantStock } from './product-policy.js';
+import { productPersonalizationFields } from '../../../shared/product-personalization.mjs';
+import { productBusinessState, positiveProductPrice, confirmedInventoryAvailable } from '../../../shared/product-business-state.mjs';
 
 // Storage references become public only through an explicitly configured HTTPS origin.
 export function mediaUrlForKey(key, baseUrl = process.env.CATALOG_MEDIA_BASE_URL || '') {
@@ -16,20 +17,11 @@ export function mediaUrlForKey(key, baseUrl = process.env.CATALOG_MEDIA_BASE_URL
 }
 
 export function inventoryCanOrder(inventory) {
-  if (!inventory?.approved || !inventory.available) return false;
-  if (inventory.mode === 'made_to_order') return true;
-  return inventory.mode === 'tracked' && Number.isSafeInteger(inventory.quantity) && inventory.quantity > 0;
+  return confirmedInventoryAvailable(inventory);
 }
 
 export function productCanOrder(product) {
-  if (productPersonalizationIssues(product.personalization).length) return false;
-  if (product.visibility !== 'public' || !purchaseSetupAllows(product) ||
-      product.priceApproved !== true || !Number.isSafeInteger(product.pricePiastres) || product.pricePiastres <= 0 ||
-      !product.mainImageKey || !product.categoryId || (!product.inventory?.approved && !ownerVariantStock(product)) || !product.inventory.available) return false;
-  if (ownerVariantStock(product)) return product.variants.some(variant => inventoryCanOrder(variant.inventory) && (variant.pricePiastres == null || variant.priceApproved === true && variant.pricePiastres > 0));
-  if (product.variants?.some(variant => (variant.pricePiastres != null &&
-      (!variant.priceApproved || variant.pricePiastres <= 0)) || !variant.inventory?.approved)) return false;
-  return product.variants?.length ? product.variants.some(variant => inventoryCanOrder(variant.inventory)) : inventoryCanOrder(product.inventory);
+  return productBusinessState(product).orderingAvailable;
 }
 
 export function categoryPresentation(category) {
@@ -38,8 +30,9 @@ export function categoryPresentation(category) {
 }
 
 export function publicProductCard(product) {
-  const browseOnly = product.visibility !== 'public' || !purchaseSetupAllows(product) || product.priceApproved !== true || !Number.isSafeInteger(product.pricePiastres) || product.pricePiastres <= 0 || (product.inventory?.approved !== true && !ownerVariantStock(product)) || !ownerVariantStock(product) && product.variants?.some(variant => (variant.pricePiastres != null && (variant.priceApproved !== true || variant.pricePiastres <= 0)) || variant.inventory?.approved !== true) || product.categoryId?.active === false || product.subcategoryId?.active === false;
-  const priceApproved = product.priceApproved === true && Number.isSafeInteger(product.pricePiastres) && product.pricePiastres > 0;
+  const business = productBusinessState(product);
+  const browseOnly = !business.orderingAvailable;
+  const priceApproved = business.priced;
   return {
     _id: String(product._id),
     name: product.name,
@@ -51,6 +44,8 @@ export function publicProductCard(product) {
     pricePiastres: priceApproved ? product.pricePiastres : null,
     compareAtPiastres: priceApproved ? product.compareAtPiastres ?? null : null,
     priceApproved,
+    businessState: business.state,
+    published: business.published,
     browseOnly,
     visibility: product.visibility,
     featured: Boolean(product.featured),
@@ -60,7 +55,7 @@ export function publicProductCard(product) {
   };
 }
 
-function publicInventory(inventory) {
+function publicInventory(inventory = {}) {
   return { mode: inventory.mode, quantity: inventory.approved === true && inventory.mode === 'tracked' ? inventory.quantity : null, available: inventoryCanOrder(inventory) };
 }
 
@@ -70,14 +65,15 @@ export function publicProductDetail(product) {
     ...card,
     description: product.description,
     galleryUrls: (product.galleryKeys || []).map((key) => mediaUrlForKey(key)).filter(Boolean),
-    inventory: card.browseOnly ? { mode: product.inventory?.mode, quantity: null, available: false } : ownerVariantStock(product) ? { mode: product.inventory.mode, quantity: null, available: product.inventory.available } : publicInventory(product.inventory),
+    inventory: ownerVariantStock(product) ? { mode: product.inventory?.mode, quantity: null, available: product.inventory?.available === true } : publicInventory(product.inventory),
     variants: (product.variants || []).map((variant) => ({
       key: variant.key,
-      priceApproved: variant.pricePiastres == null ? card.priceApproved : variant.priceApproved === true && Number.isSafeInteger(variant.pricePiastres) && variant.pricePiastres > 0,
+      stockConfirmed: variant.inventory?.approved === true,
+      priceApproved: variant.pricePiastres == null ? card.priceApproved : positiveProductPrice(variant.pricePiastres),
       attributes: variant.attributes,
-      pricePiastres: variant.pricePiastres == null ? (card.priceApproved ? product.pricePiastres : null) : variant.priceApproved === true && Number.isSafeInteger(variant.pricePiastres) && variant.pricePiastres > 0 ? variant.pricePiastres : null,
-      inventory: card.browseOnly || !variant.inventory?.approved ? { mode: variant.inventory?.mode, quantity: null, available: false } : publicInventory(variant.inventory),
-      orderingAvailable: card.orderingAvailable && inventoryCanOrder(variant.inventory) && (variant.pricePiastres == null || variant.priceApproved === true && variant.pricePiastres > 0),
+      pricePiastres: variant.pricePiastres == null ? (card.priceApproved ? product.pricePiastres : null) : positiveProductPrice(variant.pricePiastres) ? variant.pricePiastres : null,
+      inventory: publicInventory(variant.inventory),
+      orderingAvailable: card.orderingAvailable && inventoryCanOrder(variant.inventory) && (variant.pricePiastres == null || positiveProductPrice(variant.pricePiastres)),
     })),
     personalization: { requiredBeforePurchase: product.personalization?.requiredBeforePurchase === true, fields: productPersonalizationFields(product.personalization) },
     customization: {

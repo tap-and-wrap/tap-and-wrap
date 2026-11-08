@@ -121,8 +121,8 @@ test('product gallery, required options, stock and sticky controls preserve serv
   await page.getByLabel('Quantity', { exact: true }).fill('20');
   await expect(page.getByLabel('Quantity', { exact: true })).toHaveValue('3');
   await chooseOption(page.getByLabel('Choose size / color'), 'large-rose');
-  await expect(page.locator('.product-stock-status')).toHaveText('Online purchase unavailable · Enquire on WhatsApp');
-  await expect(page.locator('.product-purchase-section').getByRole('link', { name: 'Enquire on WhatsApp', exact: true })).toBeVisible();
+  await expect(page.locator('.product-stock-status')).toHaveText('Out of Stock');
+  await expect(page.locator('.product-purchase-section').getByRole('button', { name: 'Out of Stock', exact: true })).toBeDisabled();
   await chooseOption(page.getByLabel('Choose size / color'), 'small-rose');
   await expect(page.getByRole('button', { name: 'Add to Cart', exact: true })).toBeEnabled();
   await expect(page.locator('.product-related .catalog-card')).toHaveCount(4);
@@ -163,11 +163,13 @@ test('admin requires protected server verification and paginates its product tab
   await expect(page.getByText('Page 2 of 3')).toBeVisible();
   expect(fixture.requests.filter((item) => item.path === '/admin/products').at(-1).params).toMatchObject({ page: '2', limit: '20' });
   await page.getByText('More filters', { exact: true }).click();
-  await chooseOption(page.getByRole('combobox', { name: 'Original catalog status', exact: true }), 'draft');
+  await expect(page.getByRole('combobox', { name: 'Price confirmation', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('combobox', { name: 'Stock confirmation', exact: true })).toBeVisible();
+  await chooseOption(page.getByRole('combobox', { name: 'Public display', exact: true }), 'public');
   await chooseOption(page.getByRole('combobox', { name: 'Sort products', exact: true }), 'name_desc');
-  await expect(page).toHaveURL(/status=draft/);
+  await expect(page).toHaveURL(/visibility=public/);
   await expect.poll(() => fixture.requests.filter((item) => item.path === '/admin/products').at(-1).params.sort).toBe('name_desc');
-  expect(fixture.requests.filter((item) => item.path === '/admin/products').at(-1).params).toMatchObject({ page: '1', status: 'draft', sort: 'name_desc' });
+  expect(fixture.requests.filter((item) => item.path === '/admin/products').at(-1).params).toMatchObject({ page: '1', visibility: 'public', sort: 'name_desc' });
 });
 
 test('admin edits invalidate approval and preserve untouched configuration and main image ordering', async ({ page }) => {
@@ -256,11 +258,11 @@ test('browse-only products show no provisional prices or purchase action, and li
   await page.route(`**/api/v1/public/products/${browseCard.slug}`, async route => route.fulfill({ headers, json: { ok: true, data: { product: { ...browseCard, inventory: { mode: 'tracked', quantity: null, available: false }, variants: [], galleryUrls: [], personalization: { fields: [] } }, relatedProducts: [] } } }));
   await page.goto('/shop');
   await expect(page.locator('.catalog-card')).toHaveCount(1);
-  await expect(page.locator('.catalog-card')).toContainText('Price on request');
+  await expect(page.locator('.catalog-card')).toContainText('Price on Request');
   await expect(page.getByRole('link', { name: `Enquire on WhatsApp about ${browseCard.name}` })).toHaveAttribute('href', /wa\.me\/201508216472/);
   await expect(page.locator('.catalog-card').getByRole('button', { name: /Add to Cart/ })).toHaveCount(0);
   await page.goto(`/products/${browseCard.slug}`);
-  await expect(page.locator('.product-summary')).toContainText('Price on request');
+  await expect(page.locator('.product-summary')).toContainText('Price on Request');
   await expect(page.locator('.product-summary').getByRole('link', { name: 'Enquire on WhatsApp' })).toHaveAttribute('href', /wa\.me\/201508216472/);
   await expect(page.locator('.product-summary').getByRole('button', { name: 'Add to Cart' })).toHaveCount(0);
 });

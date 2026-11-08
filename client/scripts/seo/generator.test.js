@@ -231,8 +231,8 @@ test('checkout-disabled product metadata does not advertise an offer or invented
   assert.equal(schema.review, undefined);
 });
 
-test('runtime metadata rejects explicit drafts/previews and gives private pages useful non-personal titles', () => {
-  for (const change of [{ status: 'draft' }, { published: false }, { reviewRequired: true }, { preview: { enabled: true } }, { inventory: { approved: false } }]) {
+test('runtime metadata rejects hidden/withdrawn/private previews and gives private pages useful non-personal titles', () => {
+  for (const change of [{ visibility:'hidden' }, { visibility:'withdrawn' }, { preview: { enabled: true } }]) {
     const metadata = productMetadata({ ...product, ...change }, origin);
     assert.equal(metadata.indexable, false);
     assert.equal(metadata.structuredData.length, 0);
@@ -240,6 +240,14 @@ test('runtime metadata rejects explicit drafts/previews and gives private pages 
   assert.equal(privatePageTitle('/checkout'), 'Checkout | Tap & Wrap');
   assert.equal(privatePageTitle('/products/isolated/customize'), 'Customize This Product | Tap & Wrap');
   assert.equal(privatePageTitle('/orders/private-order-id'), 'Order Details | Tap & Wrap');
+});
+
+test('unpriced published products are indexable information pages with truthful schema and no invented offer',()=>{
+  const unpriced={...product,visibility:'public',pricePiastres:null,priceApproved:false,orderingAvailable:false,businessState:'price_on_request',seoEligibility:{visibility:'public',published:true,categoriesActive:true}};
+  const plan=buildSeoPlan({catalog:catalog({products:[unpriced],checkoutEnabled:true}),siteOrigin:origin,publish:true});
+  const route=plan.routes.get('/products/fixture-product');assert.equal(route.indexable,true);assert.match(route.body,/Price on Request/);
+  assert.equal(route.structuredData[0]['@type'],'Product');assert.equal(route.structuredData[0].offers,undefined);assert.match(sitemapXml(plan),/products\/fixture-product/);
+  for(const change of [{status:'draft'},{published:false},{reviewRequired:true},{inventory:{approved:false}}])assert.equal(productMetadata({...unpriced,...change},origin).indexable,true);
 });
 
 test('subcategory metadata and crawlable HTML preserve the active parent breadcrumb', () => {

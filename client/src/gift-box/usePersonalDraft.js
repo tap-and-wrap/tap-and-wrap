@@ -17,6 +17,27 @@ export function usePersonalDraft({ freePlacement = false, photoAspectRatios = fa
     for (const url of objectUrls.current) URL.revokeObjectURL(url);
     objectUrls.current.clear();
   }, []);
+  function createPhoto(file, id = crypto.randomUUID()) {
+    const url = URL.createObjectURL(file);objectUrls.current.add(url);
+    const photo = { id, file, fileKey: `${file.name}\u0000${file.size}\u0000${file.lastModified}`, name:file.name,url,dimensionsPending:true };
+    const image = new Image();
+    image.onload = () => {
+      if (!objectUrls.current.has(url)) return;
+      const aspectRatio=image.naturalWidth/image.naturalHeight;
+      if (!Number.isFinite(aspectRatio) || image.naturalWidth > 12000 || image.naturalHeight > 12000 || image.naturalWidth*image.naturalHeight > 40000000) { setNotice('Choose a smaller supported photograph.'); return; }
+      setPhotos(current=>current.map(item=>item.id === id && item.url === url ? {...item,aspectRatio,dimensionsPending:false} : item));
+    };
+    image.onerror = () => { if (objectUrls.current.has(url)) setNotice('This photo could not be opened. Remove it and choose another image.'); };
+    image.src=url;return photo;
+  }
+  function replacePhoto(id, file) {
+    const old = photosRef.current.find(photo=>photo.id===id);if (!old || !file) return;
+    const others = photosRef.current.filter(photo=>photo.id!==id), problem = validateLocalPhotoBatch(others.map(p=>p.file),[file]);
+    if (problem) {setNotice(problem);return;}
+    if (others.some(photo=>photo.fileKey===`${file.name}\u0000${file.size}\u0000${file.lastModified}`)) {setNotice('Each photo can only be added once.');return;}
+    const replacement=createPhoto(file,id);objectUrls.current.delete(old.url);URL.revokeObjectURL(old.url);
+    photosRef.current=photosRef.current.map(photo=>photo.id===id?replacement:photo);setPhotos(photosRef.current);setNotice('');
+  }
   function addPhotos(fileList) {
     let candidates = Array.from(fileList || []);
     // Deleted photos remain memory-only while they are undoable. Re-selecting
@@ -37,21 +58,7 @@ export function usePersonalDraft({ freePlacement = false, photoAspectRatios = fa
       if (existing.has(key) || seen.has(key)) { setNotice('Each photo can only be added once.'); return; }
       seen.add(key);
     }
-    const additions = candidates.map(file => {
-      const url = URL.createObjectURL(file);
-      objectUrls.current.add(url);
-      const photo = { id: crypto.randomUUID(), file, fileKey: `${file.name}\u0000${file.size}\u0000${file.lastModified}`, name:file.name,url,dimensionsPending:true };
-      const image = new Image();
-      image.onload = () => {
-        if (!objectUrls.current.has(url)) return;
-        const aspectRatio=image.naturalWidth/image.naturalHeight;
-        if (!Number.isFinite(aspectRatio) || image.naturalWidth > 12000 || image.naturalHeight > 12000 || image.naturalWidth*image.naturalHeight > 40000000) { setNotice('Choose a smaller supported photograph.'); return; }
-        setPhotos(current=>current.map(item=>item.id === photo.id ? {...item,aspectRatio,dimensionsPending:false} : item));
-      };
-      image.onerror = () => { if (objectUrls.current.has(url)) setNotice('This photo could not be opened. Remove it and choose another image.'); };
-      image.src=url;
-      return photo;
-    });
+    const additions = candidates.map(file => createPhoto(file));
     // Synchronize the ref immediately so two quick file-picker changes cannot
     // bypass the aggregate byte/count budget before useEffect runs.
     photosRef.current = [...photosRef.current, ...additions];
@@ -120,5 +127,5 @@ export function usePersonalDraft({ freePlacement = false, photoAspectRatios = fa
     setSticker({enabled:false,text:'',styleId:'sticker-rochester-v1',colorId:'black',optionId:null});
     setEngravings([{id:'line-1',text:'',styleId:null,colorId:DEFAULT_ENGRAVING_COLOR}]);
   }
-  return { freePlacement, photoAspectRatios, presentationVersion, sticker, updateSticker, photos: visiblePhotos, engravings, notice, hasContent, photoPositions: arrangementPositions || photoPositions, placePhoto, resetPhotoPositions, addPhotos, removePhoto, movePhoto, updateEngraving, addEngraving, removeEngraving,reset };
+  return { freePlacement, photoAspectRatios, presentationVersion, sticker, updateSticker, photos: visiblePhotos, engravings, notice, hasContent, photoPositions: arrangementPositions || photoPositions, placePhoto, resetPhotoPositions, addPhotos, replacePhoto, removePhoto, movePhoto, updateEngraving, addEngraving, removeEngraving,reset };
 }
