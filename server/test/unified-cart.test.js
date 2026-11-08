@@ -167,6 +167,13 @@ test('returned merchandise can be reconciled while customer engraving custody st
   await account(order,{action:'inventory_return',inspected:true,quantities:current.inventoryClaims.map(claim=>claim.quantity),reason:'Inspected actual resellable return'});
   assert.equal((await Product.findById(product._id)).inventory.quantity,3);
 });
+test('unsuitable unengraved property returns without a service charge or fictitious delivery',async()=>{
+  const {order}=await create(['engraving']);await work(order,'receive',{condition:'Actually received'});await work(order,'inspect');await work(order,'unsuitable',{publicReason:'Material unsuitable for safe engraving'});
+  await freeCharge(order,'return_shipping');await work(order,'arrange_return',{publicReason:'Agreed safe return without work'});await work(order,'return_to_customer',{publicReason:'Actually returned unengraved'});
+  const saved=await Order.findById(order._id).lean(),financial=await orderAccounting(saved);
+  assert.equal(saved.totals.totalPiastres,10000);assert.equal(saved.fulfillmentState,'completed_with_changes');assert.equal(saved.paymentState,'unpaid');assert.equal(saved.engraving.items[0].inCustody,false);
+  assert.equal(financial.groups[0].status,'not_provided');assert.equal(financial.groups[0].payablePiastres,0);assert.equal(financial.collectedPiastres,0);assert.equal(financial.outstandingPiastres,0);assert.deepEqual(presentOrder(saved).paymentInstructionsByGroup,[]);
+});
 for(const [label,kinds,allowed] of [
   ['product only',['product'],true],['Gift Box only',['gift'],true],['product + Gift Box',['product','gift'],true],
   ['multiple Gift Boxes',['gift','gift'],true],['engraving only',['engraving'],true],

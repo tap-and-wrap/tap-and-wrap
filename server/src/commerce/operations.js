@@ -24,7 +24,7 @@ const kinds = z.enum(['order', 'request']);
 const query = z.object({ page: z.coerce.number().int().min(1).max(200).default(1), view: z.enum(['all', 'initial', 'overdue', 'shipping', 'quote_preparation', 'quote_sharing', 'acceptance', 'payment_review', 'payment_pending', 'response']).default('all') }).strict();
 const contactInput = z.object({ revision: z.number().int().nonnegative(), operationKey: z.uuid(), action: z.enum(['contact', 'quote_shared', 'requires_action', 'waiting_customer', 'clear']), note: z.string().trim().min(2).max(500) }).strict();
 const modelFor = kind => kind === 'order' ? Order : ServiceRequest;
-const closedOrders = ['cancelled', 'delivered', 'returned'];
+const closedOrders = ['cancelled', 'delivered', 'returned', 'completed_with_changes'];
 const condition = (test, label) => ({ $cond: [test, [label], []] });
 export async function attentionQueue(input, now = new Date()) {
   const normalized = { $project: { kind: { $literal: 'order' }, reference: '$orderNumber', createdAt: 1, initialContactAt: 1, lastQuotationSharedAt: 1, responseState: 1, revision: 1, customer: { name: '$customer.name', phone: '$customer.phone' }, paymentState: 1, fulfillmentState: 1, charges: 1, proofReviewRequired: 1, cancellationRequestedAt: 1, financialSummary: 1, state: { $literal: '' }, orderId: '$_id' } };

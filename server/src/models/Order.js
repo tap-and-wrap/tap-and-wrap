@@ -17,7 +17,7 @@ const schema = new mongoose.Schema({
   inventoryClaims: { type: [mongoose.Schema.Types.Mixed], default: [], immutable: true },
   paymentMethod: { type: String, enum: ['cod', 'instapay'], required: true, immutable: true },
   paymentState: { type: String, enum: ['unpaid', 'awaiting_transfer', 'awaiting_verification', 'partially_paid', 'paid', 'rejected', 'refunded'], required: true },
-  fulfillmentState: { type: String, enum: ['received', 'confirmed', 'preparing', 'out_for_delivery', 'delivered', 'delivery_failed', 'returned', 'cancelled'], default: 'received' },
+  fulfillmentState: { type: String, enum: ['received', 'confirmed', 'preparing', 'out_for_delivery', 'delivered', 'delivery_failed', 'returned', 'cancelled', 'completed_with_changes'], default: 'received' },
   orderChannel: { type: String, enum: ['website', 'owner_quotation'], default: 'website', immutable: true },
   serviceRequestId: { type: mongoose.Schema.Types.ObjectId, ref: 'ServiceRequest', immutable: true },
   acceptedQuotation: { type: mongoose.Schema.Types.Mixed, immutable: true },
