@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { ShoppingBag, UserRound, Home, ChevronDown, X } from 'lucide-react';
+import { ShoppingBag, UserRound, Home, ChevronDown, X, Menu } from 'lucide-react';
 import { adminLinks } from '../admin/navigation.js';
 import { useCart } from '../commerce/CartContext.jsx';
 import { useSession } from '../auth/SessionProvider.jsx';
@@ -43,7 +43,7 @@ function NavigationLinks({ links, onClose, admin = false }) {
   })}</ul>;
 }
 
-function NavigationDrawer({ links, onClose, admin, returnFocus }) {
+function NavigationDrawer({ links, onClose, admin, returnFocus, session, accountDestination, logout }) {
   const navigate=useNavigate(),dismiss=useRef(()=>{});
   const { dialogRef, dialogProps } = useModalDialog({ onClose:()=>dismiss.current(), initialFocus:'.menu-close', returnFocus });
   const {closing,close}=useStaggeredMenuMotion(dialogRef,onClose);dismiss.current=close;
@@ -52,7 +52,14 @@ function NavigationDrawer({ links, onClose, admin, returnFocus }) {
     <div className="sm-prelayer sm-prelayer-rose" aria-hidden="true"/><div className="sm-prelayer sm-prelayer-blush" aria-hidden="true"/><div className="sm-prelayer sm-prelayer-beige" aria-hidden="true"/>
     <div className="sm-panel">
       <div className="drawer-header"><Link className="drawer-logo" to={admin?'/admin':'/'} onClick={event=>follow(event,{to:admin?'/admin':'/'})} aria-label="Tap and Wrap home"><img src="/tap-wrap-logo.webp" alt="Tap & Wrap" width="2000" height="667"/></Link><button type="button" className="menu-toggle menu-close" onClick={()=>close()} aria-label="Close menu" autoFocus><X size={24} aria-hidden="true"/></button></div>
-      <nav className={`drawer-nav ${admin ? 'admin-drawer-nav' : ''}`} aria-label={admin ? 'Administration' : 'Main navigation'}><NavigationLinks links={links} admin={admin} onClose={follow}/></nav>
+      <nav className={`drawer-nav ${admin ? 'admin-drawer-nav' : ''}`} aria-label={admin ? 'Administration' : 'Main navigation'}><NavigationLinks links={links.filter(item=>item.to!=='/my-orders')} admin={admin} onClose={follow}/>
+        <div className="drawer-account">
+          {session.ready ? <Link to={accountDestination} onClick={event=>follow(event,{to:accountDestination})}><UserRound size={24} aria-hidden="true"/><span>{session.user?.role === 'admin' ? 'Dashboard' : session.user ? 'My Orders' : 'Sign In'}</span></Link> : <span role="status">{session.phase === 'error' ? 'Account unavailable' : 'Checking account...'}</span>}
+          {admin && <Link to="/" onClick={event=>follow(event,{to:'/'})}><Home size={24} aria-hidden="true"/><span>View storefront</span></Link>}
+          {session.ready && session.user?.role === 'admin' && <button type="button" disabled={logout.isPending} onClick={()=>logout.mutate()}>{logout.isPending ? 'Signing out...' : 'Sign out'}</button>}
+          {logout.error && <p role="alert">{commerceError(logout.error)}</p>}
+        </div>
+      </nav>
     </div>
   </dialog>;
 }
@@ -95,18 +102,18 @@ export default function Header() {
     <div ref={headerRef} className={`site-header-stack ${adminWorkspace ? 'admin-header-stack' : ''}`}>
       {!adminWorkspace && <AnnouncementBar/>}
       <header className={admin&&!adminWorkspace?'site-header has-owner-actions':'site-header'}>
-      <button type="button" className="menu-toggle menu-icon" aria-label="Open menu" aria-haspopup="dialog" aria-controls={open ? 'navigation-drawer' : undefined} aria-expanded={open} onClick={openMenu}><span className="menu-text" aria-hidden="true">Menu</span><span className="menu-glyph" aria-hidden="true"><span/><span/></span></button>
+      <button type="button" className="menu-toggle menu-icon" aria-label="Open menu" aria-haspopup="dialog" aria-controls={open ? 'navigation-drawer' : undefined} aria-expanded={open} onClick={openMenu}><Menu size={24} aria-hidden="true"/></button>
       <Link className="site-logo" to={adminWorkspace ? '/admin' : '/'} aria-label={adminWorkspace ? 'Tap and Wrap dashboard' : 'Tap and Wrap home'}><img src="/tap-wrap-logo.webp" alt="Tap & Wrap" width="2000" height="667" /></Link>
       <nav className="desktop-navigation" aria-label={adminWorkspace ? 'Administration' : 'Main navigation'}><NavigationLinks links={links} admin={adminWorkspace}/></nav>
       <div className="header-actions">
         {admin && <AdminNotificationBell />}
-        {session.ready ? <Link className="icon-button" to={adminWorkspace ? '/' : accountDestination} aria-label={adminWorkspace ? 'Home — storefront' : 'Account'} title={adminWorkspace ? 'View storefront' : admin ? 'Admin dashboard' : session.user ? 'My account and orders' : 'Sign in'}>{adminWorkspace ? <Home size={20} aria-hidden="true"/> : <UserRound size={20} aria-hidden="true"/>}</Link> : <button className="icon-button" type="button" disabled aria-label={session.phase === 'error' ? 'Account unavailable' : 'Checking account'}><UserRound size={20} aria-hidden="true"/></button>}
+        {session.ready ? <Link className="icon-button header-account" to={adminWorkspace ? '/' : accountDestination} aria-label={adminWorkspace ? 'Home — storefront' : 'Account'} title={adminWorkspace ? 'View storefront' : admin ? 'Admin dashboard' : session.user ? 'My account and orders' : 'Sign in'}>{adminWorkspace ? <Home size={20} aria-hidden="true"/> : <UserRound size={20} aria-hidden="true"/>}</Link> : <button className="icon-button header-account" type="button" disabled aria-label={session.phase === 'error' ? 'Account unavailable' : 'Checking account'}><UserRound size={20} aria-hidden="true"/></button>}
         {!adminWorkspace && <Link className="icon-button" data-cart-anchor to="/cart" aria-label={`Cart${cart.quantity ? `, ${cart.quantity} items` : ''}`} title="Cart"><ShoppingBag size={20} aria-hidden="true"/>{cart.quantity > 0 && <span className="commerce-cart-count" aria-hidden="true">{cart.quantity > 99 ? '99+' : cart.quantity}</span>}</Link>}
         {admin && <button className="header-signout" type="button" disabled={logout.isPending} onClick={() => logout.mutate()}>{logout.isPending ? 'Signing out…' : 'Sign out'}</button>}
       </div>
       {logout.error && !open && <p className="header-error" role="alert">{commerceError(logout.error)}</p>}
       </header>
     </div>
-    {open && <NavigationDrawer links={links} admin={adminWorkspace} returnFocus={menuOpener.current} onClose={() => setOpen(false)}/>}
+    {open && <NavigationDrawer links={links} admin={adminWorkspace} returnFocus={menuOpener.current} session={session} accountDestination={accountDestination} logout={logout} onClose={() => setOpen(false)}/>}
   </>;
 }

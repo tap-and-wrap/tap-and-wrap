@@ -191,3 +191,39 @@ test('bundled sticker fonts and license notices bypass document routing while mi
   assert.doesNotMatch(await denied.text(),/never-publish|React shell/);
   const privateDocument=await f.get('/admin/private.ttf');assert.equal(privateDocument.headers.get('cache-control'),'private, no-store');
 });
+
+for (const failure of ['http','malformed','network','cached','oversized']) test(`catalog authority ${failure} falls back only to an empty noindex shell`, async()=>{
+  const f=fixture();f.assets.set('/spa.html','<html><head></head><body>React shell</body></html>');
+  f.env.ADDRESS_SERVICE.fetch=async()=>{
+    if(failure==='network')throw Error('secret response details');
+    if(failure==='http')return new Response('Unavailable',{status:503});
+    if(failure==='malformed')return Response.json({ok:true,data:{version:1,products:[]}});
+    if(failure==='cached')return new Response('{}',{headers:{Age:'10'}});
+    return new Response('x'.repeat(16001));
+  };
+  for(const path of ['/','/shop','/categories/gifts']) for(const method of ['GET','HEAD']) {
+    const r=await f.get(path+'?private=never-log',method);assert.equal(r.status,200);assert.match(r.headers.get('cache-control'),/private, no-store/);assert.match(r.headers.get('x-robots-tag'),/noindex/);
+    assert.equal(r.headers.get('link'),`<https://shop.example${path}>; rel="canonical"`);
+    assert.equal(r.headers.get('x-tap-wrap-seo'),'authority-unverified');
+    const html=await r.text();assert.doesNotMatch(html,/Approved|Product|Offer|secret|private/);if(method==='GET')assert.match(html,/React shell/);
+  }
+  assert.equal((await f.get('/products/approved')).status,503);
+  assert.equal((await f.get('/sitemaps/1.xml')).status,503);
+  assert.equal((await f.get('/checkout')).status,200);
+  f.env.SEO_WITHDRAWN_PATHS='/categories/gifts';assert.equal((await f.get('/categories/gifts')).status,404);
+  assert.equal((await f.get('/categories/old-gifts')).status,404);
+});
+
+test('cold authority recovers without extending publications or retaining a fallback', async()=>{
+  const f=fixture(),fetch=f.env.ADDRESS_SERVICE.fetch;
+  f.env.ADDRESS_SERVICE.fetch=(input,{signal})=>new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(Error('timeout')),{once:true}));
+  const before=JSON.stringify(f.manifest.publication),start=Date.now();
+  const r=await f.get('/shop');assert.equal(r.status,200);assert.equal(r.headers.get('x-tap-wrap-seo'),'authority-unverified');assert.ok(Date.now()-start<6000);
+  f.env.ADDRESS_SERVICE.fetch=fetch;const recovered=await f.get('/shop');assert.equal(recovered.headers.get('x-tap-wrap-seo'),null);assert.match(await recovered.text(),/Approved/);assert.equal(JSON.stringify(f.manifest.publication),before);
+  f.env.ASSETS.fetch=async()=>{throw Error('unrelated asset failure');};assert.equal((await f.get('/shop')).status,503);
+});
+
+test('invalid authority configuration and missing shell remain fail-closed', async()=>{
+  const f=fixture();f.env.PRODUCT_ADDRESS_API_ORIGIN='http://invalid.example';assert.equal((await f.get('/shop')).status,503);
+  delete f.env.PRODUCT_ADDRESS_API_ORIGIN;f.env.ADDRESS_SERVICE.fetch=async()=>new Response(null,{status:503});f.assets.delete('/spa.html');assert.equal((await f.get('/shop')).status,503);
+});

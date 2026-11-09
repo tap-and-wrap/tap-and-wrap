@@ -1,3 +1,4 @@
+import { chooseImageFiles } from '../e2e/media-helpers.js';
 import { chooseOption } from '../e2e/select-option.js';
 import { test, expect } from '@playwright/test';
 
@@ -18,7 +19,7 @@ async function build(page, box, photo = null) {
   await page.getByRole('button',{name:'Add Synthetic rose-red',exact:true}).click();
   if (photo) {
     await page.getByRole('button',{name:'Make It Personal',exact:true}).click();
-    await page.getByLabel('Choose your photos').setInputFiles(Array.isArray(photo) ? photo : {name:photo,mimeType:'image/png',buffer:png});
+    await chooseImageFiles(page,page,'Choose your photos',Array.isArray(photo) ? photo : {name:photo,mimeType:'image/png',buffer:png});
   }
   await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();
   await page.getByRole('button',{name:'Choose Synthetic ribbon-navy',exact:true}).click();
@@ -30,6 +31,27 @@ async function add(page) {
   await expect(page).toHaveURL(/\/cart$/);
 }
 async function cart(context) { return (await (await context.request.get(`${api}/commerce/cart`)).json()).data.cart; }
+
+test('native Gift Box photo selection reaches private upload and survives cart reload without checkout',async({page,context,browser})=>{
+  const signs=[],puts=[],completed=[];
+  page.on('request',request=>{
+    if(request.method()==='POST' && request.url().endsWith('/commerce/uploads/sign')) signs.push(request.postDataJSON());
+    if(request.method()==='PUT') puts.push(request.postDataBuffer());
+    const complete=/uploads\/([a-f0-9]{24})\/complete$/.exec(request.url());if(complete)completed.push(complete[1]);
+  });
+  await page.goto('/customize/gift-box');await build(page,'box-2','native.png');
+  expect(signs).toHaveLength(0);await add(page);
+  const current=await cart(context);expect(current.items).toHaveLength(1);
+  expect(current.items[0].giftBox.personalization.photoCount).toBe(1);
+  expect(signs).toHaveLength(1);expect(signs[0]).toMatchObject({purpose:'gift_box_photo',giftBoxId:'box-2'});
+  expect(puts).toHaveLength(1);expect(puts[0]).toEqual(png);
+  await page.reload();await expect(page.locator('.cart-v2-photo .gb-free-photo')).toHaveCount(1);
+  expect((await cart(context)).items[0].giftBox.personalization.photoCount).toBe(1);
+  expect(completed).toHaveLength(1);
+  const content=await context.request.get(`${api}/commerce/uploads/${completed[0]}/content`);expect(content.ok()).toBe(true);expect(content.headers()['cache-control']).toMatch(/private, no-store/);expect(await content.body()).toEqual(png);
+  const stranger=await browser.newContext();
+  const denied=await stranger.request.get(`${api}/commerce/uploads/${completed[0]}/content`);expect([403,404]).toContain(denied.status());await stranger.close();
+});
 
 for (const [navigation, firstPhoto, secondPhoto] of [
   ['fresh',null,null], ['back','first.png',null], ['fresh','first.png','second.png'], ['back','same.png','same.png'],
