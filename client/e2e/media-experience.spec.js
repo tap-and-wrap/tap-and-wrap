@@ -31,45 +31,27 @@ async function personalize(page) {
   await page.goto(`/products/${product.slug}`); await page.getByRole('button', { name: 'Customize This', exact: true }).click();
   await page.getByLabel(/^Gift name/).fill('Keep this name'); return fixture;
 }
-test('chooser precedes native selection and Escape/Cancel preserve focus and form without changing browser history at 320px', async ({ page }) => {
-  await personalize(page); await page.setViewportSize({ width: 320, height: 740 });
-  let native = 0; page.on('filechooser', () => native++);
-  const trigger = page.getByRole('button', { name: 'Your photo: Upload Image', exact: true }); await trigger.click();
-  const chooser = page.getByRole('dialog', { name: 'Choose image source', exact: true });
-  await expect(chooser).toBeVisible(); expect(native).toBe(0);
-  await chooser.getByRole('button', { name: 'Cancel', exact: true }).focus(); await page.keyboard.press('Tab');
-  await expect(chooser.getByRole('button', { name: 'Close choose image source' })).toBeFocused();
-  await page.keyboard.press('Escape'); await expect(chooser).toHaveCount(0); await expect(trigger).toBeFocused();
-  await expect(page.getByRole('dialog', { name: 'Customize This', exact: true })).toBeVisible();
-  const historyLength=await page.evaluate(()=>history.length);
-  await trigger.click(); await expect(chooser).toBeVisible();expect(await page.evaluate(()=>history.length)).toBe(historyLength);
-  await chooser.getByRole('button',{name:'Cancel',exact:true}).click();await expect(chooser).toHaveCount(0);
-  await expect(page.getByLabel(/^Gift name/)).toHaveValue('Keep this name');
-  await trigger.click(); await expect(chooser).toBeVisible();
-  await chooser.screenshot({ path: 'test-results/remediation-2/chooser-320.png' });
-  await page.setViewportSize({ width: 844, height: 390 }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await chooser.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(chooser).toHaveCount(0);
-  expect(await page.evaluate(() => document.body.style.overflow)).toBe('hidden');
-  await page.getByRole('button', { name: 'Keep editing later' }).click();
-  expect(await page.evaluate(() => document.body.style.overflow)).not.toBe('hidden'); expect(native).toBe(0);
-});
-test('native camera hint is exclusive, cancellation/reopen and Gallery/Files replacement preserve selections', async ({ page }) => {
-  const fixture = await personalize(page);
-  for (const source of ['Take a Photo', 'Choose from Gallery', 'Browse Files']) {
-    await page.getByRole('button', { name: 'Your photo: Upload Image', exact: true }).click();
-    const event = page.waitForEvent('filechooser'); await page.getByRole('dialog', { name: 'Choose image source' }).getByRole('button', { name: source, exact: true }).click();
-    const chooser = await event; expect(await chooser.element().getAttribute('capture')).toBe(source === 'Take a Photo' ? 'environment' : null);
-    expect(chooser.isMultiple()).toBe(source !== 'Take a Photo'); await chooser.setFiles([]);
+test('direct native selection, cancellation and replacement preserve the form at 320px', async ({ page }) => {
+  const fixture = await personalize(page); await page.setViewportSize({ width: 320, height: 740 });
+  const trigger = page.getByRole('button', { name: 'Your photo: Upload Image', exact: true });
+  const historyLength = await page.evaluate(()=>history.length);
+  for (let i=0;i<2;i++) {
+    const event = page.waitForEvent('filechooser'); await trigger.click(); const chooser = await event;
+    expect(await chooser.element().getAttribute('capture')).toBe(null);
+    expect(await chooser.element().getAttribute('accept')).toBe(null);
+    expect(chooser.isMultiple()).toBe(true); await chooser.setFiles([]);
+    await expect(page.getByRole('dialog', { name: 'Choose image source' })).toHaveCount(0);
     await expect(page.getByLabel(/^Gift name/)).toHaveValue('Keep this name');
+    expect(await page.evaluate(()=>history.length)).toBe(historyLength);
   }
-  await chooseImageFiles(page, page, 'Your photo', [isolatedImageFile('one.png'), isolatedImageFile('two.png')]);
-  await expect(page.getByAltText('Selected your photo 1')).toBeVisible(); await expect(page.getByAltText('Selected your photo 2')).toBeVisible();
-  await chooseImageFiles(page, page, 'Replace one.png', isolatedImageFile('one.png'), 'Browse Files');
-  await chooseImageFiles(page, page, 'Replace one.png', isolatedImageFile('one.png'), 'Take a Photo');
-  await expect(page.getByRole('button', { name: 'Remove one.png', exact: true })).toHaveCount(1);
-  await page.getByRole('button', { name: 'Remove two.png', exact: true }).click();
-  await expect(page.getByAltText('Selected your photo 2')).toHaveCount(0); expect(fixture.uploads).toHaveLength(0);
+  await chooseImageFiles(page,page,'Your photo',[isolatedImageFile('one.png'),isolatedImageFile('two.png')]);
+  await expect(page.getByAltText('Selected your photo 2')).toBeVisible();
+  await chooseImageFiles(page,page,'Replace one.png',isolatedImageFile('one.png'));
+  await page.getByRole('button',{name:'Remove two.png',exact:true}).click();
+  await expect(page.getByAltText('Selected your photo 2')).toHaveCount(0);
+  expect(fixture.uploads).toHaveLength(0);
 });
+
 test('unsupported HEIC, empty and oversized selections preserve a valid draft and helpful recovery', async ({ page }) => {
   await personalize(page); await chooseImageFiles(page, page, 'Your photo', isolatedImageFile('keep.png'));
   for (const file of [{ name: 'photo.heic', mimeType: 'image/heic', buffer: Buffer.from('unsupported fixture') }, { name: 'empty.png', mimeType: 'image/png', buffer: Buffer.alloc(0) }, { name: 'large.png', mimeType: 'image/png', buffer: Buffer.alloc(5242881) }]) {
@@ -187,13 +169,12 @@ test('trace HTML never reloads a playing storefront and repeated service scroll/
   }
   expect(navigations).toBe(0); expect(await page.evaluate(() => window.__mediaFailures)).toEqual([]);
 });
-test('history-restricted browsers still have accessible Cancel without a native picker', async ({ page }) => {
+test('history-restricted browsers still open the native picker without damaging drafts', async ({ page }) => {
   await personalize(page); await page.evaluate(() => { history.pushState = () => { throw new DOMException('Restricted fixture', 'SecurityError'); }; });
-  await page.getByRole('button', { name: 'Your photo: Upload Image' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Choose image source', exact: true }); await expect(dialog).toBeVisible();
-  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(dialog).toHaveCount(0); await expect(page.getByLabel(/^Gift name/)).toHaveValue('Keep this name');
+  await chooseImageFiles(page,page,'Your photo',isolatedImageFile('history.png'));
+  await expect(page.getByAltText('Selected your photo 1')).toBeVisible();
+  await expect(page.getByLabel(/^Gift name/)).toHaveValue('Keep this name');
 });
-
 
 test('video surfaces hide labels normally, reveal keyboard focus, and preserve hero links at desktop and mobile sizes', async ({ page }) => {
   await mockCatalog(page); await page.emulateMedia({ reducedMotion: 'reduce' });

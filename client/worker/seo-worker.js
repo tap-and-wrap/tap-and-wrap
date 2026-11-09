@@ -45,6 +45,10 @@ function withdrawalPaths(value) {
   return new Set(values);
 }
 
+class AuthorityVerificationError extends Error {
+  constructor(reason) { super('Public address verification failed'); this.reason = reason; }
+}
+
 async function resolveAddresses(env, paths, timeoutMs = 4000) {
   if (!paths.length) return new Map();
   const origin = new URL(env.PRODUCT_ADDRESS_API_ORIGIN || 'https://api.tapandwrap.net');
@@ -59,14 +63,17 @@ async function resolveAddresses(env, paths, timeoutMs = 4000) {
     // Manual preserves the trust boundary: every redirect is rejected below.
     const options = { signal: controller.signal, redirect: 'manual', cache: 'no-store', cf: { cacheTtlByStatus: { '100-599': -1 } } };
     const response = await (env.ADDRESS_SERVICE ? env.ADDRESS_SERVICE.fetch(url.href, options) : fetch(url.href, options));
-    if (!response.ok) throw new Error('Address authority unavailable');
-    if (Number(response.headers.get('Age')) > 0 || /^(?:HIT|STALE|UPDATING)$/i.test(response.headers.get('CF-Cache-Status') || '')) throw new Error('Cached address authority rejected');
+    if (!response.ok) throw new AuthorityVerificationError('http');
+    if (Number(response.headers.get('Age')) > 0 || /^(?:HIT|STALE|UPDATING)$/i.test(response.headers.get('CF-Cache-Status') || '')) throw new AuthorityVerificationError('cached');
     const reader = response.body.getReader(); let bytes = 0, text = ''; const decoder = new TextDecoder();
-    try { for (;;) { const chunk = await reader.read(); if (chunk.done) break; bytes += chunk.value.length; if (bytes > 16000) throw new Error('Address response too large'); text += decoder.decode(chunk.value, { stream: true }); } }
+    try { for (;;) { const chunk = await reader.read(); if (chunk.done) break; bytes += chunk.value.length; if (bytes > 16000) throw new AuthorityVerificationError('invalid'); text += decoder.decode(chunk.value, { stream: true }); } }
     finally { await reader.cancel(); }
     const value = JSON.parse(text + decoder.decode());
-    if (value.ok !== true) throw new Error('Invalid address authority');
+    if (value.ok !== true) throw new AuthorityVerificationError('invalid');
     return validateAddressResolution(value.data, paths);
+  } catch (error) {
+    if (error instanceof AuthorityVerificationError) throw error;
+    throw new AuthorityVerificationError(controller.signal.aborted ? 'timeout' : 'unavailable-or-invalid');
   } finally { clearTimeout(timer); controller.abort(); }
 }
 
@@ -78,7 +85,7 @@ async function resolvePublicPaths(env, paths, withdrawn) {
   const blocked = [...withdrawn].filter(path => /^\/products\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(path));
   const all = [...new Set([...paths, ...blocked])], resolved = new Map(), deadline = Date.now() + 4000;
   for (let offset = 0; offset < all.length; offset += 20) {
-    if (Date.now() >= deadline) throw new Error('Address verification deadline');
+    if (Date.now() >= deadline) throw new AuthorityVerificationError('timeout');
     for (const [path, value] of await resolveAddresses(env, all.slice(offset, offset + 20), deadline - Date.now())) resolved.set(path, value);
   }
   for (const path of blocked) if (resolved.get(path)) withdrawn.add(resolved.get(path).canonicalPath);
@@ -187,7 +194,17 @@ async function routeRequest(request, env) {
   const dependencies = manifest.routeProducts?.[path];
   if (catalogPage) {
     if (!canIndex || !Array.isArray(dependencies) || dependencies.length > 20) return shell();
-    const resolved = await resolvePublicPaths(env, dependencies, withdrawn);
+    let resolved;
+    try { resolved = await resolvePublicPaths(env, dependencies, withdrawn); }
+    catch (error) {
+      if (!(error instanceof AuthorityVerificationError)) throw error;
+      // One bounded record per failed request. Never log visitor URLs, slugs,
+      // authority bodies, exception messages or customer data.
+      console.warn(JSON.stringify({ event: 'public_seo_shell_fallback', route: path === '/' ? 'home' : path === '/shop' ? 'shop' : 'category', reason: error.reason }));
+      const response = await shell(path);
+      response.headers.set('X-Tap-Wrap-SEO', 'authority-unverified');
+      return response;
+    }
     if (dependencies.some(p => withdrawn.has(p) || !currentSnapshot(manifest, resolved.get(p), p))) return shell();
   }
   const response = await asset(env.ASSETS, request, manifest.routeFiles[path]);
