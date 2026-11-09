@@ -32,9 +32,9 @@ export default function AuthPage({ signup = false }) {
    try {
     const merged = await commercePost('/cart/merge', {});
     await cart.refresh();
-    if (Number.isSafeInteger(merged.skipped) && merged.skipped > 0) toast(`You are signed in. ${merged.skipped} unavailable guest ${merged.skipped === 1 ? 'item could' : 'items could'} not be transferred. Review your cart.`);
+    if (Number.isSafeInteger(merged.skipped) && merged.skipped > 0) toast(`You are signed in. ${merged.skipped} unavailable guest ${merged.skipped === 1 ? 'item could' : 'items could'} not be transferred. Review your cart.`, { id: 'auth-cart-merge' });
    }
-   catch { await cart.refresh(); toast.error('You are signed in. Your guest cart could not be merged; please review your cart.'); }
+   catch { await cart.refresh(); toast.error('You are signed in. Your guest cart could not be merged; please review your cart.', { id: 'auth-cart-merge' }); }
    const returnTo = params.get('returnTo');
    const administrator = response.data?.data?.user?.role === 'admin';
    navigate(administrator && returnTo && /^\/admin(?:\/|$)/.test(returnTo) && !returnTo.includes('\\') ? returnTo : administrator ? '/admin' : '/my-orders');

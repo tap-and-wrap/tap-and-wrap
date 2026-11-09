@@ -29,8 +29,6 @@
 .cart-v2-details .commerce-gift-message{white-space:pre-wrap;overflow-wrap:anywhere}
 .cart-v2-details .studio-design{margin-top:16px}.cart-v2-private-previews{display:flex;flex-wrap:wrap;gap:12px}.cart-v2-private-previews img{max-width:180px;max-height:180px;object-fit:contain}
 .cart-v2-line button:disabled{opacity:.4;cursor:default}.cart-v2-line :focus-visible,.cart-remove-dialog :focus-visible{outline:2px solid var(--tw-button);outline-offset:3px}
-.cart-remove-dialog{position:fixed;inset:0;margin:auto;width:min(460px,calc(100% - 32px));max-height:calc(100dvh - 32px);overflow:auto;box-sizing:border-box;padding:28px;border:1px solid var(--tw-border);border-radius:14px;background:var(--tw-bg);color:var(--tw-ink)}
-.cart-remove-dialog::backdrop{background:#39292299;backdrop-filter:blur(3px)}.cart-remove-dialog h2{font:500 1.9rem/1.2 var(--tw-font-display);margin:0}.cart-remove-dialog p{font-size:.9rem;line-height:1.6}.cart-remove-dialog .button-group{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}
 .cart-remove-dialog .button-primary{background:var(--tw-button);border-color:var(--tw-button);color:#fff}
 .cart-remove-dialog h2,.cart-remove-dialog p{overflow-wrap:anywhere}
 @media(max-width:1100px){.commerce-cart-layout{grid-template-columns:minmax(0,1fr) 290px;gap:22px}.cart-v2-line{grid-template-columns:104px minmax(0,1fr);gap:0 16px;padding:18px}}

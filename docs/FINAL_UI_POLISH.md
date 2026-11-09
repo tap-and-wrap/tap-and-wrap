@@ -1,0 +1,38 @@
+# Confirmation, toast and account polish — 9 November 2026
+
+## Scope
+
+Baseline: `3051aafba376180d5a58a46468b45ae2c7865a6d`; tracked working tree was clean. Preserve unrelated untracked files. This patch changes frontend presentation and confirmation handling only. No server, shared commerce contract, Worker, native uploader, database, price, inventory, provider or launch-flag changes.
+
+## Findings and implementation
+
+- **Dialog cause:** the actual 390px browser reproduction placed Gift Box removal at x=15/y=0 with computed `margin: 0px`. Tailwind preflight resets all margins; the portaled `.gb-confirm-dialog` supplied no explicit centering. Native `showModal()` and the shared lifecycle were working. Stable scrollbar gutters also required centering against the containing block midpoint rather than assuming an unoffset pixel origin.
+- **Shared confirmation:** `ConfirmationDialog.jsx` and its scoped CSS provide a body portal, native top-layer modal, explicit centering, safe-area gaps, visual-viewport resize/pan measurements, bounded dimensions and internal scrolling. After orientation/keyboard changes, only the dialog scrolls to retain visibility of its focused control. Existing focus containment, Escape/backdrop cancellation, scroll locks and opener restoration remain in `useModalDialog.js`.
+- **Audit:** Gift Box and cart removal now share this component. Order-operation review previously used the generic catalog side panel and now uses the centered confirmation without changing approval fields or operation semantics. Engraving draft reset/editor replacement use the same branded UI rather than `window.confirm`. Switching to a new admin engraving draft also requires confirmation when an editor is open. Viewers, catalog filters, sheets, notification panels and navigation drawers retain their intentional geometry. Inline financial/revision approval controls remain inline.
+- **Toasts:** Sonner remains the only library. One top-center host uses `--site-header-height` plus a safe-area-aware 12px gap. Warm ivory, brown text, rose border, soft shadow and 18px semantic icons replace the green success accent. Errors and warnings retain distinct icons/accents. Dismiss targets are 44px on the right. Selectors override Sonner's more-specific default close-button rules. Session dismissal, two-notice limit, durations, polite announcements, reduced motion and stable toast IDs remain; cart-merge notices now share a stable ID.
+- **Menu/header:** main links remain beneath the logo/X header. A smaller User-icon account action sits after an automatic flexible gap and divider at the bottom, with safe-area padding. Overflowing admin menus remain scrollable. Guests see Sign In, customers see My Account (the existing `/my-orders` screen also provides account management), and admins see Dashboard. Eight admin sections and staggered motion are retained. Owner bell/cart spacing is 12px with 44px targets; reserved side columns prevent overlap with the centered original logo, including narrow desktop-emulated phone viewports. Desktop navigation is otherwise unchanged.
+- **Sign Out:** removed from header and drawer. Customers retain it in the authenticated My Orders account panel, including when order listing fails. The dashboard reuses compact `AccountActions` inside Account settings. A persistent `SignOutProvider` is necessary because private pages unmount during authentication verification. The host confirms before calling the existing session helper, fences by owner/generation, blocks repeated requests and retains existing cache/cart/draft cleanup and redirects. Verified failures keep the confirmation and signed-in account. An uncertain response offers a read-only account check before any further explicit logout attempt; it never silently declares success or automatically replays logout.
+
+## Files
+
+Production: `App.jsx`, `auth/SignOutProvider.jsx`, shared confirmation/toast components and CSS, `Header.jsx`, `AccountActions.jsx`, `navigation.css`, owner dashboard styles/page, Gift Box confirmation/styles, cart confirmation/styles, order-operation confirmation, admin/customer engraving draft confirmations, account listing and cart-merge toast IDs.
+
+Tests: four focused `ui-polish` specs/config, existing navigation/control fixtures and assertions, notification sign-out, authenticated cache cleanup and storefront role-switch expectations. No new dependency or route.
+
+## Verification
+
+68 unique affected browser cases passed across the main affected pass and focused corrective runs. The 66-case affected pass had 65 passes and one inconsistent test fixture: it reported an admin session while denying mocked admin authorization. The corrected eight-case run passed that case, repeated the affected admin widths and added an owner-header separation case. A later 15-case account rerun passed the added uncertain-response case; a 12-case visual correction rerun passed all dialog/toast sizes. Repeated cases are not additional unique coverage.
+
+Coverage includes Gift Box confirm/cancel/undo and nested Escape, cart confirm/cancel, admin draft replacement, order-operation cancellation without mutation, both roles' sign-out/cancel/error/uncertain outcomes, account changes, private cache cleanup, focus restoration/containment, long internal scrolling, landscape/dynamic resizing, three-role menu placement, eight-section admin scrolling, 44px targets, 12px gaps, desktop navigation, toast announcements/dismissal/types and reduced motion.
+
+Screenshots inspected at 320, 390, 768, 1024 and 1440px; additional geometry checks cover 360px and landscape. Final and corrective PNGs are retained under ignored `local-data/ui-polish-2026-11-09/` and `client/test-results/ui-polish/`. These are isolated fixture/browser viewport checks, not physical device or assistive-technology certification.
+
+Lint, production build and diff whitespace checks passed. Build exit codes were checked explicitly. No broad backend or unrelated commerce/SEO suite was rerun locally. The authorized publication workflow still runs its required SEO guard checks.
+
+Corrective diagnostics: baseline placement failed before the fix; auto margins alone exposed the stable-gutter offset; the long resize case required waiting for the viewport update and keeping the focused control visible. One admin test initially attempted to click a deliberately hidden choice while an editor was open and was corrected to the visible new-draft action. An unspaced pipe regex passed through `npm.cmd` was interpreted by the Windows shell; the corrected file selection executed normally. Visual review found Sonner selector precedence and missing portaled primary-button fill; scoped fixes and assertions now cover both. No production safety guard was relaxed to resolve any test.
+
+## Release and remaining checks
+
+Commit only intended source/tests/report, push current main, verify the exact Render auto-deploy/readiness without changing Free compute, then dispatch the existing tokenless SEO renewal. Confirm that `seo-publication` differs only by its three sealed artifacts and that its lock names the reviewed main source. Verify the live exact publication ID/expiry, canonical/indexing decisions, sitemap, genuine 404 and deployed UI. Actual identifiers/results are recorded in the final execution report.
+
+Production UI verification must avoid real logout, order/payment/inventory edits or uploads. Guest local builder confirmation is safe; any cart/toast demonstration should use isolated intercepted API fixtures against deployed assets. Physical Samsung/iOS checks of this new polish patch remain separate from the owner's prior successful stability/uploader acceptance.

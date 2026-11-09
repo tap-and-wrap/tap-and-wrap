@@ -162,18 +162,6 @@ a.owner-metric:hover { border-color: #bc9388; box-shadow: 0 4px 20px #62483f0a; 
 .tw-segmented input:checked + span { background: #fff; color: #795045; box-shadow: 0 1px 4px #62483f14; }
 .tw-segmented input:focus-visible + span { outline: 2px solid #915b50; outline-offset: 2px; }
 .tw-segmented:disabled { opacity: .6; }
-[data-sonner-toast].tw-toast { background: #fffdfb; border: 1px solid #eadad5; color: #62483f; box-shadow: 0 8px 32px #62483f20; padding: 18px 20px; border-radius: 10px; gap: 12px; }
-.tw-toast-title { font-size: 13px; font-weight: 600; line-height: 1.5; }
-.tw-toast-description { color: #80675f !important; font-size: 12px; line-height: 1.5; }
-[data-sonner-toast] .tw-toast-close { color: #795045; border-color: #eadad5; background: #fffdfb; }
-[data-sonner-toast] .tw-toast-close { left:auto; right:8px; top:8px; transform:none; width:28px; height:28px; }
-[data-sonner-toast].tw-toast { padding-right:44px; }
-[data-sonner-toast] .tw-toast-action { background: #795045; color: #fff; border-radius: 5px; min-height: 32px; }
-[data-sonner-toast][data-type=success] [data-icon] { color: #55735c; }
-[data-sonner-toast][data-type=error] [data-icon] { color: #aa4537; }
-[data-sonner-toast][data-type=warning] [data-icon] { color: #916421; }
-[data-sonner-toast][data-type=info] [data-icon] { color: #915b50; }
-
 @media (min-width:1024px) and (max-width:1230px) {
  .admin-header-stack .site-header { display: grid; grid-template-columns: 150px 1fr; gap: 8px 20px; padding: 12px 24px 4px; }
  .admin-header-stack .site-logo { grid-column: 1; grid-row: 1; }
@@ -211,3 +199,5 @@ a.owner-metric:hover { border-color: #bc9388; box-shadow: 0 4px 20px #62483f0a; 
 .commerce-link-button:hover { background:#faf3ef; border-color:#b78e81; }
 .button-danger,.admin-button-danger { background:#fff !important; border:1px solid #d7a99f !important; color:#9a4335 !important; }
 .button-danger:hover,.admin-button-danger:hover { background:#fcf0ec !important; }
+
+.owner-account{padding:24px;margin-top:28px}.owner-account h2{font-size:1.6rem;margin-bottom:12px}.account-actions-compact{display:flex;flex-wrap:wrap;align-items:center;gap:16px;justify-content:space-between}.account-signout{min-height:44px}

@@ -1,5 +1,5 @@
 import Select from '../components/form/Select.jsx';
-import CatalogDialog from '../components/CatalogDialog.jsx';
+import ConfirmationDialog from '../components/ConfirmationDialog.jsx';
 import { useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { commercePost, adminCommercePost, adminCommerceGet, commerceError, money, uploadPrivateFile } from './api.js';
@@ -109,7 +109,7 @@ export function AdminOrderAccounting({ order, refresh }) {
       <label><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />I confirmed the actual account transaction, customer WhatsApp acceptance or returned-stock inspection applicable to this operation</label>
       <button className="button button-primary" type="submit">Record operation</button>
     </fieldset></form>
-    {reviewOpen && <CatalogDialog title="Review order operation" onClose={() => setReviewOpen(false)}><p><strong>{actions[action]}</strong> for order #{order.orderNumber || order.id}.</p>{['collection', 'refund', 'quote_charge'].includes(action) && <p>Entered amount: {amount || 'Not entered'} EGP. Method: {method === 'cod' ? 'Cash on Delivery' : 'InstaPay'}.</p>}<p>Review the source record, actual transaction or customer acceptance. This action records an audited change; opening this dialog verifies nothing.</p><div className="admin-inline"><button type="button" className="button button-secondary" autoFocus onClick={() => setReviewOpen(false)}>Keep editing</button><button type="button" className="button button-primary" disabled={mutation.isPending} onClick={() => { setReviewOpen(false); mutation.mutate(); }}>Confirm and record operation</button></div></CatalogDialog>}
+    {reviewOpen && <ConfirmationDialog title="Review order operation" onCancel={() => setReviewOpen(false)} cancelLabel="Keep editing" confirmLabel="Confirm and record operation" pending={mutation.isPending} onConfirm={() => { setReviewOpen(false); mutation.mutate(); }}><p><strong>{actions[action]}</strong> for order #{order.orderNumber || order.id}.</p>{['collection', 'refund', 'quote_charge'].includes(action) && <p>Entered amount: {amount || 'Not entered'} EGP. Method: {method === 'cod' ? 'Cash on Delivery' : 'InstaPay'}.</p>}<p>Review the source record, actual transaction or customer acceptance. This action records an audited change; opening this dialog verifies nothing.</p></ConfirmationDialog>}
     {uncertain && <p role="alert">Response unconfirmed. Do not enter another payment. <button type="button" className="button button-secondary" disabled={mutation.isPending} onClick={() => mutation.mutate()}>Retry same recorded operation</button></p>}
     {mutation.error && <p role="alert">{commerceError(mutation.error)} <button type="button" className="commerce-link-button" onClick={() => { if (!uncertain) { request.current = null; void refresh(); } }}>Refresh order for review</button></p>}
     {mutation.isSuccess && <p role="status">Operation recorded. Financial history is preserved.</p>}
