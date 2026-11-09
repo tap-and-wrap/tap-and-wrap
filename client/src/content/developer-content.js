@@ -6,6 +6,9 @@
 // Merchant-owner-approved figures, attested on 2026-10-14. These are owner assertions,
 // not independently audited or calculated from this site's database.
 export const developerContent = Object.freeze({
+  // Designer handoff: approved local images, desktop 2520x1080 and mobile 1200x1500.
+  // Set { approved: true, src, mobileSrc, alt } only when the real assets arrive.
+  heroImage: null,
   heroVideo: Object.freeze({
     approved: true,
     src: '/media/tap-wrap-desktop-hero.mp4',

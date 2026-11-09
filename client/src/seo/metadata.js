@@ -5,6 +5,7 @@ import { categoryHref } from '../../../shared/category-paths.mjs';
 export const BRAND_NAME = 'Tap & Wrap';
 export const HERO_HEADLINE = 'Makes someone’s heart flap with Tap & Wrap.';
 export const PUBLIC_STATIC_ROUTES = Object.freeze({
+  '/reviews': { title: 'All Customer Reviews | Tap & Wrap', description: 'Read 64 owner-approved customer testimonials in Egyptian Arabic and English.', heading: 'All Customer Reviews' },
   '/': { title: 'Tap & Wrap | Thoughtful Gifts & Personalization', description: 'Explore Tap & Wrap gifts, product personalization, gift-box building and configured laser engraving.', heading: HERO_HEADLINE },
   '/shop': { title: 'Shop Gifts | Tap & Wrap', description: 'Browse approved Tap & Wrap gifts by category, availability and price.', heading: 'Shop Our Gifts' },
   '/customize': { title: 'Personalized Gifts | Tap & Wrap', description: 'Explore Build Your Gift Box and Laser Engraving, with options configured for eligible products.', heading: 'Make It Yours' },
