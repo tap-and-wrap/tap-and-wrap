@@ -23,6 +23,7 @@ async function navigationFixture(page, initialRole) {
   let role = initialRole;
   const calls = [];
   await page.route('**/api/v1/auth/me', route => route.fulfill({ headers, json: { ok: true, data: { user: role ? { id: `synthetic-${role}`, name: 'Isolated navigation user', role } : null } } }));
+  await page.route('**/api/v1/admin/ping', route => route.fulfill({ status: role === 'admin' ? 200 : 403, headers, json: role === 'admin' ? {ok:true,data:{admin:true}} : {ok:false,error:{message:'Admin required'}} }));
   await page.route('**/api/v1/auth/logout', route => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
     calls.push(route.request().headers()); role = null;
@@ -91,14 +92,14 @@ for (const role of [null, 'customer', 'admin']) {
       if (width < 1024) await page.getByRole('button', { name: 'Open menu', exact: true }).click();
       const nav = page.getByRole('navigation', { name: 'Main navigation', exact: true });
       await expect(nav.getByRole('link', { name: 'Track Order', exact: true })).toHaveCount(role ? 0 : 1);
-      await expect(nav.getByRole('link', { name: 'My Orders', exact: true })).toHaveCount(role === 'customer' ? 1 : 0);
+      await expect(nav.getByRole('link', { name: width<1024 ? 'My Account' : 'My Orders', exact: true })).toHaveCount(role === 'customer' ? 1 : 0);
       await expect(nav.getByRole('link', { name: 'Dashboard', exact: true })).toHaveCount(width<1024 && role==='admin' ? 1 : 0);
       await expect(nav.getByRole('link', { name: 'Contact', exact: true })).toHaveCount(0);
       if (width < 1024) {
         const drawer = page.getByRole('dialog', { name: 'Main menu' });
         await expect(drawer).toBeVisible();
         await expect(drawer.getByRole('link', { name: 'Account', exact: true })).toHaveCount(0);
-        await expect(drawer.getByRole('button', { name: 'Sign out', exact: true })).toHaveCount(role === 'admin' ? 1 : 0);
+        await expect(drawer.getByRole('button', { name: 'Sign out', exact: true })).toHaveCount(0);
         await page.keyboard.press('Escape');
         await expect(drawer).toHaveCount(0);
         await expect(page.locator('header a.header-account')).toHaveAttribute('href', role === 'admin' ? '/admin' : role === 'customer' ? '/my-orders' : '/login');
@@ -107,7 +108,7 @@ for (const role of [null, 'customer', 'admin']) {
         } else {
           await expect(page.locator('header').getByRole('button', { name: 'Sign out', exact: true })).toHaveCount(0);
           await page.getByRole('button',{name:'Open menu',exact:true}).click();
-          await page.getByRole('dialog',{name:'Main menu'}).getByRole('link',{name:role==='customer'?'My Orders':'Sign In',exact:true}).click();
+          await page.getByRole('dialog',{name:'Main menu'}).getByRole('link',{name:role==='customer'?'My Account':'Sign In',exact:true}).click();
           await expect(page).toHaveURL(role === 'customer' ? /\/my-orders$/ : /\/login$/);
         }
       }
@@ -132,7 +133,10 @@ test('unknown sessions expose no role destinations, then account switching updat
   fixture.switchRole('admin');
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expect(page.locator('.desktop-navigation')).not.toContainText('Dashboard');
-  await page.locator('header').getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(page.locator('header a.header-account')).toHaveAttribute('href','/admin');
+  await page.goto('/admin');
+  await page.locator('.account-signout').click();
+  await page.getByRole('dialog',{name:'Sign out of Tap & Wrap?'}).getByRole('button',{name:'Sign out',exact:true}).click();
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.locator('header a.header-account')).toHaveAttribute('href', '/login');
   await expect(page.locator('.desktop-navigation')).toContainText('Track Order');
@@ -209,7 +213,7 @@ test('announcement marquee repeats only one message with no search or dashboard 
   const drawer = page.getByRole('dialog', { name: 'Main menu' });
   await expect(drawer).toBeVisible();
   await expect(drawer.getByRole('link', { name: 'Account', exact: true })).toHaveCount(0);
-  await expect(drawer.getByRole('button', { name: 'Sign out', exact: true })).toHaveCount(1);
+  await expect(drawer.getByRole('button', { name: 'Sign out', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(drawer).toHaveCount(0);
   await expect(page.locator('header a.header-account')).toHaveAttribute('href', '/admin');

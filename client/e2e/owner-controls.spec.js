@@ -24,7 +24,7 @@ for (const width of [320, 390, 768, 1024, 1440]) test(`shared controls, form con
   const toast = page.locator('[data-sonner-toast]').first();
   await expect.poll(() => toast.evaluate(element => Number(getComputedStyle(element).opacity))).toBe(1);
   await page.screenshot({ path: info.outputPath(`controls-toast-success-${width}.png`) });
-  const box = await toast.boundingBox(); expect(box.y).toBeGreaterThan(500); expect(box.x).toBeGreaterThanOrEqual(0); expect(box.x + box.width).toBeLessThanOrEqual(width);
+  const box = await toast.boundingBox(); expect(box.y).toBeGreaterThanOrEqual(88); expect(box.y).toBeLessThan(180); expect(box.x).toBeGreaterThanOrEqual(0); expect(box.x + box.width).toBeLessThanOrEqual(width);
   await page.getByRole('button', { name: 'Server validation', exact: true }).click();
   await expect(size).toBeFocused(); await expect(size).toHaveAttribute('aria-invalid', 'true');
   await expect(page.getByRole('alert')).toContainText('Select an available size.');

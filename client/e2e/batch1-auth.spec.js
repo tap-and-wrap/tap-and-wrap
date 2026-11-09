@@ -333,7 +333,8 @@ test('logout and session revocation remove customer content and protected caches
   await expect(page.getByRole('link', { name: 'Sign in to view your orders' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '#111111' })).toHaveCount(0);
   await spa(page, '/login'); await signIn(page); await expect(page.getByRole('heading', { name: '#222222' })).toBeVisible();
-  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await page.locator('.account-signout').click();
+  await page.getByRole('dialog',{name:'Sign out of Tap & Wrap?'}).getByRole('button',{name:'Sign out',exact:true}).click();
   await expect(page).toHaveURL(/\/login$/); await spa(page, '/my-orders');
   await expect(page.getByRole('link', { name: 'Sign in to view your orders' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '#222222' })).toHaveCount(0);

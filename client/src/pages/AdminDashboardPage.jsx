@@ -1,3 +1,4 @@
+import AccountActions from '../components/AccountActions.jsx';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowUpRight, ShoppingBag, ClipboardCheck, Wallet, CreditCard, Users } from 'lucide-react';
@@ -44,5 +45,6 @@ export default function AdminDashboardPage() {
     {sales && <p className="owner-period">Sales period: {adminDate(sales.since)} – {adminDate(sales.until)} · Cairo time. {sales.legacyPaidPiastres > 0 && 'Historical paid snapshots are shown separately in Analytics.'}</p>}
     <div className="owner-dashboard-grid"><section className="owner-workspace"><div className="owner-section-heading"><div><p className="admin-eyebrow">From your customers</p><h2>Recent orders</h2></div><Link className="owner-text-link" to="/admin/orders">All orders <ArrowUpRight size={16} aria-hidden="true"/></Link></div>{data && <OrderTable orders={data.recentOrders} compact/>}</section><section className="owner-customer-activity"><Users size={26} aria-hidden="true"/><p className="admin-eyebrow">Your community</p><h2>Customer activity</h2><strong>{data?.newCustomers ?? '—'}</strong><p>New accounts in the last 30 days</p><span>{data ? `${data.customers} customer accounts in total` : 'Loading accounts…'}</span><Link className="admin-button admin-button-secondary" to="/admin/customers">View customers</Link></section></div>
     <ActionCenter/>
+    <section className="owner-workspace owner-account"><h2>Account settings</h2><AccountActions compact/></section>
   </AdminLayout>;
 }

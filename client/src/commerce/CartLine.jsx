@@ -1,15 +1,13 @@
 import { useId, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { ChevronDown, Minus, Plus, Trash2 } from 'lucide-react';
-import useModalDialog from '../components/useModalDialog.js';
+import ConfirmationDialog from '../components/ConfirmationDialog.jsx';
 import { commerceError, money } from './api.js';
 import './cart-v2.css';
 
 function RemoveDialog({ target, pending, remove, onClose }) {
-  const id = useId(), busy = useRef(false);
+  const busy = useRef(false);
   const [saving,setSaving] = useState(false), [error,setError] = useState('');
   const close = () => { if (!busy.current) onClose(); };
-  const { dialogRef,dialogProps } = useModalDialog({ onClose:close, returnFocus:target.opener });
   async function confirm() {
     if (busy.current || pending) return;
     busy.current=true; setSaving(true); setError('');
@@ -20,12 +18,7 @@ function RemoveDialog({ target, pending, remove, onClose }) {
     } catch (caught) { setError(`${commerceError(caught)} Review your cart before retrying. Retrying removes only this same item.`); }
     finally { busy.current=false; setSaving(false); }
   }
-  return createPortal(<dialog ref={dialogRef} {...dialogProps} className="cart-remove-dialog" aria-labelledby={`${id}-title`} aria-describedby={`${id}-copy`} aria-busy={saving}>
-    <h2 id={`${id}-title`}>Remove {target.name}?</h2>
-    <p id={`${id}-copy`}>This removes {target.name} from your cart. Your other items will remain.</p>
-    {error && <p className="form-error" role="alert">{error}</p>}
-    <div className="button-group"><button type="button" autoFocus className="button button-secondary" disabled={saving} onClick={close}>Keep item</button><button type="button" className="button button-primary" disabled={saving || pending} onClick={confirm}>{saving ? 'Removing…' : 'Remove item'}</button></div>
-  </dialog>,document.body);
+  return <ConfirmationDialog className="cart-remove-dialog" title={`Remove ${target.name}?`} description={`This removes ${target.name} from your cart. Your other items will remain.`} error={error} pending={saving || pending} returnFocus={target.opener} onCancel={close} onConfirm={confirm} cancelLabel="Keep item" confirmLabel="Remove item"/>;
 }
 
 export default function CartLine({ item, name, title, image, children, pending, setQuantity, remove, fixed=false, status, edit, recovery, design=true }) {

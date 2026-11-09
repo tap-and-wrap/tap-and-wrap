@@ -334,7 +334,7 @@
 .gb-customer-design{min-width:0;margin:24px 0}.gb-customer-design .gb-free-preview{max-width:640px}.gb-customer-design .gb-canvas{max-width:640px}
 .gb-customer-design .gb-placed{cursor:default;pointer-events:none}
 .gb-arrangement-dialog{position:fixed;inset:0;margin:auto;box-sizing:border-box;width:min(960px,calc(100% - 32px));max-width:100%;max-height:calc(100dvh - 32px);border:1px solid var(--tw-border);border-radius:16px;background:var(--tw-bg);color:var(--tw-ink);padding:20px;overflow:auto}
-.gb-arrangement-dialog::backdrop,.gb-confirm-dialog::backdrop,.gb-lightbox::backdrop{background:#241b18bd;backdrop-filter:blur(4px)}
+.gb-arrangement-dialog::backdrop,.gb-lightbox::backdrop{background:#241b18bd;backdrop-filter:blur(4px)}
 .gb-arrangement-dialog>header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
 .gb-arrangement-dialog h2{margin:0;font:500 1.65rem/1.2 var(--tw-font-display)}
 .gb-arrangement-dialog>header button{display:grid;place-items:center;min-height:44px;min-width:44px;background:white;border:1px solid var(--tw-border);border-radius:50%;color:inherit;cursor:pointer}
@@ -353,9 +353,7 @@
 @media(max-width:600px){.gb-lightbox{width:100%;height:100dvh;max-height:100dvh;border:0;border-radius:0;padding:12px; padding-bottom:max(12px,env(safe-area-inset-bottom))}.gb-lightbox[open]{gap:8px;grid-template-rows:44px minmax(0,1fr) 86px}.gb-lightbox footer{flex-direction:column;justify-content:center;gap:4px}.gb-lightbox footer>div{gap:6px}}
 .gb-arrangement-dialog .gb-free-preview{width:100%;max-width:min(100%,calc((100dvh - 220px)*var(--gb-scene-aspect,1)));margin:auto}
 .gb-arrangement-dialog .gb-canvas{width:100%;scroll-margin:0}
-.gb-confirm-dialog{box-sizing:border-box;width:min(440px,calc(100% - 32px));padding:28px;border:1px solid var(--tw-border);border-radius:16px;background:var(--tw-bg);color:var(--tw-ink)}
-.gb-confirm-dialog h2{font:500 2rem/1.15 var(--tw-font-display);margin:8px 0 14px;overflow-wrap:anywhere}
-.gb-confirm-dialog p{line-height:1.6}.gb-dialog-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}.gb-dialog-actions .button{flex:1;min-width:125px}
+.gb-dialog-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}.gb-dialog-actions .button{flex:1;min-width:125px}
 .gb-shopping button:focus-visible,.gb-photo-dialog :focus-visible,.gb-confirm-dialog button:focus-visible,.gb-arrangement-dialog button:focus-visible{outline:2px solid var(--tw-button);outline-offset:3px}
 @media(max-width:900px){
  .gb-shopping{padding:20px 20px 36px}.gb-shopping .gb-workspace{grid-template-columns:1fr;gap:28px}
