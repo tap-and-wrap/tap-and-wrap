@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PUBLIC_STATIC_ROUTES, CONTENT_ROUTES, SLUG, canonicalOrigin, canonicalUrl, cleanText, publicImageUrl, productMetadata, organizationSchema, breadcrumbs, serializeJsonLd } from '../../src/seo/metadata.js';
+import { ownerReviews } from '../../src/content/owner-confirmed-reviews.js';
 import { verifiedMediaEntries } from '../../src/seo/media-verification.js';
 import { publicationFor, comparePublications, stableDigest } from './publication.js';
 
@@ -136,6 +137,7 @@ function productCards(products, emptyMessage = 'No eligible products are include
 }
 
 function staticBody(pathname, catalog, hasCatalogExport) {
+  if (pathname === '/reviews') return ownerReviews.map(review => `<figure data-review-id="${escapeHtml(review.id)}"><blockquote lang="${review.language}" dir="${review.language === 'ar-EG' ? 'rtl' : 'ltr'}">${escapeHtml(review.text)}</blockquote><figcaption><bdi>${escapeHtml(review.authorLabel)}</bdi> <span aria-label="5 out of 5 stars">★★★★★</span></figcaption></figure>`).join('');
   const links = `<nav aria-label="Gift categories"><ul>${catalog.categories.filter((category) => !category.parentId).map((category) => `<li>${link(categoryHref(category), category.name)}</li>`).join('')}</ul></nav>`;
   if (pathname === '/' || pathname === '/shop') return links + productCards(catalog.products, hasCatalogExport ? undefined : 'Development placeholder: an approved catalog export has not been provided.');
   if (pathname === '/customize') return `<ul><li>${link('/customize/gift-box', 'Build Your Gift Box')}</li><li>${link('/customize/laser-engraving', 'Laser Engraving')}</li></ul>`;

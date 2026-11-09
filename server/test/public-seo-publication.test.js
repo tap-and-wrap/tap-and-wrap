@@ -36,6 +36,23 @@ test('renewal uses only public HTTP pages and retains all twenty-one products',a
  const catalog=await readPublicSeoCatalog({fetchPage:(url,options)=>fetch(origin+new URL(url).pathname+new URL(url).search,options)});
  assert.equal(catalog.products.length,21);assert.equal(catalog.categories.length,1);assert.equal(catalog.products.some(p=>p.slug==='private-gift'),false);
 });
+test('targeted product deletion retains URL ownership and excludes only that product from catalog and SEO',async()=>{
+ const record=await Product.create({externalCatalogId:'TEST-REMOVE-ONE',name:'Disposable removal target',slug:'disposable-removal-target-legacy',categoryId:products[0].categoryId,visibility:'public',featured:true,bestSeller:true,mainImageKey:'fixtures/gift.webp',galleryKeys:['fixtures/gift.webp']});
+ await ProductAddress.create([{productId:record._id,slug:record.slug,canonical:false},{productId:record._id,slug:'disposable-removal-target',canonical:true}]);
+ const before=await Product.countDocuments();
+ assert.equal((await get('products/disposable-removal-target')).response.status,200);
+ const removed=await Product.deleteOne({_id:record._id,externalCatalogId:'TEST-REMOVE-ONE',name:'Disposable removal target',__v:record.__v});
+ assert.equal(removed.deletedCount,1);assert.equal(await Product.countDocuments(),before-1);
+ for(const slug of [record.slug,'disposable-removal-target'])assert.equal((await get('products/'+slug)).response.status,404);
+ const authority=(await get('product-addresses?slugs=disposable-removal-target,disposable-removal-target-legacy')).body.data.products;
+ assert.ok(authority.every(p=>p.notFound===true));
+ assert.equal(await ProductAddress.countDocuments({productId:record._id}),2);
+ assert.equal((await get('products?q=Disposable%20removal%20target')).body.data.products.length,0);
+ const exported=await readPublicSeoCatalog({fetchPage:(url,options)=>fetch(origin+new URL(url).pathname+new URL(url).search,options)});
+ assert.equal(exported.products.length,21);assert.ok(exported.products.every(p=>p._id!==String(record._id)));
+ assert.equal(await Product.countDocuments({_id:{$in:products.map(p=>p._id)}}),21);
+});
+
 test('source drift and media failure prevent preparation of a deployable renewal',async()=>{
  const first={products:[{_id:'one',mainImageUrl:'https://media.tapandwrap.net/fixture.webp',pricePiastres:null}],categories:[{_id:'root'}],checkoutEnabled:true};let reads=0,writes=[];
  const verification={objects:[{url:first.products[0].mainImageUrl}],failures:[]};

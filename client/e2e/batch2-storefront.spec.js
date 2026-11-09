@@ -196,7 +196,7 @@ test('announcement marquee repeats only one message with no search or dashboard 
       await expect(media).toHaveCSS('object-fit', 'cover');
       const frame = await page.locator('.hero-film').boundingBox();
       expect(geometry.height).toBeCloseTo(frame.height, 0);
-    } else expect(geometry.width / geometry.height).toBeCloseTo(geometry.ratio, 2);
+    } else await expect(media).toHaveCSS('object-fit', 'contain');
     // The page can scroll while resizing between mobile/tablet viewports.
     // boundingBox().y is viewport-relative; check the hero's document bottom
     // so incidental scroll does not falsely report a shorter initial hero.
@@ -204,9 +204,7 @@ test('announcement marquee repeats only one message with no search or dashboard 
       const rect = node.getBoundingClientRect();
       return { documentBottom: rect.bottom + window.scrollY, viewportHeight: window.innerHeight, scrollY: window.scrollY };
     });
-    expect(heroCoverage.documentBottom,
-      `Hero should fill the initial viewport at ${width}px (scrollY=${heroCoverage.scrollY}, bottom=${heroCoverage.documentBottom})`
-    ).toBeGreaterThanOrEqual(heroCoverage.viewportHeight - 1);
+    expect(heroCoverage.documentBottom, `Hero leaves the next section visible at ${width}px`).toBeLessThan(heroCoverage.viewportHeight - 30);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
   await page.getByRole('button', { name: 'Open menu', exact: true }).click();

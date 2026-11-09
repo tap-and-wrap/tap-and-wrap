@@ -14,7 +14,7 @@
 .sm-prelayer-blush{background:#efd7cf}
 .sm-prelayer-beige{background:#e7ddd2}
 .sm-panel{position:relative;display:flex;flex-direction:column;height:100%;background:var(--tw-bg);transform:translateX(0);overflow:hidden}
-.drawer-header{display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:12px;padding:22px 32px}
+.drawer-header{display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:12px;padding:22px 32px;border-bottom:1px solid var(--tw-border)}
 .drawer-logo{display:block;width:175px;max-width:50%}
 .drawer-logo img{display:block;width:100%;height:auto}
 .drawer-nav{display:flex;flex-direction:column;flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:16px 32px max(24px,env(safe-area-inset-bottom,0px));scroll-padding-block:16px}

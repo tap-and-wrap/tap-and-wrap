@@ -21,6 +21,7 @@ import PageErrorBoundary from './components/PageErrorBoundary.jsx';
 import RouteFocus, { focusMainContent } from './components/RouteFocus.jsx';
 const EngravingBuilderPage = lazy(() => import('./pages/EngravingBuilderPage.jsx'));
 const ShopPage = lazy(() => import('./pages/ShopPage.jsx'));
+const ReviewsPage = lazy(() => import('./pages/ReviewsPage.jsx'));
 const AdminEngravingPage = lazy(() => import('./pages/AdminEngravingPage.jsx'));
 const CategoryPage = lazy(() => import('./pages/CategoryPage.jsx'));
 const AccountRecoveryPage = lazy(() => import('./pages/AccountRecoveryPage.jsx'));
@@ -57,6 +58,7 @@ export default function App() {
  return <PasswordResetResultProvider><CartProvider><SignOutProvider><GiftBoxDraftProvider ownerKey={session.ownerKey}><EngravingDraftProvider ownerKey={session.ownerKey}><a href="#main-content" className="skip-navigation" onClick={focusMainContent}>Skip to main content</a><RouteMetadata/><Header/><div id="main-content" className="route-content" tabIndex={-1}><RouteFocus/><PageErrorBoundary key={`${location.pathname}:${privateRoute ? session.ownerKey : 'public'}`}><Suspense key={privateRoute ? session.ownerKey : 'public'} fallback={<main className="page-shell" role="status">Loading…</main>}><Routes>
   <Route path="/" element={<HomePage/>}/>
   <Route path="/shop" element={<ShopPage/>}/>
+  <Route path="/reviews" element={<ReviewsPage/>}/>
   <Route path="/categories/:slug" element={<CategoryPage/>}/>
   <Route path="/categories/:slug/:child" element={<CategoryPage/>}/>
   <Route path="/products/:slug" element={<ProductPage/>}/>

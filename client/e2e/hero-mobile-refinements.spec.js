@@ -19,7 +19,7 @@ test('hero typography and mobile film cover stay contained at requested widths',
       const box = await media.boundingBox();
       expect(box.width).toBeCloseTo(geometry.width, 0);
       expect(box.height).toBeCloseTo(geometry.height, 0);
-      expect(geometry.height).toBeGreaterThanOrEqual(geometry.width * 854 / 480 - 1);
+      expect(geometry.height).toBeCloseTo(900 * .59, 0);
       expect(geometry.blur).toBe('none');
       const sizes = await page.locator('.home-hero-content').evaluate(node => ['h1', '.home-hero-subtitle', '.eyebrow', '.button'].map(selector => parseFloat(getComputedStyle(node.querySelector(selector)).fontSize)));
       expect(sizes[0]).toBeGreaterThanOrEqual(49); expect(sizes[0]).toBeLessThanOrEqual(50);
@@ -27,8 +27,8 @@ test('hero typography and mobile film cover stay contained at requested widths',
       expect(sizes[2]).toBeGreaterThanOrEqual(12);
       expect(sizes[3]).toBeGreaterThanOrEqual(14); expect(sizes[3]).toBeLessThanOrEqual(15);
     } else {
-      const box = await media.boundingBox();
-      expect(box.width / box.height).toBeCloseTo(960 / 570, 2);
+      await expect(media).toHaveCSS('object-fit', 'contain');
+      expect(await media.evaluate(node => Number(node.getAttribute('width')) / Number(node.getAttribute('height')))).toBeCloseTo(960 / 570, 2);
     }
     // The page can scroll while resizing between mobile/tablet viewports.
     // boundingBox().y is viewport-relative; check the hero's document bottom
@@ -37,9 +37,7 @@ test('hero typography and mobile film cover stay contained at requested widths',
       const rect = node.getBoundingClientRect();
       return { documentBottom: rect.bottom + window.scrollY, viewportHeight: window.innerHeight, scrollY: window.scrollY };
     });
-    expect(heroCoverage.documentBottom,
-      `Hero should fill the initial viewport at ${width}px (scrollY=${heroCoverage.scrollY}, bottom=${heroCoverage.documentBottom})`
-    ).toBeGreaterThanOrEqual(heroCoverage.viewportHeight - 1);
+    expect(heroCoverage.documentBottom, `Hero leaves the next section visible at ${width}px`).toBeLessThan(heroCoverage.viewportHeight - 30);
     expect(await heading.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/hero-refinement-${width}.png` });

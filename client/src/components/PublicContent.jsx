@@ -8,7 +8,15 @@ import { developerContent } from '../content/developer-content.js';
 export function useSiteContent() {
   return useQuery({ queryKey: ['website', 'content'], queryFn: ({ signal }) => getSiteContent(signal), staleTime: 60_000, retry: false, refetchOnWindowFocus: false });
 }
-export function DeveloperHeroMedia({ video = developerContent.heroVideo }) {
+const localHeroImage = value => typeof value === 'string' && /^\/media\/[a-zA-Z0-9/_-]+\.(webp|avif|jpg|jpeg|png)$/.test(value);
+export function DeveloperHeroMedia({ video = developerContent.heroVideo, image = developerContent.heroImage }) {
+  if (image?.approved === true && localHeroImage(image.src)) return <picture className="hero-film hero-picture">
+    {localHeroImage(image.mobileSrc) && <source media="(max-width: 767px)" srcSet={image.mobileSrc} width="1200" height="1500"/>}
+    <img className="hero-film-poster" src={image.src} width="2520" height="1080" alt={image.alt || ''} fetchPriority="high" loading="eager" decoding="async"/>
+  </picture>;
+  return <HeroVideoMedia video={video}/>;
+}
+function HeroVideoMedia({ video }) {
   const mobile = useMediaPreference('(max-width: 767px)');
   const localVideo = (value) => typeof value === 'string' && /^\/media\/[a-zA-Z0-9/_-]+\.(mp4|webm)$/.test(value);
   const localPoster = value => typeof value === 'string' && /^\/media\/[a-zA-Z0-9/_-]+\.(webp|avif|jpg|jpeg|png)$/.test(value);
