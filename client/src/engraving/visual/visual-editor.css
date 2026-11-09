@@ -1,0 +1,39 @@
+/* Same licensed registry assets as Studio V2; no copied font binaries. */
+@font-face{font-family:'Engraving-amiri-v1';src:url('/assets/engraving/fonts/v1/amiri.ttf') format('truetype');font-display:swap}
+@font-face{font-family:'Engraving-rochester-v1';src:url('/assets/engraving/fonts/v1/rochester.ttf') format('truetype');font-display:swap}
+@font-face{font-family:'Engraving-allura-v1';src:url('/fonts/gift-sticker/allura.ttf') format('truetype');font-display:swap}
+@font-face{font-family:'Engraving-greatvibes-v1';src:url('/fonts/gift-sticker/greatvibes.ttf') format('truetype');font-display:swap}
+@font-face{font-family:'Engraving-sacramento-v1';src:url('/fonts/gift-sticker/sacramento.ttf') format('truetype');font-display:swap}
+@font-face{font-family:'Engraving-parisienne-v1';src:url('/fonts/gift-sticker/parisienne.ttf') format('truetype');font-display:swap}
+@font-face{font-family:'Engraving-pinyonscript-v1';src:url('/fonts/gift-sticker/pinyonscript.ttf') format('truetype');font-display:swap}
+@font-face{font-family:'Engraving-arefruqaa-v1';src:url('/fonts/gift-sticker/arefruqaa.ttf') format('truetype');font-display:swap}
+@font-face{font-family:'Engraving-lateef-v1';src:url('/fonts/gift-sticker/lateef.ttf') format('truetype');font-display:swap}
+@font-face{font-family:'Engraving-scheherazadenew-v1';src:url('/fonts/gift-sticker/scheherazadenew.ttf') format('truetype');font-display:swap}
+@font-face{font-family:'Engraving-rakkas-v1';src:url('/fonts/gift-sticker/rakkas.ttf') format('truetype');font-display:swap}
+@font-face{font-family:'Engraving-mirza-v1';src:url('/fonts/gift-sticker/mirza.ttf') format('truetype');font-display:swap}
+.visual-engraving{--ve-line:var(--tw-border,#eadad5);--ve-ink:var(--tw-ink,#62483f);max-width:1280px;margin:auto;padding:24px;color:var(--ve-ink)}
+.visual-engraving *{box-sizing:border-box}
+.visual-engraving button,.visual-engraving select,.visual-engraving textarea{font:inherit;color:inherit}
+.visual-engraving button{min-height:44px;padding:8px 14px;background:white;border:1px solid var(--ve-line);border-radius:9px;cursor:pointer;touch-action:manipulation}
+.visual-engraving button:disabled{opacity:.45;cursor:default}
+.visual-engraving :focus-visible{outline:3px solid var(--tw-rose-brown,#915b50);outline-offset:3px}
+.visual-engraving h2{font-size:clamp(1.6rem,4vw,2.2rem);margin:0}.visual-engraving h3{font-size:1.15rem;margin:0 0 12px}
+.ve-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:24px}.ve-heading .eyebrow{margin:0 0 5px}
+.ve-history,.ve-actions{display:flex;flex-wrap:wrap;gap:8px}.ve-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,340px);gap:28px;align-items:start}
+.ve-workspace{min-width:0;position:sticky;top:20px}.ve-view-controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}.ve-view-controls>span{margin-right:auto}.ve-view-controls output{min-width:48px;text-align:center}
+.ve-viewport{overflow:auto;max-height:70svh;min-height:240px;border:1px solid var(--ve-line);border-radius:14px;background:#f4eeeb;overscroll-behavior:contain;scrollbar-gutter:stable}
+.ve-scroll-space{min-width:100%;padding:20px}.ve-board{position:relative;width:100%;background:white;isolation:isolate;touch-action:none;user-select:none;-webkit-user-select:none}
+.ve-surface{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none}
+.ve-empty{position:absolute;inset:20px;display:grid;place-content:center;text-align:center}
+.ve-layer{position:absolute;transform:translate(-50%,-50%)}
+.visual-engraving .ve-layer-target{display:block;position:absolute;inset:0;width:100%;height:100%;min-height:0;padding:0;border:0;border-radius:0;background:transparent;cursor:grab;touch-action:none;overflow:visible}
+.ve-layer-target svg,.ve-layer-target img{display:block;width:100%;height:100%;object-fit:contain;pointer-events:none;filter:none;opacity:1;mix-blend-mode:normal}
+.ve-layer.is-selected{outline:1px dashed var(--tw-rose-brown,#915b50);outline-offset:4px}
+.visual-engraving .ve-resize{position:absolute;right:-20px;bottom:-20px;min-height:44px;width:44px;padding:0;border:1px solid var(--tw-rose-brown,#915b50);border-radius:50%;background:white;touch-action:none;cursor:nwse-resize;z-index:1}
+.ve-help{font-size:.9rem;line-height:1.5;margin:12px 0 0}.ve-controls{display:grid;gap:24px;min-width:0}.ve-controls>section{padding-bottom:24px;border-bottom:1px solid var(--ve-line)}
+.ve-layers{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.ve-layers button{max-width:100%;overflow-wrap:anywhere}.ve-layers [aria-pressed=true]{background:#fff7f4;border-color:var(--tw-rose-brown,#915b50)}
+.ve-selection{display:grid;gap:12px}.ve-selection textarea,.ve-selection select{display:block;width:100%;background:white;border:1px solid var(--ve-line);border-radius:8px;padding:10px;min-height:44px}.ve-selection textarea{min-height:90px;resize:vertical}
+.ve-colors{border:0;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:12px}.ve-colors legend{margin-bottom:8px}.ve-colors label{display:flex;gap:5px;align-items:center;min-height:44px}.ve-colors span{width:16px;height:16px;border:1px solid #bba79f;border-radius:50%}.ve-colors input{accent-color:#795045;width:18px;height:18px}
+.ve-move{display:grid;grid-template-columns:1fr 1fr;gap:8px}.ve-move button:last-child{grid-column:1/-1}
+@media(max-width:760px){.visual-engraving{padding:16px}.ve-heading{display:block;margin-bottom:16px}.ve-history{margin-top:16px}.ve-layout{grid-template-columns:minmax(0,1fr);gap:24px}.ve-workspace{position:static}.ve-viewport{max-height:58svh}.ve-scroll-space{padding:22px}.ve-view-controls{gap:6px}.ve-view-controls>span{width:100%}.ve-controls{gap:20px}}
+@media(prefers-reduced-motion:reduce){.visual-engraving *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
