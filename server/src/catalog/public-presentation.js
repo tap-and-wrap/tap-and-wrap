@@ -1,7 +1,7 @@
 import { productEngravingCapable, productSurfaceId } from '../../../shared/product-engraving.mjs';
 import { isSafeImageReference } from './fields.js';
 import { ownerVariantStock } from './product-policy.js';
-import { productPersonalizationFields } from '../../../shared/product-personalization.mjs';
+import { optionalPhotoFields, productPersonalizationFields } from '../../../shared/product-personalization.mjs';
 import { productBusinessState, positiveProductPrice, confirmedInventoryAvailable } from '../../../shared/product-business-state.mjs';
 
 // Storage references become public only through an explicitly configured HTTPS origin.
@@ -77,7 +77,7 @@ export function publicProductDetail(product) {
       inventory: publicInventory(variant.inventory),
       orderingAvailable: card.orderingAvailable && inventoryCanOrder(variant.inventory) && (variant.pricePiastres == null || positiveProductPrice(variant.pricePiastres)),
     })),
-    personalization: { requiredBeforePurchase: product.personalization?.requiredBeforePurchase === true, fields: productPersonalizationFields(product.personalization) },
+    personalization: { ...(optionalPhotoFields(product.personalization).length ? { photoSpaces: optionalPhotoFields(product.personalization).map(({ key, label, instructions }) => ({ key, label, instructions })), photoSpacesVersion: product.personalization.photoSpacesVersion } : {}), requiredBeforePurchase: product.personalization?.requiredBeforePurchase === true, fields: productPersonalizationFields(product.personalization) },
     customization: {
       enabled: Boolean(product.customization?.enabled),
       templateId: product.customization?.templateId ? String(product.customization.templateId) : null,

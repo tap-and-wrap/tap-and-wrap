@@ -1,10 +1,11 @@
+import PhotoSpacesEditor from '../product-photos/PhotoSpacesEditor.jsx';
 import Select from '../components/form/Select.jsx';
 const types = { image: 'Photo / reference image', short_text: 'Short text', long_text: 'Notes', select: 'Predefined choices' };
 
 export default function ProductPersonalizationEditor({ value, onChange }) {
   const fields = value.fields || [];
   const change = (index, patch) => onChange({ ...value, fields: fields.map((field, position) => position === index ? { ...field, ...patch } : field) });
-  return <section className="admin-panel"><h2>Product personalization</h2>
+  return <section className="admin-panel"><h2>Product personalization</h2><PhotoSpacesEditor value={value} onChange={onChange}/>
     <label className="admin-checkbox"><input name="personalization.requiredBeforePurchase" type="checkbox" checked={value.requiredBeforePurchase === true} onChange={event => onChange({ ...value, requiredBeforePurchase: event.target.checked })} />Requires Customization Before Purchase</label>
     <p className="admin-help">Customers personalize this product at its approved price. No separate template or extra charge is needed. Turning this off keeps saved fields for later and removes the personalization requirement.</p>
     {value.requiredBeforePurchase === undefined && fields.length > 0 && <p>Existing purchase fields are still active. Check the box to use the new Customize This step, or <button type="button" className="admin-text-button" onClick={() => onChange({ ...value, requiredBeforePurchase: false })}>turn off existing purchase fields</button>.</p>}

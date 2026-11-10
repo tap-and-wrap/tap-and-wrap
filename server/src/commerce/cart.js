@@ -1,3 +1,4 @@
+import { photoEditFingerprint } from './product-photos.js';
 import { productArtworkIds } from '../../../shared/product-engraving.mjs';
 import { productEditFingerprint, quoteProductEngraving } from '../product-engraving/service.js';
 import { loadEligibleProduct } from './pricing.js';
@@ -67,7 +68,7 @@ async function quoteCartCore(owner, { session, strict = false } = {}, capability
       }
       const uploadedFields = [...Object.entries(item.personalization || {}), ...Object.entries(item.customization?.fields || {})]
         .filter(([key, value]) => /^[a-z][a-z0-9_-]{0,79}$/i.test(key) && Array.isArray(value) && value.length > 0).map(([key]) => key);
-      items.push({ id: item.id, kind: item.kind || 'product', productId: String(item.productId), name: item.name || 'Unavailable product', slug: item.slug || null, mainImageUrl: item.mainImageUrl || null, quantity: item.quantity, ...(item.productEngraving ? { productEngraving: { surchargePiastres: null } } : {}), valid: false, error: error.message, errorCode: error.code || 'CART_ITEM_UNAVAILABLE',
+      items.push({ id: item.id, kind: item.kind || 'product', productId: String(item.productId), name: item.name || 'Unavailable product', slug: item.slug || null, mainImageUrl: item.mainImageUrl || null, quantity: item.quantity, ...(item.photoSelection ? { photoSelection: item.photoSelection } : {}), ...(item.productEngraving ? { productEngraving: { surchargePiastres: null } } : {}), valid: false, error: error.message, errorCode: error.code || 'CART_ITEM_UNAVAILABLE',
         ...(error.code === 'INVALID_UPLOAD_REFERENCES' && uploadedFields.length ? { attachments: { status: 'unavailable', replacementRequired: true, fieldKeys: [...new Set(uploadedFields)], expiresAt: null } } : {}), unitPricePiastres: null, lineTotalPiastres: null });
     }
   }
@@ -138,7 +139,7 @@ function storedLine(quote, id = randomUUID()) {
   return isEngravingKind(quote.kind) ? { id, kind: quote.kind, identity: quote.identity, name: quote.name, quantity: 1, specification: quote.specification, reviewFingerprint: quote.reviewFingerprint } : quote.kind === 'gift_box_v2'
     ? { id, kind: 'gift_box_v2', identity: quote.identity, configurationId: quote.configurationId, configuration: quote.configuration, name: quote.name, quantity: quote.quantity }
     : { id, kind: 'product', identity: quote.identity, productId: quote.productId, name: quote.name, slug: quote.slug, mainImageUrl: quote.mainImageUrl,
-      variantKey: quote.variantKey, quantity: quote.quantity, personalization: quote.personalization, customization: quote.customization || null, ...(quote.productEngraving ? { productEngraving: quote.productEngraving } : {}) };
+      variantKey: quote.variantKey, quantity: quote.quantity, personalization: quote.personalization, customization: quote.customization || null, ...(quote.photoSelection ? { photoSelection: quote.photoSelection } : {}), ...(quote.productEngraving ? { productEngraving: quote.productEngraving } : {}) };
 }
 function sameLine(item, quote) {
   if (cartLineKind(item) !== quote.kind || item.identity !== quote.identity) return false;
@@ -162,7 +163,7 @@ export async function addCartItem(owner, raw, { onAdded } = {}) {
   let added, alreadyOrdered;
   await changeCart(owner, async (cart, session) => {
     added = null; alreadyOrdered = null;
-    if (isEngravingKind(kind) || input.productEngraving) {
+    if (isEngravingKind(kind) || input.productEngraving || input.photoSelection) {
       const accepted = await Order.findOne({ owner, 'cartAddOperations.key': input.operationKey }).session(session).select('_id cartAddOperations').lean().maxTimeMS(3000);
       if (accepted) {
         if (accepted.cartAddOperations.find(entry => entry.key === input.operationKey)?.requestHash !== requestHash) throw commerceError(409, 'CART_OPERATION_CONFLICT', 'This add operation is already associated with an order.');
@@ -183,12 +184,13 @@ export async function addCartItem(owner, raw, { onAdded } = {}) {
     const quote = isEngravingKind(kind) ? await quoteEngravingLine(input, owner, { session, fence: true }) : kind === 'gift_box_v2' ? quoteGiftBoxCartLine(input, giftContext, { stored: false }) : { ...await quoteCartLine(input, owner, { session }), kind: 'product' };
     added = { kind, ...(kind === 'product' ? { productId: quote.productId, slug: quote.slug } : {}), quantity: input.quantity, unitPricePiastres: quote.unitPricePiastres, customized: Boolean(quote.customization) };
     if (input.replaceLineId) {
-      const index = cart.items.findIndex(item => item.id === input.replaceLineId && item.kind === kind && (input.productEngraving ? String(item.productId) === input.productId && item.productEngraving?.designKey === input.productEngraving.designKey : item.specification.itemKey === input.specification.itemKey));
+      const index = cart.items.findIndex(item => item.id === input.replaceLineId && item.kind === kind && (input.productEngraving ? String(item.productId) === input.productId && item.productEngraving?.designKey === input.productEngraving.designKey : input.photoSelection ? !item.productEngraving && String(item.productId) === input.productId : item.specification.itemKey === input.specification.itemKey));
       if (index < 0) throw commerceError(409, 'ENGRAVING_EDIT_CONFLICT', 'The engraving line changed or was removed. Review your cart.');
-      if (input.replaceFingerprint !== (input.productEngraving ? productEditFingerprint(cart.items[index]) : fingerprint({ specification: cart.items[index].specification, reviewFingerprint: cart.items[index].reviewFingerprint }))) throw commerceError(409, 'ENGRAVING_EDIT_CONFLICT', 'This line was edited in another tab. Your draft is retained.');
+      if (input.replaceFingerprint !== (input.productEngraving ? productEditFingerprint(cart.items[index]) : input.photoSelection ? photoEditFingerprint(cart.items[index]) : fingerprint({ specification: cart.items[index].specification, reviewFingerprint: cart.items[index].reviewFingerprint }))) throw commerceError(409, 'ENGRAVING_EDIT_CONFLICT', 'This line was edited in another tab. Your draft is retained.');
       cart.items.splice(index, 1);
     }
     const existing = cart.items.find(item => input.productEngraving ? item.productEngraving?.designKey === input.productEngraving.designKey : isEngravingKind(kind) && isEngravingKind(item.kind) ? item.specification.itemKey === input.specification.itemKey : sameLine(item, quote));
+    if (existing && input.replaceLineId) throw commerceError(409, 'PHOTO_EDIT_CONFLICT', 'An identical item is already in the cart. Remove the old item or keep its design.');
     if (existing && (isEngravingKind(kind) || input.productEngraving)) throw commerceError(409, 'ENGRAVING_ITEM_EXISTS', 'This physical item is already in the cart. Edit it or start a new item.');
     if (existing) {
       const quantity = existing.quantity + input.quantity;
@@ -271,7 +273,7 @@ export async function mergeGuestCart(fromOwner, toOwner) {
     for (const item of target.items.filter(line => line.productEngraving)) await quoteCartLine(item, toOwner, { session });
     const transferredUploads = new Set();
     for (const item of source.items) {
-      const personalizedGift = Boolean(item.productEngraving) || isEngravingKind(item.kind) || item.kind === 'gift_box_v2' && Boolean(item.configuration?.personalizationIntent);
+      const personalizedGift = Boolean(item.productEngraving || item.photoSelection?.mode === 'photos') || isEngravingKind(item.kind) || item.kind === 'gift_box_v2' && Boolean(item.configuration?.personalizationIntent);
       let quote;
       try { quote = isEngravingKind(cartLineKind(item)) ? await quoteEngravingLine(item, fromOwner, { session, allowClosed: true }) : cartLineKind(item) === 'gift_box_v2' ? quoteGiftBoxCartLine(item, sourceGiftContext) : { ...await quoteCartLine(item, fromOwner, { session }), kind: 'product' }; }
       catch (caught) {

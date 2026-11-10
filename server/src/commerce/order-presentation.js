@@ -32,7 +32,7 @@ function customization(value) {
 function state(value) { return pick(value, ['fulfillmentState', 'paymentState']); }
 function personalizationDefinitions(value) {
   return (Array.isArray(value) ? value : []).slice(0, 20).filter(field => field && typeof field.key === 'string' && /^[a-z][a-z0-9_-]{0,49}$/.test(field.key)
-    && typeof field.label === 'string' && field.label.length <= 160 && ['image', 'short_text', 'long_text', 'select'].includes(field.type)).map(field => pick(field, ['key', 'label', 'type']));
+    && typeof field.label === 'string' && field.label.length <= 160 && ['image', 'short_text', 'long_text', 'select'].includes(field.type)).map(field => pick(field, ['key', 'label', 'type', 'photoSlot', 'instructions']));
 }
 function giftBox(value, { admin }) {
   if (!value || !['gift-box-order-v1','gift-box-order-v2'].includes(value.snapshotVersion) || !Array.isArray(value.components)
@@ -105,7 +105,7 @@ function orderLine(line, { admin }) {
   if (line.kind === 'gift_box_v2') return { ...pick(line, ['kind', 'name', 'quantity', 'unitPricePiastres', 'lineTotalPiastres']), giftBox: giftBox(line.giftBox, { admin }) };
   if (line.kind !== undefined && line.kind !== 'product') return { kind: 'unsupported', name: 'Order item details unavailable' };
   return { kind: 'product', ...pick(line, ['productId', 'name', 'slug', 'variantKey', 'variantLabel', 'sku', 'description', 'categoryId', 'subcategoryId', 'mainImageUrl', 'quantity', 'unitPricePiastres', 'lineTotalPiastres']),
-    personalization: configuredValues(line.personalization), personalizationDefinitions: personalizationDefinitions(line.personalizationDefinitions), customization: customization(line.customization), ...(line.productEngraving ? { productEngraving: productEngravingSummary(line.productEngraving) } : {}) };
+    ...(line.photoPurchase ? { photoPurchase: pick(line.photoPurchase, ['contractVersion','mode','configurationVersion','slots']) } : {}), personalization: configuredValues(line.personalization), personalizationDefinitions: personalizationDefinitions(line.personalizationDefinitions), customization: customization(line.customization), ...(line.productEngraving ? { productEngraving: productEngravingSummary(line.productEngraving) } : {}) };
 }
 export function presentOrderHistory(history = [], { admin = false } = {}) {
   return history.map(entry => ({ ...pick(entry, ['at', 'event']),

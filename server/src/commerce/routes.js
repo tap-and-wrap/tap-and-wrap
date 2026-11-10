@@ -1,3 +1,6 @@
+import { Product } from '../models/Product.js';
+import { optionalPhotoFields } from '../../../shared/product-personalization.mjs';
+import { photoEditFingerprint } from './product-photos.js';
 import { productEngravingRoutes, adminProductEngravingRoutes } from '../product-engraving/routes.js';
 import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 import { engravingCollectionAllowed } from '../engraving/payment-policy.js';
@@ -21,7 +24,7 @@ import { Order } from '../models/Order.js';
 import { OrderSettlement } from '../models/OrderSettlement.js';
 import { fingerprint } from './pricing.js';
 import { commerceOwner, guestOwner, rotateGuestCookie } from './ownership.js';
-import { cartResponse, addCartItem, updateCartQuantity, removeCartItem, clearCart, mergeGuestCart } from './cart.js';
+import { readCart, cartResponse, addCartItem, updateCartQuantity, removeCartItem, clearCart, mergeGuestCart } from './cart.js';
 import { prepareCheckout, placeOrder, normalizePhone, presentOrder, getOwnedOrder, changeOrderState, orderFiles, findOwnedCheckoutSubmission } from './orders.js';
 import { GOVERNORATES, shippingForGovernorate } from './promotions.js';
 
@@ -181,6 +184,14 @@ commerceRoutes.get('/orders/:id', async (req, res) => {
 commerceRoutes.post('/orders/:id/accounting', async (req, res) => { const order = await mutateOrderAccounting(id.parse(req.params.id), req.commerceOwner, accountingInput.parse(req.body), req.user); res.json({ ok: true, data: { order: { ...presentOrder(order), accounting: await orderAccounting(order) } } }); });
 commerceRoutes.post('/orders/:id/cancel', async (req, res) => { const input = z.object({ revision: states.shape.revision, reason: states.shape.reason }).strict().parse(req.body); const record = await getOwnedOrder(id.parse(req.params.id), req.commerceOwner); const order = [1, 2].includes(record.accountingVersion) ? presentOrder(await mutateOrderAccounting(record._id, req.commerceOwner, { ...input, action: 'request_cancel' }, req.user)) : await changeOrderState(record._id, req.commerceOwner, { ...input, fulfillmentState: 'cancelled' }, req.user); res.json({ ok: true, data: { order } }); });
 
+commerceRoutes.get('/product-photos/cart/:lineId', async (req, res) => {
+  const cart = await readCart(req.commerceOwner), line = cart?.items.find(item => item.id === uuid.parse(req.params.lineId) && item.kind === 'product' && !item.productEngraving);
+  if (!line) throw commerceError(404, 'CART_ITEM_NOT_FOUND', 'This ready-made product is unavailable.');
+  const product = await Product.findById(line.productId).select('personalization').lean().maxTimeMS(3000);
+  if (!line.photoSelection && !optionalPhotoFields(product?.personalization).length) throw commerceError(404, 'CART_ITEM_NOT_FOUND', 'This product has no personal photo choices.');
+  const photoSelection = line.photoSelection || { contractVersion: 'product-photos-v1', mode: 'as_is', configurationVersion: product.personalization.photoSpacesVersion };
+  res.json({ ok: true, data: { line: { ...line, photoSelection }, editFingerprint: photoEditFingerprint(line) } });
+});
 commerceRoutes.use(engravingRoutes);
 commerceRoutes.use(productEngravingRoutes);
 commerceRoutes.use(publicConfigurationRoutes);

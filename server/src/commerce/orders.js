@@ -92,7 +92,7 @@ function snapshotOrderLine(line) {
   return { kind: 'product', productId: line.productId, name: line.name, slug: line.slug, variantKey: line.variantKey, variantLabel: line.variantLabel,
     sku: line.sku, description: line.description, categoryId: line.categoryId, subcategoryId: line.subcategoryId, mainImageUrl: line.mainImageUrl,
     quantity: line.quantity, unitPricePiastres: line.unitPricePiastres, lineTotalPiastres: line.lineTotalPiastres,
-    personalization: line.personalization, personalizationDefinitions: line.personalizationDefinitions, customization: line.customizationSnapshot, ...(line.productEngravingSnapshot ? { productEngraving: line.productEngravingSnapshot } : {}), uploadIds: line.uploadIds };
+    ...(line.photoPurchase ? { photoPurchase: line.photoPurchase } : {}), personalization: line.personalization, personalizationDefinitions: line.personalizationDefinitions, customization: line.customizationSnapshot, ...(line.productEngravingSnapshot ? { productEngraving: line.productEngravingSnapshot } : {}), uploadIds: line.uploadIds };
 }
 async function placeOrderCore(owner, input, userId, { trackingConsentId = null } = {}, capability = null) {
   if (capability) assertGiftBoxCheckoutCapability(capability, owner);
@@ -134,7 +134,7 @@ async function placeOrderCore(owner, input, userId, { trackingConsentId = null }
         await runGiftBoxCheckoutTestHook(capability, owner, 'beforePolicyFence', { session, quote });
         await fenceGiftBoxCheckoutPolicies(quote.policyFences, session);
         await fenceGiftBoxPersonalization(quote.cart.items, session);
-        const order = new Order({ ...(hasEngraving || quote.cart.items.some(line => line.productEngravingSnapshot) ? { cartAddOperations: quote.cart.document.addOperations } : {}), ...(hasEngraving ? { engraving: initialEngravingWorkflow(quote.cart.items) } : {}), owner, userId: userId || null, trackingConsentId, checkoutKey: input.checkoutKey, requestHash, orderNumber: generateOrderNumber(), customer: normalized.customer,
+        const order = new Order({ ...(hasEngraving || quote.cart.items.some(line => line.productEngravingSnapshot || line.photoSelection) ? { cartAddOperations: quote.cart.document.addOperations } : {}), ...(hasEngraving ? { engraving: initialEngravingWorkflow(quote.cart.items) } : {}), owner, userId: userId || null, trackingConsentId, checkoutKey: input.checkoutKey, requestHash, orderNumber: generateOrderNumber(), customer: normalized.customer,
           lines: quote.cart.items.map(snapshotOrderLine), totals: quote.totals, inventoryClaims, uploadIds, accountingVersion: hasEngraving || hasGifts ? 2 : 1, ...((hasEngraving || hasGifts) ? { paymentGroups: initialPaymentGroups(quote.cart.items, quote.totals, input.paymentMethod), ...(quote.cart.items.some(line => !isEngravingKind(line.kind)) ? { merchandiseFulfillment: 'received' } : {}) } : {}), personalized, allowedPaymentMethods: personalized && !hasEngraving && !hasGifts ? ['instapay'] : ['cod', 'instapay'], charges: [...(quote.cart.items.some(line => !isEngravingKind(line.kind)) ? [pendingShipping()] : []), ...(hasEngraving ? [{ ...pendingShipping(), id: 'return_shipping', label: 'Item handoff / return' }] : [])], followUpDueAt: new Date(Date.now() + 12 * 3600000),
           paymentMethod: input.paymentMethod, paymentState: hasEngraving ? 'unpaid' : quote.totals.totalPiastres === 0 ? 'paid' : input.paymentMethod === 'instapay' ? 'awaiting_transfer' : 'unpaid',
           history: [{ at: new Date(), event: 'order_received', actor: userId ? 'customer' : 'guest' }] });

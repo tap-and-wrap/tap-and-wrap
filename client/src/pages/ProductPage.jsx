@@ -1,3 +1,5 @@
+import ProductPhotoPurchase from '../product-photos/ProductPhotoPurchase.jsx';
+import { positiveProductPrice } from '../../../shared/product-business-state.mjs';
 import { lazy, Suspense } from 'react';
 const ProductEngravingBuilder = lazy(() => import('../product-engraving/ProductEngravingBuilder.jsx'));
 import Select from '../components/form/Select.jsx';
@@ -42,6 +44,9 @@ function ProductContentBody({ product, relatedProducts = [], preview = false, pr
   const [personalization, setPersonalizationState] = useState(draft.values);
   const [complete, setComplete] = useState(draft.complete);
   const location = useLocation();
+  const photoEditId = new URLSearchParams(location.search).get('photoEdit');
+  const [photoBuying, setPhotoBuying] = useState(Boolean(photoEditId));
+  const [personalPhotosSelected, setPersonalPhotosSelected] = useState(false);
   const editEngravingId = new URLSearchParams(location.search).get('engravingEdit');
   const [engravingOpen, setEngravingOpen] = useState(Boolean(editEngravingId));
   const [customizing, setCustomizing] = useState(false);
@@ -71,7 +76,7 @@ function ProductContentBody({ product, relatedProducts = [], preview = false, pr
   const variants = product.variants || [];
   const variant = variants.find((item) => item.key === variantKey);
   const price = variant ? variant.pricePiastres : product.pricePiastres;
-  const approvedPrice = (variant ? variant.priceApproved !== false && (variant.priceApproved === true || product.priceApproved === true) : product.priceApproved === true) && Number.isSafeInteger(price) && price > 0;
+  const approvedPrice = positiveProductPrice(price);
   const outOfStock = approvedPrice && (variant ? variant.inventory?.quantity === 0 && product.businessState !== 'confirm_stock' : product.businessState === 'out_of_stock');
   const enquiryRequired = !preview && !outOfStock && (product.browseOnly === true || !approvedPrice || product.orderingAvailable !== true || variant?.orderingAvailable === false);
   const orderingAvailable = !preview && !enquiryRequired && approvedPrice && product.orderingAvailable === true && (!variant || variant.orderingAvailable === true);
@@ -99,6 +104,7 @@ function ProductContentBody({ product, relatedProducts = [], preview = false, pr
   async function addProduct(event) {
     event.preventDefault();
     if (preview || adding || draft.busy || cart.pending || !orderingAvailable || !sessionReady) return;
+    if (photoBuying) { purchaseRef.current.querySelector('[data-photo-add]')?.click(); return; }
     if (requiresPersonalization && (!complete || !personalizationValid) && !draft.request) { setCustomizing(true); return; }
     const errors = validateConfiguredFields(personalizationFields, personalization);
     if (variants.length && !variant) errors.variant = 'Choose a size / color.';
@@ -109,7 +115,7 @@ function ProductContentBody({ product, relatedProducts = [], preview = false, pr
     try {
       if (!draft.request) {
         const fields = await uploadConfiguredFields(personalization, personalizationFields, { productId: product._id, onProgress: setUploadStatus, cache: draft.uploads }, uploadedIds);
-        draft.request = { operationKey: crypto.randomUUID(), productId: product._id, variantKey: variant?.key || null, quantity, personalization: fields };
+        draft.request = { operationKey: crypto.randomUUID(), productId: product._id, variantKey: variant?.key || null, quantity, personalization: fields, ...(product.personalization?.photoSpaces?.length ? { photoSelection: { contractVersion: 'product-photos-v1', mode: 'as_is', configurationVersion: product.personalization.photoSpacesVersion } } : {}) };
       }
       setUploadStatus('Verifying price and adding your item…');
       await cart.add(draft.request, document.querySelector('.product-main-image img'));
@@ -175,9 +181,11 @@ function ProductContentBody({ product, relatedProducts = [], preview = false, pr
               <button type="button" className={complete ? 'catalog-secondary-button product-customize-button' : 'button button-dark product-purchase-button'} disabled={adding || uncertain || !orderingAvailable} onClick={() => setCustomizing(true)}>{complete ? 'Edit' : 'Customize This'}</button>
               {complete && <><p className="commerce-muted">Your personalization is ready. Photos are still private on this device until Add to Cart.</p><PersonalizationSummary values={personalization} definitions={personalizationFields} /></>}
             </>}
+            {!preview && orderingAvailable && (product.personalization?.photoSpaces?.length > 0 || photoEditId) && <ProductPhotoPurchase product={product} variantKey={variant?.key || null} quantity={quantity} baseFields={personalizationFields} baseValues={personalization} editId={photoEditId} onMode={setPhotoBuying} onPhotoMode={setPersonalPhotosSelected} onHydrate={line => { setVariantKey(line.variantKey || ''); setQuantity(line.quantity); }}/>}
             {enquiryRequired ? <a className="button button-dark product-purchase-button" href={enquiryUrl} target="_blank" rel="noopener noreferrer">Enquire on WhatsApp</a>
-              : (!requiresPersonalization || complete || preview) && <button type="submit" className="button button-dark product-purchase-button" disabled={!orderingAvailable || adding || cart.pending || requiresPersonalization && !personalizationValid && !uncertain} aria-describedby="product-ordering-notice">{preview ? 'Ordering disabled' : adding ? 'Adding…' : uncertain ? 'Retry same Add to Cart' : orderingAvailable ? 'Add to Cart' : 'Out of Stock'}</button>}
-            {!preview && product.productEngraving && !enquiryRequired && <button type="button" className="catalog-secondary-button product-customize-button" disabled={!orderingAvailable || adding || uncertain || cart.pending} onClick={() => { if (variants.length && !variantKey) { setFieldErrors({ variant: 'Choose an available option first.' }); focusOptions(); } else setEngravingOpen(true); }}>Add Engraving</button>}
+              : !photoBuying && (!requiresPersonalization || complete || preview) && <button type="submit" className="button button-dark product-purchase-button" disabled={!orderingAvailable || adding || cart.pending || requiresPersonalization && !personalizationValid && !uncertain} aria-describedby="product-ordering-notice">{preview ? 'Ordering disabled' : adding ? 'Adding…' : uncertain ? 'Retry same Add to Cart' : orderingAvailable ? 'Add to Cart' : 'Out of Stock'}</button>}
+            {!preview && product.productEngraving && !enquiryRequired && <button type="button" className="catalog-secondary-button product-customize-button" disabled={!orderingAvailable || adding || uncertain || cart.pending || personalPhotosSelected} onClick={() => { if (variants.length && !variantKey) { setFieldErrors({ variant: 'Choose an available option first.' }); focusOptions(); } else setEngravingOpen(true); }}>Add Engraving</button>}
+            {personalPhotosSelected && product.productEngraving && <p className="commerce-muted">Choose Order as is to start a separate engraving design.</p>}
             {uncertain && <p role="alert">The add response is unconfirmed. Retry the same request or review your cart before adding another item. Reloading clears this local retry; check the cart first.</p>}
             {addError && <p role="alert" className="error-text">{addError}</p>}
             {adding && <p className="upload-progress" role="status"><progress aria-label="Adding your gift"/>{uploadStatus || 'Preparing your item…'}</p>}

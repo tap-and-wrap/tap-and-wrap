@@ -1,3 +1,4 @@
+import { photoSelectionInput } from '../commerce/product-photos.js';
 import { productEngravingCartInput } from '../product-engraving/contracts.js';
 import { specificationInput, visualSpecificationInput } from '../engraving/contracts.js';
 import mongoose from 'mongoose';
@@ -10,12 +11,13 @@ const line = new mongoose.Schema({
   productId: { type: mongoose.Schema.Types.ObjectId, required() { return this.kind === undefined || this.kind === 'product'; }, ref: 'Product' },
   name: { type: String, maxlength: 240 }, slug: { type: String, maxlength: 300 }, mainImageUrl: { type: String, maxlength: 2000, default: productOnly(null) },
   variantKey: { type: String, default: productOnly(null) }, quantity: { type: Number, min: 1, max: 99, required: true, validate: Number.isSafeInteger },
+  photoSelection: { type: mongoose.Schema.Types.Mixed, default: undefined, validate: value => value == null || photoSelectionInput.safeParse(value).success },
   productEngraving: { type: mongoose.Schema.Types.Mixed, default: undefined, validate: value => value == null || productEngravingCartInput.safeParse(value).success },
   personalization: { type: mongoose.Schema.Types.Mixed, default: productOnly({}) }, customization: { type: mongoose.Schema.Types.Mixed, default: productOnly(null) },
 }, { _id: false, strict: 'throw', discriminatorKey: 'kind', versionKey: false });
 line.pre('validate', function () {
   if (['gift_box_v2','engraving_service_v1','engraving_service_v2'].includes(this.kind)) {
-    for (const key of ['productEngraving', 'productId', 'slug', 'mainImageUrl', 'variantKey', 'personalization', 'customization']) {
+    for (const key of ['photoSelection', 'productEngraving', 'productId', 'slug', 'mainImageUrl', 'variantKey', 'personalization', 'customization']) {
       if (this.get(key) !== undefined) this.invalidate(key, 'Product fields cannot appear on a configured gift line.');
     }
   }

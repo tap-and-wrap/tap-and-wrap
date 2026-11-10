@@ -1,7 +1,7 @@
 import { productEngravingConfigurationInput } from '../product-engraving/contracts.js';
 import mongoose from 'mongoose';
 import { inventorySchema, catalogIdentityFields, importMetadataFields, boundedArray, safeInteger } from '../catalog/fields.js';
-import { productPersonalizationIssues } from '../../../shared/product-personalization.mjs';
+import { photoSpaceIssues, productPersonalizationIssues } from '../../../shared/product-personalization.mjs';
 
 const attributeSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true, maxlength: 80 },
@@ -36,6 +36,8 @@ fieldSchema.pre('validate', function () {
   if (this.type === 'select' && (!this.choices.length || this.choices.some(x => !x.trim() || x.length > 160) || new Set(this.choices).size !== this.choices.length)) this.invalidate('choices', 'Selection fields require distinct, nonempty choices');
 });
 const personalizationSchema = new mongoose.Schema({
+  photoSpacesVersion: { type: Number, min: 1, validate: Number.isSafeInteger },
+  photoSpaces: { type: [new mongoose.Schema({ key: { type: String, required: true }, label: { type: String, required: true, maxlength: 160 }, instructions: { type: String, default: '', maxlength: 500 } }, { _id: false, strict: 'throw' })], default: undefined, validate: boundedArray(10) },
   requiredBeforePurchase: { type: Boolean },
   fields: { type: [fieldSchema], default: [], validate: boundedArray(20) },
 }, { _id: false, strict: 'throw' });
@@ -76,6 +78,7 @@ const schema = new mongoose.Schema({
 }, { timestamps: true, strict: 'throw', optimisticConcurrency: true });
 
 schema.pre('validate', function () {
+  if (photoSpaceIssues(this.personalization).length) this.invalidate('personalization.photoSpaces', photoSpaceIssues(this.personalization)[0]);
   if (this.purchaseSetup?.version === 1 || this.visibility === 'public') for (const issue of productPersonalizationIssues(this.personalization)) this.invalidate('personalization.fields', issue);
   this.published = this.visibility === 'public';
   if (this.galleryKeys.length && this.mainImageKey !== this.galleryKeys[0]) this.invalidate('mainImageKey', 'Main image must be the first gallery reference');
