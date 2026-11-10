@@ -1,5 +1,9 @@
 # Stage D2: optional ready-made product photos
 
+Historical implementation report. New customer photo configuration is superseded by
+[Stage D2.1 collections](STAGE_D21_CUSTOMER_PHOTO_COLLECTION.md); individual physical
+photo spaces are no longer configured for new purchases.
+
 Base main: `187ce21a8dcf4e1c1142f359dd020ef1bb1f6e4c`.
 
 ## Configuration and purchasing

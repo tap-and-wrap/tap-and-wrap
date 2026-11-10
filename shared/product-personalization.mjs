@@ -5,9 +5,9 @@ export function productPersonalizationFields(personalization) {
 }
 
 export function productPersonalizationIssues(personalization) {
-  if (personalization?.requiredBeforePurchase !== true) return photoSpaceIssues(personalization);
+  if (personalization?.requiredBeforePurchase !== true) return [...photoSpaceIssues(personalization), ...customerPhotoIssues(personalization)];
   const fields = personalization.fields;
-  const issues = [...photoSpaceIssues(personalization)];
+  const issues = [...photoSpaceIssues(personalization), ...customerPhotoIssues(personalization)];
   if (!Array.isArray(fields) || !fields.length || fields.length > 20) return ['Configure between one and twenty personalization fields.'];
   if (new Set(fields.map(field => field.key)).size !== fields.length) issues.push('Personalization fields must have unique identities.');
   let minimumImages = 0;
@@ -38,8 +38,22 @@ export function photoSpaceIssues(personalization) {
     keys.add(space.key);
   }
   const required = productPersonalizationFields(personalization).filter(field => field.type === 'image').reduce((sum, field) => sum + Math.max(field.minFiles || 0, field.required ? 1 : 0), 0);
-  return required + spaces.length > 10 ? ['All required photos and personal photo spaces must fit within ten images per item.'] : [];
+  return personalization.acceptCustomerPhotos === undefined && required + spaces.length > 10 ? ['All required photos and personal photo spaces must fit within ten images per item.'] : [];
+}
+export function legacyPhotoFields(personalization) {
+  return personalization?.acceptCustomerPhotos === false || photoSpaceIssues(personalization).length ? [] : (personalization?.photoSpaces || []).map(space => ({ key: space.key, label: space.label, instructions: space.instructions, photoSlot: true, type: 'image', required: true, minFiles: 1, maxFiles: 1, maxBytes: 8388608, acceptedMimeTypes: ['image/jpeg','image/png','image/webp'] }));
+}
+
+export const CUSTOMER_PHOTOS_KEY = 'customer_photos';
+export function customerPhotoIssues(personalization) {
+  if (personalization?.acceptCustomerPhotos !== true) return [];
+  const fields = productPersonalizationFields(personalization);
+  if (fields.some(field => field.key === CUSTOMER_PHOTOS_KEY)) return ['The customer photo collection identity conflicts with an existing required field.'];
+  const required = fields.filter(field => field.type === 'image').reduce((sum, field) => sum + Math.max(field.minFiles || 0, field.required ? 1 : 0), 0);
+  return required >= 10 ? ['Other required image fields leave no room for customer photos within the ten-image limit.'] : [];
 }
 export function optionalPhotoFields(personalization) {
-  return photoSpaceIssues(personalization).length ? [] : (personalization?.photoSpaces || []).map(space => ({ key: space.key, label: space.label, instructions: space.instructions, photoSlot: true, type: 'image', required: true, minFiles: 1, maxFiles: 1, maxBytes: 8388608, acceptedMimeTypes: ['image/jpeg','image/png','image/webp'] }));
+  if (personalization?.acceptCustomerPhotos !== true || customerPhotoIssues(personalization).length) return [];
+  const minimum = productPersonalizationFields(personalization).filter(field => field.type === 'image').reduce((sum, field) => sum + Math.max(field.minFiles || 0, field.required ? 1 : 0), 0);
+  return [{ key: CUSTOMER_PHOTOS_KEY, label: 'Your personal photos', type: 'image', required: true, minFiles: 1, maxFiles: 10 - minimum, maxBytes: 8388608, acceptedMimeTypes: ['image/jpeg','image/png','image/webp'] }];
 }
