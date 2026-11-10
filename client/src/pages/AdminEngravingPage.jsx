@@ -1,3 +1,4 @@
+import ProductEngravingPrice from '../product-engraving/ProductEngravingPrice.jsx';
 import ConfirmationDialog from '../components/ConfirmationDialog.jsx';
 import { toast } from 'sonner';
 import Select from '../components/form/Select.jsx';
@@ -39,7 +40,7 @@ export default function AdminEngravingPage(){
   const [replacement,setReplacement]=useState(null);
   const session=useSession(),[page,setPage]=useState(1),[initial,setInitial]=useState(null);
   const query=useQuery({queryKey:privateQueryKey(session.ownerKey,'admin-engraving',page),queryFn:({signal})=>adminCommerceGet('/engraving/types',{page},signal),retry:false,staleTime:0});
-  return <AdminLayout title="Standalone engraving" description="A studio for meaningful marks. Manage each customer-owned item type."><div className="studio-admin">
+  return <AdminLayout title="Standalone engraving" description="A studio for meaningful marks. Manage each customer-owned item type."><div className="studio-admin"><ProductEngravingPrice/>
     {query.isPending?<p role="status">Loading engraving configuration...</p>:query.error?<p role="alert">{commerceError(query.error)}</p>:<>{!query.data.available&&<p className="commerce-notice">Engraving settings are temporarily unavailable. Contact your operator to restore access.</p>}
       <div className="studio-admin-toolbar"><div><p className="eyebrow">Your engraving collection</p><p>{query.data.types.length} types on this page · Prices are per item and location</p></div><button className="admin-button" disabled={!query.data.available} onClick={event=>{if(initial)setReplacement({type:blank(),opener:event.currentTarget,newDraft:true});else setInitial(blank());}}>Create engraving type</button></div>
       <div className="studio-admin-grid">{query.data.types.map(type=><article key={type.typeId}><img src={`/assets/engraving/v2/${['perfume','necklace','bracelet','watch','lip-gloss','makeup','bag','office-set','other'].includes(type.typeId)?type.typeId:'other'}-item.svg`} width="240" height="240" alt=""/><div><span className={`studio-status status-${type.status}`}>{type.status}</span><h2>{type.name}</h2><strong>{money(type.pricePiastres)}</strong><p>Version {type.version} · Revision {type.revision}</p><dl><div><dt>Placements</dt><dd>{type.placements.length}</dd></div><div><dt>Fonts</dt><dd>{type.fontIds.length}</dd></div><div><dt>Icons</dt><dd>{type.iconIds.length}</dd></div></dl><button className="admin-button admin-button-secondary" onClick={event=>{if(!initial)setInitial(type);else setReplacement({type,opener:event.currentTarget});}}>Edit {type.name}</button></div></article>)}</div>

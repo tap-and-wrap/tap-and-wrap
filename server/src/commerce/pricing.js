@@ -1,3 +1,4 @@
+import { quoteProductEngraving, productEngravingSummary } from '../product-engraving/service.js';
 import { createHash } from 'node:crypto';
 import mongoose from 'mongoose';
 import { Product } from '../models/Product.js';
@@ -83,10 +84,13 @@ export async function quoteCartLine(line, owner, { session, context } = {}) {
     customValues = { ...line.customization, fields: fields.values };
     componentClaims = quote.inventoryClaims || []; extraUploads = fields.uploadIds;
   }
-  const uploadIds = [...personalized.uploadIds, ...extraUploads];
+  const engraving = line.productEngraving ? await quoteProductEngraving(product, line.productEngraving, owner, { session, variantKey: variant?.key || null, basePricePiastres: basePrice }) : null;
+  if (engraving && line.customization) throw commerceError(400, 'INVALID_CUSTOMIZATION', 'Choose one product customization method.');
+  if (engraving) adjustment += engraving.surchargePiastres;
+  const uploadIds = [...personalized.uploadIds, ...extraUploads, ...(engraving?.uploadIds || [])];
   if (new Set(uploadIds).size !== uploadIds.length || uploadIds.length > 10) throw commerceError(400, 'INVALID_PHOTOS', 'Use at most ten distinct photos or artwork images per item.');
   const unitPricePiastres = checkedMoney(basePrice + adjustment);
-  const identityData = { productId: String(product._id), variantKey: variant?.key || null, personalization: personalized.values, customization: customValues };
+  const identityData = { productId: String(product._id), variantKey: variant?.key || null, personalization: personalized.values, customization: customValues, ...(engraving ? { productEngraving: line.productEngraving } : {}) };
   return {
     id: line.id, ...identityData, identity: fingerprint(identityData), name: product.name, slug: product.slug,
     sku: variant?.sku || product.sku || '', description: product.description || '',
@@ -99,10 +103,12 @@ export async function quoteCartLine(line, owner, { session, context } = {}) {
     lineTotalPiastres: checkedMoney(unitPricePiastres * line.quantity), customizationSnapshot: customization, uploadIds,
     inventoryClaims: [{ kind: 'product', id: String(product._id), variantKey: variant?.key || null, quantity: line.quantity, mode: stock.mode, expectedUpdatedAt: product.updatedAt },
       ...componentClaims.map(claim => ({ ...claim, quantity: checkedMoney(claim.quantityPerUnit * line.quantity) }))],
+    ...(engraving ? { productEngravingSnapshot: { ...engraving, basePricePiastres: basePrice, snapshotVersion: 'product-engraving-order-v1' } } : {}),
     priceVersion: product.updatedAt?.toISOString(), valid: true,
   };
 }
 export function publicCartLine(quote) {
   const { inventoryClaims, identity, priceVersion, customizationSnapshot, description, stockQuantityLimit, ...line } = quote;
+  if (quote.productEngravingSnapshot) { const { productEngravingSnapshot, productEngraving, uploadIds, ...safe } = line; void productEngraving; void uploadIds; return { ...safe, productEngraving: productEngravingSummary(productEngravingSnapshot), customization: customizationSnapshot || line.customization }; }
   return { ...line, customization: customizationSnapshot || line.customization };
 }

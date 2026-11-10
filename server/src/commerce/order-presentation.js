@@ -1,3 +1,4 @@
+import { productEngravingSummary } from '../product-engraving/service.js';
 import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 import { groupedOrder, groupedAccountingSummary } from './payment-groups.js';
 import { engravingCollectionAllowed } from '../engraving/payment-policy.js';
@@ -104,7 +105,7 @@ function orderLine(line, { admin }) {
   if (line.kind === 'gift_box_v2') return { ...pick(line, ['kind', 'name', 'quantity', 'unitPricePiastres', 'lineTotalPiastres']), giftBox: giftBox(line.giftBox, { admin }) };
   if (line.kind !== undefined && line.kind !== 'product') return { kind: 'unsupported', name: 'Order item details unavailable' };
   return { kind: 'product', ...pick(line, ['productId', 'name', 'slug', 'variantKey', 'variantLabel', 'sku', 'description', 'categoryId', 'subcategoryId', 'mainImageUrl', 'quantity', 'unitPricePiastres', 'lineTotalPiastres']),
-    personalization: configuredValues(line.personalization), personalizationDefinitions: personalizationDefinitions(line.personalizationDefinitions), customization: customization(line.customization) };
+    personalization: configuredValues(line.personalization), personalizationDefinitions: personalizationDefinitions(line.personalizationDefinitions), customization: customization(line.customization), ...(line.productEngraving ? { productEngraving: productEngravingSummary(line.productEngraving) } : {}) };
 }
 export function presentOrderHistory(history = [], { admin = false } = {}) {
   return history.map(entry => ({ ...pick(entry, ['at', 'event']),

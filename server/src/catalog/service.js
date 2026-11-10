@@ -22,8 +22,8 @@ const LIST_FIELDS = '_id name slug visibility categoryId subcategoryId mainImage
 const PUBLIC_LIST_FIELDS = `purchaseSetup ${LIST_FIELDS} status published reviewRequired variants.inventory variants.pricePiastres variants.priceApproved personalization.fields personalization.requiredBeforePurchase customization.enabled`;
 const ADMIN_LIST_FIELDS = `${LIST_FIELDS} __v externalCatalogId catalogRole status published priceApproved inventory.quantity inventory.approved reviewRequired updatedAt`;
 // Never mix a parent and its dotted child in a MongoDB projection (Path collision).
-const PUBLIC_DETAIL_FIELDS = `purchaseSetup ${LIST_FIELDS} status published reviewRequired description galleryKeys variants personalization customization updatedAt`;
-const ADMIN_DETAIL_FIELDS = `purchaseSetup ${ADMIN_LIST_FIELDS} description galleryKeys variants personalization customization engravingRequest merchantReviewNotes reviewReasons variantSourceNotes catalogConfidence`;
+const PUBLIC_DETAIL_FIELDS = `productEngraving purchaseSetup ${LIST_FIELDS} status published reviewRequired description galleryKeys variants personalization customization updatedAt`;
+const ADMIN_DETAIL_FIELDS = `purchaseSetup ${ADMIN_LIST_FIELDS} productEngraving productEngravingRevision description galleryKeys variants personalization customization engravingRequest merchantReviewNotes reviewReasons variantSourceNotes catalogConfidence`;
 const CATEGORY_FIELDS = '_id name slug parentId imageKey active featured order createdAt updatedAt __v';
 const SORTS = {
   featured: { featured: -1, featuredOrder: 1, createdAt: -1, _id: -1 },
@@ -301,6 +301,7 @@ export async function createProduct(input, { actor } = {}) {
   assertDatabaseWriteAllowed(Product.db, env);
   return catalogTransaction(async (session) => {
     await validateCatalogCategoryReferences(input.categoryId, input.subcategoryId, { session, fence: true });
+    if (input.productEngraving) { if (!input.galleryKeys?.includes(input.productEngraving.imageKey)) throw catalogError(400, 'INVALID_ENGRAVING_SURFACE', 'Select a surface from this product gallery.'); input.productEngraving = { ...input.productEngraving, version: 1 }; }
     const product = new Product(input);
     if (input.inventory) product.inventory = mergeInventory(undefined, input.inventory);
     if (input.variants) product.variants = normalizeVariants([], input.variants);
@@ -330,6 +331,14 @@ export async function updateProduct(id, input, { actor } = {}) {
   if (input.variants) patch.variants = normalizeVariants(product.variants, input.variants);
   if (input.customization) patch.customization = { ...product.customization.toObject(), ...input.customization };
   await reserveProductAddresses(product, { session });
+  if (Object.hasOwn(patch, 'productEngraving')) {
+    patch.productEngravingRevision = Math.max(product.productEngravingRevision || 0, product.productEngraving?.version || 0) + 1;
+    if (patch.productEngraving) {
+      if (!(patch.galleryKeys || product.galleryKeys).includes(patch.productEngraving.imageKey)) throw catalogError(400, 'INVALID_ENGRAVING_SURFACE', 'Select a surface from this product gallery.');
+      patch.productEngraving = { ...patch.productEngraving, version: patch.productEngravingRevision };
+    }
+  }
+  if (patch.galleryKeys && product.productEngraving && !Object.hasOwn(patch, 'productEngraving') && !patch.galleryKeys.includes(product.productEngraving.imageKey)) throw catalogError(400, 'INVALID_ENGRAVING_SURFACE', 'Choose another engraving surface before removing its gallery image.');
   product.set(patch);
   assertDatabaseWriteAllowed(Product.db, env);
   await reserveProductAddresses(product, { session });

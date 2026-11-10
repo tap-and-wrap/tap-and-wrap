@@ -22,7 +22,7 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState('cod');
   const engravingOnly = cart.items.length > 0 && cart.items.every(item => isEngravingKind(item.kind));
   const hasEngraving = cart.items.some(item => isEngravingKind(item.kind));
-  const personalized = cart.items.some(item => !['gift_box_v2','engraving_service_v1','engraving_service_v2'].includes(item.kind) && ( item.requiresPersonalization || Object.keys(item.personalization || {}).length > 0 || item.customization));
+  const personalized = cart.items.some(item => !['gift_box_v2','engraving_service_v1','engraving_service_v2'].includes(item.kind) && ( item.requiresPersonalization || Object.keys(item.personalization || {}).length > 0 || item.customization || item.productEngraving));
   useEffect(() => { if (personalized) setPaymentMethod('instapay'); }, [personalized]);
   const [discountCode, setDiscountCode] = useState('');
   const [appliedCode, setAppliedCode] = useState('');

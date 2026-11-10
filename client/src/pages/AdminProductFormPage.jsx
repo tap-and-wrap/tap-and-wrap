@@ -1,3 +1,4 @@
+import ProductEngravingSettings from '../product-engraving/ProductEngravingSettings.jsx';
 import { toast } from 'sonner';
 import Select from '../components/form/Select.jsx';
 import { EngravingRequestEditor } from '../admin/RequestEligibilityEditors.jsx';
@@ -105,6 +106,7 @@ function ProductEditor({ product }) {
         <section className="admin-panel"><h2>Inventory and availability</h2><InventoryFields variantParent={draft.optionStructure === 'variants'} value={draft.inventory} onChange={(inventory) => change('inventory', inventory)} /><p className="admin-help">Imported quantities are not confirmed stock and are not prefilled here. Enter the actual count, select Made by Request only when you can fulfil orders, or choose Unavailable for enquiries. Saving other fields never approves placeholder stock.</p></section>
 
         <section className="admin-panel"><AdminImageGallery key={revision} keys={draft.galleryKeys} onChange={galleryKeys => change('galleryKeys', galleryKeys)} onBusyChange={setMediaPending} label="Product images" /></section>
+        <ProductEngravingSettings keys={draft.galleryKeys} value={draft.productEngraving} onChange={productEngraving => setDraft(current => ({ ...current, productEngraving, productEngravingEdited: true }))}/>
         <EngravingRequestEditor value={draft.engravingRequest} onChange={engravingRequest => setDraft(current => ({ ...current, engravingRequest, engravingEdited: true }))} />
         <ProductPersonalizationEditor value={draft.personalization} onChange={personalization => setDraft(current => ({ ...current, personalization, personalizationEdited: true }))} />
 

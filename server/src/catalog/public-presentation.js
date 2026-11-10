@@ -1,3 +1,4 @@
+import { productEngravingCapable, productSurfaceId } from '../../../shared/product-engraving.mjs';
 import { isSafeImageReference } from './fields.js';
 import { ownerVariantStock } from './product-policy.js';
 import { productPersonalizationFields } from '../../../shared/product-personalization.mjs';
@@ -63,6 +64,7 @@ export function publicProductDetail(product) {
   const card = publicProductCard(product);
   return {
     ...card,
+    productEngraving: publicProductEngraving(product),
     description: product.description,
     galleryUrls: (product.galleryKeys || []).map((key) => mediaUrlForKey(key)).filter(Boolean),
     inventory: ownerVariantStock(product) ? { mode: product.inventory?.mode, quantity: null, available: product.inventory?.available === true } : publicInventory(product.inventory),
@@ -83,4 +85,10 @@ export function publicProductDetail(product) {
       serviceEntryEligible: Boolean(product.customization?.serviceEntryEligible),
     },
   };
+}
+
+export function publicProductEngraving(product) {
+  if (!productEngravingCapable(product)) return null;
+  const c = product.productEngraving, src = mediaUrlForKey(c.imageKey);
+  return src ? { version: c.version, surface: { id: productSurfaceId(product._id, c.version), src, width: c.width, height: c.height }, fontIds: c.fontIds, materials: c.materials, placements: c.placements } : null;
 }

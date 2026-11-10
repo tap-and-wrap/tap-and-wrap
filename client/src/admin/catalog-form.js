@@ -62,6 +62,8 @@ export function selectInventoryAvailability(inventory, choice) {
 
 export function createProductDraft(product = {}) {
   return {
+    productEngraving: structuredClone(product.productEngraving || null),
+    productEngravingEdited: false,
     personalization: structuredClone(product.personalization || { fields: [] }),
     personalizationEdited: false,
     engravingRequest: structuredClone(product.engravingRequest || { enabled: false, fonts: [], placements: [], materials: [], maxTextLength: 120 }),
@@ -120,6 +122,7 @@ export function createProductPayload(draft) {
     throw priceValidationError('Compare-at price must be at least the product price.', 'Compare-at price');
   }
   return {
+    ...(draft.productEngravingEdited ? { productEngraving: draft.productEngraving ? Object.fromEntries(Object.entries({ ...draft.productEngraving, materials: draft.productEngraving.materials.map(value => value.trim()).filter(Boolean), placements: draft.productEngraving.placements.map(value => value.trim()).filter(Boolean) }).filter(([key]) => key !== 'version')) : null } : {}),
     ...(draft.personalizationEdited ? { personalization: draft.personalization } : {}),
     ...(draft.engravingEdited ? { engravingRequest: { ...draft.engravingRequest, ...Object.fromEntries(['fonts', 'placements', 'materials'].map(key => [key, (draft.engravingRequest[key] || []).map(value => value.trim()).filter(Boolean)])) } } : {}),
     ownerWorkflow: true,

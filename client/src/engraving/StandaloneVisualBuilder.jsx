@@ -18,7 +18,7 @@ export default function StandaloneVisualBuilder({ saved, editId }) {
   const { draft, setDraft, ownerKey, pending, options, types, type, hydrating, error, setError, progress, quote, setQuote, added, setAdded, acceptedOrder, uncertain, recovering, update, selectPhotos, validate, review, add, check, editorChange, reset, attempt } = state;
   if (options.isPending || hydrating) return <main className="commerce-page" role="status">Opening your engraving studio...</main>;
   if (options.error) return <main className="commerce-page"><h1>Laser Engraving</h1><p role="alert">{commerceError(options.error)}</p><button onClick={() => options.refetch()}>Try again</button></main>;
-  if (!options.data.enabled) return <ServiceRequestPage kind="laser_engraving"/>;
+  if (!options.data.enabled) return <ServiceRequestPage service="laser_engraving"/>;
   return <main className="standalone-visual-page">
     <PageMetadata title="Design Your Engraving | Tap & Wrap" description="Create an engraving on your own item." pathname="/customize/laser-engraving" indexable={false}/>
     <header className="sv-heading"><p className="eyebrow">Made personal, by you</p><h1>Your piece. Your story.</h1><p>Create something meaningful on an item you already own.</p></header>

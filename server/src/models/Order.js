@@ -1,3 +1,4 @@
+import { validProductEngravingSnapshots } from '../product-engraving/contracts.js';
 import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 import { env } from '../config/env.js';
 import mongoose from 'mongoose';
@@ -13,7 +14,7 @@ const schema = new mongoose.Schema({
   customer: { type: mongoose.Schema.Types.Mixed, required: true },
   trackingConsentId: { type: mongoose.Schema.Types.ObjectId, ref: 'TrackingConsent', default: null, immutable: true },
   lines: { type: [mongoose.Schema.Types.Mixed], required: true, immutable: true,
-    validate: { validator: validOrderLineKinds, message: 'Use a supported order line kind and complete immutable gift snapshot.' } },
+    validate: { validator: lines => validOrderLineKinds(lines) && validProductEngravingSnapshots(lines), message: 'Use a supported order line kind and complete immutable gift snapshot.' } },
   totals: { type: mongoose.Schema.Types.Mixed, required: true, immutable: true },
   inventoryClaims: { type: [mongoose.Schema.Types.Mixed], default: [], immutable: true },
   paymentMethod: { type: String, enum: ['cod', 'instapay'], required: true, immutable: true },
