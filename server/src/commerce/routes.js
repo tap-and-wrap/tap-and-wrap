@@ -1,3 +1,4 @@
+import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 import { engravingCollectionAllowed } from '../engraving/payment-policy.js';
 import { engravingRoutes, adminEngravingRoutes } from '../engraving/routes.js';
 import { whatsappQuotation } from './whatsapp-quotation.js';
@@ -113,7 +114,7 @@ commerceRoutes.post('/cart/items', async (req, res) => res.status(201).json({ ok
   onAdded: async (item) => {
     // Builder contents/messages/configuration hashes have no approved public
     // Product tracking identity. Do not construct or dispatch a gift receipt.
-    if (item.kind === 'gift_box_v2' || item.kind === 'engraving_service_v1') return null;
+    if (item.kind === 'gift_box_v2' || isEngravingKind(item.kind)) return null;
     const parameters = monetaryParameters([item], item.unitPricePiastres * item.quantity);
     const [product] = await attachProductPaths([{ _id: item.productId, slug: item.slug }]);
     const sourcePath = productHref(product);
@@ -210,7 +211,8 @@ adminCommerceRoutes.get('/orders', async (req, res) => {
   const query = adminPageSchema.parse(req.query);
   const filters = [orderFilter(query), ownerOrderView(query.view)];
   const kind = { product: 'product', gift_box: 'gift_box_v2', engraving: 'engraving_service_v1' }[query.type];
-  if (kind === 'product') filters.push({ lines: { $elemMatch: { kind: { $nin: ['gift_box_v2', 'engraving_service_v1'] } } } });
+  if (kind === 'product') filters.push({ lines: { $elemMatch: { kind: { $nin: ['gift_box_v2', 'engraving_service_v1', 'engraving_service_v2'] } } } });
+  else if (query.type === 'engraving') filters.push({ 'lines.kind': { $in: ['engraving_service_v1', 'engraving_service_v2'] } });
   else if (kind) filters.push({ 'lines.kind': kind });
   if (query.type === 'mixed') filters.push({ $expr: { $gt: [{ $size: { $setUnion: [{ $map: { input: { $ifNull: ['$lines', []] }, as: 'line', in: { $ifNull: ['$$line.kind', 'product'] } } }, []] } }, 1] } });
   res.json({ ok: true, data: await listOrders({ $and: filters }, query, true) });

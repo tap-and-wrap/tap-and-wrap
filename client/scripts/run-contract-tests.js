@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const cwd = fileURLToPath(new URL('../', import.meta.url));
 const keys = ['PATH','Path','SystemRoot','WINDIR','TEMP','TMP','COMSPEC','PATHEXT','USERPROFILE','LOCALAPPDATA','APPDATA','PLAYWRIGHT_CHANNEL'];
 const safe = Object.fromEntries(keys.filter(k => process.env[k] !== undefined).map(k => [k, process.env[k]]));
-const args = process.argv.slice(2), engraving = args.some(value => /engraving(?:-studio)?-contracts/.test(value)), enabled = args.includes('--enabled-checkout') || engraving, giftShopping = args.includes('--gift-box-shopping');
+const args = process.argv.slice(2), engraving = args.some(value => /engraving(?:-studio|-visual(?:-review)?)?-contracts/.test(value)), enabled = args.includes('--enabled-checkout') || engraving, giftShopping = args.includes('--gift-box-shopping');
 if (args.length === 0) {
   // Each spec retains the real rate limits and receives its own fresh database,
   // API and browser fixture. Explicit selections keep the original lifecycle.

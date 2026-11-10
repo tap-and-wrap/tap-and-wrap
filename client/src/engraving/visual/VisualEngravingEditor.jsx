@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { FONT_REGISTRY, APPEARANCES } from '../../../../shared/engraving/definitions.mjs';
 import ImageSourceChooser from '../../components/ImageSourceChooser.jsx';
+import ConfirmationDialog from '../../components/ConfirmationDialog.jsx';
 import { authGeneration } from '../../services/api.js';
 import { subscribeSession } from '../../auth/session.js';
 import { clamp, emptyDesign, fitLayer, layerHeight, editLayer, validateDesign, createVisualDraft, restoreVisualDraft, designReadiness, newHistory, commitHistory, undoHistory, redoHistory, MAX_LAYERS } from './design.mjs';
@@ -26,7 +27,7 @@ function safePublicSource(asset) {
   try { const url = new URL(asset.src); return url.protocol === 'https:' && !url.username && !url.password ? url.href : ''; } catch { return ''; }
 }
 
-function useAssetSources(assets, ownerScope) {
+export function useAssetSources(assets, ownerScope) {
   const [resolved, setResolved] = useState({});
   useEffect(() => {
     const urls = [], next = {};
@@ -40,7 +41,7 @@ function useAssetSources(assets, ownerScope) {
   return [resolved, id => setResolved(current => { const next = { ...current }; delete next[id]; return next; })];
 }
 
-async function imageRatio(file) {
+export async function imageRatio(file) {
   const url = URL.createObjectURL(file), image = new Image();
   try {
     image.src = url; await image.decode();
@@ -50,7 +51,7 @@ async function imageRatio(file) {
   } finally { URL.revokeObjectURL(url); }
 }
 
-function TextArtwork({ layer, font }) {
+export function TextArtwork({ layer, font }) {
   const [metrics, setMetrics] = useState(null);
   useEffect(() => {
     let current = true;
@@ -68,7 +69,7 @@ function TextArtwork({ layer, font }) {
   return <svg viewBox={`0 0 1000 ${height}`} aria-hidden="true" style={{ fontFamily: font.family, fill: colors[layer.color] }}><text textAnchor="middle" direction={/\p{Script=Arabic}/u.test(layer.text) ? 'rtl' : 'ltr'}>{lines.map((line, index) => <tspan key={index} x="500" y={height / 2 + (index - (lines.length - 1) / 2) * size * 1.3 + size * .28} fontSize={size}>{line || '\u00a0'}</tspan>)}</text></svg>;
 }
 
-function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approvedFontIds = [], onChange }) {
+function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approvedFontIds = [], onChange, surfaceControls = true, confirmReset = false }) {
   const fonts = FONT_REGISTRY.filter(font => approvedFontIds.includes(font.id));
   const initial = useRef(null);
   if (!initial.current) {
@@ -78,6 +79,7 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
   const [history, setHistory] = useState(() => newHistory(initial.current.design));
   const [preview, setPreview] = useState(null), [selected, setSelected] = useState(null), [zoom, setZoom] = useState(1), [error, setError] = useState(initial.current.error);
   const [localAssets, setLocalAssets] = useState({});
+  const [resetTarget, setResetTarget] = useState(null);
   // Keep resource identity stable between geometry edits and expose only owned blobs.
   const assetCache = useRef({ supplied: null, local: null, value: {} });
   if (assetCache.current.supplied !== suppliedAssets || assetCache.current.local !== localAssets) assetCache.current = { supplied: suppliedAssets, local: localAssets, value: { ...suppliedAssets, ...localAssets } };
@@ -119,7 +121,7 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
   }
   function addText() {
     if (!fonts.length || !design.surface || design.layers.length >= MAX_LAYERS) return;
-    const added = fitLayer({ id: crypto.randomUUID(), type: 'text', text: 'Your words', fontId: fonts[0].id, color: 'black', x: .5, y: .5, width: .45, aspectRatio: 3 }, design.surface.aspectRatio);
+    const added = fitLayer({ id: crypto.randomUUID(), type: 'text', text: '', fontId: fonts[0].id, color: 'black', x: .5, y: .5, width: .45, aspectRatio: 3 }, design.surface.aspectRatio);
     commit({ ...design, layers: [...design.layers, added] }); setSelected(added.id);
   }
   function point(event) { const rect = board.current.getBoundingClientRect(); return { x: (event.clientX - rect.left) / rect.width, y: (event.clientY - rect.top) / rect.height }; }
@@ -178,8 +180,9 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
   }
   const surfaceMissing = design.surface && !sources[design.surface.assetId];
   const unsupported = design.layers.some(item => item.type === 'text' && !fonts.some(font => font.id === item.fontId));
+  function resetDesign() { cancelGesture(); commit({ ...design, layers: [] }); setSelected(null); setResetTarget(null); }
   return <section className="visual-engraving" aria-label="Visual engraving editor">
-    <header className="ve-heading"><div><p className="eyebrow">Make it personal</p><h2>Your engraving, your way</h2></div><div className="ve-history" aria-label="Design history"><button type="button" disabled={!history.past.length || Boolean(gesture.current)} onClick={() => { cancelGesture(); setHistory(undoHistory); }}>Undo</button><button type="button" disabled={!history.future.length || Boolean(gesture.current)} onClick={() => { cancelGesture(); setHistory(redoHistory); }}>Redo</button><button type="button" disabled={!design.layers.length} onClick={() => { cancelGesture(); commit({ ...design, layers: [] }); setSelected(null); }}>Reset design</button></div></header>
+    <header className="ve-heading"><div><p className="eyebrow">Make it personal</p><h2>Your engraving, your way</h2></div><div className="ve-history" aria-label="Design history"><button type="button" disabled={!history.past.length || Boolean(gesture.current)} onClick={() => { cancelGesture(); setHistory(undoHistory); }}>Undo</button><button type="button" disabled={!history.future.length || Boolean(gesture.current)} onClick={() => { cancelGesture(); setHistory(redoHistory); }}>Redo</button><button type="button" disabled={!design.layers.length} onClick={event => confirmReset ? setResetTarget(event.currentTarget) : resetDesign()}>Reset design</button></div></header>
     <div className="ve-layout"><div className="ve-workspace">
       <div className="ve-view-controls"><span>Workspace view</span><button type="button" aria-label="Zoom out workspace" disabled={zoom <= 1} onClick={() => setZoom(value => Math.max(1, value - .25))}>−</button><output aria-label="Workspace zoom">{Math.round(zoom * 100)}%</output><button type="button" aria-label="Zoom in workspace" disabled={zoom >= 3} onClick={() => setZoom(value => Math.min(3, value + .25))}>+</button><button type="button" onClick={() => { setZoom(1); viewport.current.scrollTo(0, 0); }}>Fit view</button></div>
       <div className="ve-viewport" ref={viewport}><div className="ve-scroll-space" style={{ width: `${zoom * 100}%` }}>
@@ -195,7 +198,7 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
       </div></div>
       <p id={helpId} className="ve-help">Tap to place your selected design. Drag to move, use the corner to resize. Pinch to zoom the workspace.</p>
     </div><div className="ve-controls">
-      <section aria-label="Surface photo"><h3>1. Your surface</h3><ImageSourceChooser label={design.surface ? 'Replace surface photo' : 'Choose surface photo'} inputLabel="Surface photo" context="Engraving surface" maxBytes={8388608} onSelect={files => selectFile(files, 'surface')} onError={setError}/><p className="ve-help">Your surface and engraving artwork stay separate.</p></section>
+      {surfaceControls && <section aria-label="Surface photo"><h3>Your surface</h3><ImageSourceChooser label={design.surface ? 'Replace surface photo' : 'Choose surface photo'} inputLabel="Surface photo" context="Engraving surface" maxBytes={8388608} onSelect={files => selectFile(files, 'surface')} onError={setError}/><p className="ve-help">Your surface and engraving artwork stay separate.</p></section>}
       <section aria-label="Add design"><h3>2. Your design</h3><div className="ve-actions"><button type="button" disabled={!design.surface || !fonts.length || design.layers.length >= MAX_LAYERS} onClick={addText}>Add text</button><ImageSourceChooser label="Add image artwork" inputLabel="Image artwork" context="Engraving artwork" disabled={!design.surface || design.layers.length >= MAX_LAYERS} maxBytes={8388608} onSelect={files => selectFile(files, 'artwork')} onError={setError}/></div>{!fonts.length && <p className="ve-help">Approved text styles are not available for this item.</p>}
         {design.layers.length > 0 && <div className="ve-layers" role="group" aria-label="Design layers">{design.layers.map((item, index) => <button type="button" key={item.id} aria-pressed={selected === item.id} onClick={() => setSelected(item.id)}>{index + 1}. {item.type === 'text' ? item.text.slice(0, 25) || 'Text' : 'Image artwork'}</button>)}</div>}
       </section>
@@ -208,5 +211,6 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
       {unsupported && <p role="alert">A saved text style is no longer approved. Select that text and choose a current style before continuing.</p>}
       {error && <p role="alert">{error}</p>}
     </div></div>
+    {resetTarget && <ConfirmationDialog title="Reset your engraving design?" description="Your text and artwork will be cleared. Your surface photo stays ready." returnFocus={resetTarget} onCancel={() => setResetTarget(null)} onConfirm={resetDesign} confirmLabel="Reset design" cancelLabel="Keep editing"/>}
   </section>;
 }

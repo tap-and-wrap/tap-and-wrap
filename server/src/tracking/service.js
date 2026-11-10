@@ -1,3 +1,4 @@
+import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 import { engravingCollectionAllowed } from '../engraving/payment-policy.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { env } from '../config/env.js';
@@ -48,7 +49,7 @@ export function orderMonetaryParameters(lines, totalPiastres) {
   for (const line of lines) {
     if (!line || typeof line !== 'object' || Array.isArray(line)) throw commerceError(400, 'INVALID_TRACKING_EVENT', 'Unsupported event items.');
     if (line.kind === undefined || line.kind === 'product') products.push(line);
-    else if (line.kind === 'gift_box_v2' || line.kind === 'engraving_service_v1') {
+    else if (line.kind === 'gift_box_v2' || isEngravingKind(line.kind)) {
       if (!Number.isSafeInteger(line.quantity) || line.quantity < 1 || line.quantity > 99) throw commerceError(400, 'INVALID_TRACKING_EVENT', 'Unsupported event items.');
       checkedMoney(line.unitPricePiastres);
     } else throw commerceError(400, 'INVALID_TRACKING_EVENT', 'Unsupported event items.');

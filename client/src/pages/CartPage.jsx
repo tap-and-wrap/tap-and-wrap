@@ -1,3 +1,4 @@
+import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 import { Link } from 'react-router-dom';
 import { productHref } from '../../../shared/product-paths.mjs';
 import { useSession } from '../auth/SessionProvider.jsx';
@@ -12,14 +13,14 @@ import CartLine from '../commerce/CartLine.jsx';
 export default function CartPage() {
   const { cart,checkoutEnabled,mixedCheckout,loading,error,pending,setQuantity,remove,refresh }=useCart();
   const session=useSession();
-  const invalid=cart.items.some(item=>!item.valid), gifts=cart.items.some(item=>item.kind==='gift_box_v2'), engraving=cart.items.some(item=>item.kind==='engraving_service_v1');
+  const invalid=cart.items.some(item=>!item.valid), gifts=cart.items.some(item=>item.kind==='gift_box_v2'), engraving=cart.items.some(item=>isEngravingKind(item.kind));
   if(loading) return <main className="commerce-page"><p role="status">Loading your cart…</p></main>;
   if(error) return <main className="commerce-page"><h1>Your Cart</h1><p role="alert">{commerceError(error)}</p><div className="button-group"><button type="button" className="button button-dark" onClick={()=>refresh()}>Try again</button><Link className="button button-secondary" to="/shop">Return to shop</Link></div></main>;
   return <main className="commerce-page"><div className="commerce-heading"><div><p className="eyebrow">Thoughtful gifts, ready for you</p><h1 tabIndex={-1}>Your Cart</h1></div></div>
     {!cart.items.length ? <div className="commerce-empty"><p>Your cart is empty.</p><Link className="button button-primary" to="/shop">Explore the shop</Link></div> : <div className="commerce-cart-layout">
       <section aria-label="Cart items" className="commerce-cart-items">{cart.items.map(item=>{
         const key=`${session.ownerKey}:${session.generation}:${item.id}`;
-        if(item.kind==='engraving_service_v1') return <EngravingCartCard key={key} item={item} pending={pending} remove={remove}/>;
+        if(isEngravingKind(item.kind)) return <EngravingCartCard key={key} item={item} pending={pending} remove={remove}/>;
         const gift=item.kind==='gift_box_v2', name=gift?'Gift Box':item.name||'Unavailable product';
         const url=item.slug?productHref(item):null;
         const photo=item.mainImageUrl?<img src={item.mainImageUrl} alt={name} loading="lazy"/>:<span>Product image unavailable</span>;

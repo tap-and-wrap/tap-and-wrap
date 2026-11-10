@@ -1,5 +1,5 @@
 import { hasGiftCardMessage } from '../../../shared/gift-box/card-message.mjs';
-import { engravingCartInput } from '../engraving/contracts.js';
+import { engravingCartInput, visualEngravingCartInput } from '../engraving/contracts.js';
 import { z } from 'zod';
 import { giftBoxV2CommerceInput } from '../gift-box/commerce-contract.js';
 import { commerceError } from './errors.js';
@@ -38,9 +38,9 @@ const giftCartItem = z.object({ kind: z.literal('gift_box_v2'), operationKey: uu
 // Only an absent discriminator means a historical ordinary Product line.
 export function cartLineKind(line) {
   if (line?.kind === undefined || line?.kind === 'product') return 'product';
-  if (line?.kind === 'engraving_service_v1') return 'engraving_service_v1';
+  if (['engraving_service_v1', 'engraving_service_v2'].includes(line?.kind)) return line.kind;
   if (line?.kind === 'gift_box_v2') return 'gift_box_v2';
   throw commerceError(400, 'CART_LINE_KIND_INVALID', 'The cart line type is not supported.');
 }
 export const cartItemInput = z.preprocess(value => value && typeof value === 'object' && !Array.isArray(value) && value.kind === undefined
-  ? { ...value, kind: 'product' } : value, z.discriminatedUnion('kind', [productCartItem, giftCartItem, engravingCartInput]));
+  ? { ...value, kind: 'product' } : value, z.discriminatedUnion('kind', [productCartItem, giftCartItem, engravingCartInput, visualEngravingCartInput]));

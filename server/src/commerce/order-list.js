@@ -1,3 +1,4 @@
+import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 /** Read-only projections and filters for the unified owner workspace. */
 export const closedOrderStates = ['delivered', 'cancelled', 'returned', 'completed_with_changes'];
 export const attentionConditions = () => [
@@ -24,7 +25,7 @@ export function ownerOrderView(view) {
   return {};
 }
 export function orderItemTypes(order) {
-  return [...new Set((order.lines || []).map(line => line.kind === 'gift_box_v2' ? 'gift_box' : line.kind === 'engraving_service_v1' ? 'engraving' : 'product'))];
+  return [...new Set((order.lines || []).map(line => line.kind === 'gift_box_v2' ? 'gift_box' : isEngravingKind(line.kind) ? 'engraving' : 'product'))];
 }
 export function orderActionLabel(order) {
   if (order.financialSummary?.refundReviewRequired) return 'Review refund';

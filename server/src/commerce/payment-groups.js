@@ -1,13 +1,14 @@
+import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 import { commerceError, checkedMoney } from './errors.js';
 
 export const groupedOrder = order => order.accountingVersion === 2;
 export function initialPaymentGroups(lines, totals, method) {
-  const engraving = lines.filter(line => line.kind === 'engraving_service_v1').reduce((sum, line) => checkedMoney(sum + line.lineTotalPiastres), 0);
+  const engraving = lines.filter(line => isEngravingKind(line.kind)).reduce((sum, line) => checkedMoney(sum + line.lineTotalPiastres), 0);
   const merchandise = checkedMoney(totals.totalPiastres - engraving);
   if (merchandise < 0) throw commerceError(409, 'INVALID_PAYMENT_ALLOCATION', 'The verified order allocation is invalid.');
   return [
-    ...(lines.some(line => line.kind !== 'engraving_service_v1') ? [{ id: 'merchandise', label: 'Products & Gift Boxes', amountPiastres: merchandise, method }] : []),
-    ...(lines.some(line => line.kind === 'engraving_service_v1') ? [{ id: 'engraving', label: 'Engraving after inspection', amountPiastres: engraving, method }] : []),
+    ...(lines.some(line => !isEngravingKind(line.kind)) ? [{ id: 'merchandise', label: 'Products & Gift Boxes', amountPiastres: merchandise, method }] : []),
+    ...(lines.some(line => isEngravingKind(line.kind)) ? [{ id: 'engraving', label: 'Engraving after inspection', amountPiastres: engraving, method }] : []),
   ];
 }
 export function groupAuthorized(order, scope) {

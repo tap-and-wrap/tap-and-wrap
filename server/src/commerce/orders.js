@@ -1,3 +1,4 @@
+import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 import { initialPaymentGroups, groupedOrder, groupedPaymentState, overallFulfillment } from './payment-groups.js';
 import { engravingSnapshot } from '../engraving/pricing.js';
 import { currentConfiguration } from '../engraving/configuration.js';
@@ -50,7 +51,7 @@ async function checkoutQuoteCore(owner, input, { session, userId } = {}, capabil
   const shipping = pendingShipping();
   const totals = { subtotalPiastres: promotions.subtotalPiastres, discountPiastres: promotions.discountPiastres,
     shippingPiastres: null, totalPiastres: checkedMoney(promotions.totalPiastres), applied: promotions.applied };
-  const digest = fingerprint({ lines: cart.items.map(line => ({ identity: line.identity, quantity: line.quantity, unitPrice: line.unitPricePiastres, customization: line.customizationSnapshot, ...(line.kind === 'engraving_service_v1' ? { kind: line.kind, specification: line.specification, reviewFingerprint: line.reviewFingerprint } : {}),
+  const digest = fingerprint({ lines: cart.items.map(line => ({ identity: line.identity, quantity: line.quantity, unitPrice: line.unitPricePiastres, customization: line.customizationSnapshot, ...(isEngravingKind(line.kind) ? { kind: line.kind, specification: line.specification, reviewFingerprint: line.reviewFingerprint } : {}),
     ...(line.kind === 'gift_box_v2' ? { kind: line.kind, configuration: line.configuration,
       components: line.giftComponents.map(component => ({ ...component, priceApprovedAt: new Date(component.priceApprovedAt).toISOString() })),
       personalization: line.giftPersonalization, fulfillment: line.giftFulfillment, policyHash: line.giftPolicyHash } : {}) })), totals,
@@ -84,7 +85,7 @@ export async function placeGiftBoxOrderForDisposableTest(owner, input, userId, {
   return placeOrderCore(owner, input, userId, { trackingConsentId }, capability);
 }
 function snapshotOrderLine(line) {
-  if (line.kind === 'engraving_service_v1') return { kind: line.kind, name: line.name, quantity: 1, unitPricePiastres: line.unitPricePiastres, lineTotalPiastres: line.lineTotalPiastres, engraving: engravingSnapshot(line) };
+  if (isEngravingKind(line.kind)) return { kind: line.kind, name: line.name, quantity: 1, unitPricePiastres: line.unitPricePiastres, lineTotalPiastres: line.lineTotalPiastres, engraving: engravingSnapshot(line) };
   if (line.kind === 'gift_box_v2') return giftBoxOrderLine(line);
   if (line.kind !== undefined && line.kind !== 'product') throw commerceError(400, 'CART_LINE_KIND_INVALID', 'Unsupported order line kind.');
   return { kind: 'product', productId: line.productId, name: line.name, slug: line.slug, variantKey: line.variantKey, variantLabel: line.variantLabel,
@@ -120,11 +121,11 @@ async function placeOrderCore(owner, input, userId, { trackingConsentId = null }
         if (intent.fingerprint !== quote.fingerprint || intent.paymentMethod !== input.paymentMethod) throw commerceError(409, 'CHECKOUT_CHANGED', 'Prices or cart contents changed. Review the updated total before submitting again.');
         if (input.paymentProofId) throw commerceError(400, 'ORDER_FIRST_REQUIRED', 'Create the order before transferring or submitting proof.');
         const uploadIds = [...new Set(quote.cart.items.flatMap(line => line.uploadIds))];
-        const hasEngraving = quote.cart.items.some(line => line.kind === 'engraving_service_v1');
-        for (const line of quote.cart.items.filter(line => line.kind === 'engraving_service_v1')) await currentConfiguration(line.specification.typeId, { session, fence: true });
+        const hasEngraving = quote.cart.items.some(line => isEngravingKind(line.kind));
+        for (const line of quote.cart.items.filter(line => isEngravingKind(line.kind))) await currentConfiguration(line.specification.typeId, { session, fence: true });
         const hasGifts = quote.cart.items.some(line => line.kind === 'gift_box_v2');
         const personalized = hasEngraving || hasGifts || quote.cart.items.some(line => line.requiresPersonalization || Object.keys(line.personalization || {}).length > 0 || line.customizationSnapshot);
-        if (quote.cart.items.some(line => !['gift_box_v2','engraving_service_v1'].includes(line.kind) && (line.requiresPersonalization || Object.keys(line.personalization || {}).length > 0 || line.customizationSnapshot)) && input.paymentMethod === 'cod') throw commerceError(409, 'QUOTATION_REQUIRED', 'Personalized COD requires an owner-authorized quotation before acceptance. Choose InstaPay or contact the store.');
+        if (quote.cart.items.some(line => !['gift_box_v2','engraving_service_v1','engraving_service_v2'].includes(line.kind) && (line.requiresPersonalization || Object.keys(line.personalization || {}).length > 0 || line.customizationSnapshot)) && input.paymentMethod === 'cod') throw commerceError(409, 'QUOTATION_REQUIRED', 'Personalized COD requires an owner-authorized quotation before acceptance. Choose InstaPay or contact the store.');
         await runGiftBoxCheckoutTestHook(capability, owner, 'beforeInventory', { session, quote });
         const inventoryClaims = await consumeInventory(quote.cart.items, quote.totals.applied, session);
         await runGiftBoxCheckoutTestHook(capability, owner, 'afterInventory', { session, quote });
@@ -132,7 +133,7 @@ async function placeOrderCore(owner, input, userId, { trackingConsentId = null }
         await fenceGiftBoxCheckoutPolicies(quote.policyFences, session);
         await fenceGiftBoxPersonalization(quote.cart.items, session);
         const order = new Order({ ...(hasEngraving ? { cartAddOperations: quote.cart.document.addOperations } : {}), ...(hasEngraving ? { engraving: initialEngravingWorkflow(quote.cart.items) } : {}), owner, userId: userId || null, trackingConsentId, checkoutKey: input.checkoutKey, requestHash, orderNumber: generateOrderNumber(), customer: normalized.customer,
-          lines: quote.cart.items.map(snapshotOrderLine), totals: quote.totals, inventoryClaims, uploadIds, accountingVersion: hasEngraving || hasGifts ? 2 : 1, ...((hasEngraving || hasGifts) ? { paymentGroups: initialPaymentGroups(quote.cart.items, quote.totals, input.paymentMethod), ...(quote.cart.items.some(line => line.kind !== 'engraving_service_v1') ? { merchandiseFulfillment: 'received' } : {}) } : {}), personalized, allowedPaymentMethods: personalized && !hasEngraving && !hasGifts ? ['instapay'] : ['cod', 'instapay'], charges: [...(quote.cart.items.some(line => line.kind !== 'engraving_service_v1') ? [pendingShipping()] : []), ...(hasEngraving ? [{ ...pendingShipping(), id: 'return_shipping', label: 'Item handoff / return' }] : [])], followUpDueAt: new Date(Date.now() + 12 * 3600000),
+          lines: quote.cart.items.map(snapshotOrderLine), totals: quote.totals, inventoryClaims, uploadIds, accountingVersion: hasEngraving || hasGifts ? 2 : 1, ...((hasEngraving || hasGifts) ? { paymentGroups: initialPaymentGroups(quote.cart.items, quote.totals, input.paymentMethod), ...(quote.cart.items.some(line => !isEngravingKind(line.kind)) ? { merchandiseFulfillment: 'received' } : {}) } : {}), personalized, allowedPaymentMethods: personalized && !hasEngraving && !hasGifts ? ['instapay'] : ['cod', 'instapay'], charges: [...(quote.cart.items.some(line => !isEngravingKind(line.kind)) ? [pendingShipping()] : []), ...(hasEngraving ? [{ ...pendingShipping(), id: 'return_shipping', label: 'Item handoff / return' }] : [])], followUpDueAt: new Date(Date.now() + 12 * 3600000),
           paymentMethod: input.paymentMethod, paymentState: hasEngraving ? 'unpaid' : quote.totals.totalPiastres === 0 ? 'paid' : input.paymentMethod === 'instapay' ? 'awaiting_transfer' : 'unpaid',
           history: [{ at: new Date(), event: 'order_received', actor: userId ? 'customer' : 'guest' }] });
         for (const discount of quote.totals.applied.filter(value => value.kind === 'discount')) {

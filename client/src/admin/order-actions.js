@@ -1,3 +1,4 @@
+import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 const nextFulfillment = { received: ['confirmed', 'cancelled'], confirmed: ['preparing', 'cancelled'], preparing: ['out_for_delivery'], out_for_delivery: ['delivered', 'delivery_failed'], delivered: ['returned'], delivery_failed: ['returned'], returned: [], cancelled: [] };
 // Mirror the inspected server transition contract for useful choices. The server
 // remains authoritative and independently checks revisions and every transition.
@@ -6,7 +7,7 @@ export function adminOrderActions(order, { fulfillmentState = '', paymentState =
     const group = order.accounting?.groups?.find(group => group.id === 'merchandise');
     return {fulfillment:group && !['cancelled','returned'].includes(order.fulfillmentState) ? (nextFulfillment[order.merchandiseFulfillment || 'received'] || []).filter(state => state !== 'cancelled' && (['returned','delivery_failed'].includes(state) || group.method === 'cod' || group.outstandingPiastres === 0)) : [], payment:[]};
   }
-  if (order.lines?.some(line => line.kind === 'engraving_service_v1')) return { fulfillment: [], payment: [] };
+  if (order.lines?.some(line => isEngravingKind(line.kind))) return { fulfillment: [], payment: [] };
   const effectivePayment = paymentState || order.paymentState;
   const fulfillment = (nextFulfillment[order.fulfillmentState] || []).filter(state => {
     if ([1, 2].includes(order.accountingVersion) && state === 'cancelled') return false;

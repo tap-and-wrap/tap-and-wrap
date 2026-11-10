@@ -1,3 +1,4 @@
+import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 import { groupedOrder, groupedAccountingSummary } from './payment-groups.js';
 import { engravingCollectionAllowed } from '../engraving/payment-policy.js';
 import { validEngravingLine } from '../engraving/contracts.js';
@@ -88,9 +89,16 @@ function giftBox(value, { admin }) {
   return result;
 }
 function orderLine(line, { admin }) {
-  if (line.kind === 'engraving_service_v1') {
+  if (isEngravingKind(line.kind)) {
     if (!validEngravingLine(line)) return { kind: 'unsupported', name: 'Engraving details unavailable' };
     const saved = line.engraving, spec = saved.specification;
+    if (line.kind === 'engraving_service_v2') return { ...pick(line, ['kind','name','quantity','unitPricePiastres','lineTotalPiastres']), engraving: {
+      snapshotVersion: saved.snapshotVersion, contractVersion: spec.contractVersion, itemKey: spec.itemKey, typeName: saved.configuration.name, description: spec.description, placement: spec.placement,
+      placementLabel: spec.placement.kind === 'help' ? 'Help me choose the best placement' : saved.configuration.placements.find(value => value.id === spec.placement.placementId)?.label,
+      layers: spec.design.layers.map(({ assetId, ...layer }) => { void assetId; return layer; }), fonts: saved.fonts, specialRequests: spec.specialRequests,
+      fileRoles: ['surfacePhotoUploadId', ...spec.itemPhotoUploadIds.map((_, index) => `itemPhoto-${index}`), ...spec.design.layers.filter(layer => layer.type === 'image').map((_, index) => `artwork-${index}`)],
+      ...(admin ? { placements: saved.configuration.placements } : {}), customerOwnedItem: true,
+    } };
     return { ...pick(line, ['kind','name','quantity','unitPricePiastres','lineTotalPiastres']), engraving: { snapshotVersion: saved.snapshotVersion, typeName: saved.configuration.name, fileRoles: ['itemPhotoUploadId', ...(spec.surfacePhotoUploadId ? ['surfacePhotoUploadId'] : []), ...(spec.content.mode === 'personal' ? ['artworkUploadId'] : [])], itemKey: spec.itemKey, description: spec.description, placement: spec.placement, placementLabel: spec.placement.kind === 'help' ? 'Help me choose the best placement' : saved.configuration.placements.find(value => value.id === spec.placement.placementId)?.label, content: pick(spec.content, ['mode','text','fontId','iconId','subtype']), requestedAppearance: spec.requestedAppearance, specialRequests: spec.specialRequests, font: saved.font, icon: saved.icon, ...(admin ? { placements: saved.configuration.placements } : {}), customerOwnedItem: true } };
   }
   if (line.kind === 'gift_box_v2') return { ...pick(line, ['kind', 'name', 'quantity', 'unitPricePiastres', 'lineTotalPiastres']), giftBox: giftBox(line.giftBox, { admin }) };

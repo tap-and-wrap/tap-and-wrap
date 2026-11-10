@@ -179,6 +179,7 @@ test('approved catalog background, keyboard movement, resize, reduced motion and
 test('host receives readiness changes when a font approval is withdrawn', async ({ page }) => {
   const { surface } = await open(page); await surfaceReady(page, surface);
   await page.getByRole('button', { name: 'Add text', exact: true }).click();
+  await page.getByLabel('Your text', { exact: true }).fill('A memory');
   await expect.poll(() => page.evaluate(() => window.visualReadiness.ready)).toBe(true);
   await page.evaluate(() => window.setApprovedEditorFonts([]));
   await expect(page.getByRole('alert')).toContainText('no longer approved');

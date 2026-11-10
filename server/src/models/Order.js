@@ -1,3 +1,4 @@
+import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 import { env } from '../config/env.js';
 import mongoose from 'mongoose';
 import { validOrderLineKinds } from '../gift-box/order-snapshot.js';
@@ -48,7 +49,7 @@ schema.pre('validate', function () {
       || groups.some(group => !['merchandise','engraving'].includes(group.id) || !['cod','instapay'].includes(group.method) || !Number.isSafeInteger(group.amountPiastres) || group.amountPiastres < 0)
       || groups.reduce((sum, group) => sum + group.amountPiastres, 0) !== this.totals?.totalPiastres
       || !this.allowedPaymentMethods.includes(this.paymentMethod)) this.invalidate('paymentGroups', 'Payment obligations must exactly allocate the immutable order total');
-    const engravingAmount = this.lines.filter(line => line.kind === 'engraving_service_v1').reduce((sum, line) => sum + line.lineTotalPiastres, 0);
+    const engravingAmount = this.lines.filter(line => isEngravingKind(line.kind)).reduce((sum, line) => sum + line.lineTotalPiastres, 0);
     if ((groups.find(group => group.id === 'engraving')?.amountPiastres || 0) !== engravingAmount) this.invalidate('paymentGroups', 'Engraving must retain its exact approved service amount');
     return;
   }

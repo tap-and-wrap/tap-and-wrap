@@ -2,8 +2,8 @@ import { useId } from 'react';
 import { X } from 'lucide-react';
 import useModalDialog from './useModalDialog.js';
 
-export default function CatalogDialog({ title, children, onClose, bottomSheet = false, className = '' }) {
-  const { dialogRef, dialogProps } = useModalDialog({ onClose });
+export default function CatalogDialog({ title, children, onClose, bottomSheet = false, className = '', returnFocus }) {
+  const { dialogRef, dialogProps } = useModalDialog({ onClose, returnFocus });
   const titleId = useId();
 
   return (
