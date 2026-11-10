@@ -1,3 +1,4 @@
+import { defaultStickerPlacement, STICKER_PROOFS } from '../../../shared/gift-box/sticker-placement.mjs';
 // Converts verified private upload receipts + explicit server-listed option IDs
 // into the already versioned Gift Box intent. No Files, blobs, previews, names,
 // prices, claims of fit, or client-selected R2 keys leave this boundary.
@@ -39,5 +40,6 @@ export function prepareGiftBoxPersonalizationHandoff({ boxId, personal, uploaded
     if (!surfaceOptionId || !line.styleId) throw new Error('Choose a surface and lettering style for every engraving.');
     return { text:line.text,styleId:line.styleId,colorId:line.colorId,surfaceOptionId };
   });
-  return parseGiftBoxPersonalizationIntent({version: personal.freePlacement ? 'gift-box-personalization-intent-v2' : GIFT_BOX_PERSONALIZATION_INTENT_VERSION,photoPrints,engravings, ...(personal.freePlacement ? { sticker: personal.sticker?.enabled ? { text: personal.sticker.text, styleId: personal.sticker.styleId, colorId: personal.sticker.colorId, optionId: personal.sticker.optionId, application: 'exterior-front' } : null } : {})});
+  const adjustable = personal.freePlacement && personal.sticker?.enabled && Boolean(STICKER_PROOFS[boxId]);
+  return parseGiftBoxPersonalizationIntent({version: adjustable ? 'gift-box-personalization-intent-v3' : personal.freePlacement ? 'gift-box-personalization-intent-v2' : GIFT_BOX_PERSONALIZATION_INTENT_VERSION,photoPrints,engravings, ...(personal.freePlacement ? { sticker: personal.sticker?.enabled ? { text: personal.sticker.text, styleId: personal.sticker.styleId, colorId: personal.sticker.colorId, optionId: personal.sticker.optionId, application: adjustable ? 'exterior' : 'exterior-front', ...(adjustable ? { placement: personal.sticker.placements?.[boxId] || defaultStickerPlacement(boxId) } : {}) } : null } : {})});
 }

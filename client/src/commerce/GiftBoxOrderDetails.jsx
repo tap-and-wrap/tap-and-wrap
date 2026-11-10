@@ -1,3 +1,4 @@
+import { StickerProof } from '../gift-box/StickerWorkspace.jsx';
 import { customerGiftComponentName } from '../../../shared/gift-box/customer-label.mjs';
 import { money } from './api';
 import { LETTERING_STYLES, ENGRAVING_COLORS } from '../../../shared/gift-box/lettering-styles.mjs';
@@ -26,7 +27,7 @@ export default function GiftBoxOrderDetails({ giftBox, admin = false }) {
       <div><dt>Gift card</dt><dd>{giftBox.giftCard?.selected ? 'Selected' : 'Not selected'}</dd></div>
     </dl>
     {giftBox.giftCard?.selected && (message ? <details className="commerce-gift-message"><summary>View gift-card message</summary><p>{message}</p></details> : <p className="commerce-muted">Gift card without a message.</p>)}
-    {personalized?.sticker && <section><h4>Personalized sticker</h4><p dir="auto">{personalized.sticker.text}</p><p>Apply to exterior front - {money(personalized.sticker.pricePiastres)}</p></section>}
+    {personalized?.sticker && <section><h4>Personalized sticker</h4><p dir="auto">{personalized.sticker.text}</p>{personalized.sticker.placement && <StickerProof sticker={personalized.sticker} placement={personalized.sticker.placement}/>}<p>{personalized.sticker.placement ? personalized.sticker.placement.view === 'exterior' ? 'Exterior sticker' : `${personalized.sticker.placement.view} side` : 'Apply to exterior front'} - {money(personalized.sticker.pricePiastres)}</p></section>}
     {personalized && <details className="commerce-gift-order-disclosure"><summary>Personal touches at purchase</summary>
       <p>Photo prints: {Number.isSafeInteger(personalized.photoCount) ? personalized.photoCount : photos.length} · Engravings: {engravings.length}</p>
       {Number.isSafeInteger(personalized.unitAdjustmentPiastres) && <p>Saved personalization adjustment per box: {money(personalized.unitAdjustmentPiastres)}</p>}

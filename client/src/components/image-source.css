@@ -3,3 +3,5 @@
 .image-source-error { color:var(--tw-error); font-size:.9rem; line-height:1.6; }
 .commerce-file-previews img { width: 80px; height: 80px; object-fit: contain; }
 .commerce-file-previews li { min-width: 0; overflow-wrap: anywhere; }
+
+.image-upload-button.image-upload-area{width:100%;min-height:110px;border:1px dashed #bc9589;border-radius:12px;background:#fffcfb;display:flex;align-items:center;justify-content:center;gap:14px;padding:18px;color:#62483f;text-align:center;white-space:normal}.image-upload-area span{display:grid;gap:6px;min-width:0}.image-upload-area small{font-size:.9rem;font-weight:normal}.image-upload-area:hover{background:#fff8f5;border-color:#795045}

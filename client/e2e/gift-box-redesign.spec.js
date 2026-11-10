@@ -81,16 +81,16 @@ test('photos stay local until Add; distinct licensed sticker styles, price, priv
   await expect(page.locator('.gb-live-total strong')).toContainText('50.00');
   await page.screenshot({path:info.outputPath('personalization.png'),fullPage:true});
   await review(page); await page.getByRole('button',{name:'Add Your Gift to Cart'}).click(); await expect(page).toHaveURL(/\/cart$/);
-  expect(fixture.uploads).toHaveLength(1); expect(audit.adds[0].configuration.personalizationIntent.sticker.application).toBe('exterior-front');
+  expect(fixture.uploads).toHaveLength(1); expect(audit.adds[0].configuration.personalizationIntent.sticker.application).toBe('exterior');
   expect(audit.adds[0].configuration.personalizationIntent.photoPrints[0]).toMatchObject({x:.7,zone:'beside'});
   expect(JSON.stringify(audit.adds)).not.toMatch(/blob:|private-photo.png|pricePiastres/);
-  await page.getByRole('link',{name:'Proceed to Checkout'}).click(); await fillCheckout(page); await page.getByRole('button',{name:'Place Order'}).click();
+  await page.getByRole('link',{name:'Proceed to Checkout'}).click(); await page.getByRole('radio',{name:'InstaPay',exact:true}).check(); await fillCheckout(page); await page.getByRole('button',{name:'Place Order'}).click();
   await expect(page.getByRole('heading',{name:'Order #681243'})).toBeVisible(); expect(savedOrder().totals.totalPiastres).toBe(5000);
   fixture.state.user={id:'710000000000000000000050',name:'Fixture admin',role:'admin'};
   await page.goto('/admin/commerce/orders/710000000000000000000040'); const design=page.getByRole('region',{name:"Customer's Gift Design"});
   await expect(design.locator('.gb-free-photo img')).toHaveCount(0); expect(fixture.calls.filter(call=>/\/files\//.test(call.path))).toHaveLength(0);
   await design.getByRole('button',{name:'View private photos in design'}).click(); await expect(design.locator('.gb-free-photo img')).toHaveCount(1);
-  await expect(design).toContainText('Apply to exterior front'); await page.screenshot({path:info.outputPath('admin-design.png'),fullPage:true});
+  await expect(design).toContainText('Exterior sticker'); await expect(design.locator('.sticker-proof-image')).toHaveCount(1); await page.screenshot({path:info.outputPath('admin-design.png'),fullPage:true});
 });
 
 test('all twelve box frames center measured artwork without stretching it',()=>{
@@ -128,7 +128,7 @@ test('sticker and gift-card disclosures activate only the intended purchases and
   await expect(page.getByRole('checkbox')).toHaveCount(0);
   await page.getByLabel('Write a name, special date, or heartfelt message').fill('  ');await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
   await page.getByLabel('Write a name, special date, or heartfelt message').fill('Nour');await expect(page.locator('.gb-live-total strong')).toContainText('30.00');
-  const proof=await page.locator('.gb-sticker-proof').boundingBox(),input=await page.getByLabel('Write a name, special date, or heartfelt message').boundingBox();expect(proof.y+proof.height).toBeLessThan(input.y);
+  const proof=await page.locator('.sticker-workspace').boundingBox(),input=await page.getByLabel('Write a name, special date, or heartfelt message').boundingBox();expect(proof.y+proof.height).toBeLessThan(input.y);
   await page.getByRole('radio',{name:'Gold',exact:true}).check();await expect(page.getByLabel('Write a name, special date, or heartfelt message')).toHaveValue('Nour');await expect(page.getByRole('radio',{name:'Gold',exact:true})).toBeChecked();
   await page.getByRole('button',{name:'Remove sticker',exact:true}).click();await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
   await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();
@@ -217,7 +217,7 @@ for(const width of [320,390,1440]) test(`polished arrangement, review, cart and 
   await page.getByText('View Design Details',{exact:true}).click();
   await expect(page.getByText(/Personalized sticker: For Nour.*Apply to exterior front/)).toBeVisible();
   await page.screenshot({path:info.outputPath(`cart-${width}.png`),fullPage:true});
-  await page.getByRole('link',{name:'Proceed to Checkout'}).click(); await fillCheckout(page);
+  await page.getByRole('link',{name:'Proceed to Checkout'}).click(); await page.getByRole('radio',{name:'InstaPay',exact:true}).check(); await fillCheckout(page);
   await expect(page.getByRole('radio',{name:/Cash on Delivery/})).toHaveCount(0);
   await expect(page.getByRole('radio',{name:/InstaPay/})).toBeChecked();
   await expect(page.getByText('Have a discount code?',{exact:true})).toBeVisible();

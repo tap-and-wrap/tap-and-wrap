@@ -105,7 +105,7 @@ export async function quoteCartLine(line, owner, { session, context } = {}) {
     lineTotalPiastres: checkedMoney(unitPricePiastres * line.quantity), customizationSnapshot: customization, uploadIds,
     inventoryClaims: [{ kind: 'product', id: String(product._id), variantKey: variant?.key || null, quantity: line.quantity, mode: stock.mode, expectedUpdatedAt: product.updatedAt },
       ...componentClaims.map(claim => ({ ...claim, quantity: checkedMoney(claim.quantityPerUnit * line.quantity) }))],
-    ...(engraving ? { productEngravingSnapshot: { ...engraving, basePricePiastres: basePrice, snapshotVersion: 'product-engraving-order-v1' } } : {}),
+    ...(engraving ? { productEngravingSnapshot: { ...engraving, basePricePiastres: basePrice, snapshotVersion: engraving.specification.contractVersion === 'product-engraving-v2' ? 'product-engraving-order-v2' : 'product-engraving-order-v1' } } : {}),
     ...(photos.snapshot ? { photoPurchase: photos.snapshot } : {}),
     priceVersion: product.updatedAt?.toISOString(), valid: true,
   };

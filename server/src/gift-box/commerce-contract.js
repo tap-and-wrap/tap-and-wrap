@@ -47,7 +47,8 @@ export const giftBoxV2CommerceInput = z.object({
 }).strict().superRefine((input, context) => {
   const free = input.contractVersion === GIFT_BOX_FREE_PLACEMENT_VERSION;
   if (!free && input.presentationVersion) context.addIssue({ code:'custom',message:'Presentation revision requires free placement.' });
-  if (input.personalizationIntent && (input.personalizationIntent.version === 'gift-box-personalization-intent-v2') !== free) context.addIssue({ code:'custom',message:'Personalization coordinates must match the placement contract version.' });
+  if (input.personalizationIntent && (['gift-box-personalization-intent-v2','gift-box-personalization-intent-v3'].includes(input.personalizationIntent.version)) !== free) context.addIssue({ code:'custom',message:'Personalization coordinates must match the placement contract version.' });
+  if (input.personalizationIntent?.sticker?.placement && input.personalizationIntent.sticker.placement.boxId !== input.selection.boxId) context.addIssue({code:'custom',message:'Sticker placement must match the selected box.'});
   const issue = message => context.addIssue({ code: 'custom', message });
   const visible = item => item && item.width > 0 && item.height > 0 && item.x + item.width <= 1.000001 && item.y + item.height <= 1.000001;
   if (free) {

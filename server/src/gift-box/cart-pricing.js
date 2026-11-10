@@ -196,7 +196,7 @@ export function publicGiftBoxCartLine(quote) {
     unitPricePiastres: quote.valid ? quote.unitPricePiastres : null, lineTotalPiastres: quote.valid ? quote.lineTotalPiastres : null,
     giftBox: quote.giftBox ? { ...quote.giftBox, ...(quote.giftPersonalization ? { personalization: {
       photoCount: quote.giftPersonalization.photoPrints.length,
-      ...(quote.giftPersonalization.sticker ? { sticker: { text:quote.giftPersonalization.sticker.text, styleId:quote.giftPersonalization.sticker.styleId, colorId:quote.giftPersonalization.sticker.colorId, application:quote.giftPersonalization.sticker.application, pricePiastres:quote.giftPersonalization.sticker.pricePiastres } } : {}),
+      ...(quote.giftPersonalization.sticker ? { sticker: { text:quote.giftPersonalization.sticker.text, styleId:quote.giftPersonalization.sticker.styleId, colorId:quote.giftPersonalization.sticker.colorId, application:quote.giftPersonalization.sticker.application, ...(quote.giftPersonalization.sticker.placement ? {placement:quote.giftPersonalization.sticker.placement} : {}), pricePiastres:quote.giftPersonalization.sticker.pricePiastres } } : {}),
       engravings: quote.giftPersonalization.engravings.map(entry => ({ text: entry.text, styleId: entry.styleId, colorId: entry.colorId })),
       unitAdjustmentPiastres: quote.giftPersonalization.unitAdjustmentPiastres } } : {}) } : null,
     checkoutAllowed: quote.checkoutAllowed === true, promotionsEligible: false };

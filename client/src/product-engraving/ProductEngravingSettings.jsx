@@ -1,25 +1,20 @@
-import { useEffect, useRef, useState } from 'react';
-import { api } from '../services/api.js';
-import { FONT_REGISTRY } from '../../../shared/engraving/definitions.mjs';
+import { useState } from 'react';
+import { FONT_REGISTRY, APPEARANCES } from '../../../shared/engraving/definitions.mjs';
 import CatalogDialog from '../components/CatalogDialog.jsx';
-import VisualEngravingEditor from '../engraving/visual/VisualEngravingEditor.jsx';
+import LetteringControls from '../engraving/LetteringControls.jsx';
+import { ProductTextProof } from './ProductEngravingBuilder.jsx';
 import './product-engraving.css';
-
-export default function ProductEngravingSettings({ keys, value, onChange }) {
-  const [base, setBase] = useState(''), [error, setError] = useState(''), [preview, setPreview] = useState(false), pending = useRef(null);
-  useEffect(() => { const controller = new AbortController(); api.get('/admin/media/config', { signal: controller.signal }).then(result => setBase(result.data.data.baseUrl || '')).catch(() => {}); return () => { controller.abort(); pending.current?.abort(); }; }, []);
-  const url = key => base ? `${base.replace(/\/$/, '')}/${key.split('/').map(encodeURIComponent).join('/')}` : '';
-  async function select(key) {
-    pending.current?.abort(); const controller = new AbortController(); pending.current = controller; setError('');
-    try {
-      const image = new Image(); image.src = url(key); await image.decode(); if (controller.signal.aborted) return;
-      onChange({ ...(value || { fontIds: [], materials: [], placements: [] }), imageKey: key, width: image.naturalWidth, height: image.naturalHeight });
-    } catch { if (!controller.signal.aborted) setError('This gallery image could not be opened. Choose a working approved image.'); }
-  }
-  const change = patch => onChange({ ...value, ...patch });
-  return <section className="product-engraving-settings"><h2>Product engraving</h2><p>Choose an existing approved gallery image for a physically suitable product. Saving a complete setup makes engraving available automatically when this product is orderable.</p>
-    <div className="product-engraving-images" aria-label="Engraving surface images">{keys.map((key, index) => <button type="button" key={key} aria-label={`Use image ${index + 1}`} disabled={!base} aria-pressed={value?.imageKey === key} onClick={() => select(key)}><img src={url(key)} alt="" width="110" height="110" loading="lazy"/>Use image {index + 1}</button>)}</div>
-    {value && <><label>Supported materials, one per line<textarea value={value.materials.join('\n')} onChange={event => change({ materials: event.target.value.split('\n') })}/></label><label>Placement suggestions, one per line<textarea value={value.placements.join('\n')} onChange={event => change({ placements: event.target.value.split('\n') })}/></label><fieldset><legend>Approved lettering</legend>{FONT_REGISTRY.map(font => <label key={font.id}><input type="checkbox" checked={value.fontIds.includes(font.id)} onChange={event => change({ fontIds: event.target.checked ? [...value.fontIds, font.id] : value.fontIds.filter(id => id !== font.id) })}/>{font.label}</label>)}</fieldset><button type="button" onClick={() => setPreview(true)} disabled={!value.imageKey || !value.fontIds.length}>Preview customer editor</button><button type="button" onClick={() => onChange(null)}>Remove engraving setup</button><p>Engraving price is managed separately in the engraving dashboard.</p></>}
-    {error && <p role="alert">{error}</p>}{preview && value && <CatalogDialog title="Product engraving preview" className="product-engraving-dialog" onClose={() => setPreview(false)}><p>Preview only. No cart or pricing changes.</p><VisualEngravingEditor ownerScope="owner-product-preview" initialDraft={{ ownerScope: 'owner-product-preview', design: { version: 'visual-engraving-v1', surface: { assetId: 'approved-preview', aspectRatio: value.width / value.height }, layers: [] } }} assets={{ 'approved-preview': { approved: true, src: url(value.imageKey) } }} approvedFontIds={value.fontIds} surfaceControls={false} confirmReset/></CatalogDialog>}
+export default function ProductEngravingSettings({ value, onChange }) {
+  const [preview, setPreview] = useState(false), [text, setText] = useState('With love'), [fontId, setFont] = useState(null), [color, setColor] = useState('black');
+  const colors = value?.colorIds || APPEARANCES;
+  const change = patch => onChange({ ...value, mode: 'text', colorIds: colors, ...patch });
+  return <section className="product-engraving-settings"><h2>Product engraving</h2><p>Approve engraving for this physically suitable product. Approved lettering, appearances and materials make it available automatically when the product is orderable.</p>
+    {!value ? <button type="button" onClick={() => onChange({ mode: 'text', fontIds: [], colorIds: [...APPEARANCES], materials: [] })}>Configure approved engraving</button> : <>
+      <label>Supported materials, one per line<textarea value={value.materials.join('\n')} onChange={event => change({ materials: event.target.value.split('\n') })}/></label>
+      <fieldset><legend>Approved lettering</legend>{FONT_REGISTRY.map(font => <label key={font.id}><input type="checkbox" checked={value.fontIds.includes(font.id)} onChange={event => change({ fontIds: event.target.checked ? [...value.fontIds, font.id] : value.fontIds.filter(id => id !== font.id) })}/><span style={{ fontFamily: font.family }}>{font.language === 'ar' ? '\u0628\u0643\u0644 \u0627\u0644\u062d\u0628' : 'With love'}</span> ({font.language === 'ar' ? 'Arabic' : 'English'} style {FONT_REGISTRY.filter(f => f.language === font.language).indexOf(font) + 1})</label>)}</fieldset>
+      <fieldset><legend>Approved appearances</legend>{APPEARANCES.map(id => <label key={id}><input type="checkbox" checked={colors.includes(id)} onChange={event => change({ colorIds: event.target.checked ? [...colors, id] : colors.filter(color => color !== id) })}/>{id}</label>)}</fieldset>
+      <button type="button" disabled={!value.fontIds.length || !colors.length} onClick={() => { setFont(value.fontIds[0]); setColor(colors[0]); setPreview(true); }}>Preview customer form</button><button type="button" onClick={() => onChange(null)}>Remove engraving setup</button><p>The existing engraving dashboard controls the surcharge. Historical image references are retained.</p>
+    </>}
+    {preview && value && <CatalogDialog title="Product engraving preview" onClose={() => setPreview(false)}><label>Engraving text<input value={text} dir="auto" onChange={event => setText(event.target.value)}/></label><ProductTextProof text={text} fontId={fontId} colorId={color}/><LetteringControls text={text} fontId={fontId} color={color} fontIds={value.fontIds} colorIds={colors} onChange={patch => { if (patch.fontId) setFont(patch.fontId); if (patch.color) setColor(patch.color); }}/></CatalogDialog>}
   </section>;
 }

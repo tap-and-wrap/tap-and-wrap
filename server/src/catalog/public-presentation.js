@@ -1,4 +1,4 @@
-import { productEngravingCapable, productSurfaceId } from '../../../shared/product-engraving.mjs';
+import { productEngravingCapable, productSurfaceId, productEngravingColors } from '../../../shared/product-engraving.mjs';
 import { isSafeImageReference } from './fields.js';
 import { ownerVariantStock } from './product-policy.js';
 import { legacyPhotoFields, optionalPhotoFields, productPersonalizationFields } from '../../../shared/product-personalization.mjs';
@@ -89,6 +89,6 @@ export function publicProductDetail(product) {
 
 export function publicProductEngraving(product) {
   if (!productEngravingCapable(product)) return null;
-  const c = product.productEngraving, src = mediaUrlForKey(c.imageKey);
-  return src ? { version: c.version, surface: { id: productSurfaceId(product._id, c.version), src, width: c.width, height: c.height }, fontIds: c.fontIds, materials: c.materials, placements: c.placements } : null;
+  const c = product.productEngraving, src = product.galleryKeys?.includes(c.imageKey) && c.width > 0 && c.height > 0 ? mediaUrlForKey(c.imageKey) : null;
+  return (src || c.mode === 'text') ? { version: c.version, mode: c.mode || 'visual', colorIds: productEngravingColors(c), ...(src ? { surface: { id: productSurfaceId(product._id, c.version), src, width: c.width, height: c.height } } : {}), fontIds: c.fontIds, materials: c.materials, placements: c.placements || [] } : null;
 }

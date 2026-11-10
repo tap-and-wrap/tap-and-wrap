@@ -305,7 +305,7 @@ export async function createProduct(input, { actor } = {}) {
     else if (input.personalization) delete input.personalization.customerPhotosVersion;
     if (input.personalization?.photoSpaces?.length) input.personalization.photoSpacesVersion = 1;
     else if (input.personalization) delete input.personalization.photoSpacesVersion;
-    if (input.productEngraving) { if (!input.galleryKeys?.includes(input.productEngraving.imageKey)) throw catalogError(400, 'INVALID_ENGRAVING_SURFACE', 'Select a surface from this product gallery.'); input.productEngraving = { ...input.productEngraving, version: 1 }; }
+    if (input.productEngraving) { if (input.productEngraving.mode !== 'text' && !input.galleryKeys?.includes(input.productEngraving.imageKey)) throw catalogError(400, 'INVALID_ENGRAVING_SURFACE', 'Select a surface from this product gallery.'); input.productEngraving = { ...input.productEngraving, version: 1 }; }
     const product = new Product(input);
     if (input.inventory) product.inventory = mergeInventory(undefined, input.inventory);
     if (input.variants) product.variants = normalizeVariants([], input.variants);
@@ -338,11 +338,11 @@ export async function updateProduct(id, input, { actor } = {}) {
   if (Object.hasOwn(patch, 'productEngraving')) {
     patch.productEngravingRevision = Math.max(product.productEngravingRevision || 0, product.productEngraving?.version || 0) + 1;
     if (patch.productEngraving) {
-      if (!(patch.galleryKeys || product.galleryKeys).includes(patch.productEngraving.imageKey)) throw catalogError(400, 'INVALID_ENGRAVING_SURFACE', 'Select a surface from this product gallery.');
+      if (patch.productEngraving.mode !== 'text' && !(patch.galleryKeys || product.galleryKeys).includes(patch.productEngraving.imageKey)) throw catalogError(400, 'INVALID_ENGRAVING_SURFACE', 'Select a surface from this product gallery.');
       patch.productEngraving = { ...patch.productEngraving, version: patch.productEngravingRevision };
     }
   }
-  if (patch.galleryKeys && product.productEngraving && !Object.hasOwn(patch, 'productEngraving') && !patch.galleryKeys.includes(product.productEngraving.imageKey)) throw catalogError(400, 'INVALID_ENGRAVING_SURFACE', 'Choose another engraving surface before removing its gallery image.');
+  if (patch.galleryKeys && product.productEngraving && product.productEngraving.mode !== 'text' && !Object.hasOwn(patch, 'productEngraving') && !patch.galleryKeys.includes(product.productEngraving.imageKey)) throw catalogError(400, 'INVALID_ENGRAVING_SURFACE', 'Choose another engraving surface before removing its gallery image.');
   if (patch.personalization) {
     const current = product.personalization?.toObject() || {};
     const spaces = patch.personalization.photoSpaces ?? current.photoSpaces;
