@@ -1,7 +1,8 @@
+import { emptyDesign } from '../../../shared/engraving/visual-design.mjs';
 import { useCart } from '../commerce/CartContext.jsx';
 import { createContext, useContext, useRef, useState } from 'react';
 const Context = createContext(null);
-const fresh = () => ({ itemKey: crypto.randomUUID(), step: 0, typeId: '', description: '', placement: { kind: 'help' }, mode: 'text', text: '', fontId: '', iconId: '', subtype: 'photo', requestedAppearance: 'black', specialRequests: '', files: {}, handwritingStrokes: [], replaceLineId: null, replaceFingerprint: null });
+const fresh = () => ({ itemKey: crypto.randomUUID(), visual: { design: emptyDesign(), assets: {}, itemPhotos: [] }, editorRevision: 0, step: 0, typeId: '', description: '', placement: { kind: 'help' }, mode: 'text', text: '', fontId: '', iconId: '', subtype: 'photo', requestedAppearance: 'black', specialRequests: '', files: {}, handwritingStrokes: [], replaceLineId: null, replaceFingerprint: null });
 export function EngravingDraftProvider({ ownerKey, children }) { const cart = useCart(); const scope = `${ownerKey}:${cart.checkoutOwnerKey || 'checking'}`; return <OwnedDraft ownerKey={scope}>{children}</OwnedDraft>; }
 function OwnedDraft({ ownerKey, children }) {
   const [capturedOwner,setCapturedOwner]=useState(ownerKey);

@@ -2,6 +2,9 @@ import { STUDIO_ICONS } from './studio-icons.mjs';
 export { ICON_CATEGORIES } from './studio-icons.mjs';
 // Reviewable definitions only. Importing this module never creates merchant data.
 export const ENGRAVING_KIND = 'engraving_service_v1';
+export const VISUAL_ENGRAVING_KIND = 'engraving_service_v2';
+export const ENGRAVING_KINDS = Object.freeze([ENGRAVING_KIND, VISUAL_ENGRAVING_KIND]);
+export const isEngravingKind = kind => ENGRAVING_KINDS.includes(kind);
 export const INITIAL_ENGRAVING_TYPES = Object.freeze(['Perfume','Necklace','Bracelet','Watch','Lip Gloss','Makeup','Bag','Office Set','Other'].map((name, displayOrder) => Object.freeze({ typeId: name.toLowerCase().replaceAll(' ', '-'), name, displayOrder, pricePiastres: 10000, status: 'disabled', placements: [], fontIds: [], iconIds: [], maxLines: 3, maxCharacters: 80, maxCharactersPerLine: 40 })));
 export const APPEARANCES = Object.freeze(['black','white','grey']);
 export const PERSONAL_TYPES = Object.freeze(['photo','drawing','handwriting','fingerprint']);
@@ -32,8 +35,15 @@ export const ICON_REGISTRY = Object.freeze([
 export const fontById = id => FONT_REGISTRY.find(font => font.id === id);
 export const iconById = id => ICON_REGISTRY.find(icon => icon.id === id);
 export function engravingUploadIds(spec) {
-  return [spec?.itemPhotoUploadId, spec?.surfacePhotoUploadId, spec?.content?.artworkUploadId].filter(Boolean);
+  return spec?.contractVersion === 'engraving-spec-v2'
+    ? [spec.surfacePhotoUploadId, ...(spec.itemPhotoUploadIds || []), ...(spec.design?.layers || []).filter(layer => layer.type === 'image').map(layer => layer.assetId)]
+    : [spec?.itemPhotoUploadId, spec?.surfacePhotoUploadId, spec?.content?.artworkUploadId].filter(Boolean);
 }
-export const isEngravingOrder = order => order?.lines?.some(line => line.kind === ENGRAVING_KIND) === true;
+export const isEngravingOrder = order => order?.lines?.some(line => isEngravingKind(line.kind)) === true;
 // A missing/corrupt gate on a service order must never default to authorization.
 export const engravingCollectionAllowed = order => !isEngravingOrder(order) || order.engraving?.collectionAuthorized === true;
+
+export function engravingFileEntries(spec) {
+  if (spec?.contractVersion !== 'engraving-spec-v2') return [['itemPhotoUploadId', spec?.itemPhotoUploadId, 'item_photo'], ['surfacePhotoUploadId', spec?.surfacePhotoUploadId, 'surface_photo'], ['artworkUploadId', spec?.content?.artworkUploadId, 'personal_artwork']].filter(([, id]) => id);
+  return [['surfacePhotoUploadId', spec.surfacePhotoUploadId, 'surface_photo'], ...spec.itemPhotoUploadIds.map((id, index) => [`itemPhoto-${index}`, id, 'item_photo']), ...spec.design.layers.filter(layer => layer.type === 'image').map((layer, index) => [`artwork-${index}`, layer.assetId, 'personal_artwork'])];
+}

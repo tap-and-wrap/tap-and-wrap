@@ -1,3 +1,4 @@
+import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 import { randomUUID } from 'node:crypto';
 import { env } from '../config/env.js';
 import { assertDatabaseWriteAllowed } from '../config/database-safety.js';
@@ -71,9 +72,9 @@ export async function enqueueOrderEvent(order, event, { session, eventVersion } 
   writeGuard();
   await NotificationEvent.updateOne({ eventKey }, { $setOnInsert: {
     eventKey, orderId, event, recipient: recipient.toLowerCase(),
-    snapshot: { ...(order.accountingVersion === 2 ? {groupedPayments:true,mixedEngraving:order.lines.some(line => line.kind === 'engraving_service_v1') && order.lines.some(line => line.kind !== 'engraving_service_v1')} : {}), items: (order.lines || []).slice(0, 20).map(orderItemSnapshot), orderNumber, orderChannel: order.orderChannel || 'website', accountingVersion: order.accountingVersion || 0, shippingState: order.charges?.find(charge => charge.kind === 'shipping')?.state || null,
-      engravingService: order.lines?.some(line => line.kind === 'engraving_service_v1') === true,
-      engravingReviewPending: order.lines?.some(line => line.kind === 'engraving_service_v1') && order.engraving?.collectionAuthorized !== true,
+    snapshot: { ...(order.accountingVersion === 2 ? {groupedPayments:true,mixedEngraving:order.lines.some(line => isEngravingKind(line.kind)) && order.lines.some(line => !isEngravingKind(line.kind))} : {}), items: (order.lines || []).slice(0, 20).map(orderItemSnapshot), orderNumber, orderChannel: order.orderChannel || 'website', accountingVersion: order.accountingVersion || 0, shippingState: order.charges?.find(charge => charge.kind === 'shipping')?.state || null,
+      engravingService: order.lines?.some(line => isEngravingKind(line.kind)) === true,
+      engravingReviewPending: order.lines?.some(line => isEngravingKind(line.kind)) && order.engraving?.collectionAuthorized !== true,
       paymentState: order.paymentState,
       ...(order.orderChannel === 'owner_quotation' && Number.isSafeInteger(order.acceptedQuotation?.totalPiastres) ? { acceptedQuotationTotalPiastres: order.acceptedQuotation.totalPiastres } : {}),
       ...([1, 2].includes(order.accountingVersion) ? { financial: { collectedPiastres: order.financialSummary?.collectedPiastres, refundedPiastres: order.financialSummary?.refundedPiastres, outstandingPiastres: order.financialSummary?.outstandingPiastres } } : {}),

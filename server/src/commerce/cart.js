@@ -1,3 +1,4 @@
+import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 import { Order } from '../models/Order.js';
 import { engravingQuote, quoteEngravingLine, publicEngravingLine } from '../engraving/pricing.js';
 import { engravingUploadIds } from '../../../shared/engraving/definitions.mjs';
@@ -47,14 +48,14 @@ async function quoteCartCore(owner, { session, strict = false } = {}, capability
   for (const item of lines) {
     try {
       const kind = cartLineKind(item);
-      const quoted = kind === 'engraving_service_v1' ? await quoteEngravingLine(item, owner, { session, allowClosed: !strict }) : kind === 'gift_box_v2' ? quoteGiftBoxCartLine(item, giftContext) : { ...await quoteCartLine(item, owner, { session, context }), kind: 'product' };
+      const quoted = isEngravingKind(kind) ? await quoteEngravingLine(item, owner, { session, allowClosed: !strict }) : kind === 'gift_box_v2' ? quoteGiftBoxCartLine(item, giftContext) : { ...await quoteCartLine(item, owner, { session, context }), kind: 'product' };
       if ((capability || strict && giftBoxRuntimeCommerceOpen(env)) && kind === 'gift_box_v2') quoted.inventoryClaims = giftBoxOrderInventoryClaims(quoted);
       const expiries = quoted.uploadIds.map(id => (kind === 'gift_box_v2' ? giftContext?.giftUploads : context.uploads)?.get(String(id))?.expiresAt).filter(Boolean);
       items.push({ ...quoted, ...(expiries.length ? { attachments: { status: 'temporary', expiresAt: new Date(Math.min(...expiries.map(date => date.getTime()))), replacementRequired: false } } : {}) });
     }
     catch (error) {
       if (strict || !error.status || error.status >= 500) throw error;
-      if (item.kind === 'engraving_service_v1') { items.push({ id: item.id, kind: item.kind, name: item.name, quantity: 1, valid: false, error: error.message, errorCode: error.code, unitPricePiastres: null, lineTotalPiastres: null, attachments: { replacementRequired: error.code === 'INVALID_UPLOAD_REFERENCES' } }); continue; }
+      if (isEngravingKind(item.kind)) { items.push({ id: item.id, kind: item.kind, name: item.name, quantity: 1, valid: false, error: error.message, errorCode: error.code, unitPricePiastres: null, lineTotalPiastres: null, attachments: { replacementRequired: error.code === 'INVALID_UPLOAD_REFERENCES' } }); continue; }
       if (item.kind === 'gift_box_v2') {
         items.push({ id: item.id, kind: 'gift_box_v2', name: 'Build Your Gift Box', quantity: item.quantity,
           valid: false, error: error.message, errorCode: error.code,
@@ -93,9 +94,9 @@ async function quoteCartCore(owner, { session, strict = false } = {}, capability
 }
 export async function cartResponse(owner) {
   const quote = await quoteCart(owner);
-  const items = quote.items.map(item => item.kind === 'engraving_service_v1' ? item.valid ? publicEngravingLine(item) : item : item.kind === 'gift_box_v2' ? publicGiftBoxCartLine(item) : item.valid ? publicCartLine(item) : item);
-  const hasEngraving = items.some(item => item.kind === 'engraving_service_v1');
-  const mixedCheckout = hasEngraving && items.some(item => item.kind !== 'engraving_service_v1');
+  const items = quote.items.map(item => isEngravingKind(item.kind) ? item.valid ? publicEngravingLine(item) : item : item.kind === 'gift_box_v2' ? publicGiftBoxCartLine(item) : item.valid ? publicCartLine(item) : item);
+  const hasEngraving = items.some(item => isEngravingKind(item.kind));
+  const mixedCheckout = hasEngraving && items.some(item => !isEngravingKind(item.kind));
   const hasGifts = items.some(item => item.kind === 'gift_box_v2');
   const paths = await attachProductPaths(items.filter(item => item.kind === 'product' && item.slug).map(item => ({ _id: item.productId, slug: item.slug })));
   const byProduct = new Map(paths.map(product => [String(product._id), product.publicPath]));
@@ -115,7 +116,7 @@ async function changeCart(owner, operation) {
         await operation(cart, session); cart.expiresAt = expiresAt();
         const referenced = cart.items.flatMap(item => [
           ...Object.values(item.personalization || {}), ...Object.values(item.customization?.fields || {})
-        ].filter(Array.isArray).flat().concat(item.kind === 'engraving_service_v1' ? engravingUploadIds(item.specification) : []).concat(item.kind === 'gift_box_v2'
+        ].filter(Array.isArray).flat().concat(isEngravingKind(item.kind) ? engravingUploadIds(item.specification) : []).concat(item.kind === 'gift_box_v2'
           ? (item.configuration?.personalizationIntent?.photoPrints || []).map(photo => photo.uploadId) : []));
         await detachUnusedCartUploads(cart._id, [...new Set(referenced)], owner, { session });
         assertDatabaseWriteAllowed(Cart.db, env); await cart.save({ session });
@@ -131,7 +132,7 @@ async function changeCart(owner, operation) {
 }
 const plainLine = line => typeof line.toObject === 'function' ? line.toObject() : line;
 function storedLine(quote, id = randomUUID()) {
-  return quote.kind === 'engraving_service_v1' ? { id, kind: quote.kind, identity: quote.identity, name: quote.name, quantity: 1, specification: quote.specification, reviewFingerprint: quote.reviewFingerprint } : quote.kind === 'gift_box_v2'
+  return isEngravingKind(quote.kind) ? { id, kind: quote.kind, identity: quote.identity, name: quote.name, quantity: 1, specification: quote.specification, reviewFingerprint: quote.reviewFingerprint } : quote.kind === 'gift_box_v2'
     ? { id, kind: 'gift_box_v2', identity: quote.identity, configurationId: quote.configurationId, configuration: quote.configuration, name: quote.name, quantity: quote.quantity }
     : { id, kind: 'product', identity: quote.identity, productId: quote.productId, name: quote.name, slug: quote.slug, mainImageUrl: quote.mainImageUrl,
       variantKey: quote.variantKey, quantity: quote.quantity, personalization: quote.personalization, customization: quote.customization || null };
@@ -158,7 +159,7 @@ export async function addCartItem(owner, raw, { onAdded } = {}) {
   let added, alreadyOrdered;
   await changeCart(owner, async (cart, session) => {
     added = null; alreadyOrdered = null;
-    if (kind === 'engraving_service_v1') {
+    if (isEngravingKind(kind)) {
       const accepted = await Order.findOne({ owner, 'cartAddOperations.key': input.operationKey }).session(session).select('_id cartAddOperations').lean().maxTimeMS(3000);
       if (accepted) {
         if (accepted.cartAddOperations.find(entry => entry.key === input.operationKey)?.requestHash !== requestHash) throw commerceError(409, 'CART_OPERATION_CONFLICT', 'This add operation is already associated with an order.');
@@ -173,18 +174,18 @@ export async function addCartItem(owner, raw, { onAdded } = {}) {
       }
       if (cart.addOperations.length >= 60) throw commerceError(409, 'CART_OPERATION_LIMIT', 'Review your cart before starting another personalization session.');
     }
-    if (kind === 'engraving_service_v1' && await Order.exists({ owner, 'lines.engraving.specification.itemKey': input.specification.itemKey }).session(session).maxTimeMS(3000)) throw commerceError(409, 'ENGRAVING_ITEM_ORDERED', 'This physical-item key already belongs to an order. Start a new engraving for another item.');
+    if (isEngravingKind(kind) && await Order.exists({ owner, 'lines.engraving.specification.itemKey': input.specification.itemKey }).session(session).maxTimeMS(3000)) throw commerceError(409, 'ENGRAVING_ITEM_ORDERED', 'This physical-item key already belongs to an order. Start a new engraving for another item.');
     const giftContext = kind === 'gift_box_v2' ? await createGiftBoxCartPricingContext([...cart.items, input], { session, owner, cartId: cart._id }) : null;
-    const quote = kind === 'engraving_service_v1' ? await quoteEngravingLine(input, owner, { session, fence: true }) : kind === 'gift_box_v2' ? quoteGiftBoxCartLine(input, giftContext, { stored: false }) : { ...await quoteCartLine(input, owner, { session }), kind: 'product' };
+    const quote = isEngravingKind(kind) ? await quoteEngravingLine(input, owner, { session, fence: true }) : kind === 'gift_box_v2' ? quoteGiftBoxCartLine(input, giftContext, { stored: false }) : { ...await quoteCartLine(input, owner, { session }), kind: 'product' };
     added = { kind, ...(kind === 'product' ? { productId: quote.productId, slug: quote.slug } : {}), quantity: input.quantity, unitPricePiastres: quote.unitPricePiastres, customized: Boolean(quote.customization) };
     if (input.replaceLineId) {
-      const index = cart.items.findIndex(item => item.id === input.replaceLineId && item.kind === 'engraving_service_v1' && item.specification.itemKey === input.specification.itemKey);
+      const index = cart.items.findIndex(item => item.id === input.replaceLineId && item.kind === kind && item.specification.itemKey === input.specification.itemKey);
       if (index < 0) throw commerceError(409, 'ENGRAVING_EDIT_CONFLICT', 'The engraving line changed or was removed. Review your cart.');
       if (input.replaceFingerprint !== fingerprint({ specification: cart.items[index].specification, reviewFingerprint: cart.items[index].reviewFingerprint })) throw commerceError(409, 'ENGRAVING_EDIT_CONFLICT', 'This line was edited in another tab. Your draft is retained.');
       cart.items.splice(index, 1);
     }
-    const existing = cart.items.find(item => sameLine(item, quote));
-    if (existing && kind === 'engraving_service_v1') throw commerceError(409, 'ENGRAVING_ITEM_EXISTS', 'This physical item is already in the cart. Edit it or start a new item.');
+    const existing = cart.items.find(item => isEngravingKind(kind) && isEngravingKind(item.kind) ? item.specification.itemKey === input.specification.itemKey : sameLine(item, quote));
+    if (existing && isEngravingKind(kind)) throw commerceError(409, 'ENGRAVING_ITEM_EXISTS', 'This physical item is already in the cart. Edit it or start a new item.');
     if (existing) {
       const quantity = existing.quantity + input.quantity;
       cartQuantity.parse(quantity);
@@ -211,7 +212,7 @@ export async function updateCartQuantity(owner, id, quantity) {
     const item = cart.items.find(line => line.id === id);
     if (!item) throw commerceError(404, 'CART_ITEM_NOT_FOUND', 'Cart item not found.');
     const kind = cartLineKind(item);
-    if (kind === 'engraving_service_v1') throw commerceError(400, 'ENGRAVING_QUANTITY_FIXED', 'Each engraving line covers one physical item.');
+    if (isEngravingKind(kind)) throw commerceError(400, 'ENGRAVING_QUANTITY_FIXED', 'Each engraving line covers one physical item.');
     const quote = kind === 'gift_box_v2' ? null : await quoteCartLine({ ...item.toObject(), quantity }, owner, { session }); item.quantity = quantity;
     if (kind === 'gift_box_v2') await validateGiftLines(cart.items, session, null, owner, cart._id);
     if (quote) await attachUploadsToCart(quote.uploadIds, owner, cart._id, { session });
@@ -265,16 +266,16 @@ export async function mergeGuestCart(fromOwner, toOwner) {
     const legacyGiftContext = combinedHasPersonalPhotos ? null : await createGiftBoxCartPricingContext([...source.items, ...target.items], { session });
     const transferredUploads = new Set();
     for (const item of source.items) {
-      const personalizedGift = item.kind === 'engraving_service_v1' || item.kind === 'gift_box_v2' && Boolean(item.configuration?.personalizationIntent);
+      const personalizedGift = isEngravingKind(item.kind) || item.kind === 'gift_box_v2' && Boolean(item.configuration?.personalizationIntent);
       let quote;
-      try { quote = cartLineKind(item) === 'engraving_service_v1' ? await quoteEngravingLine(item, fromOwner, { session, allowClosed: true }) : cartLineKind(item) === 'gift_box_v2' ? quoteGiftBoxCartLine(item, sourceGiftContext) : { ...await quoteCartLine(item, fromOwner, { session }), kind: 'product' }; }
+      try { quote = isEngravingKind(cartLineKind(item)) ? await quoteEngravingLine(item, fromOwner, { session, allowClosed: true }) : cartLineKind(item) === 'gift_box_v2' ? quoteGiftBoxCartLine(item, sourceGiftContext) : { ...await quoteCartLine(item, fromOwner, { session }), kind: 'product' }; }
       catch (caught) {
         const error = giftCartError(caught);
         // Never silently discard a personalized line and delete its guest cart.
         if (personalizedGift || !error.status || error.status >= 500) throw error;
         skipped += 1; continue;
       }
-      const existing = target.items.find(line => sameLine(line, quote));
+      const existing = target.items.find(line => isEngravingKind(quote.kind) && isEngravingKind(line.kind) ? line.specification.itemKey === quote.specification.itemKey : sameLine(line, quote));
       if ((!existing && target.items.length >= 30) || (existing && existing.quantity + item.quantity > 99)) {
         if (personalizedGift) throw commerceError(409, 'GIFT_BOX_PERSONAL_MERGE_LIMIT', 'The personalized gift cannot fit in the account cart. Both carts remain unchanged.');
         skipped += 1; continue;
@@ -291,7 +292,7 @@ export async function mergeGuestCart(fromOwner, toOwner) {
         if (personalizedGift || !error.status || error.status >= 500) throw error;
         skipped += 1; continue;
       }
-      if (existing && quote.kind === 'engraving_service_v1') throw commerceError(409, 'ENGRAVING_ITEM_EXISTS', 'This item exists in both carts. Both carts remain unchanged.');
+      if (existing && isEngravingKind(quote.kind)) throw commerceError(409, 'ENGRAVING_ITEM_EXISTS', 'This item exists in both carts. Both carts remain unchanged.');
       if (existing) existing.quantity += item.quantity;
       else target.items.push(quote.kind === 'gift_box_v2' ? storedLine(quote, item.id) : item);
       quote.uploadIds.forEach(id => transferredUploads.add(id));
@@ -303,7 +304,7 @@ export async function mergeGuestCart(fromOwner, toOwner) {
     // Repricing after the transfer validates every uploaded image under the
     // receiving account, as well as the merged physical stock demand.
     if (combinedHasPersonalPhotos) await validateGiftLines(target.items, session, null, toOwner, target._id);
-    for (const line of target.items.filter(item => item.kind === 'engraving_service_v1')) {
+    for (const line of target.items.filter(item => isEngravingKind(item.kind))) {
       const checked = await engravingQuote(line.specification, toOwner, { session, allowClosed: true });
       line.reviewFingerprint = checked.reviewFingerprint;
     }

@@ -1,3 +1,4 @@
+import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 import Select from '../components/form/Select.jsx';
 import PersonalizationSummary from '../commerce/PersonalizationSummary.jsx';
 import { useEffect, useId, useRef, useState } from 'react';
@@ -19,9 +20,9 @@ export default function CheckoutPage() {
   const checkoutOwner = checkoutOwnerKey ? `checkout:${checkoutOwnerKey}` : session.ownerKey;
   const [customer, setCustomer] = useState({ name: '', email: '', phone: '', governorate: '', address: '', notes: '' });
   const [paymentMethod, setPaymentMethod] = useState('cod');
-  const engravingOnly = cart.items.length > 0 && cart.items.every(item => item.kind === 'engraving_service_v1');
-  const hasEngraving = cart.items.some(item => item.kind === 'engraving_service_v1');
-  const personalized = cart.items.some(item => !['gift_box_v2','engraving_service_v1'].includes(item.kind) && ( item.requiresPersonalization || Object.keys(item.personalization || {}).length > 0 || item.customization));
+  const engravingOnly = cart.items.length > 0 && cart.items.every(item => isEngravingKind(item.kind));
+  const hasEngraving = cart.items.some(item => isEngravingKind(item.kind));
+  const personalized = cart.items.some(item => !['gift_box_v2','engraving_service_v1','engraving_service_v2'].includes(item.kind) && ( item.requiresPersonalization || Object.keys(item.personalization || {}).length > 0 || item.customization));
   useEffect(() => { if (personalized) setPaymentMethod('instapay'); }, [personalized]);
   const [discountCode, setDiscountCode] = useState('');
   const [appliedCode, setAppliedCode] = useState('');

@@ -28,7 +28,7 @@ export async function ownerAnalytics(days = 30, now = new Date()) {
       totals: [{ $group: { _id: null, orders: { $sum: 1 }, paidOrders: { $sum: { $cond: [{ $eq: ['$paymentState', 'paid'] }, 1, 0] } }, legacyPaidPiastres: { $sum: { $cond: [{ $and: [{ $not: [{ $in: ['$accountingVersion', [1, 2]] }] }, { $eq: ['$paymentState', 'paid'] }] }, '$totals.totalPiastres', 0] } } } }],
       statuses: [{ $group: { _id: '$fulfillmentState', count: { $sum: 1 } } }, { $sort: { _id: 1 } }],
       daily: [{ $group: { _id: { $dateToString: { date: '$createdAt', format: '%Y-%m-%d', timezone: 'Africa/Cairo' } }, orders: { $sum: 1 } } }, { $sort: { _id: 1 } }],
-      products: [{ $unwind: '$lines' }, { $match: { 'lines.kind': { $nin: ['gift_box_v2', 'engraving_service_v1'] } } }, { $group: { _id: { id: '$lines.productId', name: '$lines.name' }, units: { $sum: '$lines.quantity' } } }, { $sort: { units: -1, '_id.id': 1 } }, { $limit: 5 }],
+      products: [{ $unwind: '$lines' }, { $match: { 'lines.kind': { $nin: ['gift_box_v2', 'engraving_service_v1', 'engraving_service_v2'] } } }, { $group: { _id: { id: '$lines.productId', name: '$lines.name' }, units: { $sum: '$lines.quantity' } } }, { $sort: { units: -1, '_id.id': 1 } }, { $limit: 5 }],
     } }]).option({ maxTimeMS: TIMEOUT }),
     OrderSettlement.aggregate([{ $match: period }, { $facet: {
       totals: [{ $group: { _id: '$direction', amountPiastres: { $sum: '$amountPiastres' } } }],

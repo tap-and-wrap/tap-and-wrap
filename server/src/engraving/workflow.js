@@ -1,3 +1,4 @@
+import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 import { groupedOrder, groupedPaymentState, engravingWorkAllowed, overallFulfillment } from '../commerce/payment-groups.js';
 import { z } from 'zod';
 import mongoose from 'mongoose';
@@ -19,7 +20,7 @@ export const workflowInput = z.object({ revision: z.number().int().nonnegative()
 }).strict();
 const fail = message => { throw commerceError(409, 'ENGRAVING_WORKFLOW_CONFLICT', message); };
 export function initialEngravingWorkflow(lines) {
-  return { version: 1, collectionAuthorized: false, operations: [], items: lines.filter(line => line.kind === 'engraving_service_v1').map(line => ({ itemKey: line.specification.itemKey, stage: 'awaiting_customer_item', inCustody: false, inspectionApproved: false, proposal: null, history: [] })) };
+  return { version: 1, collectionAuthorized: false, operations: [], items: lines.filter(line => isEngravingKind(line.kind)).map(line => ({ itemKey: line.specification.itemKey, stage: 'awaiting_customer_item', inCustody: false, inspectionApproved: false, proposal: null, history: [] })) };
 }
 export async function engravingAction(id, raw, actor, owner = null) {
   const input = workflowInput.parse(raw), admin = actor?.role === 'admin' && actor.active !== false;
