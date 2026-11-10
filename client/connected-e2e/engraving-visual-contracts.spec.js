@@ -2,21 +2,21 @@ import { test, expect, api, origin, post, image, choose, open, start, words, rev
 test('three-step surface builder, original color layers and exact cart reconstruction at all target widths', async ({ page, context }, info) => {
   test.setTimeout(120000); const errors = [], signs = []; page.on('pageerror', error => errors.push(error.message)); page.on('request', request => { if (request.url().endsWith('/uploads/sign')) signs.push(request.postDataJSON()); });
   await page.emulateMedia({ reducedMotion: 'reduce' }); await open(page);
-  await expect(page.locator('.engraving-type-grid')).toHaveCount(0); await page.getByRole('button', { name: 'Design Your Engraving', exact: true }).click(); await expect(page.getByRole('alert')).toContainText('exact surface');
+  await expect(page.locator('.engraving-type-grid')).toHaveCount(0); await page.getByRole('button', { name: 'Design Your Engraving', exact: true }).click(); await expect(page.getByRole('alert')).toContainText('exact surface'); await expect(page.getByRole('alert')).toBeFocused(); expect((await page.getByRole('alert').boundingBox()).y).toBeGreaterThanOrEqual(0); await expect(page.locator('.tw-builder-progress li')).toHaveCount(3);
   const surface = await image(page); await choose(page, /Engraving surface: Choose surface photo/, surface); await expect(page.locator('.sv-surface-preview .ve-surface')).toBeVisible();
-  await page.getByRole('radio', { name: 'Front surface', exact: true }).check();
-  await page.getByText('Overall item photos (optional, up to 3)', { exact: true }).click(); await choose(page, 'Add overall photos', [surface, surface, surface]);
+  await expect(page.getByRole('radio', { name: 'Front surface', exact: true })).toHaveCount(0);
+  await page.getByText('Additional item photos', { exact: true }).click(); await choose(page, 'Add overall photos', [surface, surface, surface]);
   await expect(page.getByRole('button', { name: 'Add overall photos', exact: true })).toBeDisabled();
-  for (const width of [320, 390, 768, 1440]) await shot(page, info, 'your-item', width);
-  await page.getByRole('button', { name: 'Design Your Engraving', exact: true }).click(); await words(page, 'ذكرى جميلة'); await page.getByLabel('Lettering style').selectOption('engraving-arefruqaa-v1');
-  await page.getByRole('radio', { name: 'grey', exact: true }).check(); const artwork = await image(page, 400, 200); await choose(page, /Engraving artwork: Add image artwork/, artwork); await expect(page.locator('.ve-layer img')).toBeVisible();
+  for (const width of [320, 390, 768, 1024, 1440]) await shot(page, info, 'your-item', width);
+  await page.getByRole('button', { name: 'Design Your Engraving', exact: true }).click(); await words(page, 'ذكرى جميلة'); await page.getByRole('button', { name: 'Arabic style 2', exact: true }).click();
+  await page.getByRole('radio', { name: 'grey', exact: true }).check(); for (const width of [320,390,768,1024,1440]) await shot(page, info, 'text-lettering', width); const artwork = await image(page, 400, 200); await choose(page, /Engraving artwork: Add image artwork/, artwork); await expect(page.locator('.ve-layer img')).toBeVisible();
   const stable = await page.locator('.ve-layer').last().getAttribute('style'); await page.getByRole('button', { name: 'Zoom in workspace' }).click(); expect(await page.locator('.ve-layer').last().getAttribute('style')).toBe(stable); await page.getByRole('button', { name: 'Fit view', exact: true }).click();
   await page.getByRole('button', { name: 'Move left', exact: true }).click(); await page.getByRole('button', { name: 'Larger design', exact: true }).click();
   await page.getByRole('button', { name: 'Undo', exact: true }).click(); await page.getByRole('button', { name: 'Redo', exact: true }).click();
   await page.getByRole('button', { name: 'Reset design', exact: true }).click(); const dialog = page.getByRole('dialog', { name: 'Reset your engraving design?' }); await expect(dialog).toBeVisible(); await page.keyboard.press('Escape'); await expect(dialog).toHaveCount(0); await expect(page.getByRole('button', { name: 'Reset design', exact: true })).toBeFocused();
-  for (const width of [320, 390, 768, 1440]) await shot(page, info, 'design', width);
+  for (const width of [320, 390, 768, 1024, 1440]) await shot(page, info, 'design', width);
   expect(signs).toHaveLength(0); await review(page); await expect(page.getByRole('img', { name: 'Your complete engraving design' })).toBeVisible();
-  for (const width of [320, 390, 768, 1440]) await shot(page, info, 'review', width);
+  for (const width of [320, 390, 768, 1024, 1440]) await shot(page, info, 'review', width);
   await page.getByRole('button', { name: 'Add to Cart', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Your engraving is in the cart' })).toBeVisible();
   expect(signs.map(value => value.fieldKey).sort()).toEqual(['item_photo', 'item_photo', 'item_photo', 'personal_artwork', 'surface_photo']);
   const stored = (await cart(context)).items[0]; expect(stored.kind).toBe('engraving_service_v2');
@@ -25,7 +25,7 @@ test('three-step surface builder, original color layers and exact cart reconstru
   const original = await context.request.get(`${api}/commerce/uploads/${before.design.layers[1].assetId}/content`); expect((await original.body()).equals(artwork.buffer)).toBe(true);
   await page.getByRole('link', { name: 'View cart', exact: true }).click(); await page.getByRole('link', { name: 'Edit engraving', exact: true }).click(); await expect(page.locator('.sv-surface-preview .ve-surface')).toBeVisible();
   await page.reload(); await expect(page.locator('.sv-surface-preview .ve-surface')).toBeVisible(); await page.getByRole('button', { name: 'Design Your Engraving', exact: true }).click();
-  await expect(page.locator('.ve-layer')).toHaveCount(2); await page.getByRole('button', { name: /1\. ذكرى جميلة/ }).click(); await expect(page.getByLabel('Your text', { exact: true })).toHaveValue('ذكرى جميلة'); await expect(page.getByLabel('Lettering style')).toHaveValue('engraving-arefruqaa-v1');
+  await expect(page.locator('.ve-layer')).toHaveCount(2); await page.getByRole('button', { name: /1\. ذكرى جميلة/ }).click(); await expect(page.getByLabel('Your text', { exact: true })).toHaveValue('ذكرى جميلة'); await expect(page.getByRole('button', { name: 'Arabic style 2', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Move right', exact: true }).click(); await add(page);
   expect((await cart(context)).items).toHaveLength(1); const after = (await (await context.request.get(`${api}/commerce/engraving/cart/${stored.id}`)).json()).data.specification;
   expect(after.design.layers[1]).toEqual(before.design.layers[1]); expect(after.design.layers[0].x).toBeGreaterThan(before.design.layers[0].x); expect(signs).toHaveLength(5);
@@ -72,6 +72,6 @@ test('an expired add reference requires explicit replacement and never silently 
   await page.getByRole('button', { name: 'Add to Cart', exact: true }).click(); await expect(page.getByRole('alert').filter({ hasText: 'expired' }).first()).toBeVisible();
   await page.getByRole('button', { name: 'Edit Design', exact: true }).click(); await review(page); await page.getByRole('button', { name: 'Add to Cart', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'expired' }).first()).toBeVisible(); expect(signs).toHaveLength(1);
-  await page.locator('.sv-steps button').first().click(); await choose(page, /Engraving surface: Replace surface photo/, surface); await page.getByRole('button', { name: 'Design Your Engraving', exact: true }).click(); await add(page);
+  await page.locator('.tw-builder-progress button').first().click(); await choose(page, /Engraving surface: Replace surface photo/, surface); await page.getByRole('button', { name: 'Design Your Engraving', exact: true }).click(); await add(page);
   expect(signs).toHaveLength(2); expect((await cart(context)).items).toHaveLength(1);
 });

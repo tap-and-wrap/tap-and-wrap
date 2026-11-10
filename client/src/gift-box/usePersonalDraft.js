@@ -5,7 +5,9 @@ import { LETTERING_STYLES, ENGRAVING_COLORS, DEFAULT_ENGRAVING_COLOR, MAX_ENGRAV
 // This hook holds memory-only preview drafts. Never send File, object URL,
 // customer engraving text, or a candidate style to existing v1 commerce APIs.
 export function usePersonalDraft({ freePlacement = false, photoAspectRatios = false, presentationVersion, arrangementPositions = null, onPosition = null, hiddenPhotoIds = [], onRemovePhoto = null, onRestorePhoto = null } = {}) {
-  const [sticker, setSticker] = useState({ enabled: false, text: '', styleId: 'sticker-rochester-v1', colorId: 'black', optionId: null });
+  const [stickerHistory, setStickerHistory] = useState(() => ({ past: [], future: [], present: { enabled: false, text: '', styleId: 'sticker-rochester-v1', colorId: 'black', optionId: null, placements: {} } }));
+  const sticker = stickerHistory.present;
+  function setSticker(value) { setStickerHistory(history => ({ past: [...history.past.slice(-49), history.present], present: typeof value === 'function' ? value(history.present) : value, future: [] })); }
   const [photos, setPhotos] = useState([]);
   const [engravings, setEngravings] = useState([{ id: 'line-1', text: '', styleId: null, colorId: DEFAULT_ENGRAVING_COLOR }]);
   const [notice, setNotice] = useState('');
@@ -124,8 +126,8 @@ export function usePersonalDraft({ freePlacement = false, photoAspectRatios = fa
   function reset() {
     for (const url of objectUrls.current) URL.revokeObjectURL(url);
     objectUrls.current.clear();photosRef.current=[];setPhotos([]);setPhotoPositions({});setNotice('');
-    setSticker({enabled:false,text:'',styleId:'sticker-rochester-v1',colorId:'black',optionId:null});
+    setStickerHistory({past:[],future:[],present:{enabled:false,text:'',styleId:'sticker-rochester-v1',colorId:'black',optionId:null,placements:{}}});
     setEngravings([{id:'line-1',text:'',styleId:null,colorId:DEFAULT_ENGRAVING_COLOR}]);
   }
-  return { freePlacement, photoAspectRatios, presentationVersion, sticker, updateSticker, photos: visiblePhotos, engravings, notice, hasContent, photoPositions: arrangementPositions || photoPositions, placePhoto, resetPhotoPositions, addPhotos, replacePhoto, removePhoto, movePhoto, updateEngraving, addEngraving, removeEngraving,reset };
+  return { freePlacement, photoAspectRatios, presentationVersion, sticker, updateSticker, canUndoSticker: stickerHistory.past.length > 0, canRedoSticker: stickerHistory.future.length > 0, undoSticker: () => setStickerHistory(h => h.past.length ? { past: h.past.slice(0,-1), present: h.past.at(-1), future: [h.present,...h.future] } : h), redoSticker: () => setStickerHistory(h => h.future.length ? { past: [...h.past,h.present], present: h.future[0], future: h.future.slice(1) } : h), photos: visiblePhotos, engravings, notice, hasContent, photoPositions: arrangementPositions || photoPositions, placePhoto, resetPhotoPositions, addPhotos, replacePhoto, removePhoto, movePhoto, updateEngraving, addEngraving, removeEngraving,reset };
 }

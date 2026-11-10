@@ -18,6 +18,7 @@ export function priceGiftBoxPersonalization({ intent: raw, boxId, owner, uploads
   if (getFixedComponent(boxId)?.category !== 'box' || typeof owner !== 'string' || !/^(?:user:[a-f0-9]{24}|guest:[a-f0-9]{64})$/i.test(owner)) reject('GIFT_BOX_PERSONALIZATION_SCOPE_INVALID');
   let intent;
   try { intent = parseGiftBoxPersonalizationIntent(raw); } catch { reject('GIFT_BOX_PERSONALIZATION_INVALID'); }
+  if (intent.sticker?.placement && intent.sticker.placement.boxId !== boxId) reject('GIFT_BOX_STICKER_BOX_MISMATCH');
   if (!Array.isArray(uploads) || !Array.isArray(options)) reject('GIFT_BOX_PERSONALIZATION_SOURCE_INVALID');
   const byUpload = new Map();
   for (const upload of uploads) {
@@ -72,7 +73,7 @@ export function priceGiftBoxPersonalization({ intent: raw, boxId, owner, uploads
     amount = addMoney(amount, option.pricePiastres);
     sticker = { ...line, pricePiastres: option.pricePiastres, optionRevision: option.__v, priceApprovedAt: option.priceApprovedAt.toISOString() };
   }
-  return Object.freeze({ ...(intent.version === 'gift-box-personalization-intent-v2' ? { sticker } : {}), version:intent.version, photoPrints:Object.freeze(photoPrints),engravings:Object.freeze(engravings),
+  return Object.freeze({ ...(['gift-box-personalization-intent-v2','gift-box-personalization-intent-v3'].includes(intent.version) ? { sticker } : {}), version:intent.version, photoPrints:Object.freeze(photoPrints),engravings:Object.freeze(engravings),
     uploadIds:Object.freeze(photoPrints.map(photo=>photo.uploadId)), unitAdjustmentPiastres:amount,
     // The caller still must verify policy/fit and actual prices before placing an order.
     physicallyApproved:false, checkoutAuthorized:false });

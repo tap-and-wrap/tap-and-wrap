@@ -1,3 +1,4 @@
+import { StickerProof } from '../gift-box/StickerWorkspace.jsx';
 import { customerGiftComponentName } from '../../../shared/gift-box/customer-label.mjs';
 import { money } from './api.js';
 import { stickerStyle } from '../../../shared/gift-box/sticker-styles.mjs';
@@ -24,7 +25,8 @@ export default function GiftBoxCartSummary({ giftBox }) {
     {cardSelected && <p className="commerce-gift-message" dir="auto">{message || 'Gift card without a message.'}</p>}
     {giftBox.personalization?.photoCount > 0 && <p>Photo prints: {giftBox.personalization.photoCount}</p>}
     {giftBox.personalization && <p>Personal touches per box: {money(giftBox.personalization.unitAdjustmentPiastres)}</p>}
-    {giftBox.personalization?.sticker && <p>Personalized sticker: <bdi>{giftBox.personalization.sticker.text}</bdi> · {stickerStyle(giftBox.personalization.sticker.styleId)?.label || 'Saved font'} · {ENGRAVING_COLORS.find(color=>color.id===giftBox.personalization.sticker.colorId)?.label || 'Saved color'} · Apply to exterior front</p>}
+    {giftBox.personalization?.sticker?.placement && <StickerProof sticker={giftBox.personalization.sticker} placement={giftBox.personalization.sticker.placement}/>}
+    {giftBox.personalization?.sticker && <p>Personalized sticker: <bdi>{giftBox.personalization.sticker.text}</bdi> · {stickerStyle(giftBox.personalization.sticker.styleId)?.label || 'Saved font'} · {ENGRAVING_COLORS.find(color=>color.id===giftBox.personalization.sticker.colorId)?.label || 'Saved color'} · {giftBox.personalization.sticker.placement ? giftBox.personalization.sticker.placement.view === 'exterior' ? 'Exterior sticker' : `${giftBox.personalization.sticker.placement.view} side` : 'Apply to exterior front'}</p>}
     {giftBox.personalization?.engravings?.map((entry,index)=><p key={index}>Engraving: <bdi>{entry.text}</bdi> · {LETTERING_STYLES.find(style=>style.id===entry.styleId)?.label || 'Saved font'} · {ENGRAVING_COLORS.find(color=>color.id===entry.colorId)?.label || 'Saved color'}</p>)}
   </div>;
 }

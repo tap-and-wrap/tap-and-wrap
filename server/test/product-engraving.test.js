@@ -126,3 +126,48 @@ test('mixed standalone/product order keeps the product and surcharge entirely in
   const checkoutKey = randomUUID(); await prepareCheckout(owner, { checkoutKey, paymentMethod: 'instapay', governorate: 'cairo' }); const dto = await placeOrder(owner, { checkoutKey, paymentMethod: 'instapay', customer }); const saved = await Order.findById(dto.id).lean();
   assert.equal(saved.accountingVersion, 2); assert.equal(saved.paymentGroups.find(group => group.id === 'engraving').amountPiastres, 13750); assert.equal(saved.paymentGroups.find(group => group.id === 'merchandise').amountPiastres, 45000); assert.equal(saved.engraving.items.length, 1);
 });
+
+async function textEntry({ variantKey = null, text = 'For Nour', fontId = 'engraving-rochester-v1', colorId = 'black' } = {}) {
+  const specification = { contractVersion: 'product-engraving-v2', designKey: randomUUID(), configurationVersion: product.productEngraving.version, material: 'Wood', text, fontId, colorId };
+  const basePricePiastres = product.variants.find(v => v.key === variantKey)?.pricePiastres ?? product.pricePiastres;
+  const quote = await quoteProductEngraving(product.toObject(), specification, owner, { preview: true, variantKey, basePricePiastres });
+  return { kind: 'product', operationKey: randomUUID(), productId: String(product._id), variantKey, quantity: 1, productEngraving: { ...specification, reviewFingerprint: quote.reviewFingerprint } };
+}
+async function textConfiguration() { product.productEngraving = { version: 2, mode: 'text', materials: ['Wood'], fontIds: ['engraving-rochester-v1','engraving-amiri-v1'], colorIds: ['black','white'] }; await product.save(); }
+test('text-only approved configuration needs no gallery surface; v2 snapshots as merchandise', async () => {
+  await textConfiguration(); assert.ok(publicProductEngraving(product)); assert.equal(publicProductEngraving(product).surface, undefined);
+  const value = await textEntry(), { saved } = await orderFor(value), snapshot = saved.lines[0].productEngraving;
+  assert.equal(snapshot.snapshotVersion, 'product-engraving-order-v2'); assert.deepEqual(snapshot.specification, value.productEngraving);
+  assert.equal(snapshot.surchargePiastres, 10000); assert.equal(saved.lines[0].unitPricePiastres, 45000); assert.equal(saved.engraving, null);
+  const dto = presentOrder(saved, { admin: true }); assert.equal(dto.lines[0].productEngraving.text, 'For Nour'); assert.equal(dto.lines[0].productEngraving.layers, undefined);
+});
+test('text-only spec rejects invalid text, unapproved fonts/colors and canvas/artwork injection', async () => {
+  await textConfiguration(); const value = await textEntry();
+  for (const patch of [{text:''},{text:'  '},{text:'a\u0000b'},{text:'x'.repeat(501)},{fontId:'fake'},{colorId:'#ffffff'},{design:{}},{artworkUploadIds:['a'.repeat(24)]},{surchargePiastres:0}]) assert.equal(productEngravingCartInput.safeParse({...value.productEngraving,...patch}).success,false);
+  for (const patch of [{fontId:'engraving-allura-v1'},{colorId:'grey'},{material:'Metal'},{configurationVersion:1},{text:'\u062d\u0628',fontId:'engraving-rochester-v1'}]) await assert.rejects(quoteCartLine({...value,productEngraving:{...value.productEngraving,...patch}},owner));
+  const arabic = await textEntry({text:'\u0628\u0643\u0644 \u0627\u0644\u062d\u0628',fontId:'engraving-amiri-v1',colorId:'white'}); assert.equal((await quoteCartLine(arabic,owner)).unitPricePiastres,45000);
+});
+test('v2 supports existing approved visual configurations without reinterpreting v1', async () => {
+  const old = await entry({artwork:true}), modern = await textEntry(); await addCartItem(owner,old); await addCartItem(owner,modern);
+  const lines=(await readCart(owner)).items; assert.equal(lines.length,2); assert.deepEqual(lines[0].productEngraving,old.productEngraving); assert.equal(lines[1].productEngraving.design,undefined);
+});
+test('text-only safe replacement and immutable retries preserve one item and exact text', async () => {
+  await textConfiguration(); const value=await textEntry(); await addCartItem(owner,value); await addCartItem(owner,value);
+  const line=(await readCart(owner)).items[0], edit={...value,operationKey:randomUUID(),replaceLineId:line.id,replaceFingerprint:productEditFingerprint(line),productEngraving:{...value.productEngraving,text:'Edited words'}};
+  await addCartItem(owner,edit); await addCartItem(owner,edit); const result=(await readCart(owner)).items; assert.equal(result.length,1); assert.equal(result[0].id,line.id); assert.equal(result[0].productEngraving.text,'Edited words');
+  await assert.rejects(addCartItem(owner,{...edit,operationKey:randomUUID()}),{code:'ENGRAVING_EDIT_CONFLICT'});
+});
+test('text-only surcharge changes reject stale quotes and preserve accepted snapshot amounts', async () => {
+  await textConfiguration(); const value=await textEntry(),{saved}=await orderFor(value); await SiteContent.updateOne({key:'website-v1'},{$set:{productEngravingPricePiastres:12500,productEngravingPriceVersion:1}},{upsert:true});
+  const stale={...value,operationKey:randomUUID(),productEngraving:{...value.productEngraving,designKey:randomUUID()}}; await assert.rejects(addCartItem(owner,stale),{code:'PRODUCT_ENGRAVING_REVIEW_REQUIRED'});
+  assert.equal((await quoteCartLine(await textEntry(),owner)).unitPricePiastres,47500); assert.equal((await Order.findById(saved._id)).lines[0].productEngraving.surchargePiastres,10000);
+});
+test('text-only variant totals and stock remain ordinary merchandise rules', async () => {
+  await textConfiguration(); product.variants=[{key:'gold',attributes:[{name:'Finish',value:'Gold'}],pricePiastres:42000,inventory:{mode:'tracked',quantity:2,approved:true,available:true}}]; await product.save();
+  const value=await textEntry({variantKey:'gold'}); assert.equal((await quoteCartLine({...value,quantity:2},owner)).lineTotalPiastres,104000); await assert.rejects(quoteCartLine({...value,quantity:3},owner),{code:'INSUFFICIENT_STOCK'});
+  await Product.updateOne({_id:product._id},{$set:{visibility:'withdrawn'}}); await assert.rejects(addCartItem(owner,value));
+});
+test('owner saves text-only configuration without changing price or stock',async()=>{
+  const previous=product.toObject(); await updateProduct(String(product._id),{expectedRevision:product.__v,productEngraving:{mode:'text',fontIds:['engraving-amiri-v1'],colorIds:['black'],materials:['Wood']}},{actor:{_id:new mongoose.Types.ObjectId(),role:'admin'}});
+  const record=await Product.findById(product._id); assert.equal(record.productEngraving.mode,'text'); assert.equal(record.pricePiastres,previous.pricePiastres); assert.equal(record.inventory.quantity,previous.inventory.quantity);
+});

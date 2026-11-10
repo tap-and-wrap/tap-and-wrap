@@ -1,3 +1,4 @@
+import { validStickerPlacement } from './sticker-placement.mjs';
 import { stickerStyle, STICKER_APPLICATION } from './sticker-styles.mjs';
 import { ENGRAVING_COLORS, LETTERING_STYLES, MAX_ENGRAVING_CODEPOINTS, MAX_ENGRAVING_LINES, MAX_GIFT_PHOTOS, validateDraftEngraving } from './lettering-styles.mjs';
 import { deepFreeze } from './definitions.mjs';
@@ -19,7 +20,8 @@ const acceptedStyles = new Set(LETTERING_STYLES.map(style => style.id));
 const acceptedColors = new Set(ENGRAVING_COLORS.map(color => color.id));
 
 export function parseGiftBoxPersonalizationIntent(raw) {
-  const v2 = raw?.version === 'gift-box-personalization-intent-v2';
+  const v3 = raw?.version === 'gift-box-personalization-intent-v3';
+  const v2 = v3 || raw?.version === 'gift-box-personalization-intent-v2';
   if (!exact(raw, v2 ? ['version','photoPrints','engravings','sticker'] : ['version', 'photoPrints', 'engravings']) || !v2 && raw.version !== GIFT_BOX_PERSONALIZATION_INTENT_VERSION
     || !Array.isArray(raw.photoPrints) || raw.photoPrints.length > MAX_GIFT_PHOTOS
     || !Array.isArray(raw.engravings) || raw.engravings.length > MAX_ENGRAVING_LINES) fail();
@@ -51,10 +53,11 @@ export function parseGiftBoxPersonalizationIntent(raw) {
     if (engravings.length) fail();
     const line = raw.sticker;
     if (line !== null) {
-      if (!exact(line, ['text','styleId','colorId','optionId','application']) || !validateDraftEngraving(line.text) || !line.text.trim()
-        || !stickerStyle(line.styleId) || !acceptedColors.has(line.colorId) || !slug(line.optionId) || line.application !== STICKER_APPLICATION) fail();
-      sticker = { text: line.text, styleId: line.styleId, colorId: line.colorId, optionId: line.optionId, application: STICKER_APPLICATION };
+      if (!exact(line, ['text','styleId','colorId','optionId','application', ...(v3 ? ['placement'] : [])]) || !validateDraftEngraving(line.text) || !line.text.trim()
+        || !stickerStyle(line.styleId) || !acceptedColors.has(line.colorId) || !slug(line.optionId) || line.application !== (v3 ? 'exterior' : STICKER_APPLICATION) || v3 && (!validStickerPlacement(line.placement) || /\p{Script=Arabic}/u.test(line.text) && stickerStyle(line.styleId)?.language !== 'ar')) fail();
+      sticker = { text: line.text, styleId: line.styleId, colorId: line.colorId, optionId: line.optionId, application: v3 ? 'exterior' : STICKER_APPLICATION, ...(v3 ? {placement:{...line.placement}} : {}) };
     }
   }
+  if (v3 && !sticker) fail();
   return deepFreeze({ version: raw.version, photoPrints, engravings, ...(v2 ? { sticker } : {}) });
 }

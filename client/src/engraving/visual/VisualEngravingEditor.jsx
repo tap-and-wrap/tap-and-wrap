@@ -1,11 +1,13 @@
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
-import { FONT_REGISTRY, APPEARANCES } from '../../../../shared/engraving/definitions.mjs';
+import { FONT_REGISTRY } from '../../../../shared/engraving/definitions.mjs';
 import ImageSourceChooser from '../../components/ImageSourceChooser.jsx';
 import ConfirmationDialog from '../../components/ConfirmationDialog.jsx';
 import { authGeneration } from '../../services/api.js';
 import { subscribeSession } from '../../auth/session.js';
 import { clamp, emptyDesign, fitLayer, layerHeight, editLayer, validateDesign, createVisualDraft, restoreVisualDraft, designReadiness, newHistory, commitHistory, undoHistory, redoHistory, MAX_LAYERS } from './design.mjs';
 import './visual-editor.css';
+import LetteringControls from '../LetteringControls.jsx';
+import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Minus, Plus, Move } from 'lucide-react';
 
 const colors = { black: '#242020', white: '#ffffff', grey: '#888888' };
 
@@ -51,7 +53,7 @@ export async function imageRatio(file) {
   } finally { URL.revokeObjectURL(url); }
 }
 
-export function TextArtwork({ layer, font }) {
+export function TextArtwork({ layer, font, appearance }) {
   const [metrics, setMetrics] = useState(null);
   useEffect(() => {
     let current = true;
@@ -63,13 +65,13 @@ export function TextArtwork({ layer, font }) {
     }
     void measure().catch(() => {});
     return () => { current = false; };
-  }, [layer.text, font]);
+  }, [layer.text, font.id, font.family]);
   const lines = (layer.text || 'Your words').split('\n'), height = 1000 / layer.aspectRatio;
   const size = Math.min(1000 / ((metrics?.text === layer.text && metrics?.fontId === font.id ? metrics.width : 800) / 100 + .2), height / (lines.length * 1.4));
-  return <svg viewBox={`0 0 1000 ${height}`} aria-hidden="true" style={{ fontFamily: font.family, fill: colors[layer.color] }}><text textAnchor="middle" direction={/\p{Script=Arabic}/u.test(layer.text) ? 'rtl' : 'ltr'}>{lines.map((line, index) => <tspan key={index} x="500" y={height / 2 + (index - (lines.length - 1) / 2) * size * 1.3 + size * .28} fontSize={size}>{line || '\u00a0'}</tspan>)}</text></svg>;
+  return <svg viewBox={`0 0 1000 ${height}`} aria-hidden="true" style={{ fontFamily: font.family, fill: appearance || colors[layer.color] }}><text textAnchor="middle" direction={/\p{Script=Arabic}/u.test(layer.text) ? 'rtl' : 'ltr'}>{lines.map((line, index) => <tspan key={index} x="500" y={height / 2 + (index - (lines.length - 1) / 2) * size * 1.3 + size * .28} fontSize={size}>{line || '\u00a0'}</tspan>)}</text></svg>;
 }
 
-function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approvedFontIds = [], onChange, surfaceControls = true, confirmReset = false }) {
+function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approvedFontIds = [], onChange, surfaceControls = true, confirmReset = false, onError }) {
   const fonts = FONT_REGISTRY.filter(font => approvedFontIds.includes(font.id));
   const initial = useRef(null);
   if (!initial.current) {
@@ -90,7 +92,11 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
   const changeHandler = useRef(onChange); changeHandler.current = onChange;
   const approvedFonts = useRef(approvedFontIds); approvedFonts.current = approvedFontIds;
   const approvedFontKey = approvedFontIds.join(',');
-  const helpId = useId(), textId = useId();
+  const helpId = useId(), textId = useId(), errorRef = useRef(null);
+  const errorHandler = useRef(onError); errorHandler.current = onError;
+  const visibleError = error || (unsupportedError());
+  function unsupportedError() { return design.layers.some(item => item.type === 'text' && !fonts.some(font => font.id === item.fontId)) ? 'A saved text style is no longer approved. Select that text and choose a current style before continuing.' : ''; }
+  useEffect(() => { errorHandler.current?.(visibleError); if (visibleError && !errorHandler.current && errorRef.current?.getClientRects().length) errorRef.current.focus(); }, [visibleError]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => {
     // Metadata + memory-only resources. The host decides when/how to save using
@@ -121,7 +127,7 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
   }
   function addText() {
     if (!fonts.length || !design.surface || design.layers.length >= MAX_LAYERS) return;
-    const added = fitLayer({ id: crypto.randomUUID(), type: 'text', text: '', fontId: fonts[0].id, color: 'black', x: .5, y: .5, width: .45, aspectRatio: 3 }, design.surface.aspectRatio);
+    const added = fitLayer({ id: crypto.randomUUID(), type: 'text', text: '', fontId: (fonts.find(font => font.language === 'en') || fonts[0]).id, color: 'black', x: .5, y: .5, width: .45, aspectRatio: 3 }, design.surface.aspectRatio);
     commit({ ...design, layers: [...design.layers, added] }); setSelected(added.id);
   }
   function point(event) { const rect = board.current.getBoundingClientRect(); return { x: (event.clientX - rect.left) / rect.width, y: (event.clientY - rect.top) / rect.height }; }
@@ -179,9 +185,9 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
     const layers = [...design.layers]; [layers[index], layers[target]] = [layers[target], layers[index]]; commit({ ...design, layers });
   }
   const surfaceMissing = design.surface && !sources[design.surface.assetId];
-  const unsupported = design.layers.some(item => item.type === 'text' && !fonts.some(font => font.id === item.fontId));
   function resetDesign() { cancelGesture(); commit({ ...design, layers: [] }); setSelected(null); setResetTarget(null); }
   return <section className="visual-engraving" aria-label="Visual engraving editor">
+    {visibleError && !onError && <p ref={errorRef} tabIndex={-1} role="alert" className="sv-error">{visibleError}</p>}
     <header className="ve-heading"><div><p className="eyebrow">Make it personal</p><h2>Your engraving, your way</h2></div><div className="ve-history" aria-label="Design history"><button type="button" disabled={!history.past.length || Boolean(gesture.current)} onClick={() => { cancelGesture(); setHistory(undoHistory); }}>Undo</button><button type="button" disabled={!history.future.length || Boolean(gesture.current)} onClick={() => { cancelGesture(); setHistory(redoHistory); }}>Redo</button><button type="button" disabled={!design.layers.length} onClick={event => confirmReset ? setResetTarget(event.currentTarget) : resetDesign()}>Reset design</button></div></header>
     <div className="ve-layout"><div className="ve-workspace">
       <div className="ve-view-controls"><span>Workspace view</span><button type="button" aria-label="Zoom out workspace" disabled={zoom <= 1} onClick={() => setZoom(value => Math.max(1, value - .25))}>−</button><output aria-label="Workspace zoom">{Math.round(zoom * 100)}%</output><button type="button" aria-label="Zoom in workspace" disabled={zoom >= 3} onClick={() => setZoom(value => Math.min(3, value + .25))}>+</button><button type="button" onClick={() => { setZoom(1); viewport.current.scrollTo(0, 0); }}>Fit view</button></div>
@@ -198,18 +204,17 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
       </div></div>
       <p id={helpId} className="ve-help">Tap to place your selected design. Drag to move, use the corner to resize. Pinch to zoom the workspace.</p>
     </div><div className="ve-controls">
-      {surfaceControls && <section aria-label="Surface photo"><h3>Your surface</h3><ImageSourceChooser label={design.surface ? 'Replace surface photo' : 'Choose surface photo'} inputLabel="Surface photo" context="Engraving surface" maxBytes={8388608} onSelect={files => selectFile(files, 'surface')} onError={setError}/><p className="ve-help">Your surface and engraving artwork stay separate.</p></section>}
-      <section aria-label="Add design"><h3>2. Your design</h3><div className="ve-actions"><button type="button" disabled={!design.surface || !fonts.length || design.layers.length >= MAX_LAYERS} onClick={addText}>Add text</button><ImageSourceChooser label="Add image artwork" inputLabel="Image artwork" context="Engraving artwork" disabled={!design.surface || design.layers.length >= MAX_LAYERS} maxBytes={8388608} onSelect={files => selectFile(files, 'artwork')} onError={setError}/></div>{!fonts.length && <p className="ve-help">Approved text styles are not available for this item.</p>}
+      {surfaceControls && <section aria-label="Surface photo"><h3>Your surface</h3><ImageSourceChooser uploadArea helperText="Choose a clear photo of the area to engrave." label={design.surface ? 'Replace surface photo' : 'Choose surface photo'} inputLabel="Surface photo" context="Engraving surface" maxBytes={8388608} onSelect={files => selectFile(files, 'surface')} onError={setError}/><p className="ve-help">Your surface and engraving artwork stay separate.</p></section>}
+      <section aria-label="Add design"><h3>2. Your design</h3><div className="ve-actions"><button type="button" disabled={!design.surface || !fonts.length || design.layers.length >= MAX_LAYERS} onClick={addText}>Add text</button><ImageSourceChooser uploadArea helperText="Choose your original image, with all its colors." label="Add image artwork" inputLabel="Image artwork" context="Engraving artwork" disabled={!design.surface || design.layers.length >= MAX_LAYERS} maxBytes={8388608} onSelect={files => selectFile(files, 'artwork')} onError={setError}/></div>{!fonts.length && <p className="ve-help">Approved text styles are not available for this item.</p>}
         {design.layers.length > 0 && <div className="ve-layers" role="group" aria-label="Design layers">{design.layers.map((item, index) => <button type="button" key={item.id} aria-pressed={selected === item.id} onClick={() => setSelected(item.id)}>{index + 1}. {item.type === 'text' ? item.text.slice(0, 25) || 'Text' : 'Image artwork'}</button>)}</div>}
       </section>
       {layer && <section className="ve-selection" aria-label="Selected design controls"><h3>3. Make it yours</h3>
-        {layer.type === 'text' && <><label htmlFor={textId}>Your text</label><textarea id={textId} dir="auto" maxLength={500} value={layer.text} onChange={event => { const text = event.target.value, eligible = fonts.filter(font => !/\p{Script=Arabic}/u.test(text) || font.language === 'ar'); if (!eligible.length) { setError('No approved Arabic style is available for this item.'); return; } setError(''); patch({ text, fontId: eligible.some(font => font.id === layer.fontId) ? layer.fontId : eligible[0].id }); }}/><label>Lettering style<select value={layer.fontId} onChange={event => patch({ fontId: event.target.value })}>{fonts.filter(font => !/\p{Script=Arabic}/u.test(layer.text) || font.language === 'ar').map(font => <option value={font.id} key={font.id}>{font.label}</option>)}</select></label><fieldset className="ve-colors"><legend>Text appearance</legend>{APPEARANCES.map(color => <label key={color}><input type="radio" name={`${textId}-color`} checked={layer.color === color} onChange={() => patch({ color })}/><span style={{ background: colors[color] }}/>{color}</label>)}</fieldset></>}
-        <div className="ve-move" role="group" aria-label="Move selected design"><button type="button" onClick={() => move(0, -.02)}>Move up</button><button type="button" onClick={() => move(-.02, 0)}>Move left</button><button type="button" onClick={() => move(.02, 0)}>Move right</button><button type="button" onClick={() => move(0, .02)}>Move down</button><button type="button" onClick={() => patch({ x: .5, y: .5 })}>Center design</button></div>
-        <div className="ve-actions" role="group" aria-label="Design size"><button type="button" onClick={() => patch({ width: layer.width - .04 })}>Smaller design</button><button type="button" onClick={() => patch({ width: layer.width + .04 })}>Larger design</button></div>
+        {layer.type === 'text' && <><label htmlFor={textId}>Your text</label><textarea id={textId} dir="auto" maxLength={500} value={layer.text} onChange={event => { const text = event.target.value, eligible = fonts.filter(font => !/\p{Script=Arabic}/u.test(text) || font.language === 'ar'); if (!eligible.length) { setError('No approved Arabic style is available for this item.'); return; } setError(''); patch({ text, fontId: eligible.some(font => font.id === layer.fontId) ? layer.fontId : eligible[0].id }); }}/><LetteringControls text={layer.text} fontId={layer.fontId} color={layer.color} fontIds={approvedFontIds} onChange={patch}/></>}
+        <div className="ve-move" role="group" aria-label="Move selected design"><button type="button" onClick={() => move(0, -.02)} aria-label="Move up" title="Move up"><ArrowUp size={20} aria-hidden="true"/></button><button type="button" onClick={() => move(-.02, 0)} aria-label="Move left" title="Move left"><ArrowLeft size={20} aria-hidden="true"/></button><button type="button" onClick={() => move(.02, 0)} aria-label="Move right" title="Move right"><ArrowRight size={20} aria-hidden="true"/></button><button type="button" onClick={() => move(0, .02)} aria-label="Move down" title="Move down"><ArrowDown size={20} aria-hidden="true"/></button><button type="button" onClick={() => patch({ x: .5, y: .5 })} aria-label="Center design" title="Center design"><Move size={20} aria-hidden="true"/></button></div>
+        <div className="ve-actions" role="group" aria-label="Design size"><button type="button" onClick={() => patch({ width: layer.width - .04 })} aria-label="Smaller design" title="Smaller design"><Minus size={20} aria-hidden="true"/></button><button type="button" onClick={() => patch({ width: layer.width + .04 })} aria-label="Larger design" title="Larger design"><Plus size={20} aria-hidden="true"/></button></div>
         <div className="ve-actions"><button type="button" onClick={() => reorder(1)} disabled={design.layers.at(-1)?.id === layer.id}>Bring forward</button><button type="button" onClick={() => reorder(-1)} disabled={design.layers[0]?.id === layer.id}>Send backward</button><button type="button" onClick={() => { commit({ ...design, layers: design.layers.filter(item => item.id !== selected) }); setSelected(null); }}>Remove design</button></div>
       </section>}
-      {unsupported && <p role="alert">A saved text style is no longer approved. Select that text and choose a current style before continuing.</p>}
-      {error && <p role="alert">{error}</p>}
+
     </div></div>
     {resetTarget && <ConfirmationDialog title="Reset your engraving design?" description="Your text and artwork will be cleared. Your surface photo stays ready." returnFocus={resetTarget} onCancel={() => setResetTarget(null)} onConfirm={resetDesign} confirmLabel="Reset design" cancelLabel="Keep editing"/>}
   </section>;

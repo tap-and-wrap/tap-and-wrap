@@ -41,13 +41,14 @@ for (const width of [390, 1440]) test(`text/image placement, resizing, zoom and 
   await surfaceReady(page, surface); await page.getByRole('button', { name: 'Add text', exact: true }).click();
   await page.getByLabel('Your text', { exact: true }).fill('ذكرى جميلة');
   await expect(page.locator('.ve-layer text')).toHaveAttribute('direction', 'rtl');
-  await page.getByLabel('Lettering style').selectOption('engraving-arefruqaa-v1');
+  await page.getByRole('button', { name: 'Arabic style 2', exact: true }).click();
   await page.getByRole('radio', { name: 'grey', exact: true }).check();
   await page.getByRole('button', { name: 'Move left', exact: true }).click();
   const before = (await snapshot(page)).design.layers[0];
   await page.getByRole('button', { name: 'Larger design', exact: true }).click();
   expect((await snapshot(page)).design.layers[0].width).toBeGreaterThan(before.width);
   await addImage(page, artwork);
+  await page.locator('.ve-board').scrollIntoViewIfNeeded();
   const board = await page.locator('.ve-board').boundingBox();
   await page.mouse.click(board.x + board.width * .25, board.y + board.height * .27);
   await expect.poll(async () => (await snapshot(page)).design.layers[1].x).toBeCloseTo(.25, 1);
@@ -181,10 +182,11 @@ test('host receives readiness changes when a font approval is withdrawn', async 
   await page.getByRole('button', { name: 'Add text', exact: true }).click();
   await page.getByLabel('Your text', { exact: true }).fill('A memory');
   await expect.poll(() => page.evaluate(() => window.visualReadiness.ready)).toBe(true);
+  const approvedFont = (await snapshot(page)).design.layers[0].fontId;
   await page.evaluate(() => window.setApprovedEditorFonts([]));
   await expect(page.getByRole('alert')).toContainText('no longer approved');
   await expect.poll(() => page.evaluate(() => window.visualReadiness.ready)).toBe(false);
-  await page.evaluate(() => window.setApprovedEditorFonts(['engraving-amiri-v1']));
+  await page.evaluate(id => window.setApprovedEditorFonts([id]), approvedFont);
   await expect.poll(() => page.evaluate(() => window.visualReadiness.ready)).toBe(true);
 });
 
@@ -195,4 +197,19 @@ test('an unavailable approved background fails readiness without discarding save
   await expect(page.getByText('This surface photo is unavailable. Choose or open it again.')).toBeVisible();
   expect((await snapshot(page)).design.surface.assetId).toBe('product-image');
   expect(await page.evaluate(() => window.visualReadiness.issues)).toContain('surface_unavailable');
+});
+
+test('language gallery follows Arabic input with approved font IDs and unchanged appearance values', async ({page})=>{
+ const {surface}=await open(page);await surfaceReady(page,surface);await page.getByRole('button',{name:'Add text',exact:true}).click();
+ await page.getByRole('tab',{name:'English',exact:true}).click();await page.getByRole('button',{name:'English style 2',exact:true}).click();await page.getByLabel('Your text',{exact:true}).fill('\u0628\u0643\u0644 \u0627\u0644\u062d\u0628');
+ await expect(page.getByRole('tab',{name:'Arabic',exact:true})).toHaveAttribute('aria-selected','true');expect((await snapshot(page)).design.layers[0].fontId).toBe('engraving-amiri-v1');
+ for(const [color,hex]of [['black','rgb(36, 32, 32)'],['white','rgb(255, 255, 255)'],['grey','rgb(136, 136, 136)']]){await page.getByRole('radio',{name:color,exact:true}).check();await expect(page.locator('.ve-layer svg')).toHaveCSS('fill',hex);}
+});
+
+test('long English and Arabic text keep the mobile gallery and workspace within the viewport',async({page},info)=>{
+ const {surface}=await open(page,320);await surfaceReady(page,surface);await page.getByRole('button',{name:'Add text',exact:true}).click();
+ for(const [language,text]of [['en','Every beautiful memory stays close to our hearts, today and always.'],['ar','\u0623\u062c\u0645\u0644 \u0627\u0644\u0630\u0643\u0631\u064a\u0627\u062a \u062a\u0628\u0642\u0649 \u0641\u064a \u0627\u0644\u0642\u0644\u0628 \u0648\u062a\u0646\u064a\u0631 \u0623\u064a\u0627\u0645\u0646\u0627 \u0628\u0627\u0644\u062d\u0628 \u0648\u0627\u0644\u0641\u0631\u062d']]){
+  await page.getByLabel('Your text',{exact:true}).fill(text);await expect(page.locator('.ve-layer text')).toHaveAttribute('direction',language==='ar'?'rtl':'ltr');expect((await snapshot(page)).design.layers[0].text).toBe(text);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:info.outputPath(`long-${language}-320.png`),fullPage:true});
+ }
 });

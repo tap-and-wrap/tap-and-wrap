@@ -1,3 +1,5 @@
+import { StickerProof } from '../gift-box/StickerWorkspace.jsx';
+import { defaultStickerPlacement } from '../../../shared/gift-box/sticker-placement.mjs';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
@@ -227,6 +229,7 @@ export default function GiftBoxBuilderPage() {
           {review ? <div className="gb-review">
             <p className="gb-review-dedication">A thoughtful gift, made your way.</p>
             <ul className="gb-review-highlights"><li>{label(state.boxId)}</li>{Object.entries(quantities).map(([id,quantity])=><li key={id}>{quantity} × {label(id)}</li>)}{state.ribbonId && <li>{label(state.ribbonId)}</li>}{personal.photos.length > 0 && <li>{personal.photos.length} photo prints</li>}{personal.sticker.enabled && <li>Personalized sticker: <bdi>{personal.sticker.text}</bdi></li>}</ul>
+            {personal.sticker.enabled && defaultStickerPlacement(state.boxId) && <StickerProof sticker={personal.sticker} placement={personal.sticker.placements?.[state.boxId] || defaultStickerPlacement(state.boxId)}/>}
             {personal.hasContent && personalPriceEstimate === null && <p role="alert">Personalization is unavailable or incomplete. Review your photos and sticker before adding to cart.</p>}
             {!canPurchase && <p className="gb-purchase-unavailable">Online ordering for this gift is currently unavailable.</p>}
             <div className="gb-review-edit"><h3><Pencil size={17} aria-hidden="true"/> Edit your gift</h3><div>{[['Box',0],['Contents',1],['Personalization',4],['Finishing touches',5]].map(([title,index]) => <button key={title} type="button" disabled={addingGift} onClick={() => navigate(index)}>{title}<ArrowRight size={16} aria-hidden="true"/></button>)}</div></div>

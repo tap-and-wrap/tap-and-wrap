@@ -1,3 +1,4 @@
+import { StickerProof } from '../gift-box/StickerWorkspace.jsx';
 import { customerGiftComponentName } from '../../../shared/gift-box/customer-label.mjs';
 import { useEffect, useRef, useState } from 'react';
 import { ASSET_VERSION } from '../../../shared/gift-box/definitions.mjs';
@@ -21,7 +22,7 @@ export default function CustomerGiftDesign({ giftBox, orderId }) {
     && Array.isArray(config.placements) && config.placements.every(item => [item.x,item.y,item.width,item.height].every(Number.isFinite) && item.width > 0 && item.height > 0 && item.x >= 0 && item.y >= 0 && item.x + item.width <= 1.000001 && item.y + item.height <= 1.000001)
     && (!config.selection.ribbonId || config.ribbonPlacement);
   const photos = giftBox?.personalization?.photoPrints || [];
-  const photoCoordinatesSupported = !photos.length || giftBox?.personalization?.version === 'gift-box-personalization-intent-v2';
+  const photoCoordinatesSupported = !photos.length || ['gift-box-personalization-intent-v2','gift-box-personalization-intent-v3'].includes(giftBox?.personalization?.version);
   const sticker = giftBox?.personalization?.sticker;
   async function showPhotos() {
     const generation = sessionSnapshot().generation;
@@ -48,6 +49,6 @@ export default function CustomerGiftDesign({ giftBox, orderId }) {
       {error && <p role="alert">{error}</p>}
       <ul>{config.placements.map(item => <li key={item.instanceId}>{customerGiftComponentName(giftBox.components.find(component => component.componentId === item.componentId)) || item.componentId} - {item.zone}</li>)}{config.ribbonPlacement && <li>Ribbon - {config.ribbonPlacement.zone}</li>}{photos.map((photo,index) => <li key={photo.uploadId}>Photo {index+1} - {photo.zone} - {money(photo.pricePiastres)}</li>)}</ul>
     </> : <p>This historical order does not contain a complete supported visual design. Use the saved component and placement instructions below.</p>}
-    {sticker && <div className="gb-saved-sticker"><h3>Personalized sticker</h3><p>Apply to exterior front</p><p dir="auto" style={{ fontFamily:`"${stickerStyle(sticker.styleId)?.fontFamily}"`, color:getEngravingColor(sticker.colorId).hex, background:getEngravingColor(sticker.colorId).contrast === 'dark' ? '#62483f' : '#fff', fontSize:'2rem',padding:'12px' }}>{sticker.text}</p><p>{stickerStyle(sticker.styleId)?.label || sticker.styleId} - {getEngravingColor(sticker.colorId).label} - {money(sticker.pricePiastres)}</p></div>}
+    {sticker && <div className="gb-saved-sticker"><h3>Personalized sticker</h3><p>{sticker.placement ? sticker.placement.view === 'exterior' ? 'Exterior sticker' : `${sticker.placement.view} side` : 'Apply to exterior front'}</p>{sticker.placement ? <StickerProof sticker={sticker} placement={sticker.placement}/> : <p dir="auto" style={{ fontFamily:`"${stickerStyle(sticker.styleId)?.fontFamily}"`, color:getEngravingColor(sticker.colorId).hex, background:getEngravingColor(sticker.colorId).contrast === 'dark' ? '#62483f' : '#fff', fontSize:'2rem',padding:'12px' }}>{sticker.text}</p>}<p>{stickerStyle(sticker.styleId)?.label || sticker.styleId} - {getEngravingColor(sticker.colorId).label} - {money(sticker.pricePiastres)}</p></div>}
   </section>;
 }

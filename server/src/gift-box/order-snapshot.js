@@ -1,3 +1,4 @@
+import { validStickerPlacement } from '../../../shared/gift-box/sticker-placement.mjs';
 import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 import { validEngravingLine } from '../engraving/contracts.js';
 import { z } from 'zod';
@@ -39,8 +40,8 @@ const personalizedPhoto = z.object({ uploadId: z.string().regex(/^[a-f0-9]{24}$/
   x: z.number().min(0).max(1), y: z.number().min(0).max(1), aspectRatio:z.number().finite().min(1/12000).max(12000).optional(), pricePiastres: integer, optionRevision: integer, priceApprovedAt: timestamp }).strict();
 const personalizedEngraving = z.object({ text: z.string().min(1).max(500), styleId: text, colorId: text, surfaceOptionId: text,
   pricePiastres: integer, optionRevision: integer, priceApprovedAt: timestamp }).strict();
-const personalizedSticker = z.object({ text: z.string().min(1).max(500), styleId: text, colorId: text, optionId: text, application: z.literal('exterior-front'), pricePiastres: integer, optionRevision: integer, priceApprovedAt: timestamp }).strict();
-const personalizedSnapshot = z.object({ version: z.enum(['gift-box-personalization-intent-v1','gift-box-personalization-intent-v2']), sticker: personalizedSticker.nullable().optional(),
+const personalizedSticker = z.object({ text: z.string().min(1).max(500), styleId: text, colorId: text, optionId: text, application: z.enum(['exterior-front','exterior']), placement: z.custom(validStickerPlacement).optional(), pricePiastres: integer, optionRevision: integer, priceApprovedAt: timestamp }).strict();
+const personalizedSnapshot = z.object({ version: z.enum(['gift-box-personalization-intent-v1','gift-box-personalization-intent-v2','gift-box-personalization-intent-v3']), sticker: personalizedSticker.nullable().optional(),
   photoPrints: z.array(personalizedPhoto).max(48), engravings: z.array(personalizedEngraving).max(24),
   unitAdjustmentPiastres: integer }).strict();
 const claim = z.object({ kind: z.literal('gift_box_component'), id: text, mode, quantity,
@@ -102,7 +103,8 @@ export const giftBoxOrderLineInput = z.object({
       if (personal.photoPrints.length !== intent.photoPrints.length || personal.engravings.length !== intent.engravings.length
         || personal.photoPrints.some((photo, index) => ['uploadId','printOptionId','zone','x','y','aspectRatio'].some(key => photo[key] !== intent.photoPrints[index]?.[key]))
         || personal.engravings.some((entry, index) => ['text','styleId','colorId','surfaceOptionId'].some(key => entry[key] !== intent.engravings[index]?.[key]))) fail('Order attachments and engraving choices must match the selected Gift Box.');
-      if (personal.version !== intent.version || JSON.stringify(personal.sticker && Object.fromEntries(['text','styleId','colorId','optionId','application'].map(key => [key,personal.sticker[key]])) || null) !== JSON.stringify(intent.sticker || null)) fail('Save the exact sticker selection and application.');
+      if (personal.version !== intent.version || JSON.stringify(personal.sticker && Object.fromEntries(['text','styleId','colorId','optionId','application', ...(intent.version === 'gift-box-personalization-intent-v3' ? ['placement'] : [])].map(key => [key,personal.sticker[key]])) || null) !== JSON.stringify(intent.sticker || null)) fail('Save the exact sticker selection and application.');
+      if (personal.sticker?.placement && (personal.version !== 'gift-box-personalization-intent-v3' || personal.sticker.placement.boxId !== selection.boxId)) fail('Save the matching sticker proof version and box.');
       let personalTotal = 0;
       for (const entry of [...personal.photoPrints, ...personal.engravings, ...(personal.sticker ? [personal.sticker] : [])]) personalTotal = addPiastres(personalTotal, entry.pricePiastres);
       if (personalTotal !== personal.unitAdjustmentPiastres) fail('Charge each print and engraving exactly once.');
@@ -124,7 +126,7 @@ export function giftBoxOrderLine(quoted) {
     giftBox: { snapshotVersion: quoted.giftPersonalization ? PERSONAL_GIFT_BOX_ORDER_SNAPSHOT_VERSION : GIFT_BOX_ORDER_SNAPSHOT_VERSION,
       configuration: quoted.configuration, configurationId: quoted.configurationId, components,
       ...(quoted.giftPersonalization ? { personalization: { version: quoted.giftPersonalization.version,
-        ...(quoted.giftPersonalization.version === 'gift-box-personalization-intent-v2' ? { sticker: quoted.giftPersonalization.sticker } : {}),
+        ...(['gift-box-personalization-intent-v2','gift-box-personalization-intent-v3'].includes(quoted.giftPersonalization.version) ? { sticker: quoted.giftPersonalization.sticker } : {}),
         photoPrints: quoted.giftPersonalization.photoPrints, engravings: quoted.giftPersonalization.engravings,
         unitAdjustmentPiastres: quoted.giftPersonalization.unitAdjustmentPiastres } } : {}),
       fulfillment: quoted.giftFulfillment,

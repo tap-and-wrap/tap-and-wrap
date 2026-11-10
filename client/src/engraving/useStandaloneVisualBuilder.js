@@ -70,7 +70,7 @@ export default function useStandaloneVisualBuilder(saved, editId) {
     if (!draft.visual.design.surface || !draft.visual.assets[draft.visual.design.surface.assetId]) return 'Add a photo of the exact surface you want engraved.';
     if (draft.visual.itemPhotos.some(id => !draft.visual.assets[id])) return 'Replace or remove the unavailable overall item photo.';
     if (type.typeId === 'other' && !draft.description.trim()) return 'Briefly describe your item.';
-    if (draft.placement.kind === 'selected' && !type.placements.some(value => value.id === draft.placement.placementId && value.status === 'active')) return 'Choose an available position suggestion or ask us to help.';
+
     if (designRequired && (!ready || !designReadiness(draft.visual.design, { approvedFontIds: type.fontIds, availableAssetIds: Object.keys(draft.visual.assets) }).ready)) return 'Add your text or artwork and replace any missing design photos.';
     return '';
   }

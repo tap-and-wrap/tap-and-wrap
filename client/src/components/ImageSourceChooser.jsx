@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { authGeneration } from '../services/api.js';
 import { IMAGE_TYPES, ImageSelectionError, prepareSelectedImages } from './selected-images.mjs';
 import './image-source.css';
+import { ImagePlus } from 'lucide-react';
 
 export { IMAGE_FORMAT_HELP } from './selected-images.mjs';
-export default function ImageSourceChooser({ label = 'Upload Image', context, multiple = false, disabled = false, onSelect, describedBy, invalid = false, maxBytes = 10 * 1024 * 1024, maxFiles = multiple ? 48 : 1, maxTotalBytes, acceptedTypes = IMAGE_TYPES, onError, inputLabel }) {
+export default function ImageSourceChooser({ label = 'Upload Image', context, multiple = false, disabled = false, onSelect, describedBy, invalid = false, maxBytes = 10 * 1024 * 1024, maxFiles = multiple ? 48 : 1, maxTotalBytes, acceptedTypes = IMAGE_TYPES, onError, inputLabel, uploadArea = false, helperText }) {
   const [preparing,setPreparing] = useState(false), [error,setError] = useState('');
   const inputRef = useRef(null), pending = useRef(null), active = useRef(false), pickerGeneration = useRef(null);
   useEffect(() => { active.current = true;return () => { active.current = false;pending.current?.abort(); }; }, []);
@@ -40,7 +41,7 @@ export default function ImageSourceChooser({ label = 'Upload Image', context, mu
     }
   }
   return <>
-    <button type="button" className="image-upload-button button button-secondary" aria-label={context ? `${context}: ${label}` : undefined} aria-describedby={describedBy} aria-invalid={invalid || Boolean(error) || undefined} disabled={disabled || preparing} onClick={choose}>{preparing ? 'Preparing image...' : label}</button>
+    <button type="button" className={`image-upload-button button button-secondary${uploadArea ? ' image-upload-area' : ''}`} aria-label={context ? `${context}: ${label}` : uploadArea ? label : undefined} aria-describedby={describedBy} aria-invalid={invalid || Boolean(error) || undefined} disabled={disabled || preparing} onClick={choose}>{uploadArea && <ImagePlus size={26} aria-hidden="true"/>}<span>{preparing ? 'Preparing image...' : label}{uploadArea && helperText && <small>{helperText}</small>}</span></button>
     {/* WAM home-reference pattern: no accept/capture hint restricting Android's native actions.
         Signature, size and decode validation still run before any selection is delivered. */}
     <input ref={inputRef} type="file" hidden tabIndex={-1} aria-hidden="true" aria-label={inputLabel} multiple={multiple} disabled={disabled} onChange={select} />

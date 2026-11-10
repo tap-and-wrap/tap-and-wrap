@@ -69,7 +69,7 @@ function giftBox(value, { admin }) {
       && Array.isArray(value.personalization.engravings) ? { personalization: {
         version: value.personalization.version,
         photoCount: value.personalization.photoPrints.length,
-        ...(value.personalization.sticker ? { sticker: pick(value.personalization.sticker, ['text','styleId','colorId','optionId','application','pricePiastres']) } : {}),
+        ...(value.personalization.sticker ? { sticker: pick(value.personalization.sticker, ['text','styleId','colorId','optionId','application','placement','pricePiastres']) } : {}),
         unitAdjustmentPiastres: value.personalization.unitAdjustmentPiastres,
         engravings: value.personalization.engravings.map(item => pick(item, ['text','styleId','colorId','surfaceOptionId','pricePiastres'])),
         ...(admin ? { photoPrints: value.personalization.photoPrints.map(item => pick(item, ['uploadId','printOptionId','zone','x','y','aspectRatio','pricePiastres'])) } : {}),
