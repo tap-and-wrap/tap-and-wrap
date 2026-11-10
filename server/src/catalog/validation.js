@@ -61,7 +61,7 @@ const productFields = {
   visibility: z.enum(['hidden', 'public', 'withdrawn']).optional(),
   sku: boundedText(100).optional(),
   variants: z.array(variantSchema).max(30).optional(),
-  personalization: z.object({ photoSpacesVersion: z.number().int().positive().optional(), photoSpaces: z.array(z.object({ key: z.string().regex(/^photo_[a-z0-9_]{1,43}$/), label: boundedText(160).min(1), instructions: boundedText(500).default('') }).strict()).max(10).optional(), requiredBeforePurchase: bool.optional(), fields: z.array(personalizationFieldSchema).max(20) }).strict().optional(),
+  personalization: z.object({ acceptCustomerPhotos: bool.optional(), customerPhotosVersion: z.number().int().positive().optional(), photoSpacesVersion: z.number().int().positive().optional(), photoSpaces: z.array(z.object({ key: z.string().regex(/^photo_[a-z0-9_]{1,43}$/), label: boundedText(160).min(1), instructions: boundedText(500).default('') }).strict()).max(10).optional(), requiredBeforePurchase: bool.optional(), fields: z.array(personalizationFieldSchema).max(20) }).strict().optional(),
   customization: z.object({
     enabled: bool.optional(),
     templateId: objectId.nullable().optional(),

@@ -301,6 +301,8 @@ export async function createProduct(input, { actor } = {}) {
   assertDatabaseWriteAllowed(Product.db, env);
   return catalogTransaction(async (session) => {
     await validateCatalogCategoryReferences(input.categoryId, input.subcategoryId, { session, fence: true });
+    if (input.personalization?.acceptCustomerPhotos === true) input.personalization.customerPhotosVersion = 1;
+    else if (input.personalization) delete input.personalization.customerPhotosVersion;
     if (input.personalization?.photoSpaces?.length) input.personalization.photoSpacesVersion = 1;
     else if (input.personalization) delete input.personalization.photoSpacesVersion;
     if (input.productEngraving) { if (!input.galleryKeys?.includes(input.productEngraving.imageKey)) throw catalogError(400, 'INVALID_ENGRAVING_SURFACE', 'Select a surface from this product gallery.'); input.productEngraving = { ...input.productEngraving, version: 1 }; }
@@ -348,6 +350,8 @@ export async function updateProduct(id, input, { actor } = {}) {
     patch.personalization = { ...current, ...patch.personalization, ...(spaces !== undefined ? { photoSpaces: spaces } : {}) };
     if (spaces?.length || current.photoSpacesVersion) patch.personalization.photoSpacesVersion = (current.photoSpacesVersion || 0) + (changed ? 1 : 0) || 1;
     else delete patch.personalization.photoSpacesVersion;
+    if (patch.personalization.acceptCustomerPhotos === true || current.customerPhotosVersion) patch.personalization.customerPhotosVersion = (current.customerPhotosVersion || 0) + (Boolean(current.acceptCustomerPhotos) !== Boolean(patch.personalization.acceptCustomerPhotos) ? 1 : 0) || 1;
+    else delete patch.personalization.customerPhotosVersion;
   }
   product.set(patch);
   assertDatabaseWriteAllowed(Product.db, env);

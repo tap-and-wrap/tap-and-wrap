@@ -15,8 +15,9 @@ function OwnedPhotos({ purchase, values, orderId, admin = false }) {
     controller.current?.abort(); const abort = new AbortController(); controller.current = abort; setPending(true); setError('');
     const opened = [];
     try {
-      for (const slot of purchase.slots) {
-        const id = values?.[slot.key]?.[0]; if (!/^[a-f0-9]{24}$/i.test(id || '')) throw Error('A photo is missing. Edit the item to replace it.');
+      const entries = purchase.contractVersion === 'product-photos-v2' ? (values?.[purchase.collectionKey] || []).map((id, index) => ({ id, key: `collection-${index}`, label: `Personal photo ${index + 1}` })) : (purchase.slots || []).map(slot => ({ ...slot, id: values?.[slot.key]?.[0] }));
+      for (const slot of entries) {
+        const id = slot.id; if (!/^[a-f0-9]{24}$/i.test(id || '')) throw Error('A photo is missing. Edit the item to replace it.');
         const result = await api.get(admin ? `/admin/commerce/orders/${orderId}/files/${id}` : `/commerce/uploads/${id}/content`, { responseType: 'blob', signal: abort.signal });
         opened.push({ ...slot, url: URL.createObjectURL(result.data), type: result.data.type });
       }

@@ -1,5 +1,5 @@
 import { Product } from '../models/Product.js';
-import { optionalPhotoFields } from '../../../shared/product-personalization.mjs';
+import { legacyPhotoFields, optionalPhotoFields } from '../../../shared/product-personalization.mjs';
 import { photoEditFingerprint } from './product-photos.js';
 import { productEngravingRoutes, adminProductEngravingRoutes } from '../product-engraving/routes.js';
 import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
@@ -188,8 +188,9 @@ commerceRoutes.get('/product-photos/cart/:lineId', async (req, res) => {
   const cart = await readCart(req.commerceOwner), line = cart?.items.find(item => item.id === uuid.parse(req.params.lineId) && item.kind === 'product' && !item.productEngraving);
   if (!line) throw commerceError(404, 'CART_ITEM_NOT_FOUND', 'This ready-made product is unavailable.');
   const product = await Product.findById(line.productId).select('personalization').lean().maxTimeMS(3000);
-  if (!line.photoSelection && !optionalPhotoFields(product?.personalization).length) throw commerceError(404, 'CART_ITEM_NOT_FOUND', 'This product has no personal photo choices.');
-  const photoSelection = line.photoSelection || { contractVersion: 'product-photos-v1', mode: 'as_is', configurationVersion: product.personalization.photoSpacesVersion };
+  if (!line.photoSelection && !optionalPhotoFields(product?.personalization).length && !legacyPhotoFields(product?.personalization).length) throw commerceError(404, 'CART_ITEM_NOT_FOUND', 'This product has no personal photo choices.');
+  const modern = optionalPhotoFields(product?.personalization).length > 0;
+  const photoSelection = line.photoSelection || { contractVersion: modern ? 'product-photos-v2' : 'product-photos-v1', mode: 'as_is', configurationVersion: modern ? product.personalization.customerPhotosVersion : product.personalization.photoSpacesVersion };
   res.json({ ok: true, data: { line: { ...line, photoSelection }, editFingerprint: photoEditFingerprint(line) } });
 });
 commerceRoutes.use(engravingRoutes);

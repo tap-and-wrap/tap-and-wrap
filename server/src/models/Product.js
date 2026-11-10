@@ -1,7 +1,7 @@
 import { productEngravingConfigurationInput } from '../product-engraving/contracts.js';
 import mongoose from 'mongoose';
 import { inventorySchema, catalogIdentityFields, importMetadataFields, boundedArray, safeInteger } from '../catalog/fields.js';
-import { photoSpaceIssues, productPersonalizationIssues } from '../../../shared/product-personalization.mjs';
+import { customerPhotoIssues, photoSpaceIssues, productPersonalizationIssues } from '../../../shared/product-personalization.mjs';
 
 const attributeSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true, maxlength: 80 },
@@ -36,6 +36,8 @@ fieldSchema.pre('validate', function () {
   if (this.type === 'select' && (!this.choices.length || this.choices.some(x => !x.trim() || x.length > 160) || new Set(this.choices).size !== this.choices.length)) this.invalidate('choices', 'Selection fields require distinct, nonempty choices');
 });
 const personalizationSchema = new mongoose.Schema({
+  acceptCustomerPhotos: { type: Boolean },
+  customerPhotosVersion: { type: Number, min: 1, validate: Number.isSafeInteger },
   photoSpacesVersion: { type: Number, min: 1, validate: Number.isSafeInteger },
   photoSpaces: { type: [new mongoose.Schema({ key: { type: String, required: true }, label: { type: String, required: true, maxlength: 160 }, instructions: { type: String, default: '', maxlength: 500 } }, { _id: false, strict: 'throw' })], default: undefined, validate: boundedArray(10) },
   requiredBeforePurchase: { type: Boolean },
@@ -78,6 +80,7 @@ const schema = new mongoose.Schema({
 }, { timestamps: true, strict: 'throw', optimisticConcurrency: true });
 
 schema.pre('validate', function () {
+  if (customerPhotoIssues(this.personalization).length) this.invalidate('personalization.acceptCustomerPhotos', customerPhotoIssues(this.personalization)[0]);
   if (photoSpaceIssues(this.personalization).length) this.invalidate('personalization.photoSpaces', photoSpaceIssues(this.personalization)[0]);
   if (this.purchaseSetup?.version === 1 || this.visibility === 'public') for (const issue of productPersonalizationIssues(this.personalization)) this.invalidate('personalization.fields', issue);
   this.published = this.visibility === 'public';
