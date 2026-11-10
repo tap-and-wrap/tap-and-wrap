@@ -1,3 +1,4 @@
+import { photoPurchase } from './product-photos.js';
 import { quoteProductEngraving, productEngravingSummary } from '../product-engraving/service.js';
 import { createHash } from 'node:crypto';
 import mongoose from 'mongoose';
@@ -73,7 +74,8 @@ export async function quoteCartLine(line, owner, { session, context } = {}) {
   if (!inventoryCanOrder(stock) || (stock.mode === 'tracked' && stock.quantity < line.quantity)) throw commerceError(409, 'INSUFFICIENT_STOCK', 'The requested quantity is unavailable.');
   const basePrice = variant?.pricePiastres == null ? product.pricePiastres : variant.pricePiastres;
   if (!Number.isSafeInteger(basePrice) || basePrice <= 0) throw commerceError(409, 'PRICE_REQUIRED', 'Request the price of this selection before ordering.');
-  const definitions = productPersonalizationFields(product.personalization);
+  const photos = photoPurchase(product, line);
+  const definitions = [...productPersonalizationFields(product.personalization), ...photos.fields];
   const personalized = await validateFields(definitions, line.personalization || {}, owner, { productId: product._id, session, context });
   let adjustment = 0, customization = null, customValues = null, componentClaims = [], extraUploads = [];
   if (line.customization && product.personalization?.requiredBeforePurchase === true) throw commerceError(400, 'INVALID_CUSTOMIZATION', 'Product personalization uses the approved product price, without template adjustments.');
@@ -90,7 +92,7 @@ export async function quoteCartLine(line, owner, { session, context } = {}) {
   const uploadIds = [...personalized.uploadIds, ...extraUploads, ...(engraving?.uploadIds || [])];
   if (new Set(uploadIds).size !== uploadIds.length || uploadIds.length > 10) throw commerceError(400, 'INVALID_PHOTOS', 'Use at most ten distinct photos or artwork images per item.');
   const unitPricePiastres = checkedMoney(basePrice + adjustment);
-  const identityData = { productId: String(product._id), variantKey: variant?.key || null, personalization: personalized.values, customization: customValues, ...(engraving ? { productEngraving: line.productEngraving } : {}) };
+  const identityData = { productId: String(product._id), variantKey: variant?.key || null, personalization: personalized.values, customization: customValues, ...(photos.selection ? { photoSelection: photos.selection } : {}), ...(engraving ? { productEngraving: line.productEngraving } : {}) };
   return {
     id: line.id, ...identityData, identity: fingerprint(identityData), name: product.name, slug: product.slug,
     sku: variant?.sku || product.sku || '', description: product.description || '',
@@ -99,11 +101,12 @@ export async function quoteCartLine(line, owner, { session, context } = {}) {
     quantity: line.quantity, stockQuantityLimit: stock.mode === 'tracked' ? stock.quantity : null,
     maxQuantity: stock.mode === 'tracked' ? Math.min(99, stock.quantity) : 99, mainImageUrl: mediaUrlForKey(product.mainImageKey), unitPricePiastres,
     requiresPersonalization: product.personalization?.requiredBeforePurchase === true,
-    personalizationDefinitions: definitions.map(field => ({ key: field.key, label: field.label, type: field.type })),
+    personalizationDefinitions: definitions.map(field => ({ key: field.key, label: field.label, type: field.type, ...(field.photoSlot ? { photoSlot: true, instructions: field.instructions } : {}) })),
     lineTotalPiastres: checkedMoney(unitPricePiastres * line.quantity), customizationSnapshot: customization, uploadIds,
     inventoryClaims: [{ kind: 'product', id: String(product._id), variantKey: variant?.key || null, quantity: line.quantity, mode: stock.mode, expectedUpdatedAt: product.updatedAt },
       ...componentClaims.map(claim => ({ ...claim, quantity: checkedMoney(claim.quantityPerUnit * line.quantity) }))],
     ...(engraving ? { productEngravingSnapshot: { ...engraving, basePricePiastres: basePrice, snapshotVersion: 'product-engraving-order-v1' } } : {}),
+    ...(photos.snapshot ? { photoPurchase: photos.snapshot } : {}),
     priceVersion: product.updatedAt?.toISOString(), valid: true,
   };
 }

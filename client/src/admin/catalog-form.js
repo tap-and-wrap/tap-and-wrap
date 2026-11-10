@@ -123,7 +123,7 @@ export function createProductPayload(draft) {
   }
   return {
     ...(draft.productEngravingEdited ? { productEngraving: draft.productEngraving ? Object.fromEntries(Object.entries({ ...draft.productEngraving, materials: draft.productEngraving.materials.map(value => value.trim()).filter(Boolean), placements: draft.productEngraving.placements.map(value => value.trim()).filter(Boolean) }).filter(([key]) => key !== 'version')) : null } : {}),
-    ...(draft.personalizationEdited ? { personalization: draft.personalization } : {}),
+    ...(draft.personalizationEdited ? { personalization: Object.fromEntries(Object.entries(draft.personalization).filter(([key]) => key !== 'photoSpacesVersion')) } : {}),
     ...(draft.engravingEdited ? { engravingRequest: { ...draft.engravingRequest, ...Object.fromEntries(['fonts', 'placements', 'materials'].map(key => [key, (draft.engravingRequest[key] || []).map(value => value.trim()).filter(Boolean)])) } } : {}),
     ownerWorkflow: true,
     optionStructure: draft.optionStructure,

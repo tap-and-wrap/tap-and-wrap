@@ -5,7 +5,7 @@ import { requireEngraving } from '../engraving/configuration.js';
 import { requireCollectionAuthorization } from '../engraving/payment-policy.js';
 import { Order } from '../models/Order.js';
 import { assertRequestIntakeOpen } from './request-intake.js';
-import { productPersonalizationFields } from '../../../shared/product-personalization.mjs';
+import { optionalPhotoFields, productPersonalizationFields } from '../../../shared/product-personalization.mjs';
 import { getFixedComponent } from '../../../shared/gift-box/definitions.mjs';
 import mongoose from 'mongoose';
 import { randomUUID } from 'node:crypto';
@@ -120,7 +120,7 @@ async function policyForUpload(owner, body) {
   const product = await loadEligibleProduct(body.productId);
   let field;
   if (body.purpose === 'personalization') {
-    field = productPersonalizationFields(product.personalization).find(candidate => candidate.key === body.fieldKey && candidate.type === 'image');
+    field = [...productPersonalizationFields(product.personalization), ...optionalPhotoFields(product.personalization)].find(candidate => candidate.key === body.fieldKey && candidate.type === 'image');
   } else if (artworkPolicyResolver) {
     field = await artworkPolicyResolver(product, body.fieldKey, body);
   }

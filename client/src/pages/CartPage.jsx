@@ -1,3 +1,4 @@
+import SavedProductPhotos from '../product-photos/SavedProductPhotos.jsx';
 import SavedProductEngraving from '../product-engraving/SavedProductEngraving.jsx';
 import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 import { Link } from 'react-router-dom';
@@ -29,6 +30,7 @@ export default function CartPage() {
           {gift?<GiftBoxCartSummary giftBox={item.giftBox}/>:<>
             <dl><div><dt>Product</dt><dd>{url?<Link to={url}>{name}</Link>:name}</dd></div>{item.variantKey&&<div><dt>Option</dt><dd>{item.variantLabel||item.variantKey}</dd></div>}</dl>
             <PersonalizationSummary values={item.personalization} definitions={item.personalizationDefinitions}/>
+            {(item.photoPurchase || item.photoSelection) && <><SavedProductPhotos purchase={item.photoPurchase || { ...item.photoSelection, slots: [] }} values={item.personalization}/>{url && !item.productEngraving && <Link to={`${url}?photoEdit=${item.id}`}>Edit photo choices</Link>}</>}
             {item.productEngraving && <><p>Product engraving ? {money(item.productEngraving.surchargePiastres)} per item</p><SavedProductEngraving cartLineId={item.id}/>{url && <Link to={`${url}?engravingEdit=${item.id}`}>Edit engraving design</Link>}</>}
             {item.customization&&<p>Configured for you{item.customization.templateName?` · ${item.customization.templateName}`:''}</p>}
           </>}

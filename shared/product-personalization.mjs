@@ -5,9 +5,9 @@ export function productPersonalizationFields(personalization) {
 }
 
 export function productPersonalizationIssues(personalization) {
-  if (personalization?.requiredBeforePurchase !== true) return [];
+  if (personalization?.requiredBeforePurchase !== true) return photoSpaceIssues(personalization);
   const fields = personalization.fields;
-  const issues = [];
+  const issues = [...photoSpaceIssues(personalization)];
   if (!Array.isArray(fields) || !fields.length || fields.length > 20) return ['Configure between one and twenty personalization fields.'];
   if (new Set(fields.map(field => field.key)).size !== fields.length) issues.push('Personalization fields must have unique identities.');
   let minimumImages = 0;
@@ -25,4 +25,21 @@ export function productPersonalizationIssues(personalization) {
   }
   if (minimumImages > 10) issues.push('The required images across all fields cannot exceed ten per item.');
   return issues;
+}
+
+// Optional ready-made photo spaces live alongside the historical required fields.
+export function photoSpaceIssues(personalization) {
+  const spaces = personalization?.photoSpaces;
+  if (spaces == null || Array.isArray(spaces) && !spaces.length) return [];
+  if (!Array.isArray(spaces) || spaces.length > 10) return ['Use at most ten personal photo spaces.'];
+  const keys = new Set((personalization.fields || []).map(field => field.key));
+  for (const space of spaces) {
+    if (!/^photo_[a-z0-9_]{1,43}$/.test(space?.key || '') || keys.has(space.key) || typeof space.label !== 'string' || !space.label.trim() || space.label.length > 160 || typeof space.instructions !== 'string' || space.instructions.length > 500) return ['Photo spaces need unique identities, labels and supported instructions.'];
+    keys.add(space.key);
+  }
+  const required = productPersonalizationFields(personalization).filter(field => field.type === 'image').reduce((sum, field) => sum + Math.max(field.minFiles || 0, field.required ? 1 : 0), 0);
+  return required + spaces.length > 10 ? ['All required photos and personal photo spaces must fit within ten images per item.'] : [];
+}
+export function optionalPhotoFields(personalization) {
+  return photoSpaceIssues(personalization).length ? [] : (personalization?.photoSpaces || []).map(space => ({ key: space.key, label: space.label, instructions: space.instructions, photoSlot: true, type: 'image', required: true, minFiles: 1, maxFiles: 1, maxBytes: 8388608, acceptedMimeTypes: ['image/jpeg','image/png','image/webp'] }));
 }
