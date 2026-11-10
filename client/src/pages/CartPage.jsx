@@ -1,3 +1,4 @@
+import SavedProductEngraving from '../product-engraving/SavedProductEngraving.jsx';
 import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 import { Link } from 'react-router-dom';
 import { productHref } from '../../../shared/product-paths.mjs';
@@ -24,10 +25,11 @@ export default function CartPage() {
         const gift=item.kind==='gift_box_v2', name=gift?'Gift Box':item.name||'Unavailable product';
         const url=item.slug?productHref(item):null;
         const photo=item.mainImageUrl?<img src={item.mainImageUrl} alt={name} loading="lazy"/>:<span>Product image unavailable</span>;
-        return <CartLine key={key} item={item} name={name} title={!gift&&url?<Link to={url}>{name}</Link>:null} image={gift?<GiftBoxPreview giftBox={item.giftBox}/>:url?<Link to={url} aria-label={`View ${name}`}>{photo}</Link>:photo} pending={pending} setQuantity={setQuantity} remove={remove} recovery={item.attachments?.replacementRequired&&url?<Link to={url}>Review product and replace files</Link>:null} design={gift || Boolean(item.customization || item.personalization && Object.keys(item.personalization).length)}>
+        return <CartLine key={key} item={item} name={name} title={!gift&&url?<Link to={url}>{name}</Link>:null} image={gift?<GiftBoxPreview giftBox={item.giftBox}/>:url?<Link to={url} aria-label={`View ${name}`}>{photo}</Link>:photo} pending={pending} setQuantity={setQuantity} remove={remove} recovery={item.attachments?.replacementRequired&&url?<Link to={url}>Review product and replace files</Link>:null} design={gift || Boolean(item.productEngraving || item.customization || item.personalization && Object.keys(item.personalization).length)}>
           {gift?<GiftBoxCartSummary giftBox={item.giftBox}/>:<>
             <dl><div><dt>Product</dt><dd>{url?<Link to={url}>{name}</Link>:name}</dd></div>{item.variantKey&&<div><dt>Option</dt><dd>{item.variantLabel||item.variantKey}</dd></div>}</dl>
             <PersonalizationSummary values={item.personalization} definitions={item.personalizationDefinitions}/>
+            {item.productEngraving && <><p>Product engraving ? {money(item.productEngraving.surchargePiastres)} per item</p><SavedProductEngraving cartLineId={item.id}/>{url && <Link to={`${url}?engravingEdit=${item.id}`}>Edit engraving design</Link>}</>}
             {item.customization&&<p>Configured for you{item.customization.templateName?` · ${item.customization.templateName}`:''}</p>}
           </>}
           {item.attachments?.expiresAt&&<p className="commerce-muted">Private files expire <time dateTime={item.attachments.expiresAt}>{new Date(item.attachments.expiresAt).toLocaleString()}</time>. Adding to cart does not extend their lifetime.</p>}

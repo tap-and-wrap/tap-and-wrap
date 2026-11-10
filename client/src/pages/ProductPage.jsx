@@ -1,3 +1,5 @@
+import { lazy, Suspense } from 'react';
+const ProductEngravingBuilder = lazy(() => import('../product-engraving/ProductEngravingBuilder.jsx'));
 import Select from '../components/form/Select.jsx';
 import ProductPersonalizationDialog from '../commerce/ProductPersonalizationDialog.jsx';
 import PersonalizationSummary from '../commerce/PersonalizationSummary.jsx';
@@ -39,6 +41,9 @@ function ProductContentBody({ product, relatedProducts = [], preview = false, pr
   useSyncExternalStore(listener => { draft.listeners.add(listener); return () => draft.listeners.delete(listener); }, () => draft.version);
   const [personalization, setPersonalizationState] = useState(draft.values);
   const [complete, setComplete] = useState(draft.complete);
+  const location = useLocation();
+  const editEngravingId = new URLSearchParams(location.search).get('engravingEdit');
+  const [engravingOpen, setEngravingOpen] = useState(Boolean(editEngravingId));
   const [customizing, setCustomizing] = useState(false);
   const uncertain = Boolean(draft.request);
   function setPersonalization(values) {
@@ -172,6 +177,7 @@ function ProductContentBody({ product, relatedProducts = [], preview = false, pr
             </>}
             {enquiryRequired ? <a className="button button-dark product-purchase-button" href={enquiryUrl} target="_blank" rel="noopener noreferrer">Enquire on WhatsApp</a>
               : (!requiresPersonalization || complete || preview) && <button type="submit" className="button button-dark product-purchase-button" disabled={!orderingAvailable || adding || cart.pending || requiresPersonalization && !personalizationValid && !uncertain} aria-describedby="product-ordering-notice">{preview ? 'Ordering disabled' : adding ? 'Adding…' : uncertain ? 'Retry same Add to Cart' : orderingAvailable ? 'Add to Cart' : 'Out of Stock'}</button>}
+            {!preview && product.productEngraving && !enquiryRequired && <button type="button" className="catalog-secondary-button product-customize-button" disabled={!orderingAvailable || adding || uncertain || cart.pending} onClick={() => { if (variants.length && !variantKey) { setFieldErrors({ variant: 'Choose an available option first.' }); focusOptions(); } else setEngravingOpen(true); }}>Add Engraving</button>}
             {uncertain && <p role="alert">The add response is unconfirmed. Retry the same request or review your cart before adding another item. Reloading clears this local retry; check the cart first.</p>}
             {addError && <p role="alert" className="error-text">{addError}</p>}
             {adding && <p className="upload-progress" role="status"><progress aria-label="Adding your gift"/>{uploadStatus || 'Preparing your item…'}</p>}
@@ -185,6 +191,7 @@ function ProductContentBody({ product, relatedProducts = [], preview = false, pr
           </div>
         </section>
       </div>
+      {engravingOpen && !preview && product.productEngraving && <Suspense fallback={<p role="status">Opening engraving editor...</p>}><ProductEngravingBuilder key={`${product._id}:${product.productEngraving.version}:${editEngravingId || 'new'}`} product={product} variantKey={variantKey} quantity={quantity} fields={personalizationFields} personalization={personalization} editId={editEngravingId} onClose={() => setEngravingOpen(false)}/></Suspense>}
       {customizing && <ProductPersonalizationDialog product={product} fields={personalizationFields} values={personalization} onChange={setPersonalization} onComplete={finishPersonalization} onClose={() => setCustomizing(false)} />}
       {!preview && <CustomerWords/>}
       {relatedProducts.length > 0 && <section className="product-related" aria-labelledby="product-related-heading"><h2 id="product-related-heading">You May Also Like</h2><div className="catalog-grid catalog-related-grid">{relatedProducts.slice(0, 4).map((item) => <ProductCard key={item._id} product={item} />)}</div></section>}

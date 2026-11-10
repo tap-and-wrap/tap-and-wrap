@@ -1,3 +1,4 @@
+import { productEngravingConfigurationInput } from '../product-engraving/contracts.js';
 import mongoose from 'mongoose';
 import { inventorySchema, catalogIdentityFields, importMetadataFields, boundedArray, safeInteger } from '../catalog/fields.js';
 import { productPersonalizationIssues } from '../../../shared/product-personalization.mjs';
@@ -46,6 +47,8 @@ const customizationSchema = new mongoose.Schema({
 }, { _id: false, strict: 'throw' });
 
 const schema = new mongoose.Schema({
+  productEngravingRevision: { type: Number, min: 0, default: 0 },
+  productEngraving: { type: mongoose.Schema.Types.Mixed, default: undefined, validate: value => { if (value == null) return true; const { version, ...input } = value; return Number.isSafeInteger(version) && version > 0 && productEngravingConfigurationInput.safeParse(input).success; } },
   purchaseSetup: { type: new mongoose.Schema({ version: { type: Number, enum: [1], required: true }, options: { type: String, enum: ['single', 'variants', 'unresolved'], required: true } }, { _id: false, strict: 'throw' }), default: undefined },
   ...catalogIdentityFields,
   ...importMetadataFields,

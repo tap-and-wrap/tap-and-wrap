@@ -95,6 +95,8 @@ try {
     categoryId: category._id, mainImageKey: 'fixtures/private.webp', galleryKeys: ['fixtures/private.webp'], pricePiastres: null, priceApproved: false,
     inventory: { mode: 'tracked', quantity: 10, approved: false, available: true }, status });
   for (const status of ['draft','hold']) await Product.create({ name: 'ConnectedCatalogBatch3 visible ' + status, slug:'connected-visible-' + status, categoryId:category._id, visibility:'public', status, priceApproved:false, pricePiastres:null });
+  const { FONT_REGISTRY: productFonts } = await import('../../../shared/engraving/definitions.mjs');
+  await Product.create({ name:'Connected engraving product', slug:'connected-engraving-product', categoryId:category._id, visibility:'public',status:'ready',mainImageKey:'fixtures/engraving-product.webp',galleryKeys:['fixtures/engraving-product.webp','fixtures/engraving-other.webp'],pricePiastres:35000,priceApproved:true,inventory:{mode:'tracked',quantity:10,approved:true,available:true},productEngraving:{version:1,imageKey:'fixtures/engraving-product.webp',width:900,height:600,fontIds:productFonts.map(font=>font.id),materials:['Wood'],placements:['Front']}});
   const passwordHash = await bcrypt.hash('isolated-fixture-password', 4);
   const accounts = {};
   for (const [name, role] of [['admin', 'admin'], ['alice', 'customer'], ['bob', 'customer']]) accounts[name] = await User.create({ name: `Connected ${name}`, email: `${name}@connected.example.test`, role, passwordHash, active: true });

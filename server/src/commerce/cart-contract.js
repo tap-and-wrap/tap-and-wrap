@@ -1,3 +1,4 @@
+import { productEngravingCartInput } from '../product-engraving/contracts.js';
 import { hasGiftCardMessage } from '../../../shared/gift-box/card-message.mjs';
 import { engravingCartInput, visualEngravingCartInput } from '../engraving/contracts.js';
 import { z } from 'zod';
@@ -29,8 +30,11 @@ export const shoppingGiftCartConfigurationInput = giftCartConfigurationInput.ref
 });
 const productCartItem = z.object({ kind: z.literal('product'), operationKey: uuid.optional(), productId: id,
   variantKey: z.string().max(80).nullable().optional(), quantity: cartQuantity,
+  productEngraving: productEngravingCartInput.optional(), replaceLineId: uuid.optional(), replaceFingerprint: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   personalization: fields.optional(), customization: customization.nullable().optional(),
-}).strict();
+}).strict().superRefine((value, ctx) => {
+  if (value.productEngraving && !value.operationKey || Boolean(value.replaceLineId) !== Boolean(value.replaceFingerprint) || value.replaceLineId && !value.productEngraving) ctx.addIssue({ code: 'custom', message: 'An engraved product requires an immutable operation and complete replacement identity.' });
+});
 const giftCartItem = z.object({ kind: z.literal('gift_box_v2'), operationKey: uuid,
   configuration: giftCartConfigurationInput, quantity: cartQuantity,
 }).strict();

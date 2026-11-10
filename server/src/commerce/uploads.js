@@ -1,3 +1,4 @@
+import { productEngravingCapable } from '../../../shared/product-engraving.mjs';
 import { groupedOrder, groupAuthorized, groupMethod } from './payment-groups.js';
 import { commerceOwnerContext } from './ownership.js';
 import { requireEngraving } from '../engraving/configuration.js';
@@ -70,6 +71,13 @@ async function policyForUpload(owner, body) {
   if (!body || !['personalization', 'artwork', 'payment_proof', 'service_reference', 'gift_box_photo', 'engraving_service'].includes(body.purpose)) {
     throw fail('INVALID_UPLOAD_PURPOSE', 'Choose a supported upload purpose.');
   }
+  if (body.purpose === 'artwork' && body.fieldKey === 'product_engraving_artwork') {
+    if (body.ownerContext !== commerceOwnerContext(owner) || !/^[a-f0-9-]{36}$/i.test(body.designKey || '') || ['engravingItemKey','giftBoxId','orderId','requestKey','templateId','templateVersion','checkoutKey'].some(key => body[key] !== undefined)) throw fail('PRODUCT_ENGRAVING_SCOPE_INVALID', 'Your product design session changed.', 409);
+    const product = await loadEligibleProduct(body.productId);
+    if (!productEngravingCapable(product)) throw fail('INVALID_UPLOAD_FIELD', 'This product has no approved engraving surface.');
+    return { acceptedMimeTypes: UPLOAD_MIME_TYPES, maxBytes: 8388608, fieldKey: body.fieldKey };
+  }
+  if (body.designKey !== undefined) throw fail('INVALID_UPLOAD_FIELD', 'This design reference belongs to product engraving only.');
   if (body.purpose === 'engraving_service') {
     requireEngraving();
     if (body.ownerContext !== commerceOwnerContext(owner)) throw fail('ENGRAVING_OWNER_CHANGED', 'Your private shopping session changed. Reload the cart before starting another engraving.', 409);
@@ -168,7 +176,7 @@ export async function signUpload(owner, body) {
       await reserveQuota(owner, body.sizeBytes, { session });
       writeGuard();
       [upload] = await Upload.create([{
-        owner, purpose: body.purpose, engravingItemKey: body.purpose === 'engraving_service' ? body.engravingItemKey : undefined, productId: body.purpose === 'payment_proof' || body.purpose === 'gift_box_photo' ? undefined : body.productId,
+        owner, purpose: body.purpose, designKey: body.designKey, engravingItemKey: body.purpose === 'engraving_service' ? body.engravingItemKey : undefined, productId: body.purpose === 'payment_proof' || body.purpose === 'gift_box_photo' ? undefined : body.productId,
         giftBoxId: body.purpose === 'gift_box_photo' ? body.giftBoxId : undefined,
         fieldKey: policy.fieldKey, requestKey: body.purpose === 'service_reference' ? body.requestKey : undefined, proofOrderId: body.purpose === 'payment_proof' ? body.orderId : undefined,
         mimeType: body.mimeType, sizeBytes: body.sizeBytes, temporaryKey: privateObjectKey(),

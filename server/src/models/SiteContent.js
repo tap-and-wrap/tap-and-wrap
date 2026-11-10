@@ -10,6 +10,9 @@ const contact = new mongoose.Schema({
 }, { _id: false, strict: 'throw' });
 const faqItem = new mongoose.Schema({ question: { ...text(250), required: true }, answer: { ...text(3000), required: true } }, { _id: false, strict: 'throw' });
 const schema = new mongoose.Schema({
+  productEngravingPricePiastres: { type: Number, min: 0, max: 100000000, validate: Number.isSafeInteger },
+  productEngravingPriceVersion: { type: Number, min: 0, validate: Number.isSafeInteger },
+  productEngravingPriceFence: { type: Number, default: 0 },
   key: { type: String, enum: ['website-v1'], default: 'website-v1', unique: true },
   about: { type: section, default: () => ({}) },
   contact: { type: contact, default: () => ({}) },

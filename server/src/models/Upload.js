@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 const uploadSchema = new mongoose.Schema({
   owner: { type: String, required: true, maxlength: 100, index: true },
   purpose: { type: String, enum: ['personalization', 'artwork', 'payment_proof', 'service_reference', 'gift_box_photo', 'engraving_service'], required: true },
+  designKey: { type: String, maxlength: 36 },
   engravingItemKey: { type: String, maxlength: 36 },
   requestKey: { type: String, select: false }, requestId: { type: mongoose.Schema.Types.ObjectId, ref: 'ServiceRequest' },
   state: { type: String, enum: ['pending', 'verifying', 'complete', 'retained', 'deleting', 'failed'], default: 'pending', required: true },

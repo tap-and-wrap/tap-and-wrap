@@ -1,3 +1,4 @@
+import { productEngravingRoutes, adminProductEngravingRoutes } from '../product-engraving/routes.js';
 import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 import { engravingCollectionAllowed } from '../engraving/payment-policy.js';
 import { engravingRoutes, adminEngravingRoutes } from '../engraving/routes.js';
@@ -181,12 +182,14 @@ commerceRoutes.post('/orders/:id/accounting', async (req, res) => { const order 
 commerceRoutes.post('/orders/:id/cancel', async (req, res) => { const input = z.object({ revision: states.shape.revision, reason: states.shape.reason }).strict().parse(req.body); const record = await getOwnedOrder(id.parse(req.params.id), req.commerceOwner); const order = [1, 2].includes(record.accountingVersion) ? presentOrder(await mutateOrderAccounting(record._id, req.commerceOwner, { ...input, action: 'request_cancel' }, req.user)) : await changeOrderState(record._id, req.commerceOwner, { ...input, fulfillmentState: 'cancelled' }, req.user); res.json({ ok: true, data: { order } }); });
 
 commerceRoutes.use(engravingRoutes);
+commerceRoutes.use(productEngravingRoutes);
 commerceRoutes.use(publicConfigurationRoutes);
 commerceRoutes.use(serviceRequestRoutes);
 commerceRoutes.use('/uploads', uploadsRouter);
 export const adminCommerceRoutes = Router();
 adminCommerceRoutes.use(requireCommerceDatabase, requireAuth, requireAdmin, csrfProtection);
 adminCommerceRoutes.use(adminEngravingRoutes);
+adminCommerceRoutes.use(adminProductEngravingRoutes);
 adminCommerceRoutes.use(operationsRoutes);
 adminCommerceRoutes.use(adminServiceRequestRoutes);
 adminCommerceRoutes.get('/settlements/lookup', async (req, res) => {

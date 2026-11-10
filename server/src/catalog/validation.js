@@ -1,3 +1,4 @@
+import { productEngravingConfigurationInput } from '../product-engraving/contracts.js';
 import { z } from 'zod';
 import { engravingRequestPolicy } from '../commerce/request-validation.js';
 import { isSafeImageReference } from './fields.js';
@@ -44,6 +45,7 @@ const productFields = {
   ownerWorkflow: z.literal(true).optional(),
   optionStructure: z.enum(['single', 'variants', 'unresolved']).optional(),
   engravingRequest: engravingRequestPolicy.optional(),
+  productEngraving: productEngravingConfigurationInput.nullable().optional(),
   name: boundedText(240).min(1),
   slug,
   description: boundedText(10000).optional(),

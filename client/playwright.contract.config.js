@@ -7,7 +7,7 @@ if (process.env.NODE_ENV !== 'test' || process.env.TAP_WRAP_ISOLATED_TEST !== 't
 
 
 export default defineConfig({
-  testMatch: process.env.TAP_WRAP_CONTRACT_ENGRAVING === 'true' ? ['**/engraving-visual-contracts.spec.js','**/engraving-visual-review-contracts.spec.js','**/engraving-contracts.spec.js','**/engraving-studio-contracts.spec.js','**/release3-engraving-contracts.spec.js'] : process.env.TAP_WRAP_CONTRACT_GIFT_SHOPPING === 'true' ? ['**/gift-box-shopping-contracts.spec.js','**/gift-box-handoff-contracts.spec.js','**/unified-cart-contracts.spec.js'] : process.env.TAP_WRAP_CONTRACT_CHECKOUT === 'true' ? '**/enabled-checkout.spec.js' : '**/*contracts.spec.js',
+  testMatch: process.env.TAP_WRAP_CONTRACT_ENGRAVING === 'true' ? ['**/product-engraving-contracts.spec.js','**/engraving-visual-contracts.spec.js','**/engraving-visual-review-contracts.spec.js','**/engraving-contracts.spec.js','**/engraving-studio-contracts.spec.js','**/release3-engraving-contracts.spec.js'] : process.env.TAP_WRAP_CONTRACT_GIFT_SHOPPING === 'true' ? ['**/gift-box-shopping-contracts.spec.js','**/gift-box-handoff-contracts.spec.js','**/unified-cart-contracts.spec.js'] : process.env.TAP_WRAP_CONTRACT_CHECKOUT === 'true' ? '**/enabled-checkout.spec.js' : '**/*contracts.spec.js',
   testDir: './connected-e2e', timeout: 60000, expect: { timeout: 12000 }, workers: 1, fullyParallel: false,
   reporter: 'list', outputDir: './test-results-contracts/browser-' + process.env.TAP_WRAP_CONTRACT_API_PORT,
   use: { baseURL: 'http://127.0.0.1:' + (process.env.TAP_WRAP_CONTRACT_WEB_PORT || 5192), browserName: 'chromium',

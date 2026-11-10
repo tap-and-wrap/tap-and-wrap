@@ -1,3 +1,4 @@
+import { productArtworkIds } from '../../../shared/product-engraving.mjs';
 import mongoose from 'mongoose';
 import { Product } from '../models/Product.js';
 import { Category } from '../models/Category.js';
@@ -21,7 +22,7 @@ export async function createPricingContext(lines, owner, { session } = {}) {
   const read = async query => { context.queryCount += 1; return query.session(session || null).lean().maxTimeMS(3000); };
   const productIds = ids(productLines.map(line => line.productId));
   if (!productIds.length) return context;
-  context.products = byId(await read(Product.find({ ...publicProductFilter(), _id: { $in: productIds } }).select('purchaseSetup visibility name slug description sku categoryId subcategoryId mainImageKey status published reviewRequired pricePiastres priceApproved variants inventory personalization customization updatedAt')));
+  context.products = byId(await read(Product.find({ ...publicProductFilter(), _id: { $in: productIds } }).select('productEngraving galleryKeys purchaseSetup visibility name slug description sku categoryId subcategoryId mainImageKey status published reviewRequired pricePiastres priceApproved variants inventory personalization customization updatedAt')));
   const products = [...context.products.values()];
   const categoryIds = ids(products.flatMap(product => [product.categoryId, product.subcategoryId]));
   if (categoryIds.length) context.categories = byId(await read(Category.find({ _id: { $in: categoryIds } }).select('_id parentId active')));
@@ -36,7 +37,7 @@ export async function createPricingContext(lines, owner, { session } = {}) {
   // they must not turn a lightweight cart read into an unbounded dependency query.
   const uploadIds = ids(productLines.flatMap(line => {
     const values = [...Object.values(line.personalization || {}), ...Object.values(line.customization?.fields || {})].filter(Array.isArray).flat();
-    return values.length <= 10 ? values : [];
+    return values.length <= 10 ? [...values, ...productArtworkIds(line.productEngraving)] : [];
   }));
   if (uploadIds.length) context.uploads = byId(await read(Upload.find({ _id: { $in: uploadIds }, owner, state: 'complete', expiresAt: { $gt: new Date() } })));
   return context;
