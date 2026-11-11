@@ -85,4 +85,8 @@ Commit/push and exact Render source verification are recorded in the delivery re
 
 At the pre-release read, `seo-publication/lock.json` referenced baseline `28187cc8de94a326a980f056606bc400b42e0377`, publication `81a2418fdbf2424e0717f34a3f47115826d157852fa2a25355e05c0f413b48fa`, expiring `2026-11-12T19:44:47.233Z`. This is baseline evidence, not publication of the new changes.
 
+Post-deployment read-only inspection found effective checkout enabled, contrary to the brief. The two existing launch safeguards were restored to their required disabled state through a merge of only those keys. This is a prelaunch safety correction, not authorization to transact. No secrets or unrelated environment settings were read or replaced. Verify the resulting deployment and disabled runtime response in the final delivery report. The earlier no-settings-change assumption is superseded by this observed correction.
+
+The old frontend publication failed closed during the deployment/publication mismatch, including noindex responses and unavailable sitemap/withdrawal checks. Treat live frontend/SEO acceptance as **NOT VERIFIED** until the owner-reviewed renewal succeeds; do not weaken the guards to obtain a green check.
+
 After owner review, follow the exact **Post-Codex publication** procedure in [FINAL_OWNER_HANDOVER.md](FINAL_OWNER_HANDOVER.md). Required approvals remain the new engraving collection policy, final commercial/legal wording, live recipients, launch authorization and any paid-hosting decision.

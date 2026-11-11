@@ -1,10 +1,10 @@
-﻿# Tap & Wrap owner handover
+# Tap & Wrap owner handover
 
 Prepared 11 November 2026. This guide describes the implemented workflows. It is not permission to enable checkout, send money, publish unreviewed legal terms or change production records.
 
 ## Before accepting online orders
 
-The owner must approve the new standalone engraving collection policy, the final shipping/refund wording, the receiving account, genuine product availability and the operational handover process. Egyptian legal review remains outstanding where already indicated on the permanent policies. Keep both `CHECKOUT_ENABLED` and `COMMERCE_LAUNCH_AUTHORIZED` off until a separate launch decision. This refinement does not change either production setting.
+The owner must approve the new standalone engraving collection policy, the final shipping/refund wording, the receiving account, genuine product availability and the operational handover process. Egyptian legal review remains outstanding where already indicated on the permanent policies. Keep both `CHECKOUT_ENABLED` and `COMMERCE_LAUNCH_AUTHORIZED` off until a separate launch decision. Post-deployment inspection unexpectedly found effective checkout enabled. Only these two existing safeguards were restored to the explicitly required disabled state through a targeted Render merge; other environment settings and secrets were preserved. Confirm the disabled runtime response before any release acceptance.
 
 New standalone engraving orders include the approved service price at checkout. Physical receipt, suitability inspection and the customer's acceptance of the final design remain mandatory before engraving work. Historical engraving orders retain their original deferred-payment terms. Do not request a second payment simply because an old order has a different workflow.
 
