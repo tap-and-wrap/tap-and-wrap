@@ -54,11 +54,11 @@ async function input(mode = 'text', subtype = 'photo', who = owner) {
   const quote = await engravingQuote(specification, who);
   return { kind: 'engraving_service_v1', operationKey: randomUUID(), quantity: 1, specification, reviewFingerprint: quote.reviewFingerprint };
 }
-async function orderFor(lines = 1) {
+async function orderFor(lines = 1, method = 'instapay') {
   const entries = [];
   for (let n=0;n<lines;n++) { const entry = await input(); entries.push(entry); await addCartItem(owner, entry); }
-  const checkoutKey = randomUUID(); await prepareCheckout(owner, { checkoutKey, paymentMethod: 'instapay', governorate: 'cairo' });
-  const dto = await placeOrder(owner, { checkoutKey, paymentMethod: 'instapay', customer: { name: 'Fixture Customer', email: 'fixture@example.test', phone: '01012345678', governorate: 'cairo', address: 'Fixture return address 10' } });
+  const checkoutKey = randomUUID(); await prepareCheckout(owner, { checkoutKey, paymentMethod: method, governorate: 'cairo' });
+  const dto = await placeOrder(owner, { checkoutKey, paymentMethod: method, customer: { name: 'Fixture Customer', email: 'fixture@example.test', phone: '01012345678', governorate: 'cairo', address: 'Fixture return address 10' } });
   return { order: await Order.findById(dto.id).lean(), entries };
 }
 async function act(order, action, extras = {}) {
@@ -247,11 +247,31 @@ test('studio publication preserves historical two-font Drawing and text order sn
 test('historical v1 order keeps its deferred collection policy and original specification', async () => {
   const { order } = await orderFor();
   const historical = { ...order, _id: new mongoose.Types.ObjectId(), orderNumber: '987654', checkoutKey: randomUUID(), paymentState: 'unpaid' };
-  delete historical.engravingPaymentPolicy; delete historical.createdAt; delete historical.updatedAt;
+  delete historical.paymentPolicyVersion; delete historical.engravingPaymentPolicy; delete historical.createdAt; delete historical.updatedAt;
   historical.financialSummary = await orderAccounting(historical); await Order.create(historical);
   assert.equal(historical.lines[0].engraving.specification.contractVersion, 'engraving-spec-v1');
   assert.equal((await orderAccounting(historical)).amountDueNowPiastres, 0);
   assert.equal(presentOrder(historical).paymentInstructionsByGroup.length, 0);
   await assert.rejects(signUpload(owner, { purpose: 'payment_proof', paymentScope: 'engraving', orderId: String(historical._id), mimeType: 'image/png', sizeBytes: png.length }), { code: 'PAYMENT_NOT_AUTHORIZED' });
   await assert.rejects(act(historical, 'start'), { code: 'ENGRAVING_WORKFLOW_CONFLICT' });
+});
+
+
+test('new COD engraving needs inspection and accepted design, but no second COD quotation or cash fabrication',async()=>{
+ const {order}=await orderFor(1,'cod'); assert.equal(order.paymentState,'unpaid');
+ await assert.rejects(act(order,'authorize_payment'),{code:'ENGRAVING_WORKFLOW_CONFLICT'});
+ await act(order,'receive',{condition:'Synthetic intact item'}); await act(order,'inspect');
+ await act(order,'propose',{placementId:'front'});
+ await assert.rejects(act(order,'authorize_payment'),{code:'ENGRAVING_WORKFLOW_CONFLICT'});
+ await act(order,'accept',{proposalVersion:1,customerConfirmed:true,internalNote:'Synthetic recorded acceptance'});
+ await assert.rejects(act(order,'start'),{code:'ENGRAVING_WORKFLOW_CONFLICT'});
+ const approved=await act(order,'authorize_payment'); assert.equal(approved.paymentState,'unpaid');
+ assert.equal(approved.engraving.codCommitment.channel,'checkout');
+ assert.equal((await orderAccounting(approved)).collectedPiastres,0);
+ await act(order,'start');
+ const legacy={...order,_id:new mongoose.Types.ObjectId(),orderNumber:'987653',checkoutKey:randomUUID(),engraving:approved.engraving};
+ delete legacy.paymentPolicyVersion; delete legacy.createdAt; delete legacy.updatedAt;
+ legacy.engraving={...legacy.engraving,collectionAuthorized:false,codCommitment:null};
+ await Order.create(legacy);
+ await assert.rejects(act(legacy,'authorize_payment'),{code:'ENGRAVING_WORKFLOW_CONFLICT'});
 });

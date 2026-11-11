@@ -92,14 +92,14 @@ test('safe cart replacement detects another tab, keeps line identity and detache
 });
 test('orders snapshot product, design and surcharge as merchandise; no standalone inspection group', async () => {
   const value = await entry({ artwork: true }), { dto, request, saved } = await orderFor(value);
-  assert.equal(saved.lines[0].kind, 'product'); assert.equal(saved.lines[0].productEngraving.surchargePiastres, 10000); assert.equal(saved.engraving, null); assert.equal(saved.accountingVersion, 1); assert.equal(saved.personalized, true); assert.deepEqual(saved.allowedPaymentMethods, ['instapay']);
+  assert.equal(saved.lines[0].kind, 'product'); assert.equal(saved.lines[0].productEngraving.surchargePiastres, 10000); assert.equal(saved.engraving, null); assert.equal(saved.accountingVersion, 1); assert.equal(saved.personalized, true); assert.deepEqual(saved.allowedPaymentMethods, ['cod', 'instapay']);
   assert.equal((await Upload.findById(value.productEngraving.design.layers[1].assetId)).state, 'retained'); assert.equal((await Product.findById(product._id)).inventory.quantity, 9);
   await SiteContent.updateOne({ key: 'website-v1' }, { $set: { productEngravingPricePiastres: 20000, productEngravingPriceVersion: 1 } }); assert.equal((await placeOrder(owner, request)).id, dto.id); assert.equal((await addCartItem(owner, value)).alreadyOrdered, dto.id); assert.equal((await Order.findById(dto.id)).lines[0].productEngraving.surchargePiastres, 10000);
   const publicLine = presentOrder(saved).lines[0]; assert.equal(publicLine.productEngraving.surchargePiastres, 10000); assert.equal(JSON.stringify(publicLine.productEngraving).includes('imageKey'), false);
 });
-test('global checkout and personalized COD protections remain enforced', async () => {
+test('global checkout stays guarded and personalized COD is accepted unpaid', async () => {
   const value = await entry(); await addCartItem(owner, value); const checkoutKey = randomUUID(); env.checkoutEnabled = false; await assert.rejects(prepareCheckout(owner, { checkoutKey, paymentMethod: 'instapay', governorate: 'cairo' }), { code: 'CHECKOUT_DISABLED' }); env.checkoutEnabled = true;
-  await prepareCheckout(owner, { checkoutKey, paymentMethod: 'cod', governorate: 'cairo' }); await assert.rejects(placeOrder(owner, { checkoutKey, paymentMethod: 'cod', customer })); assert.equal(await Order.countDocuments(), 0); assert.equal((await Product.findById(product._id)).inventory.quantity, 10);
+  await prepareCheckout(owner, { checkoutKey, paymentMethod: 'cod', governorate: 'cairo' }); const accepted = await placeOrder(owner, { checkoutKey, paymentMethod: 'cod', customer }); assert.equal(accepted.paymentState, 'unpaid'); assert.deepEqual(accepted.allowedPaymentMethods, ['cod','instapay']); assert.equal(await Order.countDocuments(), 1); assert.equal((await Product.findById(product._id)).inventory.quantity, 9);
 });
 test('guest attachment transfer renews owner binding atomically without discarding personalized content', async () => {
   const value = await entry({ artwork: true }); await addCartItem(owner, value); const account = `user:${new mongoose.Types.ObjectId()}`; await mergeGuestCart(owner, account); assert.equal((await cartResponse(account)).cart.items[0].valid, true); assert.equal((await Upload.findById(value.productEngraving.design.layers[1].assetId)).owner, account); assert.equal(await readCart(owner), null);
@@ -112,7 +112,7 @@ test('configuration removal and re-approval never reuse an old version, and anot
   const restored = await updateProduct(product._id, { expectedRevision: removed.revision, productEngraving: config }, { actor });
   assert.equal(restored.productEngraving.version, 3); assert.equal(restored.pricePiastres, 35000); assert.equal(restored.inventory.quantity, 10);
 });
-test('mixed standalone/product order keeps the product and surcharge entirely in merchandise', async () => {
+for (const method of ['cod', 'instapay']) test(`mixed standalone/product ${method} order keeps the product and surcharge entirely in merchandise`, async () => {
   Object.assign(env, { engravingEnabled: true, engravingConfigurationEnabled: true });
   const admin = { _id: new mongoose.Types.ObjectId(), role: 'admin', active: true };
   const configuration = await publishConfiguration({ ...INITIAL_ENGRAVING_TYPES[0], pricePiastres: 13750, status: 'active', assetsApproved: true, fontIds: FONT_REGISTRY.map(font => font.id), iconIds: [ICON_REGISTRY[0].id], placements: [] }, 0, admin);
@@ -121,9 +121,7 @@ test('mixed standalone/product order keeps the product and surcharge entirely in
   const specification = { contractVersion: 'engraving-spec-v1', itemKey, typeId: configuration.typeId, configurationVersion: configuration.version, description: '', placement: { kind: 'help' }, content: { mode: 'icons', iconId: ICON_REGISTRY[0].id }, requestedAppearance: 'black', specialRequests: '', itemPhotoUploadId: String(photo._id) };
   await addCartItem(owner, { kind: 'engraving_service_v1', operationKey: randomUUID(), quantity: 1, specification, reviewFingerprint: (await engravingQuote(specification, owner)).reviewFingerprint });
   await addCartItem(owner, await entry());
-  const codKey = randomUUID(); await prepareCheckout(owner, { checkoutKey: codKey, paymentMethod: 'cod', governorate: 'cairo' });
-  await assert.rejects(placeOrder(owner, { checkoutKey: codKey, paymentMethod: 'cod', customer }), { code: 'QUOTATION_REQUIRED' });
-  const checkoutKey = randomUUID(); await prepareCheckout(owner, { checkoutKey, paymentMethod: 'instapay', governorate: 'cairo' }); const dto = await placeOrder(owner, { checkoutKey, paymentMethod: 'instapay', customer }); const saved = await Order.findById(dto.id).lean();
+  const checkoutKey = randomUUID(); await prepareCheckout(owner, { checkoutKey, paymentMethod: method, governorate: 'cairo' }); const dto = await placeOrder(owner, { checkoutKey, paymentMethod: method, customer }); const saved = await Order.findById(dto.id).lean();
   assert.equal(saved.accountingVersion, 2); assert.equal(saved.paymentGroups.find(group => group.id === 'engraving').amountPiastres, 13750); assert.equal(saved.paymentGroups.find(group => group.id === 'merchandise').amountPiastres, 45000); assert.equal(saved.engraving.items.length, 1);
 });
 

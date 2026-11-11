@@ -255,3 +255,25 @@ test('structured delivery and optional email survive immutable retry without fai
   await assert.rejects(placeOrder(owner, { ...input, checkoutKey: randomUUID(), customer: { ...details, city: '', email: 'invalid' } }), { name: 'ZodError' });
   await assert.rejects(placeOrder(owner, { ...input, checkoutKey: randomUUID(), customer: { ...details, address: 'Contradictory duplicate address' } }), { name: 'ZodError' });
 });
+
+
+test('new all-methods personalized COD stays unpaid, preserves split address and retries, while historic terms stay immutable', async () => {
+  product.personalization = { fields: [{key:'name',label:'Name',type:'short_text',required:true,maxLength:50}] }; await product.save();
+  await addCartItem(owner, {productId:String(product._id),quantity:1,personalization:{name:'Synthetic inscription'}});
+  const checkoutKey = randomUUID(); await prepareCheckout(owner, {checkoutKey,paymentMethod:'cod',governorate:'cairo'});
+  const details = {...customer,address:undefined,addressVersion:'delivery-address-v3',city:'Synthetic city',street:'10 Synthetic Street',building:'A',floor:'2',apartment:'3'};
+  const input = {checkoutKey,paymentMethod:'cod',customer:details};
+  const accepted = await placeOrder(owner,input);
+  assert.equal(accepted.paymentState,'unpaid'); assert.equal(accepted.paymentPolicyVersion,'all-methods-v1');
+  assert.deepEqual(accepted.allowedPaymentMethods,['cod','instapay']);
+  assert.equal(accepted.customer.address,'Synthetic city, 10 Synthetic Street, Building: A, Floor: 2, Apartment: 3');
+  assert.equal(accepted.customer.floor,'2'); assert.equal(accepted.customer.apartment,'3');
+  assert.equal((await placeOrder(owner,input)).id,accepted.id);
+  await operation(accepted.id,{action:'quote_charge',chargeId:'shipping',pricing:'quoted',amountPiastres:9000,collectionMethod:'cod'});
+  const historic = new Order({personalized:true}); assert.deepEqual([...historic.allowedPaymentMethods],['instapay']);
+  const {checkoutCustomer} = await import('../src/commerce/checkout-customer.js');
+  assert.equal(checkoutCustomer.safeParse({...details,floor:'x'.repeat(51)}).success,false);
+  assert.equal(checkoutCustomer.safeParse({...details,addressVersion:'delivery-address-v2'}).success,false);
+  const {floor,apartment,...v2}=details;void floor;void apartment;
+  assert.equal(checkoutCustomer.safeParse({...v2,addressVersion:'delivery-address-v2'}).success,true);
+});

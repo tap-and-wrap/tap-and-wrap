@@ -125,8 +125,9 @@ export function presentOrder(order, { admin = false } = {}) {
   const totals = { ...pick(order.totals, ['subtotalPiastres', 'discountPiastres', 'shippingPiastres', 'totalPiastres']),
     applied: (order.totals?.applied || []).map(value => pick(value, ['kind', 'id', 'name', 'code', 'applications', 'discountPiastres'])) };
   return { id: String(order._id), _id: String(order._id), orderNumber: order.orderNumber,
-    customer: pick(order.customer, ['name', 'email', 'phone', 'governorate', 'address', 'addressVersion', 'city', 'street', 'building', 'notes']),
+    customer: pick(order.customer, ['name', 'email', 'phone', 'governorate', 'address', 'addressVersion', 'city', 'street', 'building', 'floor', 'apartment', 'notes']),
     lines: (order.lines || []).map(line => orderLine(line, { admin })),
+    ...(order.paymentPolicyVersion ? { paymentPolicyVersion: order.paymentPolicyVersion } : {}),
     ...(order.engravingPaymentPolicy ? { engravingPaymentPolicy: order.engravingPaymentPolicy } : {}),
     collectionAuthorized: financial ? financial.collectionAuthorized : engravingCollectionAllowed(order),
     ...(financial ? {paymentObligations:financial.groups, merchandiseFulfillment:order.merchandiseFulfillment, paymentInstructionsByGroup:[...financial.groups, ...financial.charges.filter(charge => charge.state === 'accepted')].filter(group => group.authorized && (group.method || group.collectionMethod) === 'instapay' && group.outstandingPiastres > 0 && !['cancelled','returned','delivery_failed'].includes(order.fulfillmentState)).map(group => ({scope:group.id,label:group.label,destination:'01060673073',amountPiastres:group.outstandingPiastres,orderReference:order.orderNumber}))} : {}),

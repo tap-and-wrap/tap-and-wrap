@@ -1,9 +1,11 @@
+import { ALL_METHODS_POLICY, allPaymentMethods } from '../../../shared/order-payment-policy.mjs';
 import { validProductEngravingSnapshots } from '../product-engraving/contracts.js';
 import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 import { env } from '../config/env.js';
 import mongoose from 'mongoose';
 import { validOrderLineKinds } from '../gift-box/order-snapshot.js';
 const schema = new mongoose.Schema({
+  paymentPolicyVersion: { type: String, enum: [ALL_METHODS_POLICY], immutable: true },
   engravingPaymentPolicy: { type: String, enum: ['standalone-checkout-payment-v1'], immutable: true },
   cartAddOperations: { type: [mongoose.Schema.Types.Mixed], default: [], immutable: true },
   paymentGroups: { type: [mongoose.Schema.Types.Mixed], default: undefined, immutable: true },
@@ -25,7 +27,7 @@ const schema = new mongoose.Schema({
   serviceRequestId: { type: mongoose.Schema.Types.ObjectId, ref: 'ServiceRequest', immutable: true },
   acceptedQuotation: { type: mongoose.Schema.Types.Mixed, immutable: true },
   personalized: { type: Boolean, default: false, immutable: true },
-  allowedPaymentMethods: { type: [String], enum: ['cod', 'instapay'], default() { return this.orderChannel === 'owner_quotation' || this.personalized ? ['instapay'] : ['cod', 'instapay']; }, immutable: true },
+  allowedPaymentMethods: { type: [String], enum: ['cod', 'instapay'], default() { return !allPaymentMethods(this) && (this.orderChannel === 'owner_quotation' || this.personalized) ? ['instapay'] : ['cod', 'instapay']; }, immutable: true },
   quotationAcceptedAt: { type: Date, immutable: true },
   codAuthorizedAt: { type: Date, immutable: true },
   accountingVersion: { type: Number, immutable: true },

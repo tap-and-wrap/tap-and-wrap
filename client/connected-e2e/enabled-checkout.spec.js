@@ -47,7 +47,7 @@ test('real personalization upload to cart to InstaPay order to proof and explici
   await page.getByRole('button', { name: 'Save personalization' }).click();
   await page.getByRole('button', { name: 'Add to Cart', exact: true }).click();
   await expect(page.locator('[data-sonner-toast]').filter({ hasText: 'Added to your cart.' })).toBeVisible();
-  await details(page); await expect(page.getByRole('radio', { name: 'Cash on Delivery', exact: true })).toHaveCount(0);
+  await details(page); await expect(page.getByRole('radio', { name: 'Cash on Delivery', exact: true })).toBeVisible(); await page.getByRole('radio', { name: /InstaPay/ }).check();
   const response = page.waitForResponse(r => r.url().endsWith('/commerce/orders') && r.request().method() === 'POST');
   await page.getByRole('button', { name: 'Place Order', exact: true }).click();
   const result = await response; expect(result.status()).toBe(201); const order = (await result.json()).data.order;
