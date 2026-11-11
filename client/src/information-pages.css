@@ -17,3 +17,5 @@
 .information-related{display:flex;flex-wrap:wrap;gap:16px 24px;padding-top:28px;font-size:.9rem;line-height:1.6}
 .information-page a:focus-visible{outline:2px solid #795045;outline-offset:5px}
 @media(max-width:700px){.information-layout,.information-support{grid-template-columns:1fr}.information-contents{padding-bottom:24px;border-bottom:1px solid #EADAD5}.information-support{gap:20px}.information-copy section{padding-bottom:20px;margin-bottom:24px}.information-actions .button{width:100%;text-align:center}}
+
+.information-faq{margin-block:48px}.information-faq>h2{font-size:clamp(1.7rem,4vw,2.3rem);margin-bottom:24px}

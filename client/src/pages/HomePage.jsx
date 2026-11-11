@@ -12,7 +12,7 @@ import '../home-media.css';
 
 export default function HomePage() {
   const reviews = ownerFeaturedReviews;
-  const faq = approvedFaqFallback;
+  const faq = [0, 1, 2, 4, 8, 12, 16, 18].map(index => approvedFaqFallback[index]).filter(Boolean);
   return <><RibbonOpening/><HomeMotion/><main className="home-page">
     <section className="hero home-media-hero" aria-labelledby="home-hero-heading">
       <DeveloperHeroMedia />
@@ -31,6 +31,6 @@ export default function HomePage() {
       <article className="home-service-card"><ServiceFilm src="/media/tap-wrap-laser-engraving.mp4" poster="/media/tap-wrap-laser-engraving-poster.webp" title="Laser Engraving" /><Link className="home-service-detail" to="/customize/laser-engraving"><h3>Laser Engraving</h3><p>Add a personal mark to an unforgettable gift.</p><span>Explore Engraving <ArrowUpRight aria-hidden="true" size={20}/></span></Link></article>
     </div></section>
     {reviews.length > 0 && <section className="section home-reviews-section" aria-labelledby="home-reviews-heading"><div className="section-heading"><p className="eyebrow">KIND WORDS</p><h2 id="home-reviews-heading">What Our Customers Say</h2></div><div className="home-named-review-carousel"><ReviewMarquee reviews={reviews}/></div><div className="home-section-footer"><Link className="button button-outline" to="/reviews">All Customer Reviews</Link></div></section>}
-    {faq.length > 0 && <section className="section faq-section" aria-labelledby="home-faq-heading"><div className="section-heading"><p className="eyebrow">ANY QUESTIONS?</p><h2 id="home-faq-heading">Frequently Asked Questions</h2></div><ApprovedFaq entries={faq} categorized/></section>}
+    {faq.length > 0 && <section className="section faq-section" aria-labelledby="home-faq-heading"><div className="section-heading"><p className="eyebrow">ANY QUESTIONS?</p><h2 id="home-faq-heading">Frequently Asked Questions</h2></div><ApprovedFaq entries={faq} categorized/><div className="home-section-footer"><Link className="button button-outline" to="/contact#questions">All questions and support</Link></div></section>}
   </main></>;
 }

@@ -30,19 +30,6 @@ import '../gift-box/gift-box.css';
 const categories = ['box', 'flower', 'plush', 'chocolate', null, 'ribbon'];
 const LAST_STEP = BUILDER_STEPS.length - 1;
 
-function revealPersonalField(field = document.activeElement) {
-  if (!(field instanceof HTMLElement) || !field.closest('.gb-personal-section') || !window.matchMedia('(max-width:900px)').matches) return;
-  requestAnimationFrame(() => {
-    if (!field.isConnected || document.activeElement !== field) return;
-    const viewport = window.visualViewport;
-    const offset = viewport?.offsetTop || 0;
-    const top = Math.max(offset, document.querySelector('.site-header-stack')?.getBoundingClientRect().bottom || 0) + 16;
-    const bottom = offset + (viewport?.height || window.innerHeight) - 16;
-    const rect = field.getBoundingClientRect();
-    if (rect.top < top || rect.bottom > bottom) window.scrollBy({ top: rect.top - Math.max(top, top + (bottom - top - rect.height) / 2), behavior: 'instant' });
-  });
-}
-
 function ExpandedArrangement({ onClose, children }) {
   const { dialogRef, dialogProps } = useModalDialog({ onClose, restoreFocus: false });
   return createPortal(<dialog ref={dialogRef} {...dialogProps} className="gb-arrangement-dialog" aria-labelledby="gb-expanded-title"><header><h2 id="gb-expanded-title">Your gift box</h2><button type="button" data-gb-preview-control aria-label="Close expanded preview" onClick={onClose}><X size={22} aria-hidden="true"/></button></header>{children}</dialog>,document.body);
@@ -59,11 +46,6 @@ export default function GiftBoxBuilderPage() {
   const [notice,setNotice]=useState(''),[expanded,setExpanded]=useState(false),[removal,setRemoval]=useState(null);
   const mounted=useRef(false);
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
-  useEffect(() => {
-    const reveal = () => revealPersonalField();
-    window.visualViewport?.addEventListener('resize', reveal);
-    return () => window.visualViewport?.removeEventListener('resize', reveal);
-  }, []);
   useEffect(()=>{setPhotoAspectRatios(catalog.data?.photoAspectRatios === true);},[catalog.data?.photoAspectRatios,setPhotoAspectRatios]);
   const personalizationOptions = useQuery({
     queryKey: ['private', session.ownerKey, 'gift-box-personalization-options'],
@@ -224,7 +206,7 @@ export default function GiftBoxBuilderPage() {
           {!expanded && <ArrangementCanvas {...canvasProps} onExpand={() => setExpanded(true)}/>}
           {expanded && <ExpandedArrangement onClose={()=>{ setExpanded(false); requestAnimationFrame(() => pageRef.current?.querySelector('.gb-expand')?.focus({ preventScroll: true })); }}><ArrangementCanvas {...canvasProps}/></ExpandedArrangement>}
         </section>
-        <section className="gb-choices" aria-label="Build your gift" onFocusCapture={event => revealPersonalField(event.target)}><header className="gb-step-intro"><p className="eyebrow">{review ? 'Made by you' : step === 0 ? 'A thoughtful beginning' : 'Make it yours'}</p><h2 ref={titleRef} tabIndex={-1}>{review ? 'Review your gift' : BUILDER_STEPS[step].title}</h2></header>
+        <section className="gb-choices" aria-label="Build your gift"><header className="gb-step-intro"><p className="eyebrow">{review ? 'Made by you' : step === 0 ? 'A thoughtful beginning' : 'Make it yours'}</p><h2 ref={titleRef} tabIndex={-1}>{review ? 'Review your gift' : BUILDER_STEPS[step].title}</h2></header>
           {!review && reached > LAST_STEP && <button className="gb-return-review" type="button" onClick={() => navigate(LAST_STEP, true)}>Return to review <ArrowRight size={16} aria-hidden="true"/></button>}
           {review ? <div className="gb-review">
             <p className="gb-review-dedication">A thoughtful gift, made your way.</p>

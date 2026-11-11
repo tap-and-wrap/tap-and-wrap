@@ -316,7 +316,7 @@ test('COD checkout quotes shipping and discount server-side then confirms one un
   await expect.poll(() => fixture.calls.some((call) => call.path === '/commerce/checkout/quote' && call.body.discountCode === 'ISOLATED')).toBe(true);
   await expect(page.getByRole('button', { name: 'Place Order', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Place Order', exact: true }).click();
-  await expect(page.getByRole('heading', { name: `Order #${commerceOrder.orderNumber}`, exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: `Thank you, order #${commerceOrder.orderNumber}`, exact: true })).toBeVisible();
   expect(fixture.orders).toHaveLength(1);
   expect(fixture.orders[0].paymentState).toBe('unpaid');
   expect(fixture.calls.find((call) => call.path === '/commerce/orders' && call.method === 'POST').body).not.toHaveProperty('totalPiastres');
@@ -332,7 +332,7 @@ test('InstaPay cannot collect proof or instruct a transfer before order creation
   await expect(page.getByText('01060673073', { exact: true })).toHaveCount(0);
   expect(fixture.uploads).toHaveLength(0);
   await page.getByRole('button', { name: 'Place Order', exact: true }).click();
-  await expect(page.getByRole('heading', { name: `Order #${commerceOrder.orderNumber}` })).toBeVisible();
+  await expect(page.getByRole('heading', { name: `Thank you, order #${commerceOrder.orderNumber}` })).toBeVisible();
   expect(fixture.orders).toHaveLength(1);
   expect(fixture.calls.find(call => call.path === '/commerce/orders' && call.method === 'POST').body).not.toHaveProperty('paymentProofId');
   expect(fixture.uploads).toHaveLength(0);
@@ -350,7 +350,7 @@ test('failed InstaPay order retries the identical owner-bound request without pr
   expect(fixture.uploads).toHaveLength(0);
   options.rejectOrder = false;
   await page.getByRole('button', { name: 'Retry same submission', exact: true }).click();
-  await expect(page.getByRole('heading', { name: `Order #${commerceOrder.orderNumber}` })).toBeVisible();
+  await expect(page.getByRole('heading', { name: `Thank you, order #${commerceOrder.orderNumber}` })).toBeVisible();
   const requests = fixture.calls.filter(call => call.path === '/commerce/orders' && call.method === 'POST');
   expect(requests).toHaveLength(2);
   expect(requests[0].body).toEqual(requests[1].body);

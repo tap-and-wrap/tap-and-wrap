@@ -1,3 +1,4 @@
+import { checkoutCustomer as customer } from './checkout-customer.js';
 import { Product } from '../models/Product.js';
 import { legacyPhotoFields, optionalPhotoFields } from '../../../shared/product-personalization.mjs';
 import { photoEditFingerprint } from './product-photos.js';
@@ -45,8 +46,7 @@ const id = z.string().regex(/^[a-f0-9]{24}$/i);
 const uuid = z.string().uuid();
 const paymentMethod = z.enum(['cod', 'instapay']);
 const discountCode = z.string().trim().max(40).optional();
-const customer = z.object({ name: z.string().trim().min(2).max(100), email: z.email().max(254), phone: z.string().min(10).max(25),
-  governorate: z.enum(GOVERNORATES.map(value => value.id)), address: z.string().trim().min(10).max(500), notes: z.string().trim().max(1000).optional() }).strict();
+
 const checkoutSchema = z.object({ checkoutKey: uuid, paymentMethod, governorate: customer.shape.governorate, discountCode }).strict();
 const orderSchema = z.object({ checkoutKey: uuid, customer, paymentMethod, discountCode, paymentProofId: id.optional() }).strict();
 const states = z.object({ revision: z.number().int().nonnegative(), fulfillmentState: z.enum(['received', 'confirmed', 'preparing', 'out_for_delivery', 'delivered', 'delivery_failed', 'returned', 'cancelled']).optional(),

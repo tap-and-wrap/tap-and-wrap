@@ -1,4 +1,5 @@
 import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
+import { upfrontEngravingPayment } from '../../../shared/engraving/definitions.mjs';
 import { groupedOrder, groupedPaymentState, engravingWorkAllowed, overallFulfillment } from '../commerce/payment-groups.js';
 import { z } from 'zod';
 import mongoose from 'mongoose';
@@ -47,6 +48,7 @@ export async function engravingAction(id, raw, actor, owner = null) {
       if (closed || workflow.collectionAuthorized || workflow.items.some(value => !value.inCustody || !value.inspectionApproved || value.stage !== 'final_design_confirmed' || !value.proposal?.acceptedAt)) fail('Every physical item must be inspected and its final specification accepted before payment authorization.');
       workflow.collectionAuthorized = true; workflow.authorizedAt = at; workflow.authorizedBy = String(actor._id);
       if (groupedOrder(order)) {
+        if (upfrontEngravingPayment(order) && input.collectionMethod && input.collectionMethod !== order.paymentMethod) fail('Keep the accepted checkout payment method. A work approval cannot change an accepted financial arrangement.');
         const method = input.collectionMethod || order.paymentGroups.find(group => group.id === 'engraving').method;
         if (method === 'cod' && (!input.codAuthorized || !input.internalNote)) fail('Explicit owner authorization and agreement evidence are required before offering engraving COD.');
         workflow.collectionMethod = method;

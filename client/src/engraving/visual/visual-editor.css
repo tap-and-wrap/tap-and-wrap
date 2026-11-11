@@ -22,7 +22,7 @@
 .ve-layers{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.ve-layers button{max-width:100%;overflow-wrap:anywhere}.ve-layers [aria-pressed=true]{background:#fff7f4;border-color:var(--tw-rose-brown,#915b50)}
 .ve-selection{display:grid;gap:12px}.ve-selection textarea,.ve-selection select{display:block;width:100%;background:white;border:1px solid var(--ve-line);border-radius:8px;padding:10px;min-height:44px}.ve-selection textarea{min-height:90px;resize:vertical}
 .ve-colors{border:0;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:12px}.ve-colors legend{margin-bottom:8px}.ve-colors label{display:flex;gap:5px;align-items:center;min-height:44px}.ve-colors span{width:16px;height:16px;border:1px solid #bba79f;border-radius:50%}.ve-colors input{accent-color:#795045;width:18px;height:18px}
-.ve-move{display:grid;grid-template-columns:1fr 1fr;gap:8px}.ve-move button:last-child{grid-column:1/-1}
+.ve-move{display:flex;flex-wrap:wrap;gap:6px}.ve-move button{flex:0 0 44px;padding:8px}
 @media(max-width:760px){.visual-engraving{padding:16px}.ve-heading{display:block;margin-bottom:16px}.ve-history{margin-top:16px}.ve-layout{grid-template-columns:minmax(0,1fr);gap:24px}.ve-workspace{position:static}.ve-viewport{max-height:58svh}.ve-scroll-space{padding:22px}.ve-view-controls{gap:6px}.ve-view-controls>span{width:100%}.ve-controls{gap:20px}}
 @media(prefers-reduced-motion:reduce){.visual-engraving *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 

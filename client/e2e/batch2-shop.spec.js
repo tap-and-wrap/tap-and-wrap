@@ -138,7 +138,7 @@ test('legacy subcategory URLs are represented by a visible category and never re
   await page.goto(`/shop?category=${category.slug}&subcategory=${subcategory.slug}&q=Fixture&sort=newest`);
   await expect(page).toHaveURL(`/shop?category=${subcategory.slug}&q=Fixture&sort=newest`);
   const select = page.locator('.catalog-sidebar').getByLabel('Category', { exact: true });
-  await expect(select).toHaveAttribute('data-selected-value', subcategory.slug);
+  await expect(select).toHaveValue(subcategory.slug);
   await expect(select).toContainText(subcategory.name);
   await expect(page.locator('.catalog-card')).toHaveCount(20);
   expect(productRequests(fixture).every((request) => request.params.category === subcategory.slug && !request.params.subcategory)).toBe(true);
@@ -150,12 +150,12 @@ test('main category routes discard hidden legacy subcategory filters while prese
   await expect(page).toHaveURL(`/categories/${category.slug}?q=Fixture&sort=newest`);
   const select = page.locator('.catalog-sidebar').getByLabel('Category', { exact: true });
   await expect(select).toBeDisabled();
-  await expect(select).toHaveAttribute('data-selected-value', category.slug);
+  await expect(select).toHaveValue(category.slug);
   await expect(page.locator('.catalog-card')).toHaveCount(20);
   expect(productRequests(fixture).every((request) => request.params.category === category.slug && !request.params.subcategory)).toBe(true);
   await page.goto(`/categories/${subcategory.slug}?subcategory=obsolete-hidden-refinement&q=Fixture`);
   await expect(page).toHaveURL(`${subcategory.publicPath}?q=Fixture`);
-  await expect(select).toHaveAttribute('data-selected-value', subcategory.slug);
+  await expect(select).toHaveValue(subcategory.slug);
   await page.locator('.catalog-sidebar summary').filter({ hasText: /^Category$/ }).click();
   await expect(page.locator('.catalog-sidebar').getByText(`Within ${category.name}`, { exact: true })).toBeVisible();
   await expect(page.locator('.catalog-card')).toHaveCount(20);
@@ -217,7 +217,7 @@ test('product-card links and buttons have visible boundaries, readable states an
   expect(enquiryHref.pathname).toBe('/201508216472');
   expect(enquiryHref.searchParams.get('text')).toContain('Fixture Gift 03');
   expect(enquiryHref.searchParams.get('text')).toContain('https://tapandwrap.net/products/fixture-gift-3');
-  await expect(page.locator('.catalog-card').nth(2).getByRole('link', { name: 'View Fixture Gift 03' }))
+  await expect(page.locator('.catalog-card').nth(2).getByRole('link', { name: 'Fixture Gift 03', exact: true }))
     .toHaveAttribute('href', '/products/fixture-gift-3');
   await expect(page.locator('.catalog-card').nth(2).locator('button')).toHaveCount(0);
   for (const width of [390, 1440]) {

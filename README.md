@@ -1,5 +1,7 @@
 # Tap & Wrap — JavaScript project
 
+Current owner workflow and the final refinement release procedure are documented in [FINAL_OWNER_HANDOVER.md](docs/FINAL_OWNER_HANDOVER.md). Earlier phase reports below are historical implementation records, not current launch authorization.
+
 Standalone customer-owned-item engraving is implemented locally behind default-off
 configuration/intake gates. See [contracts, custody/payment policy and guarded release preparation](docs/STANDALONE_ENGRAVING_IMPLEMENTATION.md).
 

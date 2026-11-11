@@ -1,5 +1,6 @@
+import { checkoutCustomer } from './checkout-customer.js';
 import { fenceProductEngravingPrice } from '../product-engraving/service.js';
-import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
+import { UPFRONT_ENGRAVING_POLICY, isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 import { initialPaymentGroups, groupedOrder, groupedPaymentState, overallFulfillment } from './payment-groups.js';
 import { engravingSnapshot } from '../engraving/pricing.js';
 import { currentConfiguration } from '../engraving/configuration.js';
@@ -56,7 +57,7 @@ async function checkoutQuoteCore(owner, input, { session, userId } = {}, capabil
     ...(line.kind === 'gift_box_v2' ? { kind: line.kind, configuration: line.configuration,
       components: line.giftComponents.map(component => ({ ...component, priceApprovedAt: new Date(component.priceApprovedAt).toISOString() })),
       personalization: line.giftPersonalization, fulfillment: line.giftFulfillment, policyHash: line.giftPolicyHash } : {}) })), totals,
-    governorate: input.governorate, paymentMethod: input.paymentMethod, discountCode: input.discountCode?.trim().toUpperCase() || null });
+    engravingPaymentPolicy: cart.items.some(line => isEngravingKind(line.kind)) ? UPFRONT_ENGRAVING_POLICY : null, governorate: input.governorate, paymentMethod: input.paymentMethod, discountCode: input.discountCode?.trim().toUpperCase() || null });
   return { cart, totals, fingerprint: digest, shipping, policyFences };
 }
 export async function prepareCheckout(owner, input, userId) {
@@ -76,7 +77,7 @@ async function prepareCheckoutCore(owner, input, userId, capability = null) {
   assertDatabaseWriteAllowed(CheckoutIntent.db, env);
   await CheckoutIntent.updateOne({ owner, checkoutKey: input.checkoutKey, state: 'open' }, { $set: { fingerprint: quote.fingerprint, quote: quote.totals, paymentMethod: input.paymentMethod, expiresAt },
     $setOnInsert: { owner, checkoutKey: input.checkoutKey, state: 'open' } }, { upsert: true });
-  return { ...quote.totals, totals: quote.totals, paymentGroups: initialPaymentGroups(quote.cart.items, quote.totals, input.paymentMethod), fingerprint: quote.fingerprint, expiresAt };
+  return { ...quote.totals, totals: quote.totals, paymentGroups: initialPaymentGroups(quote.cart.items, quote.totals, input.paymentMethod, UPFRONT_ENGRAVING_POLICY), fingerprint: quote.fingerprint, expiresAt };
 }
 export async function placeOrder(owner, input, userId, { trackingConsentId = null } = {}) {
   return placeOrderCore(owner, input, userId, { trackingConsentId });
@@ -96,7 +97,8 @@ function snapshotOrderLine(line) {
 }
 async function placeOrderCore(owner, input, userId, { trackingConsentId = null } = {}, capability = null) {
   if (capability) assertGiftBoxCheckoutCapability(capability, owner);
-  const normalized = { ...input, customer: { ...input.customer, phone: normalizePhone(input.customer.phone) }, discountCode: input.discountCode?.trim().toUpperCase() || null };
+  const approvedCustomer = checkoutCustomer.parse(input.customer);
+  const normalized = { ...input, customer: { ...approvedCustomer, phone: normalizePhone(approvedCustomer.phone) }, discountCode: input.discountCode?.trim().toUpperCase() || null };
   const requestHash = fingerprint(normalized);
   const repeated = async () => {
     const order = await Order.findOne({ owner, checkoutKey: input.checkoutKey }).lean();
@@ -134,9 +136,9 @@ async function placeOrderCore(owner, input, userId, { trackingConsentId = null }
         await runGiftBoxCheckoutTestHook(capability, owner, 'beforePolicyFence', { session, quote });
         await fenceGiftBoxCheckoutPolicies(quote.policyFences, session);
         await fenceGiftBoxPersonalization(quote.cart.items, session);
-        const order = new Order({ ...(hasEngraving || quote.cart.items.some(line => line.productEngravingSnapshot || line.photoSelection) ? { cartAddOperations: quote.cart.document.addOperations } : {}), ...(hasEngraving ? { engraving: initialEngravingWorkflow(quote.cart.items) } : {}), owner, userId: userId || null, trackingConsentId, checkoutKey: input.checkoutKey, requestHash, orderNumber: generateOrderNumber(), customer: normalized.customer,
-          lines: quote.cart.items.map(snapshotOrderLine), totals: quote.totals, inventoryClaims, uploadIds, accountingVersion: hasEngraving || hasGifts ? 2 : 1, ...((hasEngraving || hasGifts) ? { paymentGroups: initialPaymentGroups(quote.cart.items, quote.totals, input.paymentMethod), ...(quote.cart.items.some(line => !isEngravingKind(line.kind)) ? { merchandiseFulfillment: 'received' } : {}) } : {}), personalized, allowedPaymentMethods: personalized && !hasEngraving && !hasGifts ? ['instapay'] : ['cod', 'instapay'], charges: [...(quote.cart.items.some(line => !isEngravingKind(line.kind)) ? [pendingShipping()] : []), ...(hasEngraving ? [{ ...pendingShipping(), id: 'return_shipping', label: 'Item handoff / return' }] : [])], followUpDueAt: new Date(Date.now() + 12 * 3600000),
-          paymentMethod: input.paymentMethod, paymentState: hasEngraving ? 'unpaid' : quote.totals.totalPiastres === 0 ? 'paid' : input.paymentMethod === 'instapay' ? 'awaiting_transfer' : 'unpaid',
+        const order = new Order({ ...(hasEngraving || quote.cart.items.some(line => line.productEngravingSnapshot || line.photoSelection) ? { cartAddOperations: quote.cart.document.addOperations } : {}), ...(hasEngraving ? { engravingPaymentPolicy: UPFRONT_ENGRAVING_POLICY, engraving: initialEngravingWorkflow(quote.cart.items) } : {}), owner, userId: userId || null, trackingConsentId, checkoutKey: input.checkoutKey, requestHash, orderNumber: generateOrderNumber(), customer: normalized.customer.addressVersion === 'delivery-address-v2' ? { ...normalized.customer, address: [normalized.customer.city, normalized.customer.street, normalized.customer.building].filter(Boolean).join(', ') } : normalized.customer,
+          lines: quote.cart.items.map(snapshotOrderLine), totals: quote.totals, inventoryClaims, uploadIds, accountingVersion: hasEngraving || hasGifts ? 2 : 1, ...((hasEngraving || hasGifts) ? { paymentGroups: initialPaymentGroups(quote.cart.items, quote.totals, input.paymentMethod, UPFRONT_ENGRAVING_POLICY), ...(quote.cart.items.some(line => !isEngravingKind(line.kind)) ? { merchandiseFulfillment: 'received' } : {}) } : {}), personalized, allowedPaymentMethods: personalized && !hasEngraving && !hasGifts ? ['instapay'] : ['cod', 'instapay'], charges: [...(quote.cart.items.some(line => !isEngravingKind(line.kind)) ? [pendingShipping()] : []), ...(hasEngraving ? [{ ...pendingShipping(), id: 'return_shipping', label: 'Item handoff / return' }] : [])], followUpDueAt: new Date(Date.now() + 12 * 3600000),
+          paymentMethod: input.paymentMethod, paymentState: quote.totals.totalPiastres === 0 ? 'paid' : input.paymentMethod === 'instapay' ? 'awaiting_transfer' : 'unpaid',
           history: [{ at: new Date(), event: 'order_received', actor: userId ? 'customer' : 'guest' }] });
         for (const discount of quote.totals.applied.filter(value => value.kind === 'discount')) {
           const count = userId ? await DiscountRedemption.countDocuments({ userId, discountId: discount.id, reversedAt: null }).session(session) : 0;

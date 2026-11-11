@@ -11,10 +11,11 @@ async function restrict(context) {
 async function details(page) {
   await page.goto('/checkout');
   await page.getByLabel('Full name', { exact: true }).fill('Audit Synthetic Customer');
-  await page.getByLabel('Email', { exact: true }).fill('synthetic@example.test');
+  await page.getByLabel('Email (optional)', { exact: true }).fill('synthetic@example.test');
   await page.getByLabel('Egyptian mobile number').fill('01012345678');
   await chooseOption(page.getByLabel('Governorate', { exact: true }), 'cairo');
-  await page.getByLabel('Delivery address').fill('10 Isolated Fixture Street');
+  await page.getByLabel('City / Area').fill('Synthetic City');
+  await page.getByLabel('Street address').fill('10 Isolated Fixture Street');
 }
 test.beforeEach(async ({ context }) => restrict(context));
 
@@ -29,6 +30,7 @@ test('real React/API/disposable database guest COD order preserves pending deliv
   await page.getByRole('button', { name: 'Place Order', exact: true }).click();
   const result = await response; expect(result.status()).toBe(201); const order = (await result.json()).data.order;
   expect(order.paymentState).toBe('unpaid'); expect(order.totals.shippingPiastres).toBeNull(); expect(order.shipping.amountPiastres).toBeNull();
+  await page.getByRole('link', {name:'View order status',exact:true}).click();
   await expect(page).toHaveURL(/\/orders\//); await page.reload(); await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); expect(errors).toEqual([]);
   console.log(JSON.stringify({ audit: 'connected-enabled-cod', realAPI: true, disposableDB: true, providers: 'mocked', orderState: order.paymentState, pendingShipping: true }));

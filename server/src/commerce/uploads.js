@@ -104,7 +104,7 @@ async function policyForUpload(owner, body) {
   }
   if (body.purpose === 'payment_proof') {
     if (!mongoose.isObjectIdOrHexString(body.orderId)) throw fail('ORDER_REQUIRED', 'Create an order before transferring and uploading proof.');
-    const order = await Order.findOne({ _id: body.orderId, owner, orderChannel: { $ne: 'owner_quotation' }, accountingVersion: { $in: [1, 2] }, fulfillmentState: { $nin: ['cancelled', 'returned', 'delivery_failed'] } }).select('_id lines engraving accountingVersion paymentGroups paymentMethod charges').lean();
+    const order = await Order.findOne({ _id: body.orderId, owner, orderChannel: { $ne: 'owner_quotation' }, accountingVersion: { $in: [1, 2] }, fulfillmentState: { $nin: ['cancelled', 'returned', 'delivery_failed'] } }).select('_id lines engraving engravingPaymentPolicy fulfillmentState accountingVersion paymentGroups paymentMethod charges').lean();
     if (!order) throw fail('ORDER_NOT_FOUND', 'No eligible owned order was found.', 404);
     if (groupedOrder(order)) {
       const group = order.paymentGroups.find(group => group.id === body.paymentScope);

@@ -27,3 +27,17 @@ export function clearCheckoutSession(owner) {
   sessions.delete(storageKey(owner));
   try { sessionStorage.removeItem(storageKey(owner)); } catch { /* Confirmation must never fail because storage is unavailable. */ }
 }
+
+// Recovery stores only an opaque order ID. Order details are always re-authorized
+// by the server and never cached in browser persistence.
+export function completedCheckout(owner, orderId) {
+  const key = `${storageKey(owner)}:completed`;
+  if (orderId !== undefined) {
+    if (!/^[a-f0-9]{24}$/i.test(orderId)) return null;
+    sessions.set(key, orderId);
+    try { sessionStorage.setItem(key, orderId); } catch { /* Memory recovery remains available. */ }
+  }
+  let value = sessions.get(key);
+  if (!value) { try { value = sessionStorage.getItem(key); } catch { /* Restricted storage. */ } }
+  return /^[a-f0-9]{24}$/i.test(value || '') ? value : null;
+}

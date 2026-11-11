@@ -1,9 +1,10 @@
+import { ApprovedFaq } from '../components/PublicContent.jsx';
 import { Link } from 'react-router-dom';
 import PageShell from '../components/PageShell.jsx';
 import PageMetadata from '../seo/PageMetadata.jsx';
 import { contactTracking } from '../tracking/client.js';
 import { whatsappUrl } from '../utils/contact.js';
-import { fixedPages, publicContacts, contentPublicationApproved, legalReviewNotice } from '../../../shared/storefront-content.mjs';
+import { fixedPages, fixedFaq, publicContacts, contentPublicationApproved, legalReviewNotice } from '../../../shared/storefront-content.mjs';
 import '../information-pages.css';
 
 export default function StaticPage({ page }) {
@@ -19,6 +20,7 @@ export default function StaticPage({ page }) {
       </article>
     </div>
     <section className="information-support" aria-labelledby="support-heading"><div><p className="eyebrow">HERE FOR THE DETAILS</p><h2 id="support-heading">A thoughtful gift starts with a conversation.</h2><p>For order support, include your order or request reference.</p></div><div className="information-actions"><a className="button button-dark" href={whatsappUrl(publicContacts.whatsapp)} target="_blank" rel="noopener noreferrer" onClick={contactTracking}>Chat on WhatsApp</a><a href={`mailto:${publicContacts.email}`} onClick={contactTracking}>{publicContacts.email}</a><a href={publicContacts.instagram} target="_blank" rel="noopener noreferrer" onClick={contactTracking}>Find us on Instagram</a></div></section>
+    {page === 'contact' && <section id="questions" className="information-faq" aria-labelledby="all-questions-heading"><h2 id="all-questions-heading">Questions about your gift</h2><ApprovedFaq entries={fixedFaq} categorized/></section>}
     <nav className="information-related" aria-label="Related information">{Object.entries(fixedPages).filter(([slug]) => slug !== page).map(([slug, value]) => <Link key={slug} to={`/${slug}`}>{value.title}</Link>)}<Link to="/shop">Explore the Shop</Link></nav>
   </main>;
 }

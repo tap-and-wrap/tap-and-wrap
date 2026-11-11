@@ -237,3 +237,21 @@ test('new financial endpoints enforce administrator, CSRF and Origin checks; dup
   const saved = await Order.findById(order.id).lean(); assert.equal(JSON.stringify(presentOrder(saved)).includes('PRIVATE_BANK_NOTE'), false);
   assert.equal(JSON.stringify(presentOrder(saved, { admin: true })).includes('PRIVATE_BANK_NOTE'), true);
 });
+
+
+test('structured delivery and optional email survive immutable retry without failed email events', async () => {
+  await addCartItem(owner, { productId: String(product._id), quantity: 1 });
+  const checkoutKey = randomUUID();
+  await prepareCheckout(owner, { checkoutKey, paymentMethod: 'cod', governorate: 'cairo' });
+  const details = { name: 'Synthetic Customer', phone: '01012345678', governorate: 'cairo', addressVersion: 'delivery-address-v2', city: 'Synthetic Area', street: '10 Synthetic Street', building: 'Floor 2', notes: 'Synthetic delivery note' };
+  const input = { checkoutKey, paymentMethod: 'cod', customer: details };
+  const accepted = await placeOrder(owner, input);
+  assert.equal(accepted.customer.address, 'Synthetic Area, 10 Synthetic Street, Floor 2');
+  assert.equal(accepted.customer.city, details.city);
+  assert.equal(accepted.customer.email, undefined);
+  assert.equal((await placeOrder(owner, input)).id, accepted.id);
+  assert.equal(await Order.countDocuments({ owner }), 1);
+  assert.equal(await NotificationEvent.countDocuments({ orderId: accepted.id, event: 'order_received' }), 0);
+  await assert.rejects(placeOrder(owner, { ...input, checkoutKey: randomUUID(), customer: { ...details, city: '', email: 'invalid' } }), { name: 'ZodError' });
+  await assert.rejects(placeOrder(owner, { ...input, checkoutKey: randomUUID(), customer: { ...details, address: 'Contradictory duplicate address' } }), { name: 'ZodError' });
+});

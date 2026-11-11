@@ -41,7 +41,9 @@ export function engravingUploadIds(spec) {
 }
 export const isEngravingOrder = order => order?.lines?.some(line => isEngravingKind(line.kind)) === true;
 // A missing/corrupt gate on a service order must never default to authorization.
-export const engravingCollectionAllowed = order => !isEngravingOrder(order) || order.engraving?.collectionAuthorized === true;
+export const UPFRONT_ENGRAVING_POLICY = 'standalone-checkout-payment-v1';
+export const upfrontEngravingPayment = order => order?.engravingPaymentPolicy === UPFRONT_ENGRAVING_POLICY;
+export const engravingCollectionAllowed = order => !isEngravingOrder(order) || upfrontEngravingPayment(order) || order.engraving?.collectionAuthorized === true;
 
 export function engravingFileEntries(spec) {
   if (spec?.contractVersion !== 'engraving-spec-v2') return [['itemPhotoUploadId', spec?.itemPhotoUploadId, 'item_photo'], ['surfacePhotoUploadId', spec?.surfacePhotoUploadId, 'surface_photo'], ['artworkUploadId', spec?.content?.artworkUploadId, 'personal_artwork']].filter(([, id]) => id);

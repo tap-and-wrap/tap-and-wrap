@@ -59,3 +59,5 @@
   .review-marquee-group[aria-hidden="true"] { display: none; }
   .home-faq-answer { transition: none; }
 }
+
+.review-confirmed{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;color:var(--tw-rose-dark,#915b50);margin-inline:6px;min-width:24px;min-height:24px}.review-confirmed:focus-visible{outline:2px solid currentColor;border-radius:50%}

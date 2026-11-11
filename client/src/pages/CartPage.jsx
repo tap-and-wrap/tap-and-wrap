@@ -25,22 +25,24 @@ export default function CartPage() {
         if(isEngravingKind(item.kind)) return <EngravingCartCard key={key} item={item} pending={pending} remove={remove}/>;
         const gift=item.kind==='gift_box_v2', name=gift?'Gift Box':item.name||'Unavailable product';
         const url=item.slug?productHref(item):null;
+        const photos = item.photoPurchase || item.photoSelection;
+        const hasDetails = gift || Boolean(item.variantKey || item.productEngraving || item.customization || photos && photos.mode !== 'as_is' || item.personalization && Object.keys(item.personalization).length || item.attachments?.expiresAt);
         const photo=item.mainImageUrl?<img src={item.mainImageUrl} alt={name} loading="lazy"/>:<span>Product image unavailable</span>;
-        return <CartLine key={key} item={item} name={name} title={!gift&&url?<Link to={url}>{name}</Link>:null} image={gift?<GiftBoxPreview giftBox={item.giftBox}/>:url?<Link to={url} aria-label={`View ${name}`}>{photo}</Link>:photo} pending={pending} setQuantity={setQuantity} remove={remove} recovery={item.attachments?.replacementRequired&&url?<Link to={url}>Review product and replace files</Link>:null} design={gift || Boolean(item.productEngraving || item.customization || item.personalization && Object.keys(item.personalization).length)}>
+        return <CartLine key={key} hasDetails={hasDetails} edit={photos && url && !item.productEngraving ? <Link to={`${url}?photoEdit=${item.id}`}>Edit photo choices</Link> : null} item={item} name={name} title={!gift&&url?<Link to={url}>{name}</Link>:null} image={gift?<GiftBoxPreview giftBox={item.giftBox}/>:url?<Link to={url} aria-label={`View ${name}`}>{photo}</Link>:photo} pending={pending} setQuantity={setQuantity} remove={remove} recovery={item.attachments?.replacementRequired&&url?<Link to={url}>Review product and replace files</Link>:null} design={gift || Boolean(item.productEngraving || item.customization || item.personalization && Object.keys(item.personalization).length)}>
           {gift?<GiftBoxCartSummary giftBox={item.giftBox}/>:<>
-            <dl><div><dt>Product</dt><dd>{url?<Link to={url}>{name}</Link>:name}</dd></div>{item.variantKey&&<div><dt>Option</dt><dd>{item.variantLabel||item.variantKey}</dd></div>}</dl>
+            <dl>{item.variantKey&&<div><dt>Option</dt><dd>{item.variantLabel||item.variantKey}</dd></div>}</dl>
             <PersonalizationSummary values={item.personalization} definitions={item.personalizationDefinitions}/>
-            {(item.photoPurchase || item.photoSelection) && <><SavedProductPhotos purchase={item.photoPurchase || { ...item.photoSelection, slots: [] }} values={item.personalization}/>{url && !item.productEngraving && <Link to={`${url}?photoEdit=${item.id}`}>Edit photo choices</Link>}</>}
+            {(item.photoPurchase || item.photoSelection) && <><SavedProductPhotos purchase={item.photoPurchase || { ...item.photoSelection, slots: [] }} values={item.personalization}/></>}
             {item.productEngraving && <><p>Product engraving ? {money(item.productEngraving.surchargePiastres)} per item</p><SavedProductEngraving cartLineId={item.id}/>{url && <Link to={`${url}?engravingEdit=${item.id}`}>Edit engraving design</Link>}</>}
             {item.customization&&<p>Configured for you{item.customization.templateName?` · ${item.customization.templateName}`:''}</p>}
           </>}
           {item.attachments?.expiresAt&&<p className="commerce-muted">Private files expire <time dateTime={item.attachments.expiresAt}>{new Date(item.attachments.expiresAt).toLocaleString()}</time>. Adding to cart does not extend their lifetime.</p>}
         </CartLine>;
       })}</section>
-      <aside className="commerce-summary"><h2>Order Summary</h2><dl><div><dt>Subtotal</dt><dd>{money(cart.subtotalPiastres)}</dd></div><div><dt>Delivery</dt><dd>Confirmed at checkout</dd></div></dl><p className="commerce-muted">Eligible discounts are applied at checkout.</p>
-        {mixedCheckout&&<p className="commerce-muted">One order, with engraving payment deferred until inspection and design acceptance.</p>}
+      <aside className="commerce-summary"><h2>Order Summary</h2><dl><div><dt>Subtotal</dt><dd>{money(cart.subtotalPiastres)}</dd></div><div><dt>Delivery</dt><dd>Confirmed separately</dd></div></dl><p className="commerce-muted">Eligible discounts are applied at checkout.</p>
+        {mixedCheckout&&<p className="commerce-muted">One order. The engraving price is included at checkout; inspection and final design acceptance come before engraving work.</p>}
         {gifts&&!mixedCheckout&&<p className="commerce-muted">Gift Boxes support COD or InstaPay at checkout. Transfers are verified before preparation.</p>}
-        {engraving&&!mixedCheckout&&<p className="commerce-muted">Submit your engraving request first. Payment is requested only after inspection, design review and your acceptance.</p>}
+        {engraving&&!mixedCheckout&&<p className="commerce-muted">The engraving price is included at checkout. We inspect your item and confirm your final design before engraving work.</p>}
         {invalid&&<p className="form-error" role="alert">Review unavailable items before checkout.</p>}
         {checkoutEnabled&&!invalid?<Link className="button button-primary" to="/checkout">Proceed to Checkout</Link>:<><button className="button button-primary" disabled>Checkout unavailable</button>{!mixedCheckout&&!invalid&&<p className="commerce-muted">Online ordering is currently unavailable for this cart. Your items remain saved.</p>}</>}
         <Link to="/shop" className="commerce-continue">Continue shopping</Link>
