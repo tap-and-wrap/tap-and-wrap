@@ -61,7 +61,7 @@ schema.pre('validate', function () {
   if (!this.allowedPaymentMethods.includes(this.paymentMethod)) this.invalidate('paymentMethod', 'Use an accepted available payment method');
   if (this.orderChannel === 'owner_quotation') {
     if (!this.quotationAcceptedAt) this.invalidate('quotationAcceptedAt', 'Custom quotations must be accepted before creating a payable order');
-    if (this.allowedPaymentMethods.includes('cod') && (!this.codAuthorizedAt || this.codAuthorizedAt > this.quotationAcceptedAt)) this.invalidate('codAuthorizedAt', 'Custom COD requires explicit authorization before acceptance');
+    if (!allPaymentMethods(this) && this.allowedPaymentMethods.includes('cod') && (!this.codAuthorizedAt || this.codAuthorizedAt > this.quotationAcceptedAt)) this.invalidate('codAuthorizedAt', 'Custom COD requires explicit authorization before acceptance');
   }
 });
 schema.index({ owner: 1, checkoutKey: 1 }, { unique: true });

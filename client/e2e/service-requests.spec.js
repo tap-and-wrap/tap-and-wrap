@@ -100,9 +100,13 @@ test('lost submission retries the same request and verified files; reload recove
 test('admin saves quotation, opens a manual message, records sharing/acceptance then creates a linked unpaid order', async ({ page }) => {
   const data = await fixture(page, { role: 'admin', initial: requestRecord() }); await page.setViewportSize({ width: 320, height: 900 }); await page.goto(`/admin/requests/${id}`);
   await page.getByLabel('Confirmed product/custom-work unit amount (EGP)').fill('450'); await page.getByLabel('Confirmed delivery fee (EGP)').fill('90'); await page.getByRole('button', { name: 'Save new quotation version' }).click();
+  expect(data.actions[0].quote.allowedPaymentMethods).toEqual(['cod','instapay']);
+  await expect(page.getByRole('checkbox',{name:/explicitly authorize COD/i})).toHaveCount(0);
+  await expect(page.getByText('New quotations include Cash on Delivery and InstaPay.',{exact:false})).toBeVisible();
   await expect(page.getByLabel('Saved WhatsApp quotation', { exact: true })).toHaveValue(/540.00/);
   await expect(page.getByRole('link', { name: 'Open WhatsApp', exact: true })).toHaveAttribute('href', /^https:\/\/wa.me\//); expect(data.actions).toHaveLength(1);
   await page.getByLabel('Private review / WhatsApp evidence note').fill('Actual manual sharing and customer reply evidence'); await page.getByRole('button', { name: 'Record quotation actually shared' }).click();
+  await chooseOption(page.getByLabel('Customer accepted payment method'), 'cod'); await chooseOption(page.getByLabel('Customer accepted payment method'), 'instapay');
   await page.getByLabel('Customer confirmed this version and method through WhatsApp').check(); await page.getByRole('button', { name: 'Record WhatsApp acceptance', exact: true }).click();
   await chooseOption(page.getByLabel('Agreed delivery governorate'), 'cairo'); await page.getByLabel('Agreed delivery address').fill('10 Isolated Delivery Street');
   await page.getByRole('button', { name: 'Create order from accepted quotation' }).click(); await expect(page.getByRole('heading', { name: 'Linked order #681243' })).toBeVisible();

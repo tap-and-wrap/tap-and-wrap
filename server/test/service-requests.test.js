@@ -89,13 +89,11 @@ test('concurrent immutable retries create one request; changed payloads cannot r
   await assert.rejects(create({ ...body, details: { ...body.details, contents: 'Changed after uncertainty' } }));
   assert.equal(serviceRequestInput.safeParse({ ...body, quote: { amount: 1 } }).success, false);
 });
-test('quotation sharing and actual WhatsApp acceptance are explicit, versioned and method-restricted', async () => {
+test('new quotations offer both methods while sharing and actual acceptance remain explicit and versioned', async () => {
   const record = await create(); await assert.rejects(action(record, 'accept', { customerConfirmed: true, method: 'instapay' }));
-  await assert.rejects(action(record, 'prepare', { quote: quote([], { allowedPaymentMethods: ['cod'] }) }));
-  const prepared = await action(record, 'prepare', { quote: quote() }); const text = requestWhatsapp(prepared); assert.equal(text.deliveryConfirmed, false); assert.match(text.text, /01060673073/);
+  const prepared = await action(record, 'prepare', { quote: quote() }); const text = requestWhatsapp(prepared); assert.equal(text.deliveryConfirmed, false); assert.match(text.text, /01060673073/); assert.deepEqual(prepared.quotations[0].allowedPaymentMethods, ['cod','instapay']); assert.equal(prepared.quotations[0].paymentPolicyVersion,'all-methods-v1');
   assert.equal((await ServiceRequest.findById(record._id)).state, 'quote_prepared');
   await action(record, 'share'); await assert.rejects(action(record, 'accept', { customerConfirmed: false, method: 'instapay' }));
-  await assert.rejects(action(record, 'accept', { customerConfirmed: true, method: 'cod' }));
   const saved = await action(record, 'accept', { customerConfirmed: true, method: 'instapay' }); assert.equal(saved.quotations[0].acceptance.channel, 'whatsapp');
   const revised = await action(record, 'prepare', { quote: quote([], { baseUnitPiastres: 12000 }) }); assert.equal(revised.quotations.length, 2); assert.ok(revised.quotations[0].acceptance); assert.equal(revised.quotations[1].acceptance, undefined);
   await assert.rejects(action(record, 'convert'));
@@ -106,7 +104,7 @@ test('conversion requires authorized launch, real approved inventory and atomica
   await assert.rejects(action(record, 'convert')); assert.equal(await Order.countDocuments(), 0); assert.equal((await ComponentOption.findById(pack._id)).inventory.quantity, 10);
   await ComponentOption.updateOne({ _id: pack._id }, { $set: { 'inventory.quantity': 2, 'inventory.approved': true } });
   const saved = await action(record, 'convert'); await action(record, 'convert'); const order = await Order.findById(saved.orderId); assert.equal(await Order.countDocuments(), 1); assert.equal((await ComponentOption.findById(pack._id)).inventory.quantity, 1);
-  assert.equal(order.orderChannel, 'owner_quotation'); assert.equal(order.allowedPaymentMethods[0], 'instapay'); assert.equal(order.acceptedQuotation.totalPiastres, 17500); assert.equal((await orderFiles(order)).length, 1);
+  assert.equal(order.orderChannel, 'owner_quotation'); assert.deepEqual([...order.allowedPaymentMethods], ['cod','instapay']); assert.equal(order.paymentPolicyVersion,'all-methods-v1'); assert.equal(order.acceptedQuotation.totalPiastres, 17500); assert.equal((await orderFiles(order)).length, 1);
   assert.equal((await Upload.findById(body.uploadIds[0])).quotaReleased, true);
 });
 test('custom orders remain partially paid until the full accepted quote is reconciled through the existing ledger', async () => {
@@ -116,8 +114,8 @@ test('custom orders remain partially paid until the full accepted quote is recon
   await assert.rejects(action(record, 'prepare', { quote: quote([], { baseUnitPiastres: 20000 }) }));
   await assert.rejects(mutateOrderAccounting(String(paid._id), null, { action: 'quote_charge', revision: paid.revision, kind: 'addon' }, admin));
 });
-test('accepted custom COD requires prior authorization and actual collection after dispatch', async () => {
-  const record = await create(); await accepted(record, quote([], { allowedPaymentMethods: ['cod'], codAuthorized: true }), 'cod'); const converted = await action(record, 'convert');
+test('new bespoke COD needs no extra authorization and still requires actual collection after dispatch', async () => {
+  const record = await create(); await accepted(record, quote([], { allowedPaymentMethods: ['instapay'], codAuthorized: false }), 'cod'); const converted = await action(record, 'convert'); const saved=await Order.findById(converted.orderId); assert.equal(saved.paymentState,'unpaid'); assert.equal(saved.codAuthorizedAt,null); assert.deepEqual([...saved.allowedPaymentMethods],['cod','instapay']);
   await assert.rejects(settle(converted.orderId, 15000, { method: 'cod' }));
   for (const fulfillmentState of ['confirmed', 'preparing', 'out_for_delivery']) { const order = await Order.findById(converted.orderId); await changeOrderState(order._id, null, { revision: order.revision, fulfillmentState }, admin); }
   assert.equal((await settle(converted.orderId, 15000, { method: 'cod' })).paymentState, 'paid');
@@ -190,4 +188,14 @@ test('admin request pricing approval is independent, normalizes zero to pending 
     assert.equal(record.requestPolicy.pricing, expected); assert.equal(record.inventory.approved, false); assert.equal(record.inventory.quantity, 10); assert.equal(record.priceApproved, false);
   }
   assert.equal((await fetch(path, { method: 'PATCH', headers, body: JSON.stringify({ expectedRevision: 0, requestPolicy: { enabled: false } }) })).status, 400);
+});
+
+
+test('historical offered/accepted quotation terms survive conversion without adopting new methods',async()=>{
+ const record=await create();await action(record,'prepare',{quote:quote()});
+ await ServiceRequest.updateOne({_id:record._id},{$unset:{'quotations.0.paymentPolicyVersion':1},$set:{'quotations.0.allowedPaymentMethods':['instapay']}});
+ await action(record,'share');await assert.rejects(action(record,'accept',{customerConfirmed:true,method:'cod'}));
+ await action(record,'accept',{customerConfirmed:true,method:'instapay'});
+ const converted=await action(record,'convert'),saved=await Order.findById(converted.orderId);
+ assert.equal(saved.paymentPolicyVersion,undefined);assert.deepEqual([...saved.allowedPaymentMethods],['instapay']);
 });

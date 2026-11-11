@@ -120,7 +120,7 @@ export async function mutateOrderAccounting(id, owner, input, actor) {
         }
         const allowed = input.allowedPaymentMethods || [input.collectionMethod];
         if (!allowed.includes(input.collectionMethod)) fail('The proposed collection method must be one of the saved available payment methods.');
-        if ((!allPaymentMethods(order) && order.personalized || order.orderChannel === 'owner_quotation') && allowed.includes('cod') && !input.codAuthorized) fail('Explicitly authorize personalized/custom COD before offering it for acceptance.');
+        if ((!allPaymentMethods(order) && (order.personalized || order.orderChannel === 'owner_quotation')) && allowed.includes('cod') && !input.codAuthorized) fail('Explicitly authorize personalized/custom COD before offering it for acceptance.');
         if (charge.state === 'accepted') fail('Accepted charges cannot be overwritten. Keep the agreed financial history.');
         charge.allowedPaymentMethods = allowed; charge.quotationVersion = (charge.quotationVersion || 0) + 1;
         if (input.codAuthorized) charge.codAuthorizedAt = now;

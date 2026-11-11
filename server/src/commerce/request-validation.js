@@ -19,5 +19,5 @@ export const requestActionInput = z.object({
   revision: z.number().int().nonnegative(), action: z.enum(['review', 'prepare', 'share', 'accept', 'convert', 'decline', 'cancel']),
   reason: text(500).min(2), customerConfirmed: z.boolean().optional(), method: z.enum(['cod', 'instapay']).optional(), acceptedAt: z.iso.datetime().optional(),
   delivery: z.object({ governorate: text(50).min(1), address: text(500).min(10) }).strict().optional(),
-  quote: z.object({ baseUnitPiastres: amount, discountPiastres: amount, charges: z.array(charge).max(25), shippingPiastres: amount, shippingFree: z.boolean(), allowedPaymentMethods: z.array(z.enum(['cod', 'instapay'])).min(1).max(2).refine(value => new Set(value).size === value.length), codAuthorized: z.boolean() }).strict().optional(),
+  quote: z.object({ baseUnitPiastres: amount, discountPiastres: amount, charges: z.array(charge).max(25), shippingPiastres: amount, shippingFree: z.boolean(), allowedPaymentMethods: z.array(z.enum(['cod', 'instapay'])).min(1).max(2).refine(value => new Set(value).size === value.length), codAuthorized: z.boolean().optional() }).strict().optional(),
 }).strict();

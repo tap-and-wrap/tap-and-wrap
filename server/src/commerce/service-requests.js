@@ -1,3 +1,4 @@
+import { ALL_METHODS_POLICY, allPaymentMethods } from '../../../shared/order-payment-policy.mjs';
 import { randomBytes } from 'node:crypto';
 import mongoose from 'mongoose';
 import { ServiceRequest } from '../models/ServiceRequest.js';
@@ -119,7 +120,7 @@ export function requestWhatsapp(record) {
   for (const [field, label] of [['productReference', 'Item reference'], ['occasion', 'Occasion'], ['style', 'Presentation'], ['colors', 'Colors'], ['contents', 'Desired contents'], ['recipient', 'Recipient'], ['message', 'Gift message'], ['engravingType', 'Engraving type'], ['engravingText', 'Engraving text'], ['font', 'Font'], ['placement', 'Placement'], ['material', 'Material'], ['instructions', 'Instructions']]) if (record.details[field]) lines.push(`${label}: ${record.details[field]}`);
   if (quote.discountPiastres) lines.push(`Discount: ${money(quote.discountPiastres)}`);
   for (const charge of quote.charges) lines.push(`${charge.label} × ${charge.quantity}: ${charge.pricing === 'free' ? 'Free' : money(charge.unitPricePiastres * charge.quantity)}`);
-  lines.push(`Delivery: ${quote.shippingFree ? 'Free (explicitly confirmed)' : money(quote.shippingPiastres)}`, `Quotation total: ${money(quote.totalPiastres)}`, `Available payment: ${quote.allowedPaymentMethods.map(method => method === 'cod' ? 'Cash on Delivery (owner authorized)' : 'InstaPay').join(' / ')}`);
+  lines.push(`Delivery: ${quote.shippingFree ? 'Free (explicitly confirmed)' : money(quote.shippingPiastres)}`, `Quotation total: ${money(quote.totalPiastres)}`, `Available payment: ${quote.allowedPaymentMethods.map(method => method === 'cod' ? allPaymentMethods(quote) ? 'Cash on Delivery' : 'Cash on Delivery (owner authorized)' : 'InstaPay').join(' / ')}`);
   lines.push('Please confirm this quotation version and your chosen payment method through WhatsApp. We record acceptance before requesting payment.', 'Do not transfer until the owner confirms your accepted order reference and inventory allocation. Agreed InstaPay payments go to 01060673073. Send the screenshot through WhatsApp; payment is confirmed only after independent account reconciliation.', 'No website account or return visit is required.');
   if (record.linkedOrderNumber) lines.push(`Accepted order reference: #${record.linkedOrderNumber}. Recorded payment status: ${record.linkedPaymentState.replaceAll('_', ' ')}. Recorded outstanding: ${money(record.linkedOutstandingPiastres)}. Never repeat a transfer because a message or screenshot failed.`);
   const text = lines.join('\n'), phone = record.customer.phone.replace(/\D/g, '');
@@ -128,15 +129,14 @@ export function requestWhatsapp(record) {
 function prepareQuotation(record, input, actor, now) {
   assertLegacyRequestAction(record, 'prepare');
   if (!input.quote || record.quotations.length >= 20) throw requestError('Enter a bounded complete quotation.');
-  const quote = structuredClone(input.quote);
+  const quote = { ...structuredClone(input.quote), allowedPaymentMethods: ['cod', 'instapay'], paymentPolicyVersion: ALL_METHODS_POLICY };
   const base = checkedMoney(quote.baseUnitPiastres * record.details.quantity);
   if (quote.discountPiastres > base || (!quote.shippingFree && quote.shippingPiastres <= 0) || quote.shippingFree && quote.shippingPiastres !== 0) throw requestError('Confirm delivery explicitly and keep the discount within the product/work amount.');
-  if (quote.allowedPaymentMethods.includes('cod') && !quote.codAuthorized) throw requestError('Explicitly authorize personalized COD before offering it for acceptance.');
   const ids = quote.charges.filter(charge => charge.componentId).map(charge => charge.componentId);
   if (new Set(ids).size !== ids.length || ids.length !== record.components.length || record.components.some(item => !quote.charges.some(charge => charge.componentId === item.componentId && charge.quantity === item.quantity))) throw requestError('Quote every requested component once with its requested quantity.');
   quote.totalPiastres = total([base - quote.discountPiastres, quote.shippingPiastres, ...quote.charges.map(charge => charge.quantity * charge.unitPricePiastres)]);
   if (quote.totalPiastres <= 0) throw requestError('A payable custom quotation requires a confirmed positive total.');
-  return { ...quote, version: record.quotations.length + 1, preparedAt: now, preparedBy: String(actor._id), codAuthorizedAt: quote.allowedPaymentMethods.includes('cod') ? now : null };
+  return { ...quote, version: record.quotations.length + 1, preparedAt: now, preparedBy: String(actor._id), codAuthorizedAt: null };
 }
 async function allocateSource(Model, id, quantity, service, { session, variantKey, details, product = false } = {}) {
   const record = product ? await requestProduct(id, { session, fence: true }) : await requestComponent(id, service, { session, fence: true });
@@ -165,7 +165,7 @@ async function convertRequest(record, quote, session, actor, delivery) {
     ...quote.charges.map((charge, index) => ({ id: `addon_${index + 1}`, kind: 'addon', label: charge.label, amountPiastres: charge.quantity * charge.unitPricePiastres, pricing: charge.pricing === 'free' ? 'free' : 'quoted', state: 'accepted' })),
   ].map(charge => ({ ...charge, collectionMethod: quote.acceptance.method, allowedPaymentMethods: quote.allowedPaymentMethods, createdAt: quote.preparedAt, quotedAt: quote.preparedAt, acceptedAt: quote.acceptance.at, acceptedBy: 'admin', acceptanceChannel: 'whatsapp', quotationVersion: quote.version }));
   const subtotal = quote.baseUnitPiastres * record.details.quantity, merchandise = subtotal - quote.discountPiastres;
-  const order = new Order({ owner: record.owner, orderNumber: generateOrderNumber(), checkoutKey: `request:${record._id}:v${quote.version}`, requestHash: fingerprint(quote),
+  const order = new Order({ ...(allPaymentMethods(quote) ? { paymentPolicyVersion: ALL_METHODS_POLICY } : {}), owner: record.owner, orderNumber: generateOrderNumber(), checkoutKey: `request:${record._id}:v${quote.version}`, requestHash: fingerprint(quote),
     customer: { ...record.customer, ...delivery }, accountingVersion: 1, orderChannel: 'owner_quotation', personalized: true, allowedPaymentMethods: quote.allowedPaymentMethods,
     quotationAcceptedAt: quote.acceptance.at, codAuthorizedAt: quote.codAuthorizedAt, serviceRequestId: record._id,
     acceptedQuotation: { reference: record.reference, version: quote.version, totalPiastres: quote.totalPiastres },
