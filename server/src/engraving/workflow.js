@@ -1,3 +1,4 @@
+import { allPaymentMethods } from '../../../shared/order-payment-policy.mjs';
 import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 import { upfrontEngravingPayment } from '../../../shared/engraving/definitions.mjs';
 import { groupedOrder, groupedPaymentState, engravingWorkAllowed, overallFulfillment } from '../commerce/payment-groups.js';
@@ -50,9 +51,9 @@ export async function engravingAction(id, raw, actor, owner = null) {
       if (groupedOrder(order)) {
         if (upfrontEngravingPayment(order) && input.collectionMethod && input.collectionMethod !== order.paymentMethod) fail('Keep the accepted checkout payment method. A work approval cannot change an accepted financial arrangement.');
         const method = input.collectionMethod || order.paymentGroups.find(group => group.id === 'engraving').method;
-        if (method === 'cod' && (!input.codAuthorized || !input.internalNote)) fail('Explicit owner authorization and agreement evidence are required before offering engraving COD.');
+        if (method === 'cod' && !allPaymentMethods(order) && (!input.codAuthorized || !input.internalNote)) fail('Explicit owner authorization and agreement evidence are required before offering engraving COD.');
         workflow.collectionMethod = method;
-        if (method === 'cod') workflow.codCommitment = {ownerAuthorizedAt:at, ownerAuthorizedBy:String(actor._id), offeredAt:at, customerAccepted:input.customerConfirmed === true, ...(input.customerConfirmed ? {acceptedAt:at, channel:'admin_recorded_customer', privateEvidence:input.internalNote} : {})};
+        if (method === 'cod') workflow.codCommitment = {ownerAuthorizedAt:at, ownerAuthorizedBy:String(actor._id), offeredAt:at, customerAccepted:allPaymentMethods(order) || input.customerConfirmed === true, ...(allPaymentMethods(order) ? {acceptedAt:order.createdAt, channel:'checkout'} : input.customerConfirmed ? {acceptedAt:at, channel:'admin_recorded_customer', privateEvidence:input.internalNote} : {})};
       } else paymentState = 'awaiting_transfer';
     } else if (input.action === 'accept_cod') {
       if (!groupedOrder(order) || closed || !workflow.collectionAuthorized || workflow.collectionMethod !== 'cod' || !workflow.codCommitment?.ownerAuthorizedAt || !input.customerConfirmed || admin && !input.internalNote) fail('Accept the current owner-authorized COD arrangement after design approval.');

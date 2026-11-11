@@ -56,7 +56,7 @@ for (const width of [320,390,768,1024,1440]) test(`storefront, product, cart and
   await page.goto('/checkout');
   await fillCheckout(page);
   await page.getByLabel('Email (optional)',{exact:true}).fill('');
-  await page.getByLabel('Building / Floor / Apartment (optional)').fill('Building A, floor 2');
+  await page.getByLabel('Building (optional)').fill('Building A, floor 2');
   await expect(page.locator('input[type=date]')).toHaveCount(0);
   await page.evaluate(() => window.scrollTo(0,0));
   await page.screenshot({path:`${screenshots}/checkout-${width}.png`,fullPage:true});

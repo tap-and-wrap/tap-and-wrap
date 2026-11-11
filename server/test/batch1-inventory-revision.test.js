@@ -92,16 +92,11 @@ for (const [kind, mode] of [['product', 'tracked'], ['variant', 'tracked'], ['co
     const path = kind === 'component' ? `/admin/commerce/components/${component._id}` : `/admin/products/${product._id}`;
     const key = kind === 'component' ? 'component' : 'product';
     const loaded = success(await request(path))[key];
-    const intent = await checkout(product, { ...(kind === 'variant' ? { variantKey: 'red' } : {}), ...(kind === 'component' ? { paymentMethod: 'instapay' } : {}), ...(template ? { customization: {
+    const intent = await checkout(product, { ...(kind === 'variant' ? { variantKey: 'red' } : {}), ...(kind === 'component' ? { paymentMethod: 'cod' } : {}), ...(template ? { customization: {
       templateId: String(template._id), version: 1, selections: [{ groupKey: 'extras', optionKey: 'component', quantity: 1 }], fields: {},
     } } : {}) });
-    if (kind === 'component') {
-      const codKey = randomUUID();
-      success(await request('/commerce/checkout/quote', { method:'POST', headers:customer, body:{ checkoutKey:codKey, paymentMethod:'cod', governorate:'cairo' } }));
-      const denied = await request('/commerce/orders', { method:'POST', headers:customer, body:{ ...intent.body, checkoutKey:codKey, paymentMethod:'cod' } });
-      assert.equal(denied.status,409); assert.equal(denied.error.code,'QUOTATION_REQUIRED'); assert.equal(await Order.countDocuments(),0);
-    }
     const order = success(await intent.submit(), 201).order;
+    if (kind === 'component') { assert.equal(order.paymentMethod, 'cod'); assert.equal(order.paymentState, 'unpaid'); }
     const consumed = success(await request(path))[key];
     assert.equal(consumed.revision, loaded.revision + 1);
     const Model = kind === 'component' ? ComponentOption : Product;

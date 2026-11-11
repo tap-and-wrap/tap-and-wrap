@@ -26,15 +26,13 @@ export default function CheckoutPage() {
   const { cart, refresh, checkoutOwnerKey } = useCart();
   const session = useSession();
   const checkoutOwner = checkoutOwnerKey ? `checkout:${checkoutOwnerKey}` : session.ownerKey;
-  const [customer, setCustomer] = useState({ name: '', email: '', phone: '', governorate: '', addressVersion: 'delivery-address-v2', city: '', street: '', building: '', notes: '' });
+  const [customer, setCustomer] = useState({ name: '', email: '', phone: '', governorate: '', addressVersion: 'delivery-address-v3', city: '', street: '', building: '', floor: '', apartment: '', notes: '' });
   const [accepted, setAccepted] = useState(null);
   const [paymentError, setPaymentError] = useState('');
   const acceptedOwner = useRef(null);
   const [paymentMethod, setPaymentMethod] = useState('cod');
   const engravingOnly = cart.items.length > 0 && cart.items.every(item => isEngravingKind(item.kind));
   const hasEngraving = cart.items.some(item => isEngravingKind(item.kind));
-  const personalized = cart.items.some(item => !['gift_box_v2','engraving_service_v1','engraving_service_v2'].includes(item.kind) && ( item.requiresPersonalization || Object.keys(item.personalization || {}).length > 0 || item.customization || item.productEngraving));
-  useEffect(() => { if (personalized) setPaymentMethod('instapay'); }, [personalized]);
   const [discountCode, setDiscountCode] = useState('');
   const [appliedCode, setAppliedCode] = useState('');
   const [fieldError, setFieldError] = useState('');
@@ -48,7 +46,7 @@ export default function CheckoutPage() {
   const uncertain = uncertainOwner === checkoutOwner || session.ready && checkoutSession(checkoutOwner).pending;
   useEffect(() => {
     submissionKey.current = null; requestSnapshot.current = null;
-    setCustomer({ name: session.user?.name || '', email: session.user?.email || '', phone: session.user?.phone || '', governorate: '', addressVersion: 'delivery-address-v2', city: '', street: '', building: '', notes: '' });
+    setCustomer({ name: session.user?.name || '', email: session.user?.email || '', phone: session.user?.phone || '', governorate: '', addressVersion: 'delivery-address-v3', city: '', street: '', building: '', floor: '', apartment: '', notes: '' });
     setFieldErrors({}); setFieldError(''); setRecoveryMessage('');
     setUncertainOwner(null);
   }, [session.ownerKey, checkoutOwner, session.user?.name, session.user?.email, session.user?.phone]);
@@ -123,9 +121,11 @@ export default function CheckoutPage() {
         <div className="commerce-field"><label htmlFor={`${prefix}-governorate`}>Governorate</label><select {...control('governorate')} required><option value="">Select governorate</option>{(config.data.governorates || []).map((area) => <option value={area.id} key={area.id}>{area.name}</option>)}</select><FieldError id={`${prefix}-governorate`}>{fieldErrors.governorate}</FieldError></div>
         <div className="commerce-field"><label htmlFor={`${prefix}-city`}>City / Area</label><input {...control('city')} required minLength={2} maxLength={100} autoComplete="address-level2"/><FieldError id={`${prefix}-city`}>{fieldErrors.city}</FieldError></div>
         <div className="commerce-field"><label htmlFor={`${prefix}-street`}>Street address</label><input {...control('street')} required minLength={5} maxLength={300} autoComplete="address-line1"/><FieldError id={`${prefix}-street`}>{fieldErrors.street}</FieldError></div>
-        <div className="commerce-field"><label htmlFor={`${prefix}-building`}>Building / Floor / Apartment (optional)</label><input {...control('building')} maxLength={100} autoComplete="address-line2"/><FieldError id={`${prefix}-building`}>{fieldErrors.building}</FieldError></div>
+        <div className="commerce-field"><label htmlFor={`${prefix}-building`}>Building (optional)</label><input {...control('building')} maxLength={100} autoComplete="address-line2"/><FieldError id={`${prefix}-building`}>{fieldErrors.building}</FieldError></div>
+        <div className="commerce-field"><label htmlFor={`${prefix}-floor`}>Floor (optional)</label><input {...control('floor')} maxLength={50}/><FieldError id={`${prefix}-floor`}>{fieldErrors.floor}</FieldError></div>
+        <div className="commerce-field"><label htmlFor={`${prefix}-apartment`}>Apartment (optional)</label><input {...control('apartment')} maxLength={50}/><FieldError id={`${prefix}-apartment`}>{fieldErrors.apartment}</FieldError></div>
         <details className="commerce-order-notes" open={fieldErrors.notes ? true : undefined}><summary>Add delivery notes (optional)</summary><div className="commerce-field"><label htmlFor={`${prefix}-notes`}>Order notes (optional)</label><textarea {...control('notes')} maxLength={1000} rows={2}/><FieldError id={`${prefix}-notes`}>{fieldErrors.notes}</FieldError></div></details>
-      </div><p className="commerce-delivery-policy">{engravingOnly ? 'Item handoff and return arrangements are confirmed separately with the store.' : <>Delivery is calculated separately. We&apos;ll contact you on WhatsApp to confirm the fee.<small>Initial contact within 12 hours.</small></>}</p><fieldset className="commerce-payment"><legend>Payment</legend>{!personalized && <label><input type="radio" name="payment" value="cod" checked={paymentMethod === 'cod'} onChange={() => setPaymentMethod('cod')} />{engravingOnly ? 'COD on agreed return / handoff' : 'Cash on Delivery'}</label>}<label><input type="radio" name="payment" value="instapay" checked={paymentMethod === 'instapay'} onChange={() => setPaymentMethod('instapay')} />{engravingOnly ? 'InstaPay' : hasEngraving || cart.items.some(item => item.kind === 'gift_box_v2') ? 'InstaPay' : 'InstaPay \u2014 full payment'}</label>
+      </div><p className="commerce-delivery-policy">{engravingOnly ? 'Item handoff and return arrangements are confirmed separately with the store.' : <>Delivery is calculated separately. We&apos;ll contact you on WhatsApp to confirm the fee.<small>Initial contact within 12 hours.</small></>}</p><fieldset className="commerce-payment"><legend>Payment</legend><label><input type="radio" name="payment" value="cod" checked={paymentMethod === 'cod'} onChange={() => setPaymentMethod('cod')} />{engravingOnly ? 'COD on agreed return / handoff' : 'Cash on Delivery'}</label><label><input type="radio" name="payment" value="instapay" checked={paymentMethod === 'instapay'} onChange={() => setPaymentMethod('instapay')} />{engravingOnly ? 'InstaPay' : hasEngraving || cart.items.some(item => item.kind === 'gift_box_v2') ? 'InstaPay' : 'InstaPay \u2014 full payment'}</label>
         {hasEngraving && <p className="commerce-notice">Your engraving price is included at checkout. We inspect your item and confirm the final design with you before any engraving work. Handoff and return charges are confirmed separately.</p>}
         {!engravingOnly && paymentMethod === 'instapay' && <p className="commerce-payment-instructions">Payment instructions appear after your order is successfully placed. Do not transfer before receiving your order reference.</p>}
       </fieldset></fieldset></section>

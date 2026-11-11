@@ -4,7 +4,9 @@ Prepared 11 November 2026. This guide describes the implemented workflows. It is
 
 ## Before accepting online orders
 
-The owner must approve the new standalone engraving collection policy, the final shipping/refund wording, the receiving account, genuine product availability and the operational handover process. Egyptian legal review remains outstanding where already indicated on the permanent policies. Keep both `CHECKOUT_ENABLED` and `COMMERCE_LAUNCH_AUTHORIZED` off until a separate launch decision. Post-deployment inspection unexpectedly found effective checkout enabled. Only these two existing safeguards were restored to the explicitly required disabled state through a targeted Render merge; other environment settings and secrets were preserved. Confirm the disabled runtime response before any release acceptance.
+On 12 November 2026 the owner confirmed the receiving account, upfront standalone checkout collection and the final all-methods policy below. The standing workflow uses this production site for development and acceptance; once prerequisites are verified, restore both `CHECKOUT_ENABLED=true` and `COMMERCE_LAUNCH_AUTHORIZED=true` together and leave checkout operational. The earlier instruction to restore them off was superseded explicitly. Never toggle these safeguards repeatedly. Defaults for unconfigured environments remain fail-closed.
+
+All eligible new website carts offer COD and InstaPay: ordinary products, personal photos, text engraving, other required personalization, Gift Boxes (including stickers/photo prints), standalone engraving and mixed carts. Personalization requires neither a COD quotation nor advance payment. Accepted historical orders and manual bespoke quotations retain their original recorded terms. New orders record the immutable `all-methods-v1` payment policy; no migration rewrites accepted orders. Delivery/return fees still require separate agreement.
 
 New standalone engraving orders include the approved service price at checkout. Physical receipt, suitability inspection and the customer's acceptance of the final design remain mandatory before engraving work. Historical engraving orders retain their original deferred-payment terms. Do not request a second payment simply because an old order has a different workflow.
 
@@ -37,7 +39,7 @@ New enquiries/custom requests are not accepted paid orders. Use their own refere
 
 For an accepted order, open the owner order detail and review:
 
-1. Customer name, normalized Egyptian phone, optional email and complete delivery address. New addresses retain governorate, city/area, street, optional building/floor/apartment and notes; historical plain addresses remain readable.
+1. Customer name, normalized Egyptian phone, optional email and complete delivery address. New addresses retain governorate, city/area, street, separate optional Building, Floor and Apartment fields (`delivery-address-v3`); older combined v2 building details and notes; historical plain addresses remain readable.
 2. Exact items, quantities, selected variants, immutable accepted prices and separate delivery/return charges.
 3. Gift Box arrangement, component quantities, photo prints and saved sticker proof.
 4. Standalone surface/design and optional overall item photographs; catalog engraving text/font/color; ready-made personal-photo collection in its submitted order.
@@ -47,7 +49,7 @@ Private photographs, artwork and payment screenshots load through explicit autho
 
 For InstaPay, the customer creates one order first, sees that order's approved recipient and payable amount in checkout, and submits a screenshot there. They can return through the secure order page. If an upload/request fails, retry or recover the same accepted order. Do not tell them to create another order or transfer again merely to replace evidence. Check the actual receiving account before recording collection. Reject unclear evidence with an explanation, and allow replacement against the same obligation.
 
-Record COD collection only after the applicable actual delivery or handoff. A COD commitment is not collected cash. Some personalized purchases require an owner-authorized quotation for COD; do not bypass that restriction.
+Record COD collection only after the applicable actual delivery or handoff. A COD commitment is not collected cash. New website orders do not require separate COD authorization because they contain personalized items. Standalone COD can be collected at the agreed physical handoff or return. Inspection and acceptance of the current final design still gate work, never payment alone. Historical accepted restrictions remain applicable to their own orders.
 
 Delivery starts as **Confirmed separately**, not free or zero. Record the exact quotation, available method and genuine customer acceptance. Changes require a new agreement. Do not invent fees, delivery dates or national coverage.
 
@@ -84,9 +86,9 @@ No password, token, connection string or customer file belongs in handover docum
 
 ## Post-Codex publication, after owner review
 
-This coding pass must not manually dispatch SEO renewal. Once the owner has reviewed the result:
+The owner has authorized the existing tokenless renewal after activation. Use a supported workflow dispatch, or ask the owner to run the existing workflow manually if no authenticated dispatch capability is available:
 
-1. Confirm the reported reviewed `main` SHA is pushed and Render has deployed that exact SHA with readiness passing. Check that both global checkout flags are still off.
+1. Confirm the reported reviewed `main` SHA is pushed and Render has deployed that exact SHA with readiness passing. Verify checkout is operational with both approved flags true.
 2. Open [Production SEO renewal](https://github.com/tap-and-wrap/tap-and-wrap/actions/workflows/seo-renewal.yml), choose **Run workflow**, select **main**, and run the existing workflow with its existing defaults. Do not substitute an ad-hoc Vite build or overwrite runtime variables.
 3. Wait for the workflow's sealed publication and Cloudflare's native build of `seo-publication`. Verify its lock references the reviewed main SHA and record the actual publication ID, expiry and Cloudflare Worker version.
 4. Independently verify the live bootstrap/source identity, canonical HTTPS routing, robots, sitemap index and child sitemap, representative product HTML/schema and genuine withdrawn-product 404/noindex. Expired or mismatched publication data must continue to fail closed.
