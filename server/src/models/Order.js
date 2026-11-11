@@ -4,6 +4,7 @@ import { env } from '../config/env.js';
 import mongoose from 'mongoose';
 import { validOrderLineKinds } from '../gift-box/order-snapshot.js';
 const schema = new mongoose.Schema({
+  engravingPaymentPolicy: { type: String, enum: ['standalone-checkout-payment-v1'], immutable: true },
   cartAddOperations: { type: [mongoose.Schema.Types.Mixed], default: [], immutable: true },
   paymentGroups: { type: [mongoose.Schema.Types.Mixed], default: undefined, immutable: true },
   merchandiseFulfillment: { type: String, enum: ['received', 'confirmed', 'preparing', 'out_for_delivery', 'delivered', 'delivery_failed', 'returned', 'cancelled'] },
@@ -11,7 +12,7 @@ const schema = new mongoose.Schema({
   orderNumber: { type: String, required: true, unique: true, match: /^[1-9][0-9]{5}$/ },
   owner: { type: String, required: true }, userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   checkoutKey: { type: String, required: true }, requestHash: { type: String, required: true },
-  customer: { type: mongoose.Schema.Types.Mixed, required: true },
+  customer: { type: mongoose.Schema.Types.Mixed, required: true, immutable: true },
   trackingConsentId: { type: mongoose.Schema.Types.ObjectId, ref: 'TrackingConsent', default: null, immutable: true },
   lines: { type: [mongoose.Schema.Types.Mixed], required: true, immutable: true,
     validate: { validator: lines => validOrderLineKinds(lines) && validProductEngravingSnapshots(lines), message: 'Use a supported order line kind and complete immutable gift snapshot.' } },

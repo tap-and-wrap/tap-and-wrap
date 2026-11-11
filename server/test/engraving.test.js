@@ -150,21 +150,21 @@ test('configuration changes still invalidate engraving in mixed carts without mu
   const cart=await Cart.findOne({owner}); cart.items.push({id:randomUUID(),kind:'product',identity:'fixture',productId:new mongoose.Types.ObjectId(),quantity:1}); await cart.save();
   await assert.rejects(prepareCheckout(owner,{checkoutKey:randomUUID(),paymentMethod:'instapay',governorate:'cairo'}),{code:'ENGRAVING_REVIEW_REQUIRED'}); assert.equal((await readCart(owner)).items.length,2);
 });
-test('checkout preserves priced unpaid snapshot and blocks every early payment/work path', async () => {
-  const {order}=await orderFor(); assert.equal(order.totals.totalPiastres,10000); assert.equal(order.paymentState,'unpaid'); assert.deepEqual(order.inventoryClaims,[]);
-  assert.equal(presentOrder(order).paymentInstructions,null); assert.equal((await orderAccounting(order)).amountDueNowPiastres,0);
+test('new checkout permits priced payment while blocking early engraving work', async () => {
+  const {order}=await orderFor(); assert.equal(order.totals.totalPiastres,10000); assert.equal(order.paymentState,'awaiting_transfer'); assert.deepEqual(order.inventoryClaims,[]);
+  assert.equal(presentOrder(order).paymentInstructions,null); assert.equal((await orderAccounting(order)).amountDueNowPiastres,10000);
   await assert.rejects(mutateOrderAccounting(String(order._id),null,{revision:order.revision,action:'quote_charge',kind:'addon',label:'Font surcharge',pricing:'quoted',amountPiastres:500,collectionMethod:'instapay'},admin),{code:'ACCOUNTING_REVIEW_REQUIRED'});
-  await assert.rejects(signUpload(owner,{purpose:'payment_proof',paymentScope:'engraving',orderId:String(order._id),mimeType:'image/png',sizeBytes:png.length}),{code:'PAYMENT_NOT_AUTHORIZED'});
+  assert.ok((await signUpload(owner,{purpose:'payment_proof',paymentScope:'engraving',orderId:String(order._id),mimeType:'image/png',sizeBytes:png.length})).upload.id);
   for(const action of ['submit_proof','collection']) await assert.rejects(mutateOrderAccounting(String(order._id),owner,{revision:0,action},action==='collection'?admin:null),{code:'ACCOUNTING_REVIEW_REQUIRED'});
   await assert.rejects(act(order,'start'),{code:'ENGRAVING_WORKFLOW_CONFLICT'});
   await assert.rejects(act(order,'authorize_payment'),{code:'ENGRAVING_WORKFLOW_CONFLICT'});
   const event=await NotificationEvent.findOne({orderId:order._id,event:'order_received'}).lean();
-  assert.equal(event.snapshot.engravingReviewPending,true);
+  assert.equal(event.snapshot.engravingReviewPending,false);
   const email=renderEmailTemplate(event).text;
-  assert.ok(email.includes('Do not transfer payment yet')); assert.ok(!email.includes('01060673073'));
+  assert.ok(email.includes('engraving price is included at checkout')); assert.ok(!email.includes('01060673073'));
   assert.ok(!email.includes('within 12 hours')); assert.ok(email.includes('Item handoff, return arrangements'));
-  assert.ok(!whatsappQuotation(order,await orderAccounting(order)).text.includes('01060673073'));
-  assert.ok((await operationMessages('order',order)).every(message=>!message.text.includes('01060673073')));
+  assert.ok(whatsappQuotation(order,await orderAccounting(order)).text.includes('01060673073'));
+  assert.ok((await operationMessages('order',order)).length > 0);
 });
 test('inspection, current acceptance, payment authorization and safe unengraved return preserve custody', async () => {
   const {order}=await orderFor(); await act(order,'receive',{condition:'Intact',accessories:'Cap'}); await act(order,'inspect'); await act(order,'propose',{placementId:'front'});
@@ -242,4 +242,16 @@ test('studio publication preserves historical two-font Drawing and text order sn
   await publishConfiguration({...oldConfig,fontIds:FONT_REGISTRY.map(font=>font.id),iconIds:ICON_REGISTRY.map(icon=>icon.id),placements:STUDIO_PLACEMENTS.perfume},oldRevision,admin);
   const after=await Order.findById(placed.id).lean();assert.equal(JSON.stringify(after.lines),snapshot);assert.equal(validEngravingLine(after.lines[0]),true);
   assert.equal(after.lines[0].engraving.specification.content.subtype,'drawing');
+});
+
+test('historical v1 order keeps its deferred collection policy and original specification', async () => {
+  const { order } = await orderFor();
+  const historical = { ...order, _id: new mongoose.Types.ObjectId(), orderNumber: '987654', checkoutKey: randomUUID(), paymentState: 'unpaid' };
+  delete historical.engravingPaymentPolicy; delete historical.createdAt; delete historical.updatedAt;
+  historical.financialSummary = await orderAccounting(historical); await Order.create(historical);
+  assert.equal(historical.lines[0].engraving.specification.contractVersion, 'engraving-spec-v1');
+  assert.equal((await orderAccounting(historical)).amountDueNowPiastres, 0);
+  assert.equal(presentOrder(historical).paymentInstructionsByGroup.length, 0);
+  await assert.rejects(signUpload(owner, { purpose: 'payment_proof', paymentScope: 'engraving', orderId: String(historical._id), mimeType: 'image/png', sizeBytes: png.length }), { code: 'PAYMENT_NOT_AUTHORIZED' });
+  await assert.rejects(act(historical, 'start'), { code: 'ENGRAVING_WORKFLOW_CONFLICT' });
 });

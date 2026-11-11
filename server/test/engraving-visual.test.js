@@ -100,18 +100,19 @@ test('v2 order retains originals and exact layered geometry; retry cannot recrea
   const value = await entry({ items: 2 }), { order, request } = await orderFor(value);
   assert.equal(validEngravingLine(order.lines[0]), true); assert.equal(order.lines[0].engraving.snapshotVersion, 'engraving-order-v2');
   assert.deepEqual(order.lines[0].engraving.specification.design, value.specification.design);
-  assert.equal(order.paymentState, 'unpaid'); assert.equal((await orderAccounting(order)).amountDueNowPiastres, 0); assert.deepEqual(order.inventoryClaims, []);
+  assert.equal(order.paymentState, 'awaiting_transfer'); assert.equal((await orderAccounting(order)).amountDueNowPiastres, 13750); assert.deepEqual(order.inventoryClaims, []);
   for (const id of engravingUploadIds(value.specification)) { const upload = await Upload.findById(id); assert.equal(upload.state, 'retained'); assert.equal(String(upload.orderId), String(order._id)); }
   assert.equal((await placeOrder(owner, request)).id, String(order._id)); assert.equal((await addCartItem(owner, value)).alreadyOrdered, String(order._id)); assert.equal((await readCart(owner)).items.length, 0);
   const dto = presentOrder(order); assert.ok(dto.lines[0].engraving.layers.length); assert.equal(dto.paymentInstructions, null);
   for (const id of engravingUploadIds(value.specification)) assert.equal(JSON.stringify(dto).includes(id), false);
-  assert.equal((await NotificationEvent.findOne({ orderId: order._id, event: 'order_received' })).snapshot.engravingReviewPending, true);
-  assert.equal(engravingCollectionAllowed({ ...order, engraving: null }), false);
+  assert.equal((await NotificationEvent.findOne({ orderId: order._id, event: 'order_received' })).snapshot.engravingReviewPending, false);
+  assert.equal(engravingCollectionAllowed({ ...order, engraving: null }), true);
+  assert.equal(engravingCollectionAllowed({ ...order, engravingPaymentPolicy: undefined, engraving: null }), false);
 });
 test('v2 cannot bypass inspection, current acceptance, payment authorization or actual payment', async () => {
   const { order } = await orderFor(await entry());
   for (const action of ['start', 'authorize_payment']) await assert.rejects(act(order, action), { code: 'ENGRAVING_WORKFLOW_CONFLICT' });
-  await assert.rejects(signUpload(owner, { purpose: 'payment_proof', paymentScope: 'engraving', orderId: String(order._id), mimeType: 'image/png', sizeBytes: png.length }), { code: 'PAYMENT_NOT_AUTHORIZED' });
+  assert.ok((await signUpload(owner, { purpose: 'payment_proof', paymentScope: 'engraving', orderId: String(order._id), mimeType: 'image/png', sizeBytes: png.length })).upload.id);
   await act(order, 'receive', { condition: 'Synthetic intact item' }); await act(order, 'inspect'); await act(order, 'propose', { placementId: 'front' });
   await assert.rejects(act(order, 'accept', { proposalVersion: 2, customerConfirmed: true }, null), { code: 'ENGRAVING_WORKFLOW_CONFLICT' });
   await act(order, 'accept', { proposalVersion: 1, customerConfirmed: true }, null);
@@ -125,7 +126,7 @@ test('mixed product + v2 accounting keeps merchandise funds separate and safe re
   const { order } = await orderFor(await entry());
   assert.equal(order.paymentGroups.find(group => group.id === 'engraving').amountPiastres, 13750);
   assert.equal(order.paymentGroups.find(group => group.id === 'merchandise').amountPiastres, 25000);
-  assert.deepEqual(presentOrder(order).paymentInstructionsByGroup.map(value => value.scope), ['merchandise']);
+  assert.deepEqual(presentOrder(order).paymentInstructionsByGroup.map(value => value.scope), ['merchandise', 'engraving']);
   await act(order, 'receive', { condition: 'Intact customer-owned item' });
   const latest = await Order.findById(order._id); await mutateOrderAccounting(String(order._id), null, { revision: latest.revision, action: 'cancel', reconciled: true, reason: 'Synthetic cancellation before work' }, admin);
   assert.equal((await Product.findById(product._id)).inventory.quantity, 3);
@@ -159,4 +160,58 @@ test('v2 verified InstaPay, completion, return and source-bound refund use the e
   const source = await OrderSettlement.findOne({ reference: collection.reference });
   const refund = { revision: (await Order.findById(order._id)).revision, action: 'refund', operationKey: randomUUID(), amountPiastres: 2500, allocations: [{ scope: 'engraving', amountPiastres: 2500 }], method: 'instapay', reference: 'SYNTHETIC-V2-REFUND', refundOf: String(source._id), reconciled: true, reason: 'Actual fixture remedy', reducePayable: true };
   await account(refund); await account(refund); assert.equal((await orderAccounting(await Order.findById(order._id).lean())).refundedPiastres, 2500);
+});
+
+
+test('upfront collection is owner-bound, idempotent and never substitutes for inspection or acceptance', async () => {
+  const { order } = await orderFor(await entry());
+  assert.equal(order.engravingPaymentPolicy, 'standalone-checkout-payment-v1');
+  assert.deepEqual(presentOrder({ ...order, fulfillmentState: 'delivery_failed', financialSummary: undefined }).paymentInstructionsByGroup, []);
+  const signed = await signUpload(owner, { purpose: 'payment_proof', paymentScope: 'engraving', orderId: String(order._id), mimeType: 'image/png', sizeBytes: png.length });
+  const upload = await Upload.findById(signed.upload.id).select('+temporaryKey'); storage.put(upload.temporaryKey, png); await completeUpload(upload._id, owner);
+  const proof = { revision: order.revision, action: 'submit_proof', scope: 'engraving', uploadId: String(upload._id) };
+  await assert.rejects(mutateOrderAccounting(String(order._id), outsider, proof), { code: 'ORDER_NOT_FOUND' });
+  await mutateOrderAccounting(String(order._id), owner, proof);
+  await mutateOrderAccounting(String(order._id), owner, proof);
+  assert.equal((await Order.findById(order._id)).proofHistory.length, 1);
+  const current = await Order.findById(order._id);
+  const payment = { revision: current.revision, action: 'collection', scope: 'engraving', operationKey: randomUUID(), amountPiastres: 13750, method: 'instapay', reference: 'Synthetic verified transfer', reconciled: true, reason: 'Synthetic reconciliation' };
+  await mutateOrderAccounting(String(order._id), null, payment, admin);
+  await mutateOrderAccounting(String(order._id), null, payment, admin);
+  assert.equal(await OrderSettlement.countDocuments({ orderId: order._id }), 1);
+  await assert.rejects(act(order, 'start'), { code: 'ENGRAVING_WORKFLOW_CONFLICT' });
+  await act(order, 'receive', { condition: 'Synthetic intact item' }); await act(order, 'inspect'); await act(order, 'propose', { placementId: 'front' });
+  await assert.rejects(act(order, 'start'), { code: 'ENGRAVING_WORKFLOW_CONFLICT' });
+  await act(order, 'accept', { proposalVersion: 1, customerConfirmed: true }, null);
+  await act(order, 'authorize_payment', { collectionMethod: 'instapay' });
+  assert.equal((await act(order, 'start')).engraving.items[0].stage, 'engraving_in_progress');
+});
+
+test('historical visual order without the new payment policy keeps deferred collection', async () => {
+  const { order } = await orderFor(await entry());
+  const historical = { ...order, _id: new mongoose.Types.ObjectId(), orderNumber: '987654', checkoutKey: randomUUID(), paymentState: 'unpaid' };
+  delete historical.engravingPaymentPolicy; delete historical.createdAt; delete historical.updatedAt;
+  historical.financialSummary = await orderAccounting(historical);
+  await Order.create(historical);
+  assert.equal((await orderAccounting(historical)).amountDueNowPiastres, 0);
+  assert.equal(presentOrder(historical).paymentInstructionsByGroup.length, 0);
+  await assert.rejects(signUpload(owner, { purpose: 'payment_proof', paymentScope: 'engraving', orderId: String(historical._id), mimeType: 'image/png', sizeBytes: png.length }), { code: 'PAYMENT_NOT_AUTHORIZED' });
+  await assert.rejects(act(historical, 'start'), { code: 'ENGRAVING_WORKFLOW_CONFLICT' });
+});
+
+test('paid but unsuitable customer item can be cancelled and refunded without losing custody or inventing stock', async () => {
+  const { order } = await orderFor(await entry());
+  const signed = await signUpload(owner, { purpose: 'payment_proof', paymentScope: 'engraving', orderId: String(order._id), mimeType: 'image/png', sizeBytes: png.length });
+  const upload = await Upload.findById(signed.upload.id).select('+temporaryKey'); storage.put(upload.temporaryKey, png); await completeUpload(upload._id, owner);
+  await mutateOrderAccounting(String(order._id), owner, { revision: order.revision, action: 'submit_proof', scope: 'engraving', uploadId: String(upload._id) });
+  let current = await Order.findById(order._id);
+  await mutateOrderAccounting(String(order._id), null, { revision: current.revision, action: 'collection', scope: 'engraving', operationKey: randomUUID(), amountPiastres: 13750, method: 'instapay', reference: 'SYNTHETIC-PREPAID', reconciled: true, reason: 'Actual synthetic transfer reconciled' }, admin);
+  await act(order, 'receive', { condition: 'Synthetic customer property' }); await act(order, 'inspect'); await act(order, 'unsuitable', { publicReason: 'Synthetic surface unsuitable' });
+  current = await Order.findById(order._id);
+  await mutateOrderAccounting(String(order._id), null, { revision: current.revision, action: 'cancel', reconciled: true, reason: 'Customer agreed cancellation after unsuitable inspection' }, admin);
+  current = await Order.findById(order._id); assert.equal((await orderAccounting(current)).refundReviewRequired, true); assert.equal(current.engraving.items[0].inCustody, true); assert.deepEqual(current.inventoryClaims, []);
+  const collection = await OrderSettlement.findOne({ orderId: order._id, direction: 'collection' });
+  await mutateOrderAccounting(String(order._id), null, { revision: current.revision, action: 'refund', scope: 'engraving', operationKey: randomUUID(), amountPiastres: 13750, method: 'instapay', reference: 'SYNTHETIC-REFUND', refundOf: String(collection._id), reducePayable: true, reconciled: true, reason: 'Actual synthetic refund completed' }, admin);
+  await act(order, 'arrange_return', { publicReason: 'Agreed return of unengraved customer property' }); await act(order, 'return_to_customer', { publicReason: 'Actual synthetic handoff confirmed' });
+  current = await Order.findById(order._id); assert.equal(current.paymentState, 'refunded'); assert.equal(current.engraving.items[0].inCustody, false); assert.equal((await orderAccounting(current)).refundedPiastres, 13750);
 });

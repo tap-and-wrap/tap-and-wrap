@@ -111,8 +111,8 @@ export async function mockCommerce(page, options = {}) {
     if (path === '/commerce/checkout/config') return success(route, { enabled: options.checkoutEnabled === true, instaPayNumber: '01060673073', governorates: [{ id: 'cairo', name: 'Cairo', shippingPiastres: 9000 }, { id: 'alexandria', name: 'Alexandria', shippingPiastres: 12000 }] });
     if (path === '/commerce/checkout/quote') {
       expect(payload.checkoutKey).toBeTruthy(); expect(['cod', 'instapay']).toContain(payload.paymentMethod);
-      const subtotalPiastres = state.cart.subtotalPiastres; const discountPiastres = payload.discountCode === 'ISOLATED' ? 2500 : 0; const shippingPiastres = payload.governorate === 'cairo' ? 9000 : 12000;
-      return success(route, { subtotalPiastres, discountPiastres, shippingPiastres, totalPiastres: subtotalPiastres - discountPiastres + shippingPiastres });
+      const subtotalPiastres = state.cart.subtotalPiastres; const discountPiastres = payload.discountCode === 'ISOLATED' ? 2500 : 0; const shippingPiastres = null;
+      return success(route, { subtotalPiastres, discountPiastres, shippingPiastres, totalPiastres: subtotalPiastres - discountPiastres });
     }
     if (path === '/commerce/orders' && method === 'POST') {
       if (options.rejectOrder) return failure(route, 'Order submission could not be completed. Your cart remains saved.', 503);
@@ -175,10 +175,11 @@ export function cartWithProduct(product = commerceProduct) {
 
 export async function fillCheckout(page) {
   await page.getByLabel('Full name', { exact: true }).fill('Isolated Customer');
-  await page.getByLabel('Email', { exact: true }).fill('isolated@example.test');
+  await page.getByLabel('Email (optional)', { exact: true }).fill('isolated@example.test');
   await page.getByLabel('Egyptian mobile number').fill('01012345678');
   await chooseOption(page.getByRole('combobox', { name: /^Governorate/ }), 'cairo');
-  await page.getByLabel('Delivery address', { exact: true }).fill('Isolated test delivery address');
+  await page.getByLabel('City / Area', { exact: true }).fill('Isolated City');
+  await page.getByLabel('Street address', { exact: true }).fill('Isolated test delivery address');
   await expect(page.getByRole('button', { name: 'Place Order', exact: true })).toBeEnabled();
 }
 

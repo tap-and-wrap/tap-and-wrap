@@ -21,7 +21,7 @@ function RemoveDialog({ target, pending, remove, onClose }) {
   return <ConfirmationDialog className="cart-remove-dialog" title={`Remove ${target.name}?`} description={`This removes ${target.name} from your cart. Your other items will remain.`} error={error} pending={saving || pending} returnFocus={target.opener} onCancel={close} onConfirm={confirm} cancelLabel="Keep item" confirmLabel="Remove item"/>;
 }
 
-export default function CartLine({ item, name, title, image, children, pending, setQuantity, remove, fixed=false, status, edit, recovery, design=true }) {
+export default function CartLine({ item, name, title, image, children, pending, setQuantity, remove, fixed=false, status, edit, recovery, design=true, hasDetails=true }) {
   const id=useId(), request=useRef(false);
   const [open,setOpen]=useState(false), [target,setTarget]=useState(null), [changing,setChanging]=useState(false), [error,setError]=useState('');
   const busy=pending || changing;
@@ -44,9 +44,9 @@ export default function CartLine({ item, name, title, image, children, pending, 
       <div className="cart-v2-actions"><div className="cart-v2-quantity" role="group" aria-label={`Quantity for ${name}`}>
         {fixed ? <span className="cart-v2-fixed">1 item</span> : <><button type="button" aria-label={`Decrease quantity for ${name}`} disabled={busy || !item.valid || item.quantity<=1} onClick={()=>change(item.quantity-1)}><Minus size={15} aria-hidden="true"/></button><output aria-live="polite">{item.quantity}</output><button type="button" aria-label={`Increase quantity for ${name}`} disabled={busy || !item.valid || item.quantity>=(item.maxQuantity ?? 99)} onClick={()=>change(item.quantity+1)}><Plus size={15} aria-hidden="true"/></button></>}
       </div><strong className="cart-v2-total"><span>Line total</span>{item.valid ? money(item.lineTotalPiastres) : 'Unavailable'}</strong></div>
-      <div className="cart-v2-links"><button type="button" className="cart-v2-disclosure" aria-expanded={open} aria-controls={`${id}-details`} onClick={()=>setOpen(value=>!value)}>{open ? 'Hide details' : design ? 'View Design Details' : 'View Details'}<ChevronDown size={16} aria-hidden="true"/></button>{edit}</div>
+      <div className="cart-v2-links">{hasDetails && <button type="button" className="cart-v2-disclosure" aria-expanded={open} aria-controls={`${id}-details`} onClick={()=>setOpen(value=>!value)}>{open ? 'Hide details' : design ? 'View Design Details' : 'View Details'}<ChevronDown size={16} aria-hidden="true"/></button>}{edit}</div>
     </div>
-    <div id={`${id}-details`} className={`cart-v2-expansion ${open ? 'is-open' : ''}`} inert={!open}><div><div className="cart-v2-details" aria-label={`${name} details`}>{typeof children === 'function' ? children(open) : children}</div></div></div>
+    {hasDetails && <div id={`${id}-details`} className={`cart-v2-expansion ${open ? 'is-open' : ''}`} inert={!open}><div><div className="cart-v2-details" aria-label={`${name} details`}>{typeof children === 'function' ? children(open) : children}</div></div></div>}
     {target && <RemoveDialog target={target} pending={pending} remove={remove} onClose={()=>setTarget(null)}/>}
   </article>;
 }

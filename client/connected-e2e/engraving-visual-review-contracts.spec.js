@@ -17,13 +17,13 @@ test('historical Drawing remains on the v1 edit path and is never silently conve
   const spec = (await (await context.request.get(`${api}/commerce/engraving/cart/${id}`)).json()).data.specification; expect(spec.contractVersion).toBe('engraving-spec-v1'); expect(spec.content.subtype).toBe('drawing'); expect(spec.design).toBeUndefined();
 });
 
-test('owned order and admin review load composites and originals explicitly; v2 payment stays gated', async ({ page, context, browser }, info) => {
+test('owned order and admin review load composites and originals explicitly; v2 payment is order-bound and work stays gated', async ({ page, context, browser }, info) => {
   test.setTimeout(120000); await start(page); await words(page, 'For Nour'); const artwork = await image(page, 400, 200); await choose(page, /Engraving artwork: Add image artwork/, artwork); await add(page);
   const line = (await cart(context)).items[0], spec = (await (await context.request.get(`${api}/commerce/engraving/cart/${line.id}`)).json()).data.specification;
   const checkoutKey = crypto.randomUUID(); expect((await post(context, '/commerce/checkout/quote', { checkoutKey, paymentMethod: 'instapay', governorate: 'cairo' })).ok()).toBe(true);
   const response = await post(context, '/commerce/orders', { checkoutKey, paymentMethod: 'instapay', customer: { name: 'Synthetic Stage C', email: 'stagec@example.test', phone: '01012345678', governorate: 'cairo', address: 'Disposable connected address 10' } }); expect(response.status(), await response.text()).toBe(201); const order = (await response.json()).data.order;
   let reads = 0; page.on('request', request => { if (/\/uploads\/[^/]+\/content$/.test(request.url())) reads++; });
-  await page.goto(`/orders/${order.id}`); await expect(page.getByRole('heading', { name: `Order #${order.orderNumber}`, exact: true })).toBeVisible(); expect(reads).toBe(0); await expect(page.getByRole('button', { name: /Submit proof/ })).toHaveCount(0);
+  await page.goto(`/orders/${order.id}`); await expect(page.getByRole('heading', { name: `Order #${order.orderNumber}`, exact: true })).toBeVisible(); expect(reads).toBe(0); await expect(page.getByRole('button', { name: /Submit proof/ })).toBeVisible();
   await page.getByRole('button', { name: 'View saved design', exact: true }).click(); await expect(page.locator('.saved-visual-preview .ve-composite')).toBeVisible(); expect(reads).toBe(2);
   const opener = page.getByRole('button', { name: 'View artwork 1', exact: true }); await opener.click(); await expect(page.getByRole('dialog')).toBeVisible(); await page.keyboard.press('Escape'); await expect(opener).toBeFocused();
   await shot(page, info, 'owned-order', 390);

@@ -146,8 +146,7 @@ async function filtersForQuery(query, admin) {
 // A fixed order is essential to preserve unique products across page navigation.
 const DISCOVERY_PRIME = 2147483647;
 const DISCOVERY_MULTIPLIER = 48271;
-const GIFT_BOX_CATEGORY = /gift[\s-]*box(?:es)?|gift[\s-]*set(?:s)?|hamper(?:s)?/i;
-function discoveryOrder(giftCategoryIds) {
+function discoveryOrder() {
   const hex = { $toString: '$_id' };
   const counter = { $add: Array.from({ length: 6 }, (_, i) => ({
     $multiply: [{ $indexOfCP: ['0123456789abcdef', { $substrCP: [hex, 18 + i, 1] }] }, 16 ** (5 - i)],
@@ -156,13 +155,7 @@ function discoveryOrder(giftCategoryIds) {
     { $mod: [{ $multiply: [counter, DISCOVERY_MULTIPLIER] }, DISCOVERY_PRIME] },
     DISCOVERY_MULTIPLIER,
   ] }, DISCOVERY_PRIME] };
-  const gift = { $or: [
-    { $in: ['$categoryId', giftCategoryIds] },
-    { $in: ['$subcategoryId', giftCategoryIds] },
-    { $regexMatch: { input: '$name', regex: 'gift[\\s-]*box(?:es)?|gift[\\s-]*set(?:s)?|hamper(?:s)?', options: 'i' } },
-  ] };
-  // Favor actual gift boxes/sets, but retain a mixed first page.
-  return { $cond: [gift, { $multiply: [scrambled, 0.25] }, scrambled] };
+  return scrambled;
 }
 
 export async function listProducts(query, { admin = false } = {}) {
@@ -174,16 +167,19 @@ export async function listProducts(query, { admin = false } = {}) {
   const { pricePiastres: _priceBounds, ...rangeFilters } = filters;
   const rangeFilter = admin ? { $and: [rangeFilters, { pricePiastres: { $type: 'number' } }] } : { $and: [visibility, rangeFilters, approvedProductPriceFilter()] };
   const priceSort = !admin && ['price_asc', 'price_desc'].includes(query.sort);
-  const discoverySort = !admin && query.sort === 'discovery';
+  const discoverySort = !admin && ['discovery', 'featured'].includes(query.sort ?? 'featured') && !query.q && !query.category && !query.subcategory && !query.availability
+    && query.minPrice === undefined && query.maxPrice === undefined && query.featured === undefined && query.bestSeller === undefined;
   const projection = Object.fromEntries(PUBLIC_LIST_FIELDS.split(' ').map(field => [field, 1]));
-  const giftCategoryIds = discoverySort ? graph.identities.filter(category => category.active &&
-    GIFT_BOX_CATEGORY.test(`${category.name} ${category.slug}`)).map(category => category._id) : [];
   const stages = discoverySort ? [
     { $match: filter }, { $project: projection },
-    { $addFields: { _discoveryOrder: discoveryOrder(giftCategoryIds) } },
-    { $sort: { _discoveryOrder: 1, _id: 1 } },
+    { $addFields: { _discoveryOrder: discoveryOrder() } },
+    // Spread each category's first choices through the opening pages. Per-item
+    // jitter varies the sequence without random sampling or page-local ranking.
+    { $setWindowFields: { partitionBy: { $ifNull: ['$subcategoryId', '$categoryId'] }, sortBy: { _discoveryOrder: 1 }, output: { _categoryRank: { $rank: {} } } } },
+    { $addFields: { _mixedOrder: { $add: [{ $multiply: ['$_categoryRank', .6] }, { $divide: ['$_discoveryOrder', DISCOVERY_PRIME] }] }, _ownerFeatured: { $cond: [{ $or: [{ $eq: ['$featured', true] }, { $eq: ['$bestSeller', true] }] }, 1, 0] } } },
+    { $sort: { _ownerFeatured: -1, featuredOrder: 1, bestSellerOrder: 1, _mixedOrder: 1, _id: 1 } },
     { $skip: pagination.skip }, { $limit: pagination.limit },
-    { $unset: '_discoveryOrder' },
+    { $unset: ['_discoveryOrder', '_categoryRank', '_mixedOrder', '_ownerFeatured'] },
   ] : priceSort ? [
 { $match: filter },
     { $addFields: { _confirmedPrice: { $cond: [{ $gt: ['$pricePiastres', 0] }, '$pricePiastres', null] } } },
@@ -196,7 +192,7 @@ export async function listProducts(query, { admin = false } = {}) {
     .then(products => Product.populate(products, [{ path: 'categoryId', select: 'name slug active' }, { path: 'subcategoryId', select: 'name slug active' }]))
     : Product.find(filter).select(admin ? `${ADMIN_LIST_FIELDS} purchaseSetup variants.inventory variants.priceApproved variants.pricePiastres personalization` : PUBLIC_LIST_FIELDS)
       .populate(admin ? [] : [{ path: 'categoryId', select: 'name slug active' }, { path: 'subcategoryId', select: 'name slug active' }])
-      .sort(SORTS[query.sort ?? 'newest']).skip(pagination.skip).limit(pagination.limit).lean().maxTimeMS(QUERY_TIMEOUT_MS);
+      .sort(SORTS[query.sort === 'discovery' ? 'featured' : query.sort ?? 'newest']).skip(pagination.skip).limit(pagination.limit).lean().maxTimeMS(QUERY_TIMEOUT_MS);
   const [products, total, priceRanges] = await Promise.all([
     productsQuery,
     Product.countDocuments(filter).maxTimeMS(QUERY_TIMEOUT_MS),

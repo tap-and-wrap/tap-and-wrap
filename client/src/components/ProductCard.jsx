@@ -1,12 +1,24 @@
 import { productHref } from '../../../shared/product-paths.mjs';
 import { Link } from 'react-router-dom';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { formatCatalogPrice } from '../utils/catalog.js';
+import { useSession } from '../auth/SessionProvider.jsx';
 import { useCart } from '../commerce/CartContext.jsx';
 
 export default function ProductCard({ product }) {
   const cardRef = useRef(null);
   const cart = useCart();
+  const { generation } = useSession();
+  const [addingGeneration, setAdding] = useState(null);
+  const adding = addingGeneration === generation;
+  const operation = useRef(null);
+  async function add() {
+    if (operation.current === generation || cart.pending) return;
+    operation.current = generation; setAdding(generation);
+    try { await cart.add({ productId: product._id, quantity: 1 }, cardRef.current?.querySelector('img')); }
+    catch { /* Shared cart feedback reports the failure. */ }
+    finally { if (operation.current === generation) operation.current = null; setAdding(current => current === generation ? null : current); }
+  }
   const approvedPrice = product.priceApproved === true && Number.isSafeInteger(product.pricePiastres) && product.pricePiastres > 0;
   const outOfStock = approvedPrice && product.businessState === 'out_of_stock';
   const enquiryRequired = !outOfStock && (product.browseOnly === true || !approvedPrice || product.orderingAvailable !== true);
@@ -38,7 +50,7 @@ export default function ProductCard({ product }) {
         {enquiryRequired ? <a className="catalog-card-action" href={enquiryUrl} target="_blank" rel="noopener noreferrer" aria-label={`Enquire on WhatsApp about ${product.name}`}>Enquire on WhatsApp</a>
           : !orderingAvailable ? <Link className="catalog-card-action" to={detailUrl} aria-label={`View details: ${product.name}`}>View Details</Link>
           : product.requiresOptions ? <Link className="catalog-card-action" to={detailUrl} aria-label={`Choose Options: ${product.name}`}>Choose Options</Link>
-            : <button type="button" className="catalog-card-action" disabled={cart.pending} aria-label={`Add to Cart: ${product.name}`} onClick={() => cart.add({ productId: product._id, quantity: 1 }, cardRef.current?.querySelector('img')).catch(() => {})}>{cart.pending ? 'Please wait…' : action}</button>}
+            : <button type="button" className="catalog-card-action" disabled={cart.pending} aria-label={`Add to Cart: ${product.name}`} onClick={add}>{adding ? 'Please wait…' : action}</button>}
       </div>
     </article>
   );

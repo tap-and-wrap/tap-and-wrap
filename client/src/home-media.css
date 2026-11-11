@@ -96,3 +96,11 @@
   border-color: #fff;
   color: #fff;
 }
+
+/* Quiet surface changes give the existing approved imagery room to lead. */
+.home-page .brand-icon-marquee{background:#faf6f2;border-block:1px solid var(--tw-border)}
+.home-page .section[aria-labelledby="home-categories-heading"]{background:#fff}
+.home-page .section[aria-labelledby="home-featured-heading"]{background:#fcf3ef;border-block:1px solid #f0e2db}
+.home-page .service-section{background:var(--tw-bg)}
+.home-page .home-reviews-section{background:#f8f3ef;border-block:1px solid var(--tw-border)}
+.home-page .faq-section{background:#fff}

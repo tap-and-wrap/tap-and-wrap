@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { commerceDelete, commerceError, commerceGet, commercePatch, commercePost } from './api';
 import { animateToCart } from './animation';
@@ -15,12 +15,15 @@ export function CartProvider({ children }) {
   const session = useSession();
   const cartKey = privateQueryKey(session.ownerKey, 'cart');
   const [feedbackState, setFeedback] = useState(null);
+  const mutationGeneration = useRef(null);
   const [pendingGeneration, setPending] = useState(null);
   const feedback = feedbackState?.generation === session.generation ? feedbackState.text : '';
   const pending = pendingGeneration === session.generation;
   const query = useQuery({ queryKey: cartKey, queryFn: ({ signal }) => commerceGet('/cart', undefined, signal), enabled: session.ready, retry: false, staleTime: 30_000, refetchOnWindowFocus: false });
   const update = useCallback(async (operation, success, source) => {
     const generation = authGeneration();
+    if (mutationGeneration.current === generation) throw new Error('Your cart is updating. Please wait for this change to finish.');
+    mutationGeneration.current = generation;
     const opener = document.activeElement;
     const key = privateQueryKey(sessionOwner(), 'cart');
     setPending(generation);
@@ -46,7 +49,7 @@ export function CartProvider({ children }) {
     } catch (error) {
       if (generation === authGeneration()) setFeedback({ generation, text: commerceError(error), opener });
       throw error;
-    } finally { setPending(current => current === generation ? null : current); }
+    } finally { if (mutationGeneration.current === generation) mutationGeneration.current = null; setPending(current => current === generation ? null : current); }
   }, [queryClient]);
   const value = useMemo(() => ({
     cart: session.ready && query.data?.cart || { items: [], subtotalPiastres: 0, quantity: 0 },

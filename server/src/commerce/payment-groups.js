@@ -1,29 +1,30 @@
-import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
+import { UPFRONT_ENGRAVING_POLICY, upfrontEngravingPayment, isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 import { commerceError, checkedMoney } from './errors.js';
 
 export const groupedOrder = order => order.accountingVersion === 2;
-export function initialPaymentGroups(lines, totals, method) {
+export function initialPaymentGroups(lines, totals, method, policy) {
   const engraving = lines.filter(line => isEngravingKind(line.kind)).reduce((sum, line) => checkedMoney(sum + line.lineTotalPiastres), 0);
   const merchandise = checkedMoney(totals.totalPiastres - engraving);
   if (merchandise < 0) throw commerceError(409, 'INVALID_PAYMENT_ALLOCATION', 'The verified order allocation is invalid.');
   return [
     ...(lines.some(line => !isEngravingKind(line.kind)) ? [{ id: 'merchandise', label: 'Products & Gift Boxes', amountPiastres: merchandise, method }] : []),
-    ...(lines.some(line => isEngravingKind(line.kind)) ? [{ id: 'engraving', label: 'Engraving after inspection', amountPiastres: engraving, method }] : []),
+    ...(lines.some(line => isEngravingKind(line.kind)) ? [{ id: 'engraving', label: policy === UPFRONT_ENGRAVING_POLICY ? 'Engraving' : 'Engraving after inspection', amountPiastres: engraving, method }] : []),
   ];
 }
 export function groupAuthorized(order, scope) {
   if (scope !== 'engraving') return !['returned','cancelled'].includes(order.merchandiseFulfillment);
+  if (upfrontEngravingPayment(order)) return !['cancelled', 'returned', 'delivery_failed'].includes(order.fulfillmentState);
   return order.engraving?.collectionAuthorized === true && (order.engraving.collectionMethod !== 'cod' || order.engraving.codCommitment?.customerAccepted === true);
 }
 export function groupMethod(order, group) {
-  return group.id === 'engraving' ? order.engraving?.collectionMethod || group.method : group.method;
+  return group.id === 'engraving' && !upfrontEngravingPayment(order) ? order.engraving?.collectionMethod || group.method : group.method;
 }
 export function groupBalances(order, netFor, reductionFor) {
   return (order.paymentGroups || []).map(group => {
     // Inspection is not a chargeable engraving service. A wholly declined,
     // unworked group returned before collection authorization has no service due.
     // Keep the original quoted snapshot and explicit custody/inspection history.
-    const notProvided = group.id === 'engraving' && !order.engraving?.collectionAuthorized && order.engraving?.items.length > 0
+    const notProvided = !upfrontEngravingPayment(order) && group.id === 'engraving' && !order.engraving?.collectionAuthorized && order.engraving?.items.length > 0
       && order.engraving.items.every(item => item.stage === 'returned_to_customer' && !item.history?.some(entry => entry.action === 'complete'));
     const amount = notProvided ? 0 : Math.max(0, group.amountPiastres - reductionFor(group.id));
     const collected = netFor(group.id), authorized = groupAuthorized(order, group.id);
