@@ -22,12 +22,20 @@ export function defaultStickerPlacement(boxId, view = Object.keys(STICKER_PROOFS
 export function boundStickerPlacement(value) {
   const proof = stickerProof(value?.boxId, value?.view); if (!proof) throw Error('Choose a supported sticker view.');
   const s = proof.surface, clamp = (n, a, b) => Math.max(a, Math.min(b, n));
-  const width = clamp(value.width, .06, s.width), height = clamp(value.height, .04, s.height);
+  const rotation = clamp(value.rotation ?? 0, -35, 35), radians = rotation * Math.PI / 180;
+  const cos = Math.abs(Math.cos(radians)), sin = Math.abs(Math.sin(radians));
+  let width = clamp(value.width, .06, s.width), height = clamp(value.height, .04, s.height);
+  // Rotation is in physical proof pixels, not the non-square normalized space.
+  const extent = () => ({ width: cos * width + sin * height * proof.height / proof.width, height: sin * width * proof.width / proof.height + cos * height });
+  const rotated = extent(), scale = Math.min(1, s.width / rotated.width, s.height / rotated.height);
+  width *= scale; height *= scale;
+  const bounds = extent();
   return { version: STICKER_PROOF_VERSION, boxId: value.boxId, view: value.view, width, height,
-    x: clamp(value.x, s.x + width / 2, s.x + s.width - width / 2), y: clamp(value.y, s.y + height / 2, s.y + s.height - height / 2) };
+    ...(Object.hasOwn(value, 'rotation') ? { rotation } : {}),
+    x: clamp(value.x, s.x + bounds.width / 2, s.x + s.width - bounds.width / 2), y: clamp(value.y, s.y + bounds.height / 2, s.y + s.height - bounds.height / 2) };
 }
 export function validStickerPlacement(value) {
-  if (!value || Object.keys(value).sort().join() !== ['version','boxId','view','x','y','width','height'].sort().join() || value.version !== STICKER_PROOF_VERSION || !stickerProof(value.boxId, value.view) || !['x','y','width','height'].every(key => Number.isFinite(value[key]))) return false;
+  if (!value || Object.keys(value).sort().join() !== ['version','boxId','view','x','y','width','height', ...(Object.hasOwn(value, 'rotation') ? ['rotation'] : [])].sort().join() || value.version !== STICKER_PROOF_VERSION || !stickerProof(value.boxId, value.view) || !['x','y','width','height'].every(key => Number.isFinite(value[key])) || Object.hasOwn(value, 'rotation') && (!Number.isFinite(value.rotation) || Math.abs(value.rotation) > 35)) return false;
   const bounded = boundStickerPlacement(value);
   return ['x','y','width','height'].every(key => Math.abs(bounded[key] - value[key]) < .0000001);
 }

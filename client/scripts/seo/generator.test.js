@@ -273,16 +273,18 @@ test('sitemap includes only canonical eligible routes and genuine source dates',
   const xml = sitemapXml(plan);
   assert.match(xml, /https:\/\/shop.example\/products\/fixture-product/);
   assert.match(xml, /2026-10-09T12:00:00.000Z/);
-  for (const excluded of ['/admin', '/cart', '/checkout', '/track-order', '/my-orders', '/privacy-policy', '/404']) assert.equal(xml.includes(`<loc>${origin}${excluded}</loc>`), false);
+  for (const excluded of ['/admin', '/cart', '/checkout', '/track-order', '/my-orders', '/404']) assert.equal(xml.includes(`<loc>${origin}${excluded}</loc>`), false);
+  assert.ok(xml.includes(`<loc>${origin}/privacy-policy</loc>`));
   assert.match(robotsText(plan), /Sitemap: https:\/\/shop.example\/sitemap.xml/);
 });
 
-test('fixed pages are complete but noindex until source approval; database content cannot override', () => {
+test('owner-approved fixed pages respect publication gates; database content cannot override', () => {
   const plan = buildSeoPlan({ catalog: catalog(), siteOrigin: origin, publish: true, content: { routes: { '/privacy-policy': { approved: true, title: 'Injected legacy text', paragraphs: ['Unreviewed override'] } } } });
   for (const slug of ['about', 'contact', 'privacy-policy', 'refund-policy', 'shipping-policy', 'terms-of-service']) {
     const route = plan.routes.get('/' + slug);
-    assert.equal(route.indexable, false);
-    assert.doesNotMatch(route.body, /Development placeholder|Unreviewed override/);
+    assert.equal(route.indexable, true);
+    assert.equal(buildSeoPlan().routes.get('/' + slug).indexable, false);
+    assert.doesNotMatch(route.body, /Development placeholder|Unreviewed override|review before publication|Questions\? Contact Tap & Wrap/);
     assert.ok(route.body.length > 1000);
   }
   assert.match(plan.routes.get('/refund-policy').body, /14 days/);

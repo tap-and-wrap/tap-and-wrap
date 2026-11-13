@@ -25,6 +25,23 @@ test('placement bounds include alpha margins, side compatibility and finite geom
  for(const [id,views]of Object.entries(STICKER_PROOFS))for(const view of Object.keys(views)){const value=defaultStickerPlacement(id,view);assert.ok(validStickerPlacement(value));const bounded=boundStickerPlacement({...value,x:-1,y:2,width:5,height:4});assert.ok(validStickerPlacement(bounded));assert.equal(validStickerPlacement({...value,view:'top'}),false);assert.equal(validStickerPlacement({...value,x:NaN}),false);assert.equal(validStickerPlacement({...value,x:-.1}),false);}
  const first=defaultStickerPlacement('box-1');assert.ok(validStickerPlacement({...first,view:'right'}));
 });
+test('rotated text stays inside every canonical surface and historical poses remain unchanged',()=>{
+ for(const [boxId,views]of Object.entries(STICKER_PROOFS))for(const [view,proof]of Object.entries(views)){
+  const legacy=defaultStickerPlacement(boxId,view);
+  assert.deepEqual(boundStickerPlacement(legacy),legacy);
+  for(const rotation of [-35,-5,0,5,35]){
+   const pose=boundStickerPlacement({...legacy,rotation,x:-1,y:2,width:1,height:1});
+   assert.ok(validStickerPlacement(pose));
+   const r=rotation*Math.PI/180,c=Math.abs(Math.cos(r)),s=Math.abs(Math.sin(r));
+   const w=c*pose.width+s*pose.height*proof.height/proof.width,h=s*pose.width*proof.width/proof.height+c*pose.height;
+   assert.ok(pose.x-w/2>=proof.surface.x-1e-7&&pose.x+w/2<=proof.surface.x+proof.surface.width+1e-7);
+   assert.ok(pose.y-h/2>=proof.surface.y-1e-7&&pose.y+h/2<=proof.surface.y+proof.surface.height+1e-7);
+  }
+  for(const rotation of [NaN,Infinity,36,-36,null,'5'])assert.equal(validStickerPlacement({...legacy,rotation}),false);
+ }
+ const raw=intent();raw.sticker.placement=boundStickerPlacement({...raw.sticker.placement,rotation:25});
+ assert.deepEqual(parseGiftBoxPersonalizationIntent(JSON.parse(JSON.stringify(raw))),raw);
+});
 test('new sticker intent is strict and legacy v2 remains unchanged',()=>{
  const raw=intent();assert.deepEqual(parseGiftBoxPersonalizationIntent(raw),raw);
  const old={...raw,version:'gift-box-personalization-intent-v2',sticker:{...raw.sticker,application:'exterior-front'}};delete old.sticker.placement;assert.deepEqual(parseGiftBoxPersonalizationIntent(old),old);
@@ -38,7 +55,8 @@ test('placement changes gift identity but never doubles sticker price or authori
  const a=identifyGiftBoxConfiguration(base),b=identifyGiftBoxConfiguration({...base,personalizationIntent:{...raw,sticker:{...raw.sticker,placement:{...raw.sticker.placement,x:raw.sticker.placement.x+.01}}}});assert.notEqual(a.configurationId,b.configurationId);assert.ok(giftBoxV2CommerceInput.safeParse(a.configuration).success);
 });
 test('immutable order saves exact sticker pose, rejects tampering and exposes proof to owner/customer',()=>{
- const raw=intent(),configuration=identifyGiftBoxConfiguration({...giftCartConfiguration({roses:0,plush:false,chocolate:false,card:false}),contractVersion:'gift-box-commerce-v2',ribbonPlacement:{x:.2,y:.2,width:.1,height:.1,zone:'inside',layer:0},personalizationIntent:raw});
+ const raw=intent();raw.sticker.placement=boundStickerPlacement({...raw.sticker.placement,rotation:-20});
+ const configuration=identifyGiftBoxConfiguration({...giftCartConfiguration({roses:0,plush:false,chocolate:false,card:false}),contractVersion:'gift-box-commerce-v2',ribbonPlacement:{x:.2,y:.2,width:.1,height:.1,zone:'inside',layer:0},personalizationIntent:raw});
  const records=['box-2','ribbon-navy'].map(componentId=>({componentId,displayName:componentId,pricePiastres:1000,priceApproval:'paid',priceApprovedBy:actor,priceApprovedAt:new Date('2026-01-01'),enabled:true,available:true,__v:1,inventoryMode:getFixedComponent(componentId).category==='ribbon'?'status_only':'tracked',inventoryQuantity:componentId.startsWith('ribbon-')?null:20}));
  const base=prepareGiftBoxV2CommerceQuote({configuration:configuration.configuration,quantity:1},records,{fulfillmentPolicy:giftCartPolicy(),flexibleMadeToOrder:true});
  const personal=priceGiftBoxPersonalization({intent:raw,boxId:'box-2',owner,uploads:[],options:[option]});

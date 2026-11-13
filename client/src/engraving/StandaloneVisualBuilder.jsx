@@ -19,6 +19,16 @@ export default function StandaloneVisualBuilder({ saved, editId }) {
   const state = useStandaloneVisualBuilder(saved, editId), [, setParams] = useSearchParams(), [resetTarget, setResetTarget] = useState(null);
   const { draft, setDraft, ownerKey, pending, options, types, type, hydrating, error, setError, progress, quote, setQuote, added, setAdded, acceptedOrder, uncertain, recovering, update, selectPhotos, validate, review, add, check, editorChange, reset, attempt } = state;
   const [editorError, setEditorError] = useState(''), alertRef = useRef(null);
+  const stepStart = useRef(null), lastStep = useRef(draft.step);
+  useEffect(() => {
+    if (lastStep.current === draft.step) return;
+    lastStep.current = draft.step;
+    const frame = requestAnimationFrame(() => {
+      stepStart.current?.focus({ preventScroll: true });
+      stepStart.current?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [draft.step]);
   const shownError = error || (draft.step === 1 ? editorError : '');
   useEffect(() => { if (shownError) { alertRef.current?.focus({ preventScroll: true }); alertRef.current?.scrollIntoView({ block: 'nearest' }); } }, [shownError]);
   if (options.isPending || hydrating) return <main className="commerce-page" role="status">Opening your engraving studio...</main>;
@@ -27,7 +37,7 @@ export default function StandaloneVisualBuilder({ saved, editId }) {
   return <main className="standalone-visual-page">
     <PageMetadata title="Design Your Engraving | Tap & Wrap" description="Create an engraving on your own item." pathname="/customize/laser-engraving" indexable={false}/>
     <header className="sv-heading"><p className="eyebrow">Made personal, by you</p><h1>Your piece. Your story.</h1><p>Create something meaningful on an item you already own.</p></header>
-    <EngravingStepper steps={steps} step={draft.step} disabled={pending || uncertain || added} onNavigate={index => { setError(''); setDraft(previous => ({ ...previous, step: index })); }}/>
+    <div ref={stepStart} className="sv-step-start" tabIndex={-1} aria-label={steps[draft.step]}><EngravingStepper steps={steps} step={draft.step} disabled={pending || uncertain || added} onNavigate={index => { setError(''); setDraft(previous => ({ ...previous, step: index })); }}/></div>
     {shownError && <p ref={alertRef} tabIndex={-1} id="standalone-engraving-error" className="sv-error" role="alert">{shownError}</p>}
     {uncertain && <section className="commerce-notice"><h2>Check your cart addition</h2><p>Your last add is unconfirmed. Check before starting another item.</p><button disabled={recovering || pending} onClick={check}>Check add status</button>{attempt.current && <button disabled={pending} onClick={add}>Retry same add</button>}</section>}
     <fieldset className="sv-builder" disabled={pending || uncertain || added} aria-busy={pending} aria-describedby={error ? 'standalone-engraving-error' : undefined}>

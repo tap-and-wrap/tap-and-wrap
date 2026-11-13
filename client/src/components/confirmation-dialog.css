@@ -8,8 +8,8 @@ dialog.confirmation-dialog {
   max-width:none; height:max-content; max-height:calc(var(--confirmation-height,100dvh) - max(16px,env(safe-area-inset-top,0px)) - max(16px,env(safe-area-inset-bottom,0px)));
   box-sizing:border-box; overflow:auto; overscroll-behavior:contain; padding:clamp(20px,4vw,28px); border:1px solid var(--tw-border); border-radius:14px; background:var(--tw-bg); color:var(--tw-ink); box-shadow:0 12px 48px #62483f26; z-index:2000;
 }
-.confirmation-dialog::backdrop { background:#39292299; backdrop-filter:blur(3px); }
-.confirmation-dialog h2 { font:400 clamp(1.65rem,5vw,2rem)/1.25 var(--tw-font-ui); margin:0 0 14px; overflow-wrap:anywhere; }
+.confirmation-dialog::backdrop { background:rgb(57 41 34 / 38%); backdrop-filter:none; }
+.confirmation-dialog h2 { font:500 clamp(1.65rem,5vw,2rem)/1.25 var(--tw-font-heading); margin:0 0 14px; overflow-wrap:anywhere; }
 .confirmation-dialog p { font-size:1rem; line-height:1.6; margin:12px 0; overflow-wrap:anywhere; }
 .confirmation-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:24px; }
 .confirmation-actions .button { flex:1 1 150px; min-height:44px; }
