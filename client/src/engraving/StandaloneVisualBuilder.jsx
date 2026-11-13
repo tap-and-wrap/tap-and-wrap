@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { commerceError, money } from '../commerce/api.js';
 import ImageSourceChooser from '../components/ImageSourceChooser.jsx';
-import ConfirmationDialog from '../components/ConfirmationDialog.jsx';
 import PageMetadata from '../seo/PageMetadata.jsx';
 import ServiceRequestPage from '../pages/ServiceRequestPage.jsx';
 import VisualEngravingEditor from './visual/VisualEngravingEditor.jsx';
@@ -16,7 +15,7 @@ import { ChevronDown, X } from 'lucide-react';
 
 const steps = ['Your Item', 'Design Your Engraving', 'Review Your Engraving'];
 export default function StandaloneVisualBuilder({ saved, editId }) {
-  const state = useStandaloneVisualBuilder(saved, editId), [, setParams] = useSearchParams(), [resetTarget, setResetTarget] = useState(null);
+  const state = useStandaloneVisualBuilder(saved, editId), [, setParams] = useSearchParams();
   const { draft, setDraft, ownerKey, pending, options, types, type, hydrating, error, setError, progress, quote, setQuote, added, setAdded, acceptedOrder, uncertain, recovering, update, selectPhotos, validate, review, add, check, editorChange, reset, attempt } = state;
   const [editorError, setEditorError] = useState(''), alertRef = useRef(null);
   const stepStart = useRef(null), lastStep = useRef(draft.step);
@@ -51,12 +50,10 @@ export default function StandaloneVisualBuilder({ saved, editId }) {
       <div hidden={draft.step !== 1} className="sv-editor"><VisualEngravingEditor key={`${draft.itemKey}:${draft.editorRevision}`} ownerScope={ownerKey} initialDraft={{ ownerScope: ownerKey, design: draft.visual.design }} assets={draft.visual.assets} approvedFontIds={type?.fontIds || []} surfaceControls={false} confirmReset onError={setEditorError} onChange={editorChange}/></div>
       {draft.step === 2 && <div className="sv-review-layout"><div><h2>Review Your Engraving</h2><VisualDesignPreview design={draft.visual.design} assets={draft.visual.assets} ownerScope={ownerKey} label="Your complete engraving design"/></div><section className="sv-review-details"><h3>{type?.name}, made yours</h3><dl>{draft.visual.design.layers.map(layer => <div key={layer.id}><dt>{layer.type === 'text' ? 'Text' : 'Image artwork'}</dt><dd>{layer.type === 'text' ? <><bdi>{layer.text}</bdi><br/>{FONT_REGISTRY.find(font => font.id === layer.fontId)?.language === 'ar' ? 'Arabic lettering' : 'English lettering'} · {layer.color}</> : 'Your original uploaded artwork'}</dd></div>)}</dl>{draft.description && <p>{draft.description}</p>}
         {draft.visual.itemPhotos.length > 0 && <div className="sv-photo-strip">{draft.visual.itemPhotos.map((id, index) => draft.visual.assets[id]?.blob && <LocalPhoto key={id} file={draft.visual.assets[id].blob} alt={`Overall item photo ${index + 1}`}/>)}</div>}
-        <button type="button" onClick={() => setDraft(previous => ({ ...previous, step: 1 }))}>Edit Design</button><p>Your engraving price is included at checkout. We inspect your item and confirm the final design with you before engraving.</p></section></div>}
+        <button type="button" onClick={() => setDraft(previous => ({ ...previous, step: 1 }))}>Edit Design</button></section></div>}
       <div className="sv-footer"><span>{type ? money(quote?.unitPricePiastres ?? type.pricePiastres) : 'Choose your item'}</span><div>{draft.step > 0 && <button type="button" className="button button-secondary" onClick={() => setDraft(previous => ({ ...previous, step: previous.step - 1 }))}>Back</button>}{draft.step === 0 ? <button type="button" className="button button-primary" onClick={() => { const invalid = validate(); if (invalid) setError(invalid); else update({ step: 1 }); }}>Design Your Engraving</button> : draft.step === 1 ? <button type="button" className="button button-primary" onClick={review}>Review Your Engraving</button> : <button type="button" className="button button-primary" disabled={!quote} onClick={add}>{pending ? 'Adding securely...' : 'Add to Cart'}</button>}</div></div>
     </fieldset>
     {progress && <p role="status">{progress}</p>}
     {added && <section className="sv-success" role="status"><h2>{acceptedOrder ? 'Your engraving is already ordered' : 'Your engraving is in the cart'}</h2><Link className="button button-primary" to={acceptedOrder ? `/orders/${acceptedOrder}` : '/cart'}>{acceptedOrder ? 'View accepted order' : 'View cart'}</Link><button onClick={() => { reset(); setParams({}); setAdded(false); setQuote(null); }}>Start a new engraving</button></section>}
-    {!added && <button className="commerce-link-button sv-start-again" disabled={pending || uncertain} onClick={event => setResetTarget(event.currentTarget)}>Start again</button>}
-    {resetTarget && <ConfirmationDialog title="Start a new engraving?" description="Your current design and local photos will be cleared." returnFocus={resetTarget} onCancel={() => setResetTarget(null)} onConfirm={() => { reset(); setParams({}); setQuote(null); setResetTarget(null); }} confirmLabel="Start again" cancelLabel="Keep editing"/>}
   </main>;
 }

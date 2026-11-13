@@ -49,14 +49,12 @@ for (const width of [390, 1440]) test(`text/image placement, resizing, zoom and 
   expect((await snapshot(page)).design.layers[0].width).toBeGreaterThan(before.width);
   await addImage(page, artwork);
   await page.locator('.ve-board').scrollIntoViewIfNeeded();
-  const board = await page.locator('.ve-board').boundingBox();
-  await page.mouse.click(board.x + board.width * .25, board.y + board.height * .27);
-  await expect.poll(async () => (await snapshot(page)).design.layers[1].x).toBeCloseTo(.25, 1);
+  await page.getByRole('button', { name: 'Move left', exact: true }).click();
+  const startX = (await snapshot(page)).design.layers[1].x;
   const target = page.locator('.ve-layer').last(), box = await target.boundingBox();
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down(); await page.mouse.move(box.x + box.width / 2 + 30, box.y + box.height / 2 + 15, { steps: 6 }); await page.mouse.up();
-  const moved = (await snapshot(page)).design.layers[1]; expect(moved.x).toBeGreaterThan(.25);
-  const resize = await page.getByRole('button', { name: 'Resize selected design' }).boundingBox();
-  await page.mouse.move(resize.x + 22, resize.y + 22); await page.mouse.down(); await page.mouse.move(resize.x + 40, resize.y + 22, { steps: 5 }); await page.mouse.up();
+  const moved = (await snapshot(page)).design.layers[1]; expect(moved.x).toBeGreaterThan(startX);
+  await page.getByRole('button', { name: 'Larger design', exact: true }).click();
   expect((await snapshot(page)).design.layers[1].width).toBeGreaterThan(moved.width);
   const original = await snapshot(page); await page.getByRole('button', { name: 'Adjust View', exact: true }).click(); await page.getByRole('button', { name: 'Zoom in workspace' }).click();
   await expect(page.getByLabel('Workspace zoom')).toHaveText('125%'); expect(await snapshot(page)).toEqual(original);
@@ -69,8 +67,8 @@ for (const width of [390, 1440]) test(`text/image placement, resizing, zoom and 
     const context = canvas.getContext('2d'); context.drawImage(node, 0, 0); return [Array.from(context.getImageData(50, 50, 1, 1).data), Array.from(context.getImageData(350, 50, 1, 1).data)];
   });
   expect(samples).toEqual([[239, 35, 21, 255], [18, 100, 233, 255]]);
-  await page.getByRole('button', { name: 'Send backward' }).click();
-  expect((await snapshot(page)).design.layers[0].type).toBe('image');
+  await page.locator('.ve-layers button').first().click();
+  expect((await snapshot(page)).design.layers.map(layer => layer.type)).toEqual(['text', 'image']);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.evaluate(() => document.fonts.ready); await page.screenshot({ path: info.outputPath(`editor-${width}.png`), fullPage: true });
   expect(mutations).toEqual([]); expect(errors).toEqual([]);
@@ -120,15 +118,10 @@ test('native mobile touch drag and pinch zoom keep design size independent', asy
   await expect(page.getByLabel('Workspace zoom')).not.toHaveText('100%'); expect(await snapshot(page)).toEqual(before);
   await page.getByRole('button', { name: 'Fit view', exact: true }).click();
   await page.getByRole('button', { name: 'Save view', exact: true }).click();
-  const handle = await page.getByRole('button', { name: 'Resize selected design' }).boundingBox();
-  await touch('touchStart', [{ x: handle.x + 22, y: handle.y + 22 }]); await touch('touchMove', [{ x: handle.x + 34, y: handle.y + 22 }]); await touch('touchEnd', []);
+  await page.getByRole('button', { name: 'Larger design', exact: true }).click();
   expect((await snapshot(page)).design.layers[0].width).toBeGreaterThan(before.design.layers[0].width);
-  // Beginning a pinch on empty surface must never act like a placement tap.
-  const stable = await snapshot(page), current = await page.locator('.ve-board').boundingBox();
-  const empty = { x: current.x + 20, y: current.y + 20 };
-  await touch('touchStart', [empty]); await touch('touchStart', [empty, { x: empty.x + 35, y: empty.y }]);
-  await touch('touchMove', [{ x: empty.x + 2, y: empty.y }, { x: empty.x + 65, y: empty.y }]); await touch('touchEnd', []);
-  expect(await snapshot(page)).toEqual(stable);
+  await expect(page.locator('.ve-resize')).toHaveCount(0);
+
 });
 
 test('cancelled pointer drag is discarded, surface replacement fits layers without cropping', async ({ page }) => {
@@ -187,9 +180,9 @@ test('approved catalog background, keyboard movement, resize, reduced motion and
   await page.keyboard.press('ArrowLeft'); await page.keyboard.press('Shift+ArrowUp');
   expect((await snapshot(page)).design.layers[0].x).toBeCloseTo(before.design.layers[0].x - .01, 4);
   expect((await snapshot(page)).design.layers[0].y).toBeCloseTo(before.design.layers[0].y - .05, 4);
-  await page.keyboard.press('Tab'); await expect(page.getByRole('button', { name: 'Resize selected design' })).toBeFocused();
-  await page.keyboard.press('ArrowRight'); expect((await snapshot(page)).design.layers[0].width).toBeGreaterThan(before.design.layers[0].width);
-  await page.keyboard.press('Shift+Tab'); await expect(target).toBeFocused();
+  await page.keyboard.press('Tab'); await expect(page.getByRole('button', { name: 'Move up', exact: true })).toBeFocused();
+  await page.getByRole('button', { name: 'Larger design', exact: true }).focus(); await page.keyboard.press('Enter'); expect((await snapshot(page)).design.layers[0].width).toBeGreaterThan(before.design.layers[0].width);
+  await target.focus(); await expect(target).toBeFocused();
   expect(await target.evaluate(node => getComputedStyle(node).outlineStyle)).not.toBe('none');
   await expect(page.locator('img[data-symbol]')).toHaveAttribute('src', '/assets/engraving/v1/heart.svg');
   await expect(page.getByRole('button', { name: /symbol|icon/i })).toHaveCount(0);

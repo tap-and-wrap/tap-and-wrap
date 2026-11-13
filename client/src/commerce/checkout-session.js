@@ -41,3 +41,8 @@ export function completedCheckout(owner, orderId) {
   if (!value) { try { value = sessionStorage.getItem(key); } catch { /* Restricted storage. */ } }
   return /^[a-f0-9]{24}$/i.test(value || '') ? value : null;
 }
+
+export function persistCheckoutSession(owner) {
+  const value = checkoutSession(owner);
+  try { sessionStorage.setItem(storageKey(owner), JSON.stringify(value)); } catch { /* Opaque recovery remains available in memory. */ }
+}

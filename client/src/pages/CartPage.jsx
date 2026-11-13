@@ -15,7 +15,7 @@ import CartLine from '../commerce/CartLine.jsx';
 export default function CartPage() {
   const { cart,checkoutEnabled,mixedCheckout,loading,error,pending,setQuantity,remove,refresh }=useCart();
   const session=useSession();
-  const invalid=cart.items.some(item=>!item.valid), gifts=cart.items.some(item=>item.kind==='gift_box_v2'), engraving=cart.items.some(item=>isEngravingKind(item.kind));
+  const invalid=cart.items.some(item=>!item.valid);
   if(loading) return <main className="commerce-page"><p role="status">Loading your cart…</p></main>;
   if(error) return <main className="commerce-page"><h1>Your Cart</h1><p role="alert">{commerceError(error)}</p><div className="button-group"><button type="button" className="button button-dark" onClick={()=>refresh()}>Try again</button><Link className="button button-secondary" to="/shop">Return to shop</Link></div></main>;
   return <main className="commerce-page"><div className="commerce-heading"><div><p className="eyebrow">Thoughtful gifts, ready for you</p><h1 tabIndex={-1}>Your Cart</h1></div></div>
@@ -39,10 +39,7 @@ export default function CartPage() {
           {item.attachments?.expiresAt&&<p className="commerce-muted">Private files expire <time dateTime={item.attachments.expiresAt}>{new Date(item.attachments.expiresAt).toLocaleString()}</time>. Adding to cart does not extend their lifetime.</p>}
         </CartLine>;
       })}</section>
-      <aside className="commerce-summary"><h2>Order Summary</h2><dl><div><dt>Subtotal</dt><dd>{money(cart.subtotalPiastres)}</dd></div><div><dt>Delivery</dt><dd>Confirmed separately</dd></div></dl><p className="commerce-muted">Eligible discounts are applied at checkout.</p>
-        {mixedCheckout&&<p className="commerce-muted">One order. The engraving price is included at checkout; inspection and final design acceptance come before engraving work.</p>}
-        {gifts&&!mixedCheckout&&<p className="commerce-muted">Gift Boxes support COD or InstaPay at checkout. Transfers are verified before preparation.</p>}
-        {engraving&&!mixedCheckout&&<p className="commerce-muted">The engraving price is included at checkout. We inspect your item and confirm your final design before engraving work.</p>}
+      <aside className="commerce-summary"><h2>Order Summary</h2><dl><div><dt>Subtotal</dt><dd>{money(cart.subtotalPiastres)}</dd></div><div><dt>Delivery</dt><dd>Confirmed separately</dd></div></dl>
         {invalid&&<p className="form-error" role="alert">Review unavailable items before checkout.</p>}
         {checkoutEnabled&&!invalid?<Link className="button button-primary" to="/checkout">Proceed to Checkout</Link>:<><button className="button button-primary" disabled>Checkout unavailable</button>{!mixedCheckout&&!invalid&&<p className="commerce-muted">Online ordering is currently unavailable for this cart. Your items remain saved.</p>}</>}
         <Link to="/shop" className="commerce-continue">Continue shopping</Link>

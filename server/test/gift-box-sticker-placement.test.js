@@ -29,15 +29,15 @@ test('rotated text stays inside every canonical surface and historical poses rem
  for(const [boxId,views]of Object.entries(STICKER_PROOFS))for(const [view,proof]of Object.entries(views)){
   const legacy=defaultStickerPlacement(boxId,view);
   assert.deepEqual(boundStickerPlacement(legacy),legacy);
-  for(const rotation of [-35,-5,0,5,35]){
+  for(const rotation of [-180,-135,-90,-35,0,35,90,135,180]){
    const pose=boundStickerPlacement({...legacy,rotation,x:-1,y:2,width:1,height:1});
    assert.ok(validStickerPlacement(pose));
    const r=rotation*Math.PI/180,c=Math.abs(Math.cos(r)),s=Math.abs(Math.sin(r));
    const w=c*pose.width+s*pose.height*proof.height/proof.width,h=s*pose.width*proof.width/proof.height+c*pose.height;
-   assert.ok(pose.x-w/2>=proof.surface.x-1e-7&&pose.x+w/2<=proof.surface.x+proof.surface.width+1e-7);
-   assert.ok(pose.y-h/2>=proof.surface.y-1e-7&&pose.y+h/2<=proof.surface.y+proof.surface.height+1e-7);
+   assert.ok(pose.x-w/2>=(proof.usableSurface || proof.surface).x-1e-7&&pose.x+w/2<=(proof.usableSurface || proof.surface).x+(proof.usableSurface || proof.surface).width+1e-7);
+   assert.ok(pose.y-h/2>=(proof.usableSurface || proof.surface).y-1e-7&&pose.y+h/2<=(proof.usableSurface || proof.surface).y+(proof.usableSurface || proof.surface).height+1e-7);
   }
-  for(const rotation of [NaN,Infinity,36,-36,null,'5'])assert.equal(validStickerPlacement({...legacy,rotation}),false);
+  for(const rotation of [NaN,Infinity,181,-181,null,'5'])assert.equal(validStickerPlacement({...legacy,rotation}),false);
  }
  const raw=intent();raw.sticker.placement=boundStickerPlacement({...raw.sticker.placement,rotation:25});
  assert.deepEqual(parseGiftBoxPersonalizationIntent(JSON.parse(JSON.stringify(raw))),raw);

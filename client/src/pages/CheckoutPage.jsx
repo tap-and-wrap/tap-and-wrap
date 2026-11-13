@@ -1,3 +1,6 @@
+import CheckoutInstaPay from '../commerce/CheckoutInstaPay.jsx';
+import ConfirmationDialog from '../components/ConfirmationDialog.jsx';
+import { ChevronDown } from 'lucide-react';
 import GiftBoxPreview from '../commerce/GiftBoxPreview.jsx';
 import { PrivateImage } from '../engraving/EngravingCartCard.jsx';
 import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
@@ -17,7 +20,7 @@ import { checkoutSession, completedCheckout, clearCheckoutSession, markCheckoutP
 
 function CheckoutLine({ item, owner }) {
   const gift = item.kind === 'gift_box_v2', engraving = isEngravingKind(item.kind);
-  const name = gift ? item.giftBox?.box?.displayName || item.name : item.name;
+  const name = gift ? 'Gift Box' : engraving ? `${item.engraving?.typeName || String(item.name || 'Item').replace(/\s+engraving$/i, '')} Engraving` : item.name;
   const layers = item.engraving?.layers || (item.engraving?.content ? [item.engraving.content] : []);
   return <div className="commerce-summary-item"><div className="checkout-line-thumbnail">{gift ? <GiftBoxPreview giftBox={item.giftBox}/> : engraving ? <PrivateImage key={`${owner}:${item.id}`} item={item} owner={owner} role="surface" label="Your engraving surface"/> : item.mainImageUrl ? <img src={item.mainImageUrl} alt="" width="58" height="58"/> : null}</div><div className="checkout-line-description"><span>{name} × {item.quantity}</span>{item.variantKey && <small>{item.variantLabel || item.variantKey}</small>}{gift && <small>{item.giftBox?.personalization?.photoCount || 0} photo prints{item.giftBox?.personalization?.sticker && <> · Sticker: <bdi>{item.giftBox.personalization.sticker.text}</bdi></>}</small>}{item.productEngraving && <small>Engraving{item.productEngraving.text && <>: <bdi>{item.productEngraving.text}</bdi> · {item.productEngraving.colorId}</>}</small>}{engraving && layers.map((layer,index) => <small key={layer.id || index}>{layer.text ? <bdi>{layer.text}</bdi> : 'Uploaded engraving artwork'}</small>)}<PersonalizationSummary values={item.personalization} definitions={item.personalizationDefinitions}/></div><strong>{money(item.lineTotalPiastres)}</strong></div>;
 }
@@ -31,6 +34,8 @@ export default function CheckoutPage() {
   const [paymentError, setPaymentError] = useState('');
   const acceptedOwner = useRef(null);
   const [paymentMethod, setPaymentMethod] = useState('cod');
+  const [checkoutPayment,setCheckoutPayment] = useState(null), [switchTarget,setSwitchTarget] = useState(null), [switchError,setSwitchError] = useState(''), [switchPending,setSwitchPending] = useState(false);
+  const switchingPayment = useRef(false);
   const engravingOnly = cart.items.length > 0 && cart.items.every(item => isEngravingKind(item.kind));
   const hasEngraving = cart.items.some(item => isEngravingKind(item.kind));
   const [discountCode, setDiscountCode] = useState('');
@@ -47,12 +52,15 @@ export default function CheckoutPage() {
   useEffect(() => {
     submissionKey.current = null; requestSnapshot.current = null;
     setCustomer({ name: session.user?.name || '', email: session.user?.email || '', phone: session.user?.phone || '', governorate: '', addressVersion: 'delivery-address-v3', city: '', street: '', building: '', floor: '', apartment: '', notes: '' });
+    setCheckoutPayment(null); setPaymentMethod('cod');
     setFieldErrors({}); setFieldError(''); setRecoveryMessage('');
     setUncertainOwner(null);
   }, [session.ownerKey, checkoutOwner, session.user?.name, session.user?.email, session.user?.phone]);
   const config = useQuery({ queryKey: privateQueryKey(session.ownerKey, 'checkout-config'), queryFn: ({ signal }) => commerceGet('/checkout/config', undefined, signal), enabled: session.ready, retry: false, staleTime: 60_000 });
   const enabled = config.data?.enabled === true;
   const completedId = session.ready ? completedCheckout(checkoutOwner) : null;
+  const paymentRecovery = useQuery({ queryKey: privateQueryKey(session.ownerKey,'checkout-payment',checkoutSession(checkoutOwner).key), queryFn:({signal})=>commerceGet(`/checkout/payments/${checkoutSession(checkoutOwner).key}`,undefined,signal), enabled:session.ready && !accepted && (!completedId || cart.items.length > 0), retry:false,gcTime:0 });
+  useEffect(()=>{ if(paymentRecovery.data?.payment && paymentRecovery.data.payment.state!=='consumed')setPaymentMethod('instapay'); },[paymentRecovery.data]);
   const recoveredPayment = useQuery({ queryKey: privateQueryKey(session.ownerKey, 'checkout-completed-order', completedId), queryFn: ({signal}) => commerceGet(`/orders/${completedId}`, undefined, signal), enabled: session.ready && !cart.items.length && Boolean(completedId) && !accepted, retry: false, gcTime: 0 });
   useEffect(() => {
     if (recoveredPayment.data?.order) { acceptedOwner.current = session.ownerKey; setAccepted(recoveredPayment.data.order); }
@@ -62,7 +70,7 @@ export default function CheckoutPage() {
   const quote = useQuery({ queryKey: privateQueryKey(session.ownerKey, 'checkout-quote', customer.governorate, paymentMethod, appliedCode, cart.items.map((item) => ({ id: item.id, kind: item.kind, productId: item.productId, variantKey: item.variantKey, quantity: item.quantity, unitPricePiastres: item.unitPricePiastres, personalization: item.personalization, customization: item.customization })), cart.subtotalPiastres, cart.quantity), queryFn: ({ signal }) => {
     submissionKey.current ||= checkoutSession(checkoutOwner).key;
     return commercePost('/checkout/quote', { checkoutKey: submissionKey.current, paymentMethod, governorate: customer.governorate, ...(appliedCode ? { discountCode: appliedCode } : {}) }, { signal });
-  }, enabled: session.ready && enabled && !uncertain && Boolean(customer.governorate) && cart.items.length > 0, retry: false, staleTime: 0 });
+  }, enabled: session.ready && enabled && !paymentRecovery.isPending && !uncertain && Boolean(customer.governorate) && cart.items.length > 0, retry: false, staleTime: 0 });
   const totals = quote.data?.totals || quote.data?.quote || quote.data;
   useEffect(() => { if (quote.data?.tracking) emitTracking(quote.data.tracking); }, [quote.data]);
   function confirmed(result) {
@@ -82,6 +90,7 @@ export default function CheckoutPage() {
   } });
   const submit = useMutation({ mutationFn: async () => {
     if (requestSnapshot.current) return commercePost('/orders', requestSnapshot.current);
+    if (paymentMethod === 'instapay' && !checkoutPayment?.ready) throw new Error('Save your payment evidence against the current reference first. Do not transfer again.');
     if (!enabled) throw new Error('Ordering has not been enabled yet.');
     submissionKey.current ||= checkoutSession(checkoutOwner).key;
     setUploadStatus('Submitting your order securely…');
@@ -89,7 +98,7 @@ export default function CheckoutPage() {
     markCheckoutPending(checkoutOwner);
     return commercePost('/orders', requestSnapshot.current);
   }, onSuccess: confirmed, onError: (error) => {
-    const reviewable = ['CHECKOUT_QUOTE_REQUIRED', 'CHECKOUT_CHANGED', 'PRODUCT_UNAVAILABLE', 'INSUFFICIENT_STOCK', 'QUOTATION_REQUIRED', 'ENGRAVING_REVIEW_REQUIRED', 'ENGRAVING_TYPE_UNAVAILABLE', 'ENGRAVING_CHANGED', 'ENGRAVING_MIXED_CHECKOUT', 'ENGRAVING_DISABLED', 'INVALID_UPLOAD_REFERENCES'].includes(error.response?.data?.error?.code);
+    const reviewable = !checkoutPayment?.reference && ['CHECKOUT_QUOTE_REQUIRED', 'CHECKOUT_CHANGED', 'PRODUCT_UNAVAILABLE', 'INSUFFICIENT_STOCK', 'QUOTATION_REQUIRED', 'ENGRAVING_REVIEW_REQUIRED', 'ENGRAVING_TYPE_UNAVAILABLE', 'ENGRAVING_CHANGED', 'ENGRAVING_MIXED_CHECKOUT', 'ENGRAVING_DISABLED', 'INVALID_UPLOAD_REFERENCES'].includes(error.response?.data?.error?.code);
     if (reviewable) { markCheckoutRejected(checkoutOwner); requestSnapshot.current = null; setUncertainOwner(null); void refresh().catch(() => {}); void quote.refetch(); }
     else if (requestSnapshot.current && (!error.response || error.response.status >= 500 || error.response.status === 409)) setUncertainOwner(checkoutOwner);
     else if (requestSnapshot.current) { markCheckoutRejected(checkoutOwner); requestSnapshot.current = null; }
@@ -108,7 +117,7 @@ export default function CheckoutPage() {
     try { const result = await commerceGet(`/orders/${accepted.id}`); if (acceptedOwner.current === owner) { setAccepted(result.order); setPaymentError(''); } }
     catch (error) { if (acceptedOwner.current === owner) setPaymentError(commerceError(error)); }
   }
-  if (accepted && acceptedOwner.current === session.ownerKey) return <main className="commerce-page checkout-payment-step"><p className="eyebrow">Order confirmed</p><h1>Thank you, order #{accepted.orderNumber}</h1><p>{accepted.paymentMethod === 'instapay' ? 'Complete your InstaPay payment below. Keep this order reference if you need to return later.' : 'Your order is unpaid. Cash is collected only through the agreed delivery or handoff arrangement.'}</p><>{paymentError && <div className="commerce-notice" role="alert"><p>{paymentError} Your accepted order remains saved.</p><button type="button" className="button button-secondary" onClick={refreshAccepted}>Refresh payment status</button></div>}</><CustomerOrderPayments key={`${session.ownerKey}:${accepted.id}`} order={accepted} refresh={refreshAccepted}/><Link className="button button-primary" to={`/orders/${accepted.id}`}>View order status</Link></main>;
+  if (accepted && acceptedOwner.current === session.ownerKey) return <main className="commerce-page checkout-payment-step"><p className="eyebrow">Order confirmed</p><h1>Thank you, order #{accepted.orderNumber}</h1><p>{accepted.paymentMethod === 'instapay' ? accepted.checkoutPayment ? 'Your payment evidence is saved and awaits owner verification. Do not transfer again.' : 'Complete your InstaPay payment below. Keep this order reference if you need to return later.' : 'Your order is unpaid. Cash is collected only through the agreed delivery or handoff arrangement.'}</p><>{paymentError && <div className="commerce-notice" role="alert"><p>{paymentError} Your accepted order remains saved.</p><button type="button" className="button button-secondary" onClick={refreshAccepted}>Refresh payment status</button></div>}</><CustomerOrderPayments key={`${session.ownerKey}:${accepted.id}`} order={accepted} refresh={refreshAccepted}/><Link className="button button-primary" to={`/orders/${accepted.id}`}>View order status</Link></main>;
   const control = (name) => ({ id: `${prefix}-${name}`, name, value: customer[name], onChange: change, ...fieldErrorProps(`${prefix}-${name}`, fieldErrors[name]) });
   return <main className="commerce-page"><p className="eyebrow">A little thought goes a long way</p><h1>Checkout</h1>
     {uncertain && <section className="commerce-notice" aria-label="Unconfirmed submission"><h2>Check your order submission</h2><p role="alert">The previous submission is unconfirmed. Do not make another payment or start a new order yet.</p><div className="button-group"><button className="button button-secondary" type="button" disabled={recover.isPending || submit.isPending} onClick={() => recover.mutate()}>Check submission status</button>{requestSnapshot.current && <button className="button button-primary" type="button" disabled={submit.isPending || recover.isPending} onClick={() => submit.mutate()}>Retry same submission</button>}<Link to="/contact">Contact the store</Link></div>{recover.isPending && <p role="status">Checking securely…</p>}{recoveryMessage && <p role="status">{recoveryMessage}</p>}{recover.error && <p role="alert">{commerceError(recover.error)}</p>}</section>}
@@ -124,20 +133,20 @@ export default function CheckoutPage() {
         <div className="commerce-field"><label htmlFor={`${prefix}-building`}>Building (optional)</label><input {...control('building')} maxLength={100} autoComplete="address-line2"/><FieldError id={`${prefix}-building`}>{fieldErrors.building}</FieldError></div>
         <div className="commerce-field"><label htmlFor={`${prefix}-floor`}>Floor (optional)</label><input {...control('floor')} maxLength={50}/><FieldError id={`${prefix}-floor`}>{fieldErrors.floor}</FieldError></div>
         <div className="commerce-field"><label htmlFor={`${prefix}-apartment`}>Apartment (optional)</label><input {...control('apartment')} maxLength={50}/><FieldError id={`${prefix}-apartment`}>{fieldErrors.apartment}</FieldError></div>
-        <details className="commerce-order-notes" open={fieldErrors.notes ? true : undefined}><summary>Add delivery notes (optional)</summary><div className="commerce-field"><label htmlFor={`${prefix}-notes`}>Order notes (optional)</label><textarea {...control('notes')} maxLength={1000} rows={2}/><FieldError id={`${prefix}-notes`}>{fieldErrors.notes}</FieldError></div></details>
-      </div><p className="commerce-delivery-policy">{engravingOnly ? 'Item handoff and return arrangements are confirmed separately with the store.' : <>Delivery is calculated separately. We&apos;ll contact you on WhatsApp to confirm the fee.<small>Initial contact within 12 hours.</small></>}</p><fieldset className="commerce-payment"><legend>Payment</legend><label><input type="radio" name="payment" value="cod" checked={paymentMethod === 'cod'} onChange={() => setPaymentMethod('cod')} />{engravingOnly ? 'COD on agreed return / handoff' : 'Cash on Delivery'}</label><label><input type="radio" name="payment" value="instapay" checked={paymentMethod === 'instapay'} onChange={() => setPaymentMethod('instapay')} />{engravingOnly ? 'InstaPay' : hasEngraving || cart.items.some(item => item.kind === 'gift_box_v2') ? 'InstaPay' : 'InstaPay \u2014 full payment'}</label>
-        {hasEngraving && <p className="commerce-notice">Your engraving price is included at checkout. We inspect your item and confirm the final design with you before any engraving work. Handoff and return charges are confirmed separately.</p>}
-        {!engravingOnly && paymentMethod === 'instapay' && <p className="commerce-payment-instructions">Payment instructions appear after your order is successfully placed. Do not transfer before receiving your order reference.</p>}
+        <details className="commerce-order-notes" open={fieldErrors.notes ? true : undefined}><summary>Add delivery notes (optional)<ChevronDown size={18} aria-hidden="true"/></summary><div className="commerce-field"><label htmlFor={`${prefix}-notes`}>Order notes (optional)</label><textarea {...control('notes')} maxLength={1000} rows={2}/><FieldError id={`${prefix}-notes`}>{fieldErrors.notes}</FieldError></div></details>
+      </div><p className="commerce-delivery-policy">{engravingOnly ? 'Item handoff and return arrangements are confirmed separately with the store.' : <>Delivery is calculated separately. We&apos;ll contact you on WhatsApp to confirm the fee.<small>Initial contact within 12 hours.</small></>}</p><fieldset className="commerce-payment"><legend>Payment</legend><label><input type="radio" name="payment" value="cod" disabled={checkoutPayment?.busy} checked={paymentMethod === 'cod'} onChange={event => checkoutPayment?.reference ? setSwitchTarget(event.currentTarget) : setPaymentMethod('cod')} />{engravingOnly ? 'COD on agreed return / handoff' : 'Cash on Delivery'}</label><label><input type="radio" name="payment" value="instapay" checked={paymentMethod === 'instapay'} onChange={() => setPaymentMethod('instapay')} />{engravingOnly ? 'InstaPay' : hasEngraving || cart.items.some(item => item.kind === 'gift_box_v2') ? 'InstaPay' : 'InstaPay \u2014 full payment'}</label>
+        {paymentMethod === 'instapay' && <CheckoutInstaPay key={`${session.ownerKey}:${checkoutSession(checkoutOwner).key}`} owner={session.ownerKey} checkoutOwner={checkoutOwner} checkoutKey={checkoutSession(checkoutOwner).key} governorate={customer.governorate} discountCode={appliedCode} quote={quote} onChange={setCheckoutPayment} disabled={submit.isPending || uncertain}/>}
       </fieldset></fieldset></section>
       <aside className="commerce-summary"><h2>Your Order</h2>{cart.items.map(item => <CheckoutLine key={`${session.ownerKey}:${item.id}`} item={item} owner={session.ownerKey}/>)}
-        {!engravingOnly && <details className="commerce-discount"><summary>Have a discount code?</summary><label className="commerce-field">Discount code<input value={discountCode} maxLength={40} disabled={submit.isPending || uncertain} onChange={(event) => setDiscountCode(event.target.value)} /></label><button className="button button-secondary" type="button" disabled={uncertain || !customer.governorate || quote.isFetching || submit.isPending} onClick={() => setAppliedCode(discountCode.trim())}>Apply code</button></details>}
+        {!engravingOnly && <details className="commerce-discount"><summary>Have a discount code?<ChevronDown size={18} aria-hidden="true"/></summary><label className="commerce-field">Discount code<input value={discountCode} maxLength={40} disabled={submit.isPending || uncertain} onChange={(event) => setDiscountCode(event.target.value)} /></label><button className="button button-secondary" type="button" disabled={uncertain || !customer.governorate || quote.isFetching || submit.isPending} onClick={() => setAppliedCode(discountCode.trim())}>Apply code</button></details>}
         {quote.isFetching && <p role="status">Calculating your total…</p>}{quote.error && <p className="form-error" role="alert">{commerceError(quote.error)}</p>}
         {customer.governorate && <button className="commerce-link-button" type="button" disabled={uncertain || quote.isFetching || submit.isPending} onClick={() => quote.refetch()}>Refresh order total</button>}
-        {hasEngraving && <p className="commerce-notice">Engraving work begins only after physical inspection and your final design acceptance.</p>}{quote.data?.paymentGroups && <dl>{quote.data.paymentGroups.map(group => <div key={group.id}><dt>{group.label}{group.method === 'cod' ? ' - COD' : ' - InstaPay after order confirmation'}</dt><dd>{money(group.amountPiastres)}</dd></div>)}</dl>}{totals && <dl><div><dt>Subtotal</dt><dd>{money(totals.subtotalPiastres)}</dd></div>{(totals.discountPiastres || 0) > 0 && <div><dt>Discounts</dt><dd>−{money(totals.discountPiastres)}</dd></div>}<div><dt>Delivery</dt><dd>Confirmed separately</dd></div><div className="commerce-total"><dt>Order total</dt><dd>{money(totals.totalPiastres)}</dd></div></dl>}
+        {quote.data?.paymentGroups && <dl>{quote.data.paymentGroups.map(group => <div key={group.id}><dt>{group.label}{group.method === 'cod' ? ' - COD' : ' - InstaPay'}</dt><dd>{money(group.amountPiastres)}</dd></div>)}</dl>}{totals && <dl><div><dt>Subtotal</dt><dd>{money(totals.subtotalPiastres)}</dd></div>{(totals.discountPiastres || 0) > 0 && <div><dt>Discounts</dt><dd>−{money(totals.discountPiastres)}</dd></div>}<div><dt>Delivery</dt><dd>Confirmed separately</dd></div><div className="commerce-total"><dt>Order total</dt><dd>{money(totals.totalPiastres)}</dd></div></dl>}
         {(fieldError || submit.error) && <p className="form-error" role="alert">{fieldError || commerceError(submit.error)}</p>}
         {submit.isPending && <p className="upload-progress" role="status"><progress aria-label="Placing your order"/>{uploadStatus || 'Preparing your order…'}</p>}
-        <button className="button button-primary" type="submit" disabled={uncertain || submit.isPending || !totals || quote.isFetching || Boolean(quote.error) || cart.items.some((item) => !item.valid)}>{submit.isPending ? 'Placing your order…' : 'Place Order'}</button>
+        <button className="button button-primary" type="submit" disabled={uncertain || submit.isPending || paymentMethod === 'instapay' && !checkoutPayment?.ready || !totals || quote.isFetching || Boolean(quote.error) || cart.items.some((item) => !item.valid)}>{submit.isPending ? 'Placing your order…' : 'Place Order'}</button>
       </aside>
     </form>}
+    {switchTarget && <ConfirmationDialog title="Switch to Cash on Delivery?" description="Continue only if you have not transferred money. If you transferred or submitted proof, keep your payment reference and contact the store; do not pay again." returnFocus={switchTarget} onCancel={()=>{setSwitchTarget(null);setSwitchError('');}} confirmLabel="I have not transferred" error={switchError} pending={switchPending} onConfirm={async()=>{if(switchingPayment.current)return;switchingPayment.current=true;setSwitchPending(true);try{await commercePost(`/checkout/payments/${checkoutSession(checkoutOwner).key}/cancel`,{noTransferConfirmed:true});clearCheckoutSession(checkoutOwner);submissionKey.current=null;setCheckoutPayment(null);setPaymentMethod('cod');setSwitchTarget(null);}catch(error){setSwitchError(commerceError(error));}finally{switchingPayment.current=false;setSwitchPending(false);}}}/>}
   </main>;
 }

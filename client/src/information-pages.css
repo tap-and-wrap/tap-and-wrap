@@ -15,3 +15,5 @@
 @media(max-width:700px){.information-copy section{padding-bottom:20px;margin-bottom:24px}}
 
 .information-faq{scroll-margin-top:calc(var(--site-header-height,100px) + 24px)}
+
+.contact-page-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:24px}.contact-page-actions .button{display:inline-flex;gap:8px;align-items:center;justify-content:center}@media(max-width:390px){.contact-page-actions .button{flex:1 1 100%}}

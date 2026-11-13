@@ -19,8 +19,9 @@ export function validateDesign(value) {
   if (!value.surface && value.layers.length) fail();
   const ids = new Set();
   for (const layer of value.layers) {
-    const fields = ['id', 'type', 'x', 'y', 'width', 'aspectRatio', ...(layer?.type === 'text' ? ['text', 'fontId', 'color'] : ['assetId'])];
+    const fields = ['id', 'type', 'x', 'y', 'width', 'aspectRatio', 'rotation', ...(layer?.type === 'text' ? ['text', 'fontId', 'color'] : ['assetId'])];
     if (!only(layer, fields) || !key(layer.id) || ids.has(layer.id) || !['text', 'image'].includes(layer.type) || !finite(layer.x, 0, 1) || !finite(layer.y, 0, 1) || !finite(layer.width, .0001, 1) || !finite(layer.aspectRatio, .05, 40)) fail();
+    if (layer.rotation !== undefined && !finite(layer.rotation, -180, 180)) fail();
     ids.add(layer.id);
     if (layer.type === 'image' && (!key(layer.assetId) || layer.assetId === value.surface.assetId)) fail();
     if (layer.type === 'text' && (typeof layer.text !== 'string' || [...layer.text].length > 500 || !layer.text.isWellFormed() || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(layer.text) || !FONT_REGISTRY.some(font => font.id === layer.fontId) || !APPEARANCES.includes(layer.color) || /\p{Script=Arabic}/u.test(layer.text) && FONT_REGISTRY.find(font => font.id === layer.fontId)?.language !== 'ar')) fail();
@@ -32,10 +33,12 @@ export function validateDesign(value) {
 
 /** Coordinates refer to the full, uncropped surface, never the viewport. */
 export function fitLayer(layer, surfaceRatio) {
-  const maxWidth = Math.min(1, layer.aspectRatio / surfaceRatio);
-  const width = clamp(layer.width, Math.min(.04, maxWidth), maxWidth);
-  const height = width * surfaceRatio / layer.aspectRatio;
-  return { ...layer, width, x: clamp(layer.x, width / 2, 1 - width / 2), y: clamp(layer.y, height / 2, 1 - height / 2) };
+  const angle = (layer.rotation ?? 0) * Math.PI / 180, c = Math.abs(Math.cos(angle)), s = Math.abs(Math.sin(angle));
+  const heightPerWidth = surfaceRatio / layer.aspectRatio;
+  const maxWidth = Math.min(1, 1 / (c + s / layer.aspectRatio), 1 / (s * surfaceRatio + c * heightPerWidth));
+  const width = clamp(layer.width, Math.min(.04, maxWidth), maxWidth), height = width * heightPerWidth;
+  const halfX = (c * width + s * height / surfaceRatio) / 2, halfY = (s * width * surfaceRatio + c * height) / 2;
+  return { ...layer, width, x: clamp(layer.x, halfX, 1 - halfX), y: clamp(layer.y, halfY, 1 - halfY) };
 }
 export const layerHeight = (layer, surfaceRatio) => layer.width * surfaceRatio / layer.aspectRatio;
 export function editLayer(design, id, patch) {

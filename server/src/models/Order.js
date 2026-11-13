@@ -14,6 +14,7 @@ const schema = new mongoose.Schema({
   orderNumber: { type: String, required: true, unique: true, match: /^[1-9][0-9]{5}$/ },
   owner: { type: String, required: true }, userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   checkoutKey: { type: String, required: true }, requestHash: { type: String, required: true },
+  checkoutPayment: { type: mongoose.Schema.Types.Mixed, immutable: true, default: undefined },
   customer: { type: mongoose.Schema.Types.Mixed, required: true, immutable: true },
   trackingConsentId: { type: mongoose.Schema.Types.ObjectId, ref: 'TrackingConsent', default: null, immutable: true },
   lines: { type: [mongoose.Schema.Types.Mixed], required: true, immutable: true,

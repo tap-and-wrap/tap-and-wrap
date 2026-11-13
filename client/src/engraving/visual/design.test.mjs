@@ -3,6 +3,17 @@ import assert from 'node:assert/strict';
 import { emptyDesign, fitLayer, editLayer, layerHeight, validateDesign, createVisualDraft, restoreVisualDraft, designReadiness, newHistory, commitHistory, undoHistory, redoHistory } from './design.mjs';
 
 const design = () => ({ ...emptyDesign(), surface: { assetId: 'surface', aspectRatio: 1.5 }, layers: [{ id: 'words', type: 'text', x: .5, y: .5, width: .4, aspectRatio: 3, text: 'Our story', fontId: 'engraving-amiri-v1', color: 'black' }, { id: 'art', type: 'image', assetId: 'artwork', x: .6, y: .6, width: .2, aspectRatio: 2 }] });
+test('text and image rotations preserve aspect ratio, bounds and old unrotated snapshots', () => {
+  assert.deepEqual(validateDesign(design()), design());
+  for (const surfaceRatio of [.05,1,1.5,20]) for (const rotation of [-180,-135,-90,-35,0,45,90,135,180]) for (const source of design().layers) {
+    const layer=fitLayer({...source,x:0,y:1,width:2,rotation},surfaceRatio),r=rotation*Math.PI/180,c=Math.abs(Math.cos(r)),s=Math.abs(Math.sin(r)),height=layerHeight(layer,surfaceRatio);
+    const w=c*layer.width+s*height/surfaceRatio,h=s*layer.width*surfaceRatio+c*height;
+    assert.ok(layer.x-w/2>=-1e-7&&layer.x+w/2<=1+1e-7&&layer.y-h/2>=-1e-7&&layer.y+h/2<=1+1e-7);
+    const value={...emptyDesign(),surface:{assetId:'surface',aspectRatio:surfaceRatio},layers:[layer]};
+    assert.deepEqual(validateDesign(JSON.parse(JSON.stringify(value))),value);
+  }
+  for(const rotation of [NaN,Infinity,null,'90',181,-181])assert.throws(()=>validateDesign({...design(),layers:[{...design().layers[0],rotation}]}));
+});
 test('proportional draft survives JSON reconstruction with exact layering and separate assets', () => {
   const saved = JSON.parse(JSON.stringify(createVisualDraft('guest:3:cart', design())));
   assert.deepEqual(restoreVisualDraft(saved, 'guest:3:cart'), design());
