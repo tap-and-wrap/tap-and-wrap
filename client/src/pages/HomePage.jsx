@@ -12,7 +12,15 @@ import '../home-media.css';
 
 export default function HomePage() {
   const reviews = ownerFeaturedReviews;
-  const faq = [0, 1, 2, 4, 8, 12, 16, 18].map(index => approvedFaqFallback[index]).filter(Boolean);
+  const homeQuestions = [
+    'How do I place an order?', 'Which payment methods do you accept?',
+    'When will I hear from Tap & Wrap after placing an order?', 'How do I submit my InstaPay screenshot?',
+    'Is shipping included in the product price?', 'How do I pay the delivery fee?',
+    'How long does delivery take?', 'Where do you deliver?',
+    'How does Build Your Gift Box work?', 'How do Gift Box stickers and photo prints work?',
+    'How do I add my personal photos?', 'What can I personalize or laser engrave?',
+  ];
+  const faq = homeQuestions.map(question => approvedFaqFallback.find(entry => entry.question === question)).filter(Boolean);
   return <><RibbonOpening/><HomeMotion/><main className="home-page">
     <section className="hero home-media-hero" aria-labelledby="home-hero-heading">
       <DeveloperHeroMedia />

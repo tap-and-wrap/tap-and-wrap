@@ -58,9 +58,10 @@ for (const width of [390, 1440]) test(`text/image placement, resizing, zoom and 
   const resize = await page.getByRole('button', { name: 'Resize selected design' }).boundingBox();
   await page.mouse.move(resize.x + 22, resize.y + 22); await page.mouse.down(); await page.mouse.move(resize.x + 40, resize.y + 22, { steps: 5 }); await page.mouse.up();
   expect((await snapshot(page)).design.layers[1].width).toBeGreaterThan(moved.width);
-  const original = await snapshot(page); await page.getByRole('button', { name: 'Zoom in workspace' }).click();
+  const original = await snapshot(page); await page.getByRole('button', { name: 'Adjust View', exact: true }).click(); await page.getByRole('button', { name: 'Zoom in workspace' }).click();
   await expect(page.getByLabel('Workspace zoom')).toHaveText('125%'); expect(await snapshot(page)).toEqual(original);
   await page.getByRole('button', { name: 'Fit view', exact: true }).click();
+  await page.getByRole('button', { name: 'Save view', exact: true }).click();
   const image = target.locator('img'); await expect(image).toHaveCSS('filter', 'none'); await expect(image).toHaveCSS('mix-blend-mode', 'normal');
   const ratio = await image.evaluate(node => node.getBoundingClientRect().width / node.getBoundingClientRect().height); expect(ratio).toBeCloseTo(2, 3);
   const samples = await image.evaluate(async node => {
@@ -73,6 +74,24 @@ for (const width of [390, 1440]) test(`text/image placement, resizing, zoom and 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.evaluate(() => document.fonts.ready); await page.screenshot({ path: info.outputPath(`editor-${width}.png`), fullPage: true });
   expect(mutations).toEqual([]); expect(errors).toEqual([]);
+});
+
+test('view adjustment saves or cancels without changing design metadata', async ({ page }) => {
+  const { surface, artwork } = await open(page, 390);
+  await surfaceReady(page, surface); await addImage(page, artwork);
+  const original = await snapshot(page);
+  await expect(page.getByRole('button', { name: 'Zoom in workspace' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Adjust View', exact: true }).click();
+  await page.getByRole('button', { name: 'Zoom in workspace' }).click();
+  await expect(page.getByRole('button', { name: 'Add text', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('button', { name: 'Adjust View', exact: true }).click();
+  await expect(page.getByLabel('Workspace zoom')).toHaveText('100%');
+  await page.getByRole('button', { name: 'Zoom in workspace' }).click();
+  await page.getByRole('button', { name: 'Save view', exact: true }).click();
+  await page.getByRole('button', { name: 'Adjust View', exact: true }).click();
+  await expect(page.getByLabel('Workspace zoom')).toHaveText('125%');
+  expect(await snapshot(page)).toEqual(original);
 });
 
 test('history groups drag; undo, redo and reset preserve the surface', async ({ page }) => {
@@ -93,12 +112,14 @@ test('native mobile touch drag and pinch zoom keep design size independent', asy
   const center = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
   await touch('touchStart', [center]); await touch('touchMove', [{ x: center.x + 25, y: center.y - 15 }]); await touch('touchEnd', []);
   const moved = await snapshot(page); expect(moved.design.layers[0].x).toBeGreaterThan(.5);
+  await page.getByRole('button', { name: 'Adjust View', exact: true }).click();
   await touch('touchStart', [{ x: center.x - 30, y: center.y }]);
   await touch('touchStart', [{ x: center.x - 30, y: center.y }, { x: center.x + 30, y: center.y }]);
   const before = await snapshot(page);
   await touch('touchMove', [{ x: center.x - 60, y: center.y }, { x: center.x + 60, y: center.y }]); await touch('touchEnd', []);
   await expect(page.getByLabel('Workspace zoom')).not.toHaveText('100%'); expect(await snapshot(page)).toEqual(before);
   await page.getByRole('button', { name: 'Fit view', exact: true }).click();
+  await page.getByRole('button', { name: 'Save view', exact: true }).click();
   const handle = await page.getByRole('button', { name: 'Resize selected design' }).boundingBox();
   await touch('touchStart', [{ x: handle.x + 22, y: handle.y + 22 }]); await touch('touchMove', [{ x: handle.x + 34, y: handle.y + 22 }]); await touch('touchEnd', []);
   expect((await snapshot(page)).design.layers[0].width).toBeGreaterThan(before.design.layers[0].width);

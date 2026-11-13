@@ -15,6 +15,18 @@ test('named testimonial marquee pauses and reduced motion exposes one complete c
     await expect(control.locator('span')).toHaveCSS('opacity', '1');
     await page.keyboard.press('Tab');
     await expect(control.locator('span')).toHaveCSS('opacity', '0');
+    const bounds = await page.locator('.review-marquee-window').boundingBox();
+    const viewport = await page.evaluate(() => {
+      // The root layout rectangle excludes reserved scrollbar gutters.
+      const root = document.documentElement, rect = root.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, width: rect.width, outerWidth: innerWidth, scrollWidth: root.scrollWidth, clientWidth: root.clientWidth };
+    });
+    expect(viewport.left).toBeGreaterThanOrEqual(0);
+    expect(viewport.right).toBeLessThanOrEqual(viewport.outerWidth);
+    expect(bounds.x).toBeCloseTo(viewport.left, 3);
+    expect(bounds.x + bounds.width).toBeCloseTo(viewport.right, 3);
+    expect(bounds.width).toBeCloseTo(viewport.width, 3);
+    expect(viewport.scrollWidth).toBeLessThanOrEqual(viewport.clientWidth);
   }
   await page.setViewportSize({ width: 1440, height: 900 });
   const groups = page.locator('.review-marquee-group');
@@ -24,9 +36,6 @@ test('named testimonial marquee pauses and reduced motion exposes one complete c
   await expect(page.getByRole('button', { name: /Pause reviews|Resume reviews/ })).toHaveCount(0);
   await expect(page.getByText('Customer feedback translated or lightly edited for clarity.')).toHaveCount(0);
   const window = page.locator('.review-marquee-window');
-  const bounds = await window.boundingBox();
-  expect(bounds.x).toBe(0);
-  expect(bounds.width).toBe(await page.evaluate(() => document.documentElement.getBoundingClientRect().width));
   await window.focus();
   expect(await page.locator('.review-marquee-track').evaluate(node => getComputedStyle(node).animationPlayState)).toBe('paused');
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -34,14 +43,14 @@ test('named testimonial marquee pauses and reduced motion exposes one complete c
   await expect(groups.nth(1)).toBeHidden();
 });
 
-test('FAQ categories preserve all eleven exact approved answers', async ({ page }) => {
+test('FAQ categories show four approved answers each on the homepage', async ({ page }) => {
   await mockCatalog(page); await page.goto('/');
   for (const width of [1440, 320]) {
     await page.setViewportSize({ width, height: 900 });
     const positions = await page.locator('.home-faq-categories button').evaluateAll(buttons => buttons.map(button => button.getBoundingClientRect().top));
     expect(Math.max(...positions) - Math.min(...positions)).toBeLessThan(1);
   }
-  for (const [label, count] of [['Orders', 4], ['Shipping', 4], ['Personalization', 3]]) {
+  for (const [label, count] of [['Orders', 4], ['Shipping', 4], ['Personalization', 4]]) {
     await page.getByRole('button', { name: label, exact: true }).click();
     const questions = page.locator('.home-faq-card');
     await expect(questions).toHaveCount(count);

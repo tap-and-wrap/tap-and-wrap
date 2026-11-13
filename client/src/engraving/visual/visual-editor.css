@@ -27,3 +27,11 @@
 @media(prefers-reduced-motion:reduce){.visual-engraving *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
 .ve-preview-empty{aspect-ratio:1;display:grid;place-content:center;text-align:center;padding:32px}.ve-composite{position:relative;width:100%;max-width:min(100%,calc(65svh * var(--ve-surface-ratio,1)));background:#f4eeeb;isolation:isolate;overflow:hidden;margin-inline:auto}.ve-composite>.ve-layer>svg,.ve-composite>.ve-layer>img{display:block;width:100%;height:100%;object-fit:contain;filter:none;mix-blend-mode:normal;opacity:1}.ve-composite>.ve-layer{pointer-events:none}.saved-visual-preview{max-width:680px;margin-block:16px}.saved-visual-preview .ve-composite{margin-top:16px}
+
+/* Keep the workspace first and the shared lettering controls compact. */
+.ve-controls{border:0;padding:0;margin:0}.ve-controls>section{padding-bottom:16px}.ve-controls>section:last-child{border-bottom:0;padding-bottom:0}.ve-controls{gap:16px}.ve-heading{gap:12px;margin-bottom:16px}.ve-history button{padding:7px 10px}.ve-viewport{overflow:hidden}.ve-viewport.is-adjusting{overflow:auto;outline:2px solid var(--tw-rose-dark);outline-offset:2px}.ve-viewport.is-adjusting .ve-board{cursor:grab}.ve-viewport.is-adjusting .ve-layer{pointer-events:none}.ve-actions>button{flex:1}.ve-actions[aria-label="Design size"]>button{flex:0 0 44px}.ve-move{flex-wrap:nowrap;gap:4px}.ve-move button{padding:6px}.ve-view-controls{gap:6px}.ve-view-controls>span{font-size:.85rem}.ve-controls .ve-selection{gap:10px}.ve-selection textarea{min-height:72px}
+.visual-engraving .tw-lettering-tabs button{background:transparent;border:0;border-radius:0;border-bottom:2px solid transparent;padding:8px}.visual-engraving .tw-lettering-tabs [aria-selected=true]{border-bottom-color:var(--tw-button)}.visual-engraving .tw-lettering-gallery button{padding:10px;min-height:72px}.visual-engraving .tw-lettering-gallery [aria-pressed=true]{border:2px solid var(--tw-button);padding:9px;background:var(--tw-bg)}
+
+.ve-scroll-space{min-width:0;margin-inline:auto}
+
+.visual-engraving .ve-layer-target:disabled{opacity:1}

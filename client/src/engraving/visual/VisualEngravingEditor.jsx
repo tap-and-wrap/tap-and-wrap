@@ -82,6 +82,7 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
   const [preview, setPreview] = useState(null), [selected, setSelected] = useState(null), [zoom, setZoom] = useState(1), [error, setError] = useState(initial.current.error);
   const [localAssets, setLocalAssets] = useState({});
   const [resetTarget, setResetTarget] = useState(null);
+  const [viewBefore, setViewBefore] = useState(null);
   // Keep resource identity stable between geometry edits and expose only owned blobs.
   const assetCache = useRef({ supplied: null, local: null, value: {} });
   if (assetCache.current.supplied !== suppliedAssets || assetCache.current.local !== localAssets) assetCache.current = { supplied: suppliedAssets, local: localAssets, value: { ...suppliedAssets, ...localAssets } };
@@ -135,13 +136,13 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
     if (!design.surface || event.pointerType === 'mouse' && event.button !== 0) return;
     event.preventDefault(); board.current.setPointerCapture(event.pointerId); pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (pointers.current.size === 2) {
-      // Commit any preceding drag once, then pinch changes view state only.
-      if (preview) commit(preview);
+      if (!viewBefore) { gesture.current = null; setPreview(null); return; }
       const [a, b] = [...pointers.current.values()];
       gesture.current = { kind: 'pinch', distance: Math.hypot(a.x - b.x, a.y - b.y), zoom, midpoint: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, scrollLeft: viewport.current.scrollLeft, scrollTop: viewport.current.scrollTop };
       return;
     }
     if (pointers.current.size > 2) return;
+    if (viewBefore) { gesture.current = { kind: 'pan', x: event.clientX, y: event.clientY, left: viewport.current.scrollLeft, top: viewport.current.scrollTop }; return; }
     const target = event.target.closest('[data-layer-id]'), id = target?.dataset.layerId;
     const item = design.layers.find(value => value.id === id);
     if (item) {
@@ -157,6 +158,7 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     const active = gesture.current;
     if (!active) return;
+    if (active.kind === 'pan') { viewport.current.scrollTo(active.left + active.x - event.clientX, active.top + active.y - event.clientY); return; }
     if (active.kind === 'pinch') {
       if (pointers.current.size !== 2) return;
       const [a, b] = [...pointers.current.values()];
@@ -188,22 +190,22 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
   function resetDesign() { cancelGesture(); commit({ ...design, layers: [] }); setSelected(null); setResetTarget(null); }
   return <section className="visual-engraving" aria-label="Visual engraving editor">
     {visibleError && !onError && <p ref={errorRef} tabIndex={-1} role="alert" className="sv-error">{visibleError}</p>}
-    <header className="ve-heading"><div><p className="eyebrow">Make it personal</p><h2>Your engraving, your way</h2></div><div className="ve-history" aria-label="Design history"><button type="button" disabled={!history.past.length || Boolean(gesture.current)} onClick={() => { cancelGesture(); setHistory(undoHistory); }}>Undo</button><button type="button" disabled={!history.future.length || Boolean(gesture.current)} onClick={() => { cancelGesture(); setHistory(redoHistory); }}>Redo</button><button type="button" disabled={!design.layers.length} onClick={event => confirmReset ? setResetTarget(event.currentTarget) : resetDesign()}>Reset design</button></div></header>
+    <header className="ve-heading"><div><p className="eyebrow">Make it personal</p><h2>Your engraving, your way</h2></div><div className="ve-history" aria-label="Design history"><button type="button" disabled={Boolean(viewBefore) || !history.past.length || Boolean(gesture.current)} onClick={() => { cancelGesture(); setHistory(undoHistory); }}>Undo</button><button type="button" disabled={Boolean(viewBefore) || !history.future.length || Boolean(gesture.current)} onClick={() => { cancelGesture(); setHistory(redoHistory); }}>Redo</button><button type="button" disabled={Boolean(viewBefore) || !design.layers.length} onClick={event => confirmReset ? setResetTarget(event.currentTarget) : resetDesign()}>Reset design</button></div></header>
     <div className="ve-layout"><div className="ve-workspace">
-      <div className="ve-view-controls"><span>Workspace view</span><button type="button" aria-label="Zoom out workspace" disabled={zoom <= 1} onClick={() => setZoom(value => Math.max(1, value - .25))}>−</button><output aria-label="Workspace zoom">{Math.round(zoom * 100)}%</output><button type="button" aria-label="Zoom in workspace" disabled={zoom >= 3} onClick={() => setZoom(value => Math.min(3, value + .25))}>+</button><button type="button" onClick={() => { setZoom(1); viewport.current.scrollTo(0, 0); }}>Fit view</button></div>
-      <div className="ve-viewport" ref={viewport}><div className="ve-scroll-space" style={{ width: `${zoom * 100}%` }}>
+      <div className="ve-view-controls">{viewBefore ? <><span>Adjusting editor view</span><button type="button" aria-label="Zoom out workspace" disabled={zoom <= 1} onClick={() => setZoom(value => Math.max(1, value - .25))}>-</button><output aria-label="Workspace zoom">{Math.round(zoom * 100)}%</output><button type="button" aria-label="Zoom in workspace" disabled={zoom >= 3} onClick={() => setZoom(value => Math.min(3, value + .25))}>+</button><button type="button" onClick={() => { setZoom(1); viewport.current.scrollTo(0, 0); }}>Fit view</button><button type="button" onClick={() => { cancelGesture(); setViewBefore(null); }}>Save view</button><button type="button" onClick={() => { cancelGesture(); setZoom(viewBefore.zoom); const { left, top } = viewBefore; requestAnimationFrame(() => viewport.current?.scrollTo(left, top)); setViewBefore(null); }}>Cancel</button></> : <button type="button" onClick={() => { cancelGesture(); setViewBefore({ zoom, left: viewport.current.scrollLeft, top: viewport.current.scrollTop }); }}>Adjust View</button>}</div>
+      <div className={`ve-viewport ${viewBefore ? 'is-adjusting' : ''}`} ref={viewport} tabIndex={viewBefore ? 0 : undefined} aria-label="Engraving editor view"><div className="ve-scroll-space" style={{ width: `calc(min(100%, ${50 * (design.surface?.aspectRatio || 1)}svh) * ${zoom})` }}>
         <div ref={board} className="ve-board" style={{ aspectRatio: design.surface?.aspectRatio || 1 }} aria-label="Engraving surface workspace" aria-describedby={helpId} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={cancelGesture} onLostPointerCapture={event => { if (pointers.current.has(event.pointerId)) cancelGesture(); }}>
           {sources[design.surface?.assetId] ? <img className="ve-surface" src={sources[design.surface.assetId]} alt="Engraving surface" draggable="false" onError={() => rejectSource(design.surface.assetId)}/> : <p className="ve-empty">{surfaceMissing ? 'This surface photo is unavailable. Choose or open it again.' : 'Start with a photo of your engraving surface.'}</p>}
           {design.surface && design.layers.map(item => <div key={item.id} data-layer-id={item.id} className={`ve-layer ${selected === item.id ? 'is-selected' : ''}`} style={{ left: `${item.x * 100}%`, top: `${item.y * 100}%`, width: `${item.width * 100}%`, height: `${layerHeight(item, design.surface.aspectRatio) * 100}%` }}>
-            <button type="button" className="ve-layer-target" aria-label={`Select ${item.type === 'text' ? item.text || 'text' : 'image artwork'}`} aria-pressed={selected === item.id} onClick={() => setSelected(item.id)} onKeyDown={event => { const delta = event.shiftKey ? .05 : .01, offsets = { ArrowLeft: [-delta, 0], ArrowRight: [delta, 0], ArrowUp: [0, -delta], ArrowDown: [0, delta] }; if (offsets[event.key]) { event.preventDefault(); setSelected(item.id); commit(editLayer(design, item.id, { x: item.x + offsets[event.key][0], y: item.y + offsets[event.key][1] })); } }}>
+            <button type="button" className="ve-layer-target" disabled={Boolean(viewBefore)} aria-label={`Select ${item.type === 'text' ? item.text || 'text' : 'image artwork'}`} aria-pressed={selected === item.id} onClick={() => { if (!viewBefore) setSelected(item.id); }} onKeyDown={event => { if (viewBefore) return; const delta = event.shiftKey ? .05 : .01, offsets = { ArrowLeft: [-delta, 0], ArrowRight: [delta, 0], ArrowUp: [0, -delta], ArrowDown: [0, delta] }; if (offsets[event.key]) { event.preventDefault(); setSelected(item.id); commit(editLayer(design, item.id, { x: item.x + offsets[event.key][0], y: item.y + offsets[event.key][1] })); } }}>
               {item.type === 'text' ? <TextArtwork layer={item} font={FONT_REGISTRY.find(font => font.id === item.fontId)}/> : sources[item.assetId] ? <img src={sources[item.assetId]} alt="" draggable="false" onError={() => rejectSource(item.assetId)}/> : <span>Open artwork again</span>}
             </button>
-            {selected === item.id && <button type="button" className="ve-resize" data-resize="true" aria-label="Resize selected design" onKeyDown={event => { if (['ArrowRight', 'ArrowUp', 'ArrowLeft', 'ArrowDown'].includes(event.key)) { event.preventDefault(); patch({ width: item.width + (['ArrowRight', 'ArrowUp'].includes(event.key) ? .02 : -.02) }); } }}>↔</button>}
+            {selected === item.id && <button type="button" className="ve-resize" disabled={Boolean(viewBefore)} data-resize="true" aria-label="Resize selected design" onKeyDown={event => { if (viewBefore) return; if (['ArrowRight', 'ArrowUp', 'ArrowLeft', 'ArrowDown'].includes(event.key)) { event.preventDefault(); patch({ width: item.width + (['ArrowRight', 'ArrowUp'].includes(event.key) ? .02 : -.02) }); } }}>↔</button>}
           </div>)}
         </div>
       </div></div>
-      <p id={helpId} className="ve-help">Tap to place your selected design. Drag to move, use the corner to resize. Pinch to zoom the workspace.</p>
-    </div><div className="ve-controls">
+      <p id={helpId} className="ve-help">{viewBefore ? 'Drag to pan or pinch to zoom. This editor view does not change the final engraving.' : 'Tap to place your selected design. Drag to move; use the corner to resize. Adjust View changes only your workspace view.'}</p>
+    </div><fieldset className="ve-controls" disabled={Boolean(viewBefore)}><legend className="sr-only">Design controls</legend>
       {surfaceControls && <section aria-label="Surface photo"><h3>Your surface</h3><ImageSourceChooser uploadArea helperText="Choose a clear photo of the area to engrave." label={design.surface ? 'Replace surface photo' : 'Choose surface photo'} inputLabel="Surface photo" context="Engraving surface" maxBytes={8388608} onSelect={files => selectFile(files, 'surface')} onError={setError}/><p className="ve-help">Your surface and engraving artwork stay separate.</p></section>}
       <section aria-label="Add design"><h3>Add your design</h3><div className="ve-actions"><button type="button" disabled={!design.surface || !fonts.length || design.layers.length >= MAX_LAYERS} onClick={addText}>Add text</button><ImageSourceChooser label="Add image artwork" inputLabel="Image artwork" context="Engraving artwork" disabled={!design.surface || design.layers.length >= MAX_LAYERS} maxBytes={8388608} onSelect={files => selectFile(files, 'artwork')} onError={setError}/></div>{!fonts.length && <p className="ve-help">Approved text styles are not available for this item.</p>}
         {design.layers.length > 0 && <div className="ve-layers" role="group" aria-label="Design layers">{design.layers.map((item, index) => <button type="button" key={item.id} aria-pressed={selected === item.id} onClick={() => setSelected(item.id)}>{index + 1}. {item.type === 'text' ? item.text.slice(0, 25) || 'Text' : 'Image artwork'}</button>)}</div>}
@@ -215,7 +217,7 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
         <div className="ve-actions"><button type="button" onClick={() => reorder(1)} disabled={design.layers.at(-1)?.id === layer.id}>Bring forward</button><button type="button" onClick={() => reorder(-1)} disabled={design.layers[0]?.id === layer.id}>Send backward</button><button type="button" onClick={() => { commit({ ...design, layers: design.layers.filter(item => item.id !== selected) }); setSelected(null); }}>Remove design</button></div>
       </section>}
 
-    </div></div>
+    </fieldset></div>
     {resetTarget && <ConfirmationDialog title="Reset your engraving design?" description="Your text and artwork will be cleared. Your surface photo stays ready." returnFocus={resetTarget} onCancel={() => setResetTarget(null)} onConfirm={resetDesign} confirmLabel="Reset design" cancelLabel="Keep editing"/>}
   </section>;
 }

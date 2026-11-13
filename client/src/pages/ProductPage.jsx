@@ -13,7 +13,7 @@ import { categoryHref } from '../../../shared/category-paths.mjs';
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, Minus, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react';
 import { getProduct } from '../services/catalog.js';
 import ProductCard from '../components/ProductCard.jsx';
 import { formatCatalogPrice, variantLabel } from '../utils/catalog.js';
@@ -62,6 +62,7 @@ function ProductContentBody({ product, relatedProducts = [], preview = false, pr
   const [uploadStatus, setUploadStatus] = useState('');
   const [failedImages, setFailedImages] = useState([]);
   const [activeImage, setActiveImage] = useState(0);
+  const thumbnailStrip = useRef(null), imageSwipe = useRef(null);
   const [variantKey, setVariantKey] = useState(draft.variantKey || '');
   const [quantity, setQuantity] = useState(draft.quantity || 1);
   useEffect(() => { draft.variantKey = variantKey; draft.quantity = quantity; }, [draft, variantKey, quantity]);
@@ -73,6 +74,16 @@ function ProductContentBody({ product, relatedProducts = [], preview = false, pr
     ? product.gallerySlots.map((slot) => ({ ...slot }))
     : [...new Set([product.mainImageUrl, ...(product.galleryUrls || [])].filter(Boolean))].map((url, index) => ({ url, position: index + 1, isMain: index === 0 }));
   const selectedImage = images[activeImage] || images[0];
+  function changeImage(index) {
+    const next = (index + images.length) % images.length;
+    setActiveImage(next);
+    const strip = thumbnailStrip.current, thumbnail = strip?.children[next];
+    if (thumbnail) {
+      const left = thumbnail.getBoundingClientRect().left - strip.getBoundingClientRect().left + strip.scrollLeft;
+      if (left < strip.scrollLeft) strip.scrollLeft = left;
+      else if (left + thumbnail.offsetWidth > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = left + thumbnail.offsetWidth - strip.clientWidth;
+    }
+  }
   const variants = product.variants || [];
   const variant = variants.find((item) => item.key === variantKey);
   const price = variant ? variant.pricePiastres : product.pricePiastres;
@@ -141,13 +152,18 @@ function ProductContentBody({ product, relatedProducts = [], preview = false, pr
       </nav>
       <div className="product-detail-layout">
         <section className="product-gallery" aria-label="Product images">
-          <div className="product-main-image">
+          <div className="product-main-image" tabIndex={images.length > 1 ? 0 : undefined} aria-label={images.length > 1 ? 'Product image gallery. Use left and right arrow keys to switch images.' : undefined}
+            onKeyDown={event => { if (images.length > 1 && ['ArrowLeft', 'ArrowRight'].includes(event.key)) { event.preventDefault(); changeImage(activeImage + (event.key === 'ArrowRight' ? 1 : -1)); } }}
+            onPointerDown={event => { if (event.pointerType !== 'mouse' && !event.target.closest('button')) imageSwipe.current = { id: event.pointerId, x: event.clientX, y: event.clientY }; }}
+            onPointerCancel={() => { imageSwipe.current = null; }}
+            onPointerUp={event => { const start = imageSwipe.current; imageSwipe.current = null; if (!start || start.id !== event.pointerId || images.length < 2) return; const dx = event.clientX - start.x, dy = event.clientY - start.y; if (Math.abs(dx) >= 40 && Math.abs(dx) > Math.abs(dy) * 1.5) changeImage(activeImage + (dx < 0 ? 1 : -1)); }}>
             {selectedImage?.url && !failedImages.includes(selectedImage.url) ? <img src={selectedImage.url} alt={`${product.name}${activeImage ? `, image ${activeImage + 1}` : ''}`} width="900" height="900" loading="eager" fetchPriority="high" decoding="async" onError={() => setFailedImages((previous) => [...previous, selectedImage.url])} />
               : <span className="catalog-image-placeholder">{preview ? selectedImage ? `${selectedImage.isMain ? 'Main image · ' : ''}Image ${selectedImage.position} · Media not configured` : 'No image references recorded' : 'Image coming soon'}</span>}
             {!preview && !enquiryRequired && product.bestSeller === true && <span className="product-image-badge">Best Seller</span>}
+            {images.length > 1 && <><button type="button" className="product-gallery-arrow is-previous" aria-label="Previous product image" onClick={() => changeImage(activeImage - 1)}><ChevronLeft size={22} aria-hidden="true"/></button><button type="button" className="product-gallery-arrow is-next" aria-label="Next product image" onClick={() => changeImage(activeImage + 1)}><ChevronRight size={22} aria-hidden="true"/></button></>}
           </div>
-          {images.length > 1 && <div className="product-thumbnails" aria-label="Choose product image">
-            {images.map((image, index) => <button key={preview ? image.position : image.url} type="button" className={activeImage === index ? 'is-active' : ''} aria-label={`View image ${image.position}${preview && image.isMain ? ' (main)' : ''}`} aria-pressed={activeImage === index} onClick={() => setActiveImage(index)}>{image.url ? <img src={image.url} alt="" width="100" height="100" loading="lazy" decoding="async" /> : <span className="product-preview-thumbnail">Image {image.position}{image.isMain && <small>Main</small>}</span>}</button>)}
+          {images.length > 1 && <div ref={thumbnailStrip} className="product-thumbnails" aria-label="Choose product image">
+            {images.map((image, index) => <button key={preview ? image.position : image.url} type="button" className={activeImage === index ? 'is-active' : ''} aria-label={`View image ${image.position}${preview && image.isMain ? ' (main)' : ''}`} aria-pressed={activeImage === index} onClick={() => changeImage(index)}>{image.url ? <img src={image.url} alt="" width="100" height="100" loading="lazy" decoding="async" /> : <span className="product-preview-thumbnail">Image {image.position}{image.isMain && <small>Main</small>}</span>}</button>)}
           </div>}
         </section>
         <section className="product-summary" aria-labelledby="product-title">
@@ -195,7 +211,7 @@ function ProductContentBody({ product, relatedProducts = [], preview = false, pr
           <div className="product-accordions">
             <details open><summary>Description</summary><div className="product-description">{product.description || 'No description has been provided yet.'}</div></details>
             <details><summary>Product details</summary><div>{product.sku && <p>SKU: {product.sku}</p>}{product.subcategory?.name && <p>Subcategory: {product.subcategory.name}</p>}<p>{enquiryRequired ? 'Ask us to confirm availability.' : product.inventory?.mode === 'made_to_order' ? 'Made by Request' : preview ? 'Inventory approval is shown in the preview notice.' : 'Availability is shown above.'}</p></div></details>
-            <details><summary>Shipping</summary><div><p>Delivery arrangements and timing depend on your destination and preparation. The delivery fee is confirmed separately.</p><p>We contact you on WhatsApp within 12 hours to confirm arrangements.</p><p>Read our <Link to="/shipping-policy">shipping policy</Link>.</p></div></details>
+            <details><summary>Shipping</summary><div><p>Delivery arrangements and timing depend on your destination and preparation. The delivery fee is confirmed separately.</p><p>We contact you on WhatsApp within 12 hours to confirm arrangements.</p></div></details>
           </div>
         </section>
       </div>

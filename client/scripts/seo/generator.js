@@ -1,4 +1,4 @@
-import { fixedPages, publicContacts, contentPublicationApproved, legalReviewNotice } from '../../../shared/storefront-content.mjs';
+import { fixedPages, contentPublicationApproved } from '../../../shared/storefront-content.mjs';
 import { productHref } from '../../../shared/product-paths.mjs';
 import { validateProductCompatibility } from '../../../shared/product-url-compatibility.mjs';
 import { categoryPublicPaths, categoryHref } from '../../../shared/category-paths.mjs';
@@ -171,7 +171,7 @@ export function buildSeoPlan({ catalog: input, siteOrigin, productCompatibility,
   for (const pathname of CONTENT_ROUTES) {
     const page = fixedPages[pathname.slice(1)];
     add(pathname, { title: `${page.title} | Tap & Wrap`, description: page.description, heading: page.title,
-      body: paragraph(page.intro) + page.sections.map(section => `<section><h2>${escapeHtml(section.heading)}</h2>${section.paragraphs.map(paragraph).join('')}</section>`).join('') + (page.legal && !contentPublicationApproved ? paragraph(legalReviewNotice) : '') + paragraph('Questions? Contact Tap & Wrap.') + link('https://wa.me/' + publicContacts.whatsapp.replace(/\D/g, ''), 'WhatsApp') + ' ' + link('mailto:' + publicContacts.email, 'Email Tap & Wrap') + ' ' + link(publicContacts.instagram, 'Instagram'),
+      body: paragraph(page.intro) + page.sections.map(section => `<section><h2>${escapeHtml(section.heading)}</h2>${section.paragraphs.map(paragraph).join('')}</section>`).join(''),
       indexable: publish && Boolean(origin) && contentPublicationApproved, structuredData: [] });
   }
   for (const category of catalog.categories) {
