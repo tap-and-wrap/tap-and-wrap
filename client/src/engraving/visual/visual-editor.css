@@ -35,3 +35,7 @@
 .ve-scroll-space{min-width:0;margin-inline:auto}
 
 .visual-engraving .ve-layer-target:disabled{opacity:1}
+
+.ve-layout{display:flex;flex-direction:column;gap:16px;max-width:860px;margin-inline:auto}.ve-workspace{position:static;width:100%}.ve-controls{width:100%}.ve-heading{max-width:860px;margin-inline:auto}.ve-history button{width:44px;padding:8px;display:grid;place-items:center}.ve-transform-controls{border:0;padding:12px 0 0;margin:0;display:flex;justify-content:space-between;gap:8px;min-width:0}.ve-transform-controls .ve-actions{flex-wrap:nowrap}.ve-transform-controls button{width:40px;min-height:44px;padding:6px}.ve-transform-controls .ve-move button{flex-basis:40px}.ve-layer-chip{display:inline-flex;max-width:100%;align-items:center}.ve-layer-chip>button:first-child{border-radius:9px 0 0 9px}.ve-layer-chip .ve-delete-layer{padding:6px;min-width:40px;border-radius:0 9px 9px 0}.ve-viewport{scrollbar-width:none;scrollbar-gutter:auto}.ve-viewport::-webkit-scrollbar{display:none}.ve-selection:has(textarea){border:0}.ve-selection:not(:has(textarea)){display:none}@media(max-width:360px){.ve-transform-controls{gap:4px}.ve-transform-controls button{width:36px;padding:4px}.ve-transform-controls .ve-move button{flex-basis:36px}.ve-transform-controls .ve-move{gap:2px}}
+
+.ve-viewport:has(.ve-surface){min-height:0}

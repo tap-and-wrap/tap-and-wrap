@@ -379,3 +379,5 @@
 }
 @media(max-width:360px){.gb-arrangement-dialog{padding:8px}.gb-shopping{padding-inline:14px}.gb-shopping .gb-options{grid-template-columns:repeat(2,minmax(0,1fr))}.gb-free-tools{column-gap:4px}.gb-arrows{gap:2px}.gb-free-tools button{min-width:44px}.gb-arrows button{min-width:44px}.gb-free-tools .gb-expand span{display:inline}.gb-review-edit button{font-size:.73rem;padding:10px}.gb-photo-thumbnails{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(prefers-reduced-motion:reduce){.gb-shopping *,.gb-lightbox *,.gb-confirm-dialog *,.gb-arrangement-dialog *{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+
+.gb-font-tabs{gap:12px}.gb-font-tabs button{flex:1;text-align:center}

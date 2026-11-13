@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import './engraving.css';
 import { useSession } from '../auth/SessionProvider.jsx';
 import { api, authGeneration } from '../services/api.js';
 import { commerceGet } from '../commerce/api.js';
 import CartLine from '../commerce/CartLine.jsx';
 import { DesignPreview } from './StudioControls.jsx';
-import { FONT_REGISTRY, ICON_REGISTRY } from '../../../shared/engraving/definitions.mjs';
+import { ICON_REGISTRY } from '../../../shared/engraving/definitions.mjs';
 import EngravingSummary from './EngravingSummary.jsx';
 import SavedVisualPreview from './visual/SavedVisualPreview.jsx';
 
@@ -35,16 +34,16 @@ export function PrivateImage({item,owner,role,label}) {
 export default function EngravingCartCard({item,pending,remove}) {
   const session=useSession(), engraving=item.engraving;
   const name=(item.name||'Item engraving').replace(/\bengraving\b/gi,'Engraving');
-  if (item.kind === 'engraving_service_v2') return <CartLine item={item} name={name} pending={pending} remove={remove} fixed image={<PrivateImage key={`${session.ownerKey}:${item.id}`} item={item} owner={session.ownerKey} role="surface" label="Your engraving surface"/>} status="Inspection and design acceptance before engraving." edit={<Link to={`/customize/laser-engraving?edit=${item.id}`}>Edit engraving</Link>}>{open => <><EngravingSummary engraving={engraving} preview={false}/>{open && item.valid && <SavedVisualPreview cartLineId={item.id}/>}<p className="commerce-muted">{item.attachments?.replacementRequired ? 'A private image has expired. Edit your engraving to replace it.' : 'Your original photos stay private.'}</p></>}</CartLine>;
-  const font=FONT_REGISTRY.find(value=>value.id===engraving?.content?.fontId),icon=ICON_REGISTRY.find(value=>value.id===engraving?.content?.iconId);
+  if (item.kind === 'engraving_service_v2') return <CartLine item={item} name={name} pending={pending} remove={remove} fixed image={<PrivateImage key={`${session.ownerKey}:${item.id}`} item={item} owner={session.ownerKey} role="surface" label="Your engraving surface"/>} status="Inspection and design acceptance before engraving.">{open => <><EngravingSummary engraving={engraving} preview={false}/>{open && item.valid && <SavedVisualPreview cartLineId={item.id}/>}{item.attachments?.replacementRequired && <p className="commerce-muted">A private image has expired. Replace this engraving before ordering.</p>}</>}</CartLine>;
+  const icon=ICON_REGISTRY.find(value=>value.id===engraving?.content?.iconId);
   return <CartLine item={item} name={name} pending={pending} remove={remove} fixed image={<PrivateImage key={`${session.ownerKey}:${item.id}`} item={item} owner={session.ownerKey} role="item" label="Your private item reference"/>}
     status="Inspection and design acceptance before engraving."
-    edit={<Link to={`/customize/laser-engraving?edit=${item.id}`}>Edit engraving</Link>}>
+   >
     {open=><>
       {engraving?<dl>
         <div><dt>Item</dt><dd>{engraving.description||engraving.typeName||name}</dd></div>
-        <div><dt>Placement</dt><dd>{engraving.placementLabel||'Help me choose the best placement'}</dd></div>
-        <div><dt>Design</dt><dd>{engraving.content?.mode==='text'?<><bdi>{engraving.content.text}</bdi> · {font?.label||'Saved font'}</>:engraving.content?.mode==='icons'?icon?.label||'Saved symbol':`${engraving.content?.subtype||'Personal'} artwork`}</dd></div>
+        <div><dt>Type</dt><dd>{engraving.typeName}</dd></div>
+        <div><dt>Design</dt><dd>{engraving.content?.mode==='text'?<><bdi>{engraving.content.text}</bdi></>:engraving.content?.mode==='icons'?icon?.label||'Saved symbol':`${engraving.content?.subtype||'Personal'} artwork`}</dd></div>
         <div><dt>Appearance</dt><dd>{engraving.requestedAppearance} · preference, subject to inspection</dd></div>
         {engraving.specialRequests&&<div><dt>Requests</dt><dd>{engraving.specialRequests}</dd></div>}
       </dl>:<p>Edit this engraving to review its saved design and images.</p>}
@@ -52,7 +51,7 @@ export default function EngravingCartCard({item,pending,remove}) {
         {engraving?.files?.surface&&<PrivateImage item={item} owner={session.ownerKey} role="surface" label="Requested engraving surface"/>}
         {engraving?.files?.artwork&&<PrivateImage item={item} owner={session.ownerKey} role="artwork" label="Your private design artwork"/>}
       </div></>}
-      <p className="commerce-muted">Your images are private. Adding to cart does not extend their lifetime.{item.attachments?.expiresAt&&<> Replace or order before <time dateTime={item.attachments.expiresAt}>{new Date(item.attachments.expiresAt).toLocaleString()}</time>.</>}</p>
+      <p className="commerce-muted">{item.attachments?.expiresAt&&<> Replace or order before <time dateTime={item.attachments.expiresAt}>{new Date(item.attachments.expiresAt).toLocaleString()}</time>.</>}</p>
     </>}
   </CartLine>;
 }

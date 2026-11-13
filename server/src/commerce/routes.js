@@ -1,3 +1,5 @@
+import { CheckoutIntent } from '../models/CheckoutIntent.js';
+import { prepareCheckoutPayment, presentCheckoutPayment, submitCheckoutPaymentProof, cancelCheckoutPayment } from './checkout-payment.js';
 import { checkoutCustomer as customer } from './checkout-customer.js';
 import { Product } from '../models/Product.js';
 import { legacyPhotoFields, optionalPhotoFields } from '../../../shared/product-personalization.mjs';
@@ -34,7 +36,7 @@ import { commerceError } from './errors.js';
 import { publicConfigurationRoutes } from './configuration.routes.js';
 import uploadsRouter from './uploads.routes.js';
 import { captureAction, currentConsent, monetaryParameters, ownedPurchaseReceipt } from '../tracking/service.js';
-import { presentOrderSummary } from './order-presentation.js';
+import { presentOrderSummary, approvedInstaPayDestination } from './order-presentation.js';
 import { ownerOrderView } from './order-list.js';
 import { CommerceJobRun } from '../models/CommerceJobRun.js';
 import { NotificationEvent } from '../models/NotificationEvent.js';
@@ -136,7 +138,7 @@ commerceRoutes.post('/cart/merge', requireAuth, async (req, res) => {
   res.json({ ok: true, data: result });
 });
 commerceRoutes.get('/checkout/config', async (req, res) => {
-  res.json({ ok: true, data: { enabled: env.checkoutEnabled === true, governorates: GOVERNORATES, shippingStatus: 'pending_confirmation', shippingPiastres: null, instaPayNumber: '01060673073' } });
+  res.json({ ok: true, data: { enabled: env.checkoutEnabled === true, governorates: GOVERNORATES, shippingStatus: 'pending_confirmation', shippingPiastres: null, instaPayNumber: approvedInstaPayDestination } });
 });
 commerceRoutes.get('/checkout/submissions/:checkoutKey', submissionStatusLimit, async (req, res) => {
   z.object({}).strict().parse(req.query);
@@ -151,6 +153,24 @@ commerceRoutes.post('/checkout/quote', checkoutLimit, async (req, res) => {
     captureAction(req, 'InitiateCheckout', parameters, { sourcePath: '/checkout', dedupKey: input.checkoutKey }),
   ]);
   res.json({ ok: true, data: { ...result, tracking: tracking.filter(Boolean) } });
+});
+commerceRoutes.get('/checkout/payments/:checkoutKey', submissionStatusLimit, async (req, res) => {
+  const intent = await CheckoutIntent.findOne({ owner: req.commerceOwner, checkoutKey: uuid.parse(req.params.checkoutKey) }).lean();
+  res.json({ ok: true, data: { payment: intent?.payment ? presentCheckoutPayment(intent) : null } });
+});
+commerceRoutes.post('/checkout/payments', checkoutLimit, async (req, res) => {
+  const input = checkoutSchema.parse(req.body), quote = await prepareCheckout(req.commerceOwner, input, req.user?._id);
+  const payment = await prepareCheckoutPayment(req.commerceOwner, input.checkoutKey, quote.fingerprint, quote.paymentGroups);
+  res.json({ ok: true, data: { payment } });
+});
+commerceRoutes.post('/checkout/payments/:checkoutKey/proof', checkoutLimit, async (req, res) => {
+  const input = z.object({ uploadId: id, senderName: z.string().trim().min(2).max(100) }).strict().parse(req.body);
+  const payment = await submitCheckoutPaymentProof(req.commerceOwner, uuid.parse(req.params.checkoutKey), input);
+  res.json({ ok: true, data: { payment } });
+});
+commerceRoutes.post('/checkout/payments/:checkoutKey/cancel', checkoutLimit, async (req, res) => {
+  z.object({ noTransferConfirmed: z.literal(true) }).strict().parse(req.body);
+  res.json({ ok: true, data: await cancelCheckoutPayment(req.commerceOwner, uuid.parse(req.params.checkoutKey)) });
 });
 commerceRoutes.post('/orders', checkoutLimit, async (req, res) => {
   // An unverified/unavailable optional consent defaults to no tracking; it must
@@ -204,6 +224,20 @@ adminCommerceRoutes.use(adminEngravingRoutes);
 adminCommerceRoutes.use(adminProductEngravingRoutes);
 adminCommerceRoutes.use(operationsRoutes);
 adminCommerceRoutes.use(adminServiceRequestRoutes);
+adminCommerceRoutes.get('/checkout-payments', async (req, res) => {
+  const { reference } = z.object({ reference: uuid.optional() }).strict().parse(req.query);
+  const rows = await CheckoutIntent.find({ ...(reference ? { 'payment.reference': reference } : {}), state: 'open', payment: { $exists: true }, 'payment.state': 'prepared' }).sort({ createdAt: -1 }).limit(20).lean().maxTimeMS(3000);
+  res.json({ ok: true, data: { payments: rows.map(row => presentCheckoutPayment(row, { admin: true })) } });
+});
+adminCommerceRoutes.get('/checkout-payments/:checkoutKey/proof', async (req, res) => {
+  const intent = await CheckoutIntent.findOne({ 'payment.reference': uuid.parse(req.params.checkoutKey), 'payment.proofId': { $exists: true } }).lean();
+  if (!intent) throw commerceError(404, 'PROOF_NOT_FOUND', 'No checkout payment proof was found.');
+  const file = await openPrivateUpload(intent.payment.proofId, intent.owner, { adminUser: req.user });
+  res.set('Content-Type', file.mimeType); res.set('Content-Length', String(file.sizeBytes));
+  res.set('X-Content-Type-Options', 'nosniff'); res.set('Content-Security-Policy', "default-src 'none'; sandbox");
+  await pipeline(file.body, res);
+});
+
 adminCommerceRoutes.get('/settlements/lookup', async (req, res) => {
   const input = z.object({ method: paymentMethod, reference: z.string().trim().min(3).max(120).regex(/^[A-Za-z0-9/_-]+$/) }).strict().parse(req.query);
   const entry = await OrderSettlement.findOne({ referenceKey: fingerprint({ method: input.method, reference: input.reference.toUpperCase() }) }).lean().maxTimeMS(3000);

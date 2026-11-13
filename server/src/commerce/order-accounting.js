@@ -89,9 +89,17 @@ export async function mutateOrderAccounting(id, owner, input, actor) {
       const closed = ['cancelled', 'returned', 'delivery_failed'].includes(order.fulfillmentState);
       const now = new Date();
       let groupProof;
-      if (groupedOrder(order) && ['submit_proof', 'collection'].includes(input.action)) {
+      const checkoutCombined = groupedOrder(order) && input.action === 'collection' && input.scope === 'checkout' && order.checkoutPayment;
+      if (checkoutCombined) {
+        const financial = accountingSummary(order, entries), proof = [...order.proofHistory].reverse().find(value => value.scope === 'checkout');
+        if (closed || input.method !== 'instapay' || !proof || proof.state !== 'submitted'
+          || input.amountPiastres !== order.checkoutPayment.amountPiastres || entries.some(entry => String(entry.proofUploadId) === String(proof.uploadId))
+          || order.checkoutPayment.allocations.some(part => { const group = financial.groups.find(group => group.id === part.scope); return !group?.authorized || group.method !== 'instapay' || group.outstandingPiastres !== part.amountPiastres; })) fail('Reconcile the exact combined checkout transfer before recording it. Changed or partially collected obligations require specialist review.');
+        groupProof = proof;
+      }
+      if (!checkoutCombined && groupedOrder(order) && ['submit_proof', 'collection'].includes(input.action)) {
         const financial = accountingSummary(order, entries);
-        const obligation = financial.groups.find(group => group.id === input.scope) || financial.charges.find(charge => charge.id === input.scope && charge.state === 'accepted');
+        const obligation = input.action === 'submit_proof' && input.scope === 'checkout' && order.checkoutPayment && financial.groups.every(group => group.authorized && group.method === 'instapay' && order.checkoutPayment.allocations.some(part => part.scope === group.id && part.amountPiastres === group.outstandingPiastres)) ? {authorized:true,method:'instapay'} : financial.groups.find(group => group.id === input.scope) || financial.charges.find(charge => charge.id === input.scope && charge.state === 'accepted');
         if (closed || !obligation || !obligation.authorized) fail('This payment obligation is not authorized for collection.');
         const method = obligation.method || obligation.collectionMethod;
         if (input.action === 'submit_proof' && method !== 'instapay') fail('Choose an authorized InstaPay obligation for this proof.');
@@ -167,6 +175,7 @@ export async function mutateOrderAccounting(id, owner, input, actor) {
         if (!groupedOrder(order) && input.action === 'collection' && input.method === 'cod' && !['out_for_delivery', 'delivered', 'delivery_failed'].includes(order.fulfillmentState)) fail('Record COD only after dispatch and actual collection.');
         let refundOf;
         let allocations = [{ scope: input.scope, amountPiastres: input.amountPiastres }];
+        if (checkoutCombined) allocations = order.checkoutPayment.allocations.filter(part => part.amountPiastres > 0).map(part => ({ scope: part.scope, amountPiastres: part.amountPiastres }));
         if (input.action === 'refund') {
           refundOf = entries.find(entry => String(entry._id) === input.refundOf && entry.direction === 'collection');
           allocations = input.allocations || allocations; // Legacy single-scope commands remain valid.

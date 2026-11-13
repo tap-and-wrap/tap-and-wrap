@@ -1,7 +1,6 @@
 import { StickerProof } from '../gift-box/StickerWorkspace.jsx';
 import { customerGiftComponentName } from '../../../shared/gift-box/customer-label.mjs';
-import { stickerStyle } from '../../../shared/gift-box/sticker-styles.mjs';
-import { ENGRAVING_COLORS, LETTERING_STYLES } from '../../../shared/gift-box/lettering-styles.mjs';
+import { ENGRAVING_COLORS } from '../../../shared/gift-box/lettering-styles.mjs';
 const groups = [['flower', 'Flowers'], ['plush', 'Soft Toys'], ['chocolate', 'Chocolates']];
 
 export default function GiftBoxCartSummary({ giftBox }) {
@@ -21,11 +20,11 @@ export default function GiftBoxCartSummary({ giftBox }) {
       <div><dt>Ribbon</dt><dd className="commerce-gift-ribbon">{ribbonColor && <span aria-hidden="true" className="commerce-gift-swatch" style={{ backgroundColor: ribbonColor }} />}{ribbon ? (ribbon.displayName || 'Saved ribbon details unavailable') : 'No ribbon selected'}</dd></div>
       <div><dt>Gift card</dt><dd>{cardSelected ? 'Selected' : 'Not selected'}</dd></div>
       <div><dt>Photo prints</dt><dd>{giftBox.personalization?.photoCount || 0}</dd></div>
-    {giftBox.personalization?.sticker && <div><dt>Personalized sticker</dt><dd dir="auto"> <bdi>{giftBox.personalization.sticker.text}</bdi> · {stickerStyle(giftBox.personalization.sticker.styleId)?.label || 'Saved font'} · {ENGRAVING_COLORS.find(color=>color.id===giftBox.personalization.sticker.colorId)?.label || 'Saved color'} · {giftBox.personalization.sticker.placement ? giftBox.personalization.sticker.placement.view === 'exterior' ? 'Exterior sticker' : `${giftBox.personalization.sticker.placement.view} side` : 'Apply to exterior front'}</dd></div>}
+    {giftBox.personalization?.sticker && <div><dt>Personalized sticker</dt><dd dir="auto"> <bdi>{giftBox.personalization.sticker.text}</bdi> · {ENGRAVING_COLORS.find(color=>color.id===giftBox.personalization.sticker.colorId)?.label || 'Saved color'} · {giftBox.personalization.sticker.placement ? giftBox.personalization.sticker.placement.view === 'exterior' ? 'Exterior sticker' : `${giftBox.personalization.sticker.placement.view} side` : 'Apply to exterior front'}</dd></div>}
     </dl>
     {cardSelected && <p className="commerce-gift-message" dir="auto">{message || 'Gift card without a message.'}</p>}
     {giftBox.personalization?.sticker?.placement && <StickerProof sticker={giftBox.personalization.sticker} placement={giftBox.personalization.sticker.placement}/>}
 
-    {giftBox.personalization?.engravings?.map((entry,index)=><p key={index}>Engraving: <bdi>{entry.text}</bdi> · {LETTERING_STYLES.find(style=>style.id===entry.styleId)?.label || 'Saved font'} · {ENGRAVING_COLORS.find(color=>color.id===entry.colorId)?.label || 'Saved color'}</p>)}
+    {giftBox.personalization?.engravings?.map((entry,index)=><p key={index}>Engraving: <bdi>{entry.text}</bdi> · {ENGRAVING_COLORS.find(color=>color.id===entry.colorId)?.label || 'Saved color'}</p>)}
   </div>;
 }

@@ -57,7 +57,7 @@ export async function uploadPrivateFile(file, { purpose, ownerContext, designKey
     return signed.upload.id;
   } catch (error) {
     assertAuthGeneration(generation);
-    if (timedOut) throw new Error(purpose === 'payment_proof' ? 'The proof upload timed out. Your accepted order remains recorded. Do not transfer again; retry proof submission or contact the store.' : 'The private upload timed out. Your item was not added. Check your connection and try again.');
+    if (timedOut) throw new Error(purpose === 'payment_proof' ? checkoutKey ? 'The proof upload timed out. Your payment reference remains recorded. Do not transfer again; retry proof submission or contact the store.' : 'The proof upload timed out. Your accepted order remains recorded. Do not transfer again; retry proof submission or contact the store.' : 'The private upload timed out. Your item was not added. Check your connection and try again.');
     throw error;
   } finally { clearTimeout(timer); unsubscribe(); signal?.removeEventListener('abort', abort); }
 }

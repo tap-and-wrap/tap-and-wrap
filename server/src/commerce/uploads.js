@@ -3,6 +3,7 @@ import { groupedOrder, groupAuthorized, groupMethod } from './payment-groups.js'
 import { commerceOwnerContext } from './ownership.js';
 import { requireEngraving } from '../engraving/configuration.js';
 import { requireCollectionAuthorization } from '../engraving/payment-policy.js';
+import { ownedCheckoutPayment } from './checkout-payment.js';
 import { Order } from '../models/Order.js';
 import { assertRequestIntakeOpen } from './request-intake.js';
 import { legacyPhotoFields, optionalPhotoFields, productPersonalizationFields } from '../../../shared/product-personalization.mjs';
@@ -103,15 +104,22 @@ async function policyForUpload(owner, body) {
     return { acceptedMimeTypes: UPLOAD_MIME_TYPES, maxBytes: 8 * 1024 * 1024, fieldKey: 'service_reference' };
   }
   if (body.purpose === 'payment_proof') {
+    if (body.checkoutKey !== undefined) {
+      if (['orderId','productId','fieldKey','paymentScope','requestKey','templateId','templateVersion'].some(key => body[key] !== undefined)) throw fail('INVALID_PAYMENT_SCOPE', 'Use only the current checkout payment reference.');
+      const intent = await ownedCheckoutPayment(owner, body.checkoutKey);
+      if (intent.state !== 'open' || intent.payment.state !== 'prepared' || new Date(intent.payment.expiresAt) <= new Date() || intent.payment.proofId) throw fail('CHECKOUT_PAYMENT_REVIEW_REQUIRED', 'This payment reference needs review. Do not transfer again.', 409);
+      return { acceptedMimeTypes: UPLOAD_MIME_TYPES, maxBytes: 5 * 1024 * 1024, fieldKey: 'payment_proof' };
+    }
     if (!mongoose.isObjectIdOrHexString(body.orderId)) throw fail('ORDER_REQUIRED', 'Create an order before transferring and uploading proof.');
-    const order = await Order.findOne({ _id: body.orderId, owner, orderChannel: { $ne: 'owner_quotation' }, accountingVersion: { $in: [1, 2] }, fulfillmentState: { $nin: ['cancelled', 'returned', 'delivery_failed'] } }).select('_id lines engraving engravingPaymentPolicy fulfillmentState accountingVersion paymentGroups paymentMethod charges').lean();
+    const order = await Order.findOne({ _id: body.orderId, owner, orderChannel: { $ne: 'owner_quotation' }, accountingVersion: { $in: [1, 2] }, fulfillmentState: { $nin: ['cancelled', 'returned', 'delivery_failed'] } }).select('_id lines engraving engravingPaymentPolicy checkoutPayment fulfillmentState accountingVersion paymentGroups paymentMethod charges').lean();
     if (!order) throw fail('ORDER_NOT_FOUND', 'No eligible owned order was found.', 404);
     if (groupedOrder(order)) {
+      const combined = body.paymentScope === 'checkout' && Boolean(order.checkoutPayment);
       const group = order.paymentGroups.find(group => group.id === body.paymentScope);
       const charge = order.charges.find(charge => charge.id === body.paymentScope && charge.state === 'accepted' && charge.collectionMethod === 'instapay');
       const chargeScope = Boolean(charge);
       const authorized = group ? groupAuthorized(order, group.id) && groupMethod(order, group) === 'instapay' : chargeScope && groupAuthorized(order, body.paymentScope === 'return_shipping' ? 'engraving' : 'merchandise');
-      if (!authorized) throw fail('PAYMENT_NOT_AUTHORIZED', 'Choose an authorized InstaPay obligation.', 409);
+      if (!authorized && !combined) throw fail('PAYMENT_NOT_AUTHORIZED', 'Choose an authorized InstaPay obligation.', 409);
     } else { if (order.paymentMethod !== 'instapay') throw fail('PAYMENT_NOT_AUTHORIZED', 'This order does not accept InstaPay proof.', 409); requireCollectionAuthorization(order); }
     return { acceptedMimeTypes: UPLOAD_MIME_TYPES, maxBytes: 5 * 1024 * 1024, fieldKey: 'payment_proof' };
   }
@@ -161,6 +169,10 @@ async function releaseQuota(upload, { session } = {}) {
     }, { session });
   }
 }
+export async function releaseRetainedUploadQuota(upload, session) {
+  if (!session?.inTransaction() || upload.state !== 'retained') throw fail('UPLOAD_TRANSACTION_REQUIRED', 'Retained proof requires an order transaction.', 503);
+  await releaseQuota(upload, { session });
+}
 
 export async function signUpload(owner, body) {
   assertUploadOwner(owner);
@@ -178,7 +190,7 @@ export async function signUpload(owner, body) {
       [upload] = await Upload.create([{
         owner, purpose: body.purpose, designKey: body.designKey, engravingItemKey: body.purpose === 'engraving_service' ? body.engravingItemKey : undefined, productId: body.purpose === 'payment_proof' || body.purpose === 'gift_box_photo' ? undefined : body.productId,
         giftBoxId: body.purpose === 'gift_box_photo' ? body.giftBoxId : undefined,
-        fieldKey: policy.fieldKey, requestKey: body.purpose === 'service_reference' ? body.requestKey : undefined, proofOrderId: body.purpose === 'payment_proof' ? body.orderId : undefined,
+        fieldKey: policy.fieldKey, ...(body.purpose === 'payment_proof' && body.checkoutKey ? { checkoutKey: body.checkoutKey } : {}), requestKey: body.purpose === 'service_reference' ? body.requestKey : undefined, proofOrderId: body.purpose === 'payment_proof' ? body.orderId : undefined,
         mimeType: body.mimeType, sizeBytes: body.sizeBytes, temporaryKey: privateObjectKey(),
         signedExpiresAt: new Date(now + UPLOAD_URL_SECONDS * 1000), expiresAt: new Date(now + TEMPORARY_LIFETIME_MS),
       }], { session });

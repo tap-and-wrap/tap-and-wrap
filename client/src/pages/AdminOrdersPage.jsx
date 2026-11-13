@@ -1,3 +1,4 @@
+import CheckoutPaymentRecovery from '../admin/CheckoutPaymentRecovery.jsx';
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -21,7 +22,7 @@ export default function AdminOrdersPage() {
   function selectView(next) { const search = new URLSearchParams(params); ['page', 'action', 'fulfillmentState', 'paymentState'].forEach(key => search.delete(key)); search.set('view', next); setParams(search); }
   const pages = Math.max(1, query.data?.pagination?.pages || 1);
   return <AdminLayout title="Orders" description="Every purchase, Gift Box and engraving job. One place to take the next step." actions={<Link className="admin-button admin-button-secondary" to="/admin/orders/requests">Quotation history</Link>} busy={query.isPending}>
-    <section className="owner-workspace">
+    <CheckoutPaymentRecovery key={session.ownerKey}/><section className="owner-workspace">
       <nav className="owner-view-tabs" aria-label="Order views">{views.map(([key, label]) => <button key={key} type="button" aria-pressed={view === key} onClick={() => selectView(key)}>{label}</button>)}</nav>
       <div className="owner-filter-row"><form className="admin-search" onSubmit={event => { event.preventDefault(); change('q', draft.trim()); }}><label htmlFor="owner-order-search">Find an order</label><div className="admin-inline"><input id="owner-order-search" type="search" inputMode="numeric" pattern="[1-9][0-9]{5}" maxLength={6} placeholder="Six-digit order number" value={draft} onChange={event => setDraft(event.target.value)}/><button className="admin-button admin-button-secondary">Search</button>{params.get('q') && <button type="button" className="admin-button admin-button-secondary" onClick={() => { setDraft(''); change('q', ''); }}>Clear</button>}</div></form>
         <label>Item type<Select value={params.get('type') || ''} onChange={event => change('type', event.target.value)}><option value="">All types</option><option value="product">Product</option><option value="gift_box">Gift Box</option><option value="engraving">Engraving</option><option value="mixed">Mixed</option></Select></label>

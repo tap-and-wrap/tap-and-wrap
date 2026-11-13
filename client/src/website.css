@@ -63,3 +63,5 @@
 .review-confirmed{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;color:var(--tw-rose-dark,#915b50);margin-inline:6px;min-width:24px;min-height:24px}.review-confirmed:focus-visible{outline:2px solid currentColor;border-radius:50%}
 
 .testimonial-author{display:inline-flex;align-items:center;gap:5px;min-width:0;direction:ltr}.testimonial-author bdi{overflow-wrap:anywhere}.testimonial-author .review-confirmed{display:inline-flex;flex:none}.testimonial-card .customer-words-stars{margin-left:auto;flex:none;white-space:nowrap}
+
+.testimonial-card figcaption{display:grid;justify-content:start;align-items:start;gap:8px}.testimonial-author{display:block}.testimonial-author>span{display:inline}.testimonial-author .review-confirmed{margin-inline:5px 0;vertical-align:middle}.testimonial-card .customer-words-stars{margin:0}
