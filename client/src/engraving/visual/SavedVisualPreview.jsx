@@ -5,6 +5,7 @@ import { api, authGeneration } from '../../services/api.js';
 import { commerceGet, adminCommerceGet, commerceError } from '../../commerce/api.js';
 import { validateDesign } from './design.mjs';
 import VisualDesignPreview from './VisualDesignPreview.jsx';
+import { ChevronDown } from 'lucide-react';
 
 /** Private originals load only on an explicit View action, including for admins. */
 export default function SavedVisualPreview({ cartLineId, orderId, itemKey, admin = false }) {
@@ -12,7 +13,7 @@ export default function SavedVisualPreview({ cartLineId, orderId, itemKey, admin
   const [state, setState] = useState(null), [error, setError] = useState(''), [loading, setLoading] = useState(false);
   const pending = useRef(null), currentScope = useRef(ownerScope); currentScope.current = ownerScope;
   useEffect(() => () => pending.current?.abort(), [ownerScope]);
-  function close(event) { pending.current?.abort(); setLoading(false); setState(null); setError(''); const button=event.currentTarget; button.focus({preventScroll:true}); requestAnimationFrame(()=>button.scrollIntoView({block:'nearest',behavior:'instant'})); }
+  function close(event) { pending.current?.abort(); setLoading(false); setState(null); setError(''); const button=event.currentTarget; button.focus({preventScroll:true}); }
   const previewId = `saved-design-${cartLineId || orderId}-${itemKey || 'cart'}`;
   async function open() {
     pending.current?.abort(); const controller = new AbortController(), generation = authGeneration(); pending.current = controller; setLoading(true); setError('');
@@ -27,5 +28,5 @@ export default function SavedVisualPreview({ cartLineId, orderId, itemKey, admin
     } catch (caught) { if (!controller.signal.aborted && generation === authGeneration() && currentScope.current === ownerScope) setError(commerceError(caught)); }
     finally { if (!controller.signal.aborted && generation === authGeneration() && currentScope.current === ownerScope) setLoading(false); }
   }
-  return <div className="saved-visual-preview"><button type="button" className="button button-secondary" disabled={loading} aria-expanded={state?.ownerScope === ownerScope} aria-controls={previewId} onClick={state?.ownerScope === ownerScope ? close : open}>{loading ? 'Opening private design...' : state?.ownerScope === ownerScope ? 'Hide design' : 'View design'}</button>{state?.ownerScope === ownerScope && <div id={previewId}><VisualDesignPreview design={state.design} assets={state.assets} ownerScope={ownerScope}/></div>} {error && <p role="alert">{error}</p>}</div>;
+  return <div className="saved-visual-preview"><button type="button" className={`button button-secondary${admin ? '' : ' customer-design-disclosure'}`} disabled={loading} aria-expanded={state?.ownerScope === ownerScope} aria-controls={previewId} onClick={state?.ownerScope === ownerScope ? close : open}>{loading ? 'Opening private design...' : state?.ownerScope === ownerScope ? 'Hide design' : 'View design'}{!admin && <ChevronDown size={18} aria-hidden="true"/>}</button>{state?.ownerScope === ownerScope && <div id={previewId}><VisualDesignPreview design={state.design} assets={state.assets} ownerScope={ownerScope}/></div>} {error && <p role="alert">{error}</p>}</div>;
 }

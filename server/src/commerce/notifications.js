@@ -161,7 +161,9 @@ export async function runNotificationBatch({ batchSize = 20, now = new Date(), b
   const counts = { enabled: true, claimed: 0, sent: 0, failed: 0, ...maintenance };
   try {
   for (let index = 0; index < batchSize; index += 1) {
-    if (shouldStop(budget)) { counts.stopped = true; break; }
+    // Do not start another non-idempotent send with the tail of a cycle budget.
+    // Otherwise the global deadline can classify a healthy SMTP send uncertain.
+    if (shouldStop(budget) || budget && budget.deadline - budget.clock() < 46000) { counts.stopped = true; break; }
     const leaseToken = randomUUID();
     writeGuard();
     const event = await NotificationEvent.findOneAndUpdate({

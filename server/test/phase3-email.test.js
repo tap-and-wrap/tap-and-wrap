@@ -66,9 +66,8 @@ test('mocked SMTP uses the authenticated sender, strict TLS, compact private-fre
   assert.equal(options.auth.user, settings.EMAIL_USER);
   assert.equal(options.service, 'gmail');
   assert.equal(options.tls.rejectUnauthorized, true);
-  assert.equal(options.maxConnections, 1);
-  assert.equal(options.maxRequeues, 0);
-  assert.equal(options.rateLimit, 1);
+  assert.equal(options.pool, false);
+  assert.equal(options.socketTimeout, 30000);
   assert.equal(options.disableUrlAccess, true);
   assert.equal(options.disableFileAccess, true);
   assert.equal(options.logger, false);
@@ -126,4 +125,16 @@ test('developer email smoke test is offline by default and cannot send under tes
   assert.throws(() => parseEmailSmokeArguments(['--send']), /Sending requires/);
   assert.throws(() => parseEmailSmokeArguments(['--unexpected']), /Unknown/);
   await assert.rejects(runEmailSmokeTest({ send: true, confirmSend: true, recipient: 'safe@example.test' }, { ...settings, EMAIL_SMOKE_TEST_ENABLED: 'true' }), /authorization/);
+});
+
+for (const message of ['Connection timeout', 'Greeting never received']) {
+  test(`SMTP setup failure ${message} is safely retryable without treating CONN as proof`, () => {
+    assert.equal(classifySmtpFailure({ code: 'ETIMEDOUT', command: 'CONN', message }).code, 'SMTP_TRANSIENT_FAILURE');
+    assert.equal(classifySmtpFailure({ code: 'ETIMEDOUT', command: 'CONN', message: 'Timeout' }).code, 'SMTP_DELIVERY_UNCERTAIN');
+  });
+}
+test('temporary authentication throttle retries, permanent authentication fails, unknown transport fails closed', () => {
+  assert.equal(classifySmtpFailure({ code: 'EAUTH', responseCode: 454 }).code, 'SMTP_TRANSIENT_FAILURE');
+  assert.equal(classifySmtpFailure({ code: 'EAUTH', responseCode: 535 }).code, 'SMTP_AUTHENTICATION_FAILED');
+  assert.equal(classifySmtpFailure(new Error('Unclassified transport error')).code, 'SMTP_DELIVERY_UNCERTAIN');
 });

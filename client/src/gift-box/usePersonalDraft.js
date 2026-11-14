@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 import { stickerStyle } from '../../../shared/gift-box/sticker-styles.mjs';
 import { useEffect, useRef, useState } from 'react';
 import { LETTERING_STYLES, ENGRAVING_COLORS, DEFAULT_ENGRAVING_COLOR, MAX_ENGRAVING_LINES, validateDraftEngraving, validateLocalPhotoBatch } from '../../../shared/gift-box/lettering-styles.mjs';
@@ -28,6 +29,7 @@ export function usePersonalDraft({ freePlacement = false, photoAspectRatios = fa
       const aspectRatio=image.naturalWidth/image.naturalHeight;
       if (!Number.isFinite(aspectRatio) || image.naturalWidth > 12000 || image.naturalHeight > 12000 || image.naturalWidth*image.naturalHeight > 40000000) { setNotice('Choose a smaller supported photograph.'); return; }
       setPhotos(current=>current.map(item=>item.id === id && item.url === url ? {...item,aspectRatio,dimensionsPending:false} : item));
+      toast.success('Photo selected in your gift draft.', { id: `gift-photo-${id}` });
     };
     image.onerror = () => { if (objectUrls.current.has(url)) setNotice('This photo could not be opened. Remove it and choose another image.'); };
     image.src=url;return photo;

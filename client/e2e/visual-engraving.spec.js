@@ -107,10 +107,12 @@ test('native mobile touch drag and pinch zoom keep design size independent', asy
   const { surface, artwork } = await open(page, 390); await surfaceReady(page, surface); await addImage(page, artwork);
   const cdp = await page.context().newCDPSession(page), box = await page.locator('.ve-board').boundingBox();
   const touch = (type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points.map((point, id) => ({ ...point, id })) });
-  const center = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  let center = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
   await touch('touchStart', [center]); await touch('touchMove', [{ x: center.x + 25, y: center.y - 15 }]); await touch('touchEnd', []);
   const moved = await snapshot(page); expect(moved.design.layers[0].x).toBeGreaterThan(.5);
   await page.getByRole('button', { name: 'Adjust View', exact: true }).click();
+  const adjustedBox = await page.locator('.ve-board').boundingBox();
+  center = {x:adjustedBox.x + adjustedBox.width / 2, y:adjustedBox.y + adjustedBox.height / 2};
   await touch('touchStart', [{ x: center.x - 30, y: center.y }]);
   await touch('touchStart', [{ x: center.x - 30, y: center.y }, { x: center.x + 30, y: center.y }]);
   const before = await snapshot(page);

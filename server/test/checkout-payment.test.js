@@ -49,6 +49,20 @@ test('durable payment intent snapshots authoritative amount, destination and all
  await assert.rejects(ownedCheckoutPayment(other,value.checkoutKey),error=>error.code==='CHECKOUT_PAYMENT_NOT_FOUND');
  await assert.rejects(prepareCheckoutPayment(owner,value.checkoutKey,value.quote.fingerprint,[{id:'engraving',amountPiastres:1,method:'instapay'}]));
 });
+
+test('merchandise quote and prepared transfer do not require destination; final order still validates it',async()=>{
+ const value=await prepared({governorate:undefined});
+ assert.equal(value.payment.amountPiastres,12000);
+ assert.equal(value.quote.totals.shippingPiastres,null);
+ const changedAddress=await prepareCheckout(owner,{checkoutKey:value.checkoutKey,paymentMethod:'instapay',governorate:'alexandria'});
+ assert.equal(changedAddress.fingerprint,value.quote.fingerprint);
+ assert.equal(changedAddress.payment.reference,value.payment.reference);
+ const id=await proof(value);await submitCheckoutPaymentProof(owner,value.checkoutKey,{uploadId:id,senderName:'Fixture Sender'});
+ await assert.rejects(placeOrder(owner,{...request(value),customer:{...customer,governorate:'not-a-governorate'}}));
+ const accepted=await placeOrder(owner,request(value));
+ assert.equal(accepted.paymentState,'awaiting_verification');
+ assert.equal(accepted.totals.totalPiastres,12000);
+});
 test('private proof validates sender, exact reference, completion and owner; repeated submission is immutable',async()=>{
  const value=await prepared(),id=await proof(value),second=await prepared();
  await assert.rejects(submitCheckoutPaymentProof(owner,value.checkoutKey,{uploadId:id,senderName:'x'}));

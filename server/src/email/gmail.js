@@ -4,7 +4,11 @@ import { emailSettings, assertSafeEmailRecipient, emailError } from './settings.
 import { renderEmailTemplate } from './templates.js';
 
 export function classifySmtpFailure(error) {
+  if (Number.isInteger(error?.responseCode) && error.responseCode >= 400 && error.responseCode < 500) return emailError('SMTP_TRANSIENT_FAILURE');
   if (error?.code === 'EAUTH' || error?.code === 'ENOAUTH') return emailError('SMTP_AUTHENTICATION_FAILED', { terminal: true });
+  // CONN alone is NOT evidence: this version also uses it for a close after
+  // DATA. Only these library-generated setup failures prove no acceptance.
+  if (error?.code === 'EDNS' || error?.code === 'ETIMEDOUT' && ['Connection timeout', 'Greeting never received'].includes(error.message)) return emailError('SMTP_TRANSIENT_FAILURE');
   // Nodemailer labels socket timeouts/closures CONN even after the final DATA
   // stream. Without a server response, transport errors cannot prove that the
   // message was rejected; stop automatic retries for operator review.
@@ -13,7 +17,8 @@ export function classifySmtpFailure(error) {
     return emailError('SMTP_DELIVERY_UNCERTAIN', { terminal: true });
   }
   if (Number.isInteger(error?.responseCode) && error.responseCode >= 500) return emailError('SMTP_MESSAGE_REJECTED', { terminal: true });
-  return emailError('SMTP_TRANSIENT_FAILURE');
+  // An unclassified pool/stream error cannot authorize an automatic resend.
+  return emailError('SMTP_DELIVERY_UNCERTAIN', { terminal: true });
 }
 
 export function createGmailProvider(settings = process.env, { createTransport, render = renderEmailTemplate } = {}) {
@@ -23,8 +28,10 @@ export function createGmailProvider(settings = process.env, { createTransport, r
   const config = emailSettings(settings);
   if (config.provider !== 'gmail' || !config.enabled || !config.configured || (!config.production && !config.safeRecipients.length)) throw emailError('NOTIFICATIONS_DISABLED');
   const transport = (createTransport || nodemailer.createTransport)({
-    service: 'gmail', pool: true, maxConnections: 1, maxMessages: 50, maxRequeues: 0,
-    rateLimit: 1, rateDelta: 1000, connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 15000,
+    // Low-volume durable outbox sends sequentially. A fresh SMTP connection per
+    // message avoids idle pooled sockets and hidden transport requeues.
+    service: 'gmail', pool: false,
+    connectionTimeout: 15000, greetingTimeout: 15000, socketTimeout: 30000,
     secure: true, tls: { rejectUnauthorized: true },
     auth: { user: config.from, pass: settings.EMAIL_APP_PASSWORD.replace(/\s/g, '') },
     logger: false, debug: false, disableFileAccess: true, disableUrlAccess: true, maxRecipients: 1,
@@ -48,7 +55,13 @@ export function createGmailProvider(settings = process.env, { createTransport, r
         return { id: messageId };
       } catch (error) {
         if (error?.code?.startsWith('SMTP_')) throw error;
-        throw classifySmtpFailure(error);
+        const classified = classifySmtpFailure(error);
+        if (!testing) console.warn(JSON.stringify({ event: 'gmail_delivery_failed', code: classified.code,
+          transportCode: ['EAUTH','ENOAUTH','EDNS','ETIMEDOUT','ESOCKET','ECONNECTION','ECONNRESET','EPIPE','ETLS'].includes(error?.code) ? error.code : 'UNKNOWN',
+          phase: ['CONN','DATA','MAIL FROM','RCPT TO','AUTH PLAIN','AUTH LOGIN'].includes(error?.command) ? error.command : 'UNKNOWN',
+          responseCode: Number.isInteger(error?.responseCode) ? error.responseCode : null,
+          setupTimeout: error?.code === 'ETIMEDOUT' && ['Connection timeout','Greeting never received'].includes(error.message) }));
+        throw classified;
       }
     },
     close() { transport.close?.(); },

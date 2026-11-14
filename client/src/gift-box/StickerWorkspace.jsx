@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Minus, Plus, RotateCcw, RotateCw, Undo2, Redo2 } from 'lucide-react';
 import { TextArtwork } from '../engraving/visual/VisualEngravingEditor.jsx';
 import ConfirmationDialog from '../components/ConfirmationDialog.jsx';
@@ -16,11 +16,19 @@ export function StickerProof({ sticker, placement }) {
     <StickerText sticker={sticker} placement={placement}/>
   </div>;
 }
+function stickerLines(text) {
+  const lines = [];
+  // Preserve the original proof's whitespace/wrapping contract for saved orders.
+  for (const paragraph of [text]) {
+    let line = '';
+    for (const word of paragraph.split(/\s+/)) { if (line && (line + ' ' + word).length > 24) { lines.push(line); line = word; } else line += (line ? ' ' : '') + word; }
+    lines.push(line);
+  }
+  return lines;
+}
 function StickerText({ sticker, placement, children }) {
   const proof = stickerProof(placement.boxId, placement.view), ratio = placement.width * proof.width / (placement.height * proof.height);
-  const text = sticker.text || 'With love', words = text.split(/\s+/), lines = [];
-  let line = '';
-  for (const word of words) { if (line && (line + ' ' + word).length > 24) { lines.push(line); line = word; } else line += (line ? ' ' : '') + word; } lines.push(line);
+  const lines = stickerLines(sticker.text || 'With love');
   return <div className="sticker-position" style={{ left: `${placement.x * 100}%`, top: `${placement.y * 100}%`, width: `${placement.width * 100}%`, height: `${placement.height * 100}%`, transform: `translate(-50%, -50%) rotate(${placement.rotation ?? 0}deg)` }}>
     <TextArtwork layer={{ text: lines.join('\n'), aspectRatio: ratio }} font={{id: sticker.styleId, family:stickerStyle(sticker.styleId)?.fontFamily}} appearance={getEngravingColor(sticker.colorId).hex}/>{children}
   </div>;
@@ -28,19 +36,50 @@ function StickerText({ sticker, placement, children }) {
 export default function StickerWorkspace({ boxId, personal }) {
   const placement = personal.sticker.placements?.[boxId] || defaultStickerPlacement(boxId);
   const [preview, setPreview] = useState(null), [reset, setReset] = useState(null);
-  const board = useRef(null);
+  const board = useRef(null), root = useRef(null);
+  const [selected, setSelected] = useState(false);
+  const measuredFrame = useRef(null);
+  const latest = useRef(null); latest.current = { personal, placement };
+  // Normalize only the editable draft. Historical/cart/order proofs continue to
+  // render their exact saved rectangle through StickerProof above.
+  useEffect(() => {
+    let active = true;
+    async function measure() {
+      const family = stickerStyle(personal.sticker.styleId)?.fontFamily;
+      await document.fonts.load(`100px "${family}"`);
+      if (!active) return;
+      const context = document.createElement('canvas').getContext('2d');
+      context.font = `100px "${family}"`;
+      const text = personal.sticker.text || 'With love';
+      const lines = stickerLines(text);
+      const width = Math.max(1, ...lines.map(line => { const m = context.measureText(line); return Math.max(m.width, m.actualBoundingBoxLeft + m.actualBoundingBoxRight); })) + 20;
+      const { placement: current, personal: draft } = latest.current;
+      const proof = stickerProof(boxId, current.view);
+      const previous = measuredFrame.current;
+      // Grow wrapped lines at the current lettering size. A restored historical
+      // rectangle keeps its saved height; explicit resizing rebases this metric.
+      const sameFrame = previous?.boxId === boxId && Math.abs(previous.height-current.height)<1e-7 && Math.abs(previous.width-current.width)<1e-7;
+      const height = sameFrame ? current.height * lines.length / previous.lines : current.height;
+      const next = boundStickerPlacement({ ...current, height, width: height * proof.height / proof.width * width / (lines.length * 140) });
+      measuredFrame.current = {boxId,lines:lines.length,width:next.width,height:next.height};
+      if (Math.abs(next.width - current.width) > .000001 || Math.abs(next.height - current.height) > .000001) draft.updateSticker({ placements: { ...draft.sticker.placements, [boxId]: next } });
+    }
+    void measure().catch(() => {});
+    return () => { active = false; };
+  }, [boxId, personal.sticker.text, personal.sticker.styleId]);
+  useEffect(() => { const outside = event => { if (!root.current?.contains(event.target)) setSelected(false); }; document.addEventListener('pointerdown', outside, true); return () => document.removeEventListener('pointerdown', outside, true); }, []);
   const shown = preview || placement, proof = stickerProof(boxId, shown.view);
-  function commit(next) { setPreview(null); personal.updateSticker({ placements: { ...personal.sticker.placements, [boxId]: boundStickerPlacement(next) } }); }
+  function commit(next) { const bounded=boundStickerPlacement(next); measuredFrame.current={boxId,lines:stickerLines(personal.sticker.text || 'With love').length,width:bounded.width,height:bounded.height}; setPreview(null); personal.updateSticker({ placements: { ...personal.sticker.placements, [boxId]: bounded } }); }
   function patch(values) { commit({ ...placement, ...values }); }
-  const { cancel: cancelGesture, ...gestures } = useArtworkGestures({ board, read: () => placement, fit: boundStickerPlacement, onPreview: setPreview, onCommit: commit });
+  const { cancel: cancelGesture, ...gestures } = useArtworkGestures({ board, read: event => { const hit = event.target.closest('.sticker-text-target'); setSelected(Boolean(hit)); return hit ? placement : null; }, fit: boundStickerPlacement, onPreview: setPreview, onCommit: commit });
   function size(scale) { patch({ width: placement.width * scale, height: placement.height * scale }); }
   const arrows = [[ArrowUp, 'Move sticker up', 0, -.02], [ArrowLeft, 'Move sticker left', -.02, 0], [ArrowRight, 'Move sticker right', .02, 0], [ArrowDown, 'Move sticker down', 0, .02]];
-  return <section className="sticker-workspace" aria-label="Sticker placement editor">
+  return <section ref={root} className={`sticker-workspace ${selected ? 'has-selection' : ''}`} aria-label="Sticker placement editor">
     {Object.keys(STICKER_PROOFS[boxId]).length > 1 && <div className="sticker-side-options" role="group" aria-label="Sticker side">{['left', 'right'].map(view => <button type="button" key={view} aria-pressed={placement.view === view} onClick={() => commit({ ...placement, view })}>{view === 'left' ? 'Left side' : 'Right side'}</button>)}</div>}
     <div className="sticker-toolbar"><div role="group" aria-label="Sticker history"><button type="button" aria-label="Undo sticker change" disabled={!personal.canUndoSticker} onClick={() => { cancelGesture(); personal.undoSticker(); }}><Undo2 size={18}/></button><button type="button" aria-label="Redo sticker change" disabled={!personal.canRedoSticker} onClick={() => { cancelGesture(); personal.redoSticker(); }}><Redo2 size={18}/></button><button type="button" aria-label="Reset sticker placement" onClick={event => setReset(event.currentTarget)}><RotateCcw size={18}/></button></div></div>
     <div className="sticker-viewport"><div><div ref={board} className="sticker-proof-image is-editable" style={{ aspectRatio: proof.width / proof.height }} {...gestures}>
       <img src={`/assets/gift-box/stickers/v1/${proof.file}`} width={proof.width} height={proof.height} alt={`Box ${boxId.slice(4)}, ${shown.view} sticker view`} draggable="false"/>
-      <StickerText sticker={personal.sticker} placement={shown}><button type="button" className="sticker-text-target" aria-label="Move sticker text" onKeyDown={event => { const delta = event.shiftKey ? .05 : .01, dirs = { ArrowUp: [0, -delta], ArrowDown: [0, delta], ArrowLeft: [-delta, 0], ArrowRight: [delta, 0] }; if (dirs[event.key]) { event.preventDefault(); patch({ x: placement.x + dirs[event.key][0], y: placement.y + dirs[event.key][1] }); } }}/></StickerText>
+      <StickerText sticker={personal.sticker} placement={shown}><button type="button" className="sticker-text-target" aria-label="Move sticker text" aria-pressed={selected} onFocus={() => setSelected(true)} onClick={() => setSelected(true)} onKeyDown={event => { const delta = event.shiftKey ? .05 : .01, dirs = { ArrowUp: [0, -delta], ArrowDown: [0, delta], ArrowLeft: [-delta, 0], ArrowRight: [delta, 0] }; if (dirs[event.key]) { event.preventDefault(); patch({ x: placement.x + dirs[event.key][0], y: placement.y + dirs[event.key][1] }); } }}/></StickerText>
     </div></div></div>
     <div className="sticker-toolbar"><div role="group" aria-label="Sticker movement">{arrows.map(([Icon, label, dx, dy]) => <button type="button" key={label} aria-label={label} onClick={() => patch({ x: placement.x + dx, y: placement.y + dy })}><Icon size={18}/></button>)}</div><div role="group" aria-label="Sticker text size"><button type="button" aria-label="Smaller sticker text" onClick={() => size(.9)}><Minus size={18}/></button><button type="button" aria-label="Larger sticker text" onClick={() => size(1.1)}><Plus size={18}/></button></div></div>
     <div className="sticker-toolbar" role="group" aria-label="Sticker text rotation"><button type="button" aria-label="Rotate sticker text left" onClick={() => patch({ rotation: normalizedAngle((placement.rotation ?? 0) - 5) })}><RotateCcw size={18}/></button><output aria-label="Sticker text angle">{Math.round(placement.rotation ?? 0)}&deg;</output><button type="button" aria-label="Rotate sticker text right" onClick={() => patch({ rotation: normalizedAngle((placement.rotation ?? 0) + 5) })}><RotateCw size={18}/></button><button type="button" aria-label="Reset sticker text angle" disabled={!(placement.rotation ?? 0)} onClick={() => patch({ rotation: 0 })}>0&deg;</button></div>

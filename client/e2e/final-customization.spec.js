@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { mockCatalog } from './catalog-fixtures.js';
-import { mockCommerce, cartWithProduct, fillCheckout, isolatedImageFile } from './commerce-fixtures.js';
+import { mockCommerce, cartWithProduct, isolatedImageFile } from './commerce-fixtures.js';
 import { FONT_REGISTRY } from '../../shared/engraving/definitions.mjs';
 import { publicContacts } from '../../shared/storefront-content.mjs';
 
@@ -21,7 +21,7 @@ for(const width of [320,390,768,1024,1440])test(`sticker and engraving transform
   await expect(page.getByRole('button',{name:'Adjust View',exact:true})).toHaveCount(0);
   await expect(page.locator('.sticker-resize,.sticker-help')).toHaveCount(0);
   const original=await page.evaluate(()=>window.snapshotSticker());
-  await twist(page,'.sticker-proof-image.is-editable');
+  await twist(page,'.sticker-text-target');
   const transformed=await page.evaluate(()=>window.snapshotSticker().placements['box-1']);
   expect(Math.abs(transformed.rotation)).toBeGreaterThan(35);
   await page.getByRole('button',{name:'Undo sticker change'}).click();
@@ -38,7 +38,7 @@ for(const width of [320,390,768,1024,1440])test(`sticker and engraving transform
   await page.getByRole('button',{name:'Add text',exact:true}).click();await page.getByLabel('Your text',{exact:true}).fill('With love');
   await expect(page.locator('.ve-resize')).toHaveCount(0);
   const before=await page.evaluate(()=>window.snapshotEditor());
-  await twist(page,'.ve-board');
+  await twist(page,'.ve-layer-target');
   const after=await page.evaluate(()=>window.snapshotEditor());
   expect(Math.abs(after.design.layers[0].rotation)).toBeGreaterThan(35);
   await page.getByRole('button',{name:'Undo',exact:true}).click();expect(await page.evaluate(()=>window.snapshotEditor())).toEqual(before);
@@ -53,35 +53,64 @@ for(const width of [320,390,768,1024,1440])test(`sticker and engraving transform
   expect(errors).toEqual([]);
 });
 
-for(const lost of ['none','proof','order','changed-quote'])test(`checkout saves private evidence and accepts one unpaid order, lost acknowledgement=${lost}`,async({page},info)=>{
+for(const lost of ['none','proof','order','changed-quote','upload','double-click','cod'])test(`checkout saves private evidence and accepts one unpaid order, lost acknowledgement=${lost}`,async({page},info)=>{
   await page.setViewportSize({width:390,height:900});
+  await page.addInitScript(()=>Object.defineProperty(navigator,'clipboard',{value:{writeText:async value=>{window.copiedTransferValue=value;}}}));
   const fixture=await mockCommerce(page,{checkoutEnabled:true,cart:cartWithProduct(),loseFirstOrderResponse:lost==='order'});
-  let payment=null,proofAttempts=0,privateCheckoutKey=null;
+  let payment=null,proofAttempts=0,privateCheckoutKey=null,uploadAttempts=0;
+  if(lost==='upload')await page.route('**/api/v1/commerce/uploads/sign',route=>{uploadAttempts++;return uploadAttempts===1?route.fulfill({status:503,json:{error:{message:'Temporary upload failure'}}}):route.fallback();});
   const headers={'Access-Control-Allow-Origin':'http://127.0.0.1:5191','Access-Control-Allow-Credentials':'true'};
   await page.route('**/api/v1/commerce/checkout/**',async route=>{
     const path=new URL(route.request().url()).pathname,body=route.request().method()==='POST'?route.request().postDataJSON():null;
     const reply=data=>route.fulfill({headers,json:{ok:true,data}});
     if(path.endsWith('/config')||path.includes('/submissions/'))return route.fallback();
     if(path.endsWith('/quote'))return reply({fingerprint:body.discountCode?'fixture-changed-price':'fixture-current-price',totals:{subtotalPiastres:25000,discountPiastres:0,totalPiastres:25000},paymentGroups:[{id:'merchandise',method:body.paymentMethod,amountPiastres:25000}]});
+    if(path.endsWith('/cancel')){payment=null;return reply({cancelled:true});}
     if(path.endsWith('/payments')&&body.discountCode)return route.fulfill({headers,status:409,json:{ok:false,error:{code:'CHECKOUT_PAYMENT_REVIEW_REQUIRED',message:'Keep the original reference for reconciliation.'}}});
     if(path.endsWith('/payments')){privateCheckoutKey=body.checkoutKey;payment||={reference:'22222222-2222-4222-8222-222222222222',state:'prepared',amountPiastres:25000,destination:'01060673073',expiresAt:new Date(Date.now()+600000).toISOString(),proofReceived:false};return reply({payment});}
     if(path.endsWith('/proof')){proofAttempts++;expect(body.senderName).toBe('Fixture Sender');expect(fixture.uploads).toHaveLength(1);payment={...payment,proofReceived:true,state:'proof_received'};fixture.state.order.checkoutPayment={reference:payment.reference};if(lost==='proof'&&proofAttempts===1)return route.abort('failed');return reply({payment});}
     return reply({payment});
   });
-  await page.goto('/checkout');await fillCheckout(page);await page.getByRole('radio',{name:/InstaPay/}).check();
-  await expect(page.getByRole('button',{name:'Copy recipient'})).toBeVisible();
+  await page.goto('/checkout');await page.getByRole('radio',{name:/InstaPay/}).check();
+  await expect(page.getByRole('button',{name:'Copy transfer destination'})).toBeVisible();
+  await page.getByRole('button',{name:'Copy transfer destination'}).click();expect(await page.evaluate(()=>window.copiedTransferValue)).toBe('01060673073');
+  await page.getByRole('button',{name:'Copy transfer amount'}).click();expect(await page.evaluate(()=>window.copiedTransferValue)).toBe('250.00');
+  await expect(page.getByLabel('Governorate',{exact:true})).toHaveValue('');
+  await page.getByLabel('Full name', {exact:true}).fill('Isolated Customer');
+  await page.getByLabel('Egyptian mobile number').fill('01012345678');
+  await page.getByLabel('Governorate', {exact:true}).selectOption('cairo');
+  await page.getByLabel('City / Area', {exact:true}).fill('Isolated City');
+  await page.getByLabel('Street address', {exact:true}).fill('Isolated test delivery address');
+  await expect(page.getByRole('button',{name:'Copy transfer destination'})).toBeVisible();
   await expect(page.getByRole('button',{name:'Place Order',exact:true})).toBeDisabled();
+  if(lost==='none'){
+    await page.getByText('Have a discount code?',{exact:true}).click();
+    for(const width of [320,337,343,390,768,1024,1440]){
+      await page.setViewportSize({width,height:900});
+      const discount=await page.locator('.commerce-discount').boundingBox(),apply=await page.getByRole('button',{name:'Apply code',exact:true}).boundingBox();
+      expect(apply.x).toBeGreaterThanOrEqual(discount.x);expect(apply.x+apply.width).toBeLessThanOrEqual(discount.x+discount.width);
+      expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+      await expect(page.locator('.checkout-proof-drop>.image-upload-area')).toHaveCSS('min-height','210px');
+      await page.locator('.checkout-instapay').screenshot({path:info.outputPath(`reference-instapay-${width}.png`)});
+    }
+    await page.setViewportSize({width:390,height:900});
+  }
   if(lost==='changed-quote'){
     await page.getByText('Have a discount code?',{exact:true}).click();await page.getByLabel('Discount code',{exact:true}).fill('CHANGED');await page.getByRole('button',{name:'Apply code',exact:true}).click();
-    await expect(page.getByText(/This payment reference requires review/)).toBeVisible();await expect(page.getByRole('button',{name:'Copy recipient'})).toHaveCount(0);await expect(page.getByRole('button',{name:'Place Order',exact:true})).toBeDisabled();expect(fixture.orders).toHaveLength(0);return;
+    await expect(page.getByText(/This payment reference requires review/)).toBeVisible();await expect(page.getByRole('button',{name:'Copy transfer destination'})).toHaveCount(0);await expect(page.getByRole('button',{name:'Place Order',exact:true})).toBeDisabled();expect(fixture.orders).toHaveLength(0);return;
   }
+  if(lost==='cod'){await page.getByRole('radio',{name:'Cash on Delivery',exact:true}).click();await page.getByRole('button',{name:'I have not transferred',exact:true}).click();await page.getByRole('button',{name:'Place Order',exact:true}).click();await expect(page.getByRole('heading',{name:/Thank you/})).toBeVisible();expect(fixture.orders[0].paymentMethod).toBe('cod');expect(fixture.uploads).toHaveLength(0);return;}
   await page.getByLabel('Transfer sender name').fill('Fixture Sender');await page.getByLabel('Transaction screenshot',{exact:true}).setInputFiles(isolatedImageFile());
   await expect(page.getByAltText('Selected transaction screenshot')).toBeVisible();
   await page.screenshot({path:info.outputPath('checkout-instapay-upload-mobile.png'),fullPage:true});
-  await page.getByRole('button',{name:'Save payment proof'}).click();await expect(page.getByRole('button',{name:'Place Order',exact:true})).toBeEnabled();
-  expect(fixture.uploads[0].checkoutKey).toBe(privateCheckoutKey);expect(fixture.uploads[0].orderId).toBeUndefined();
+  await expect(page.getByRole('button',{name:'Save payment proof'})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Place Order',exact:true})).toBeEnabled();
+  expect(fixture.uploads).toHaveLength(0);
   await page.screenshot({path:info.outputPath('checkout-instapay-mobile.png'),fullPage:true});
-  await page.getByRole('button',{name:'Place Order',exact:true}).click();if(lost==='order'){await expect(page.getByRole('heading',{name:'Check your order submission',exact:true})).toBeVisible();await page.getByRole('button',{name:'Check submission status',exact:true}).click();}await expect(page.getByRole('heading',{name:/Thank you/})).toBeVisible();
+  const place=page.getByRole('button',{name:'Place Order',exact:true});
+  if(lost==='upload'){await place.click();await expect(page.getByText('Temporary upload failure',{exact:true}).first()).toBeVisible();expect(fixture.orders).toHaveLength(0);await expect(place).toBeEnabled();}
+  await place.click(lost==='double-click'?{clickCount:2}:{});if(lost==='order'){await expect(page.getByRole('heading',{name:'Check your order submission',exact:true})).toBeVisible();await page.getByRole('button',{name:'Check submission status',exact:true}).click();}await expect(page.getByRole('heading',{name:/Thank you/})).toBeVisible();
+  expect(fixture.uploads).toHaveLength(1);expect(fixture.uploads[0].checkoutKey).toBe(privateCheckoutKey);expect(fixture.uploads[0].orderId).toBeUndefined();
   expect(fixture.orders).toHaveLength(1);expect(fixture.orders[0].paymentState).toBe('awaiting_verification');
 });
 
@@ -91,7 +120,7 @@ test('image layers support pinch and twist without changing colors, insertion or
   await page.getByRole('button',{name:'Add text',exact:true}).click();await page.getByLabel('Your text',{exact:true}).fill('Under artwork');
   await page.getByLabel('Image artwork',{exact:true}).setInputFiles(isolatedImageFile());await expect(page.locator('.ve-layer img')).toBeVisible();
   const before=await page.evaluate(()=>window.snapshotEditor());expect(before.design.layers.map(layer=>layer.type)).toEqual(['text','image']);
-  await twist(page,'.ve-board');const after=await page.evaluate(()=>window.snapshotEditor());expect(Math.abs(after.design.layers[1].rotation)).toBeGreaterThan(35);
+  await twist(page,'.ve-layer-target >> nth=1');const after=await page.evaluate(()=>window.snapshotEditor());expect(Math.abs(after.design.layers[1].rotation)).toBeGreaterThan(35);
   await expect(page.locator('.ve-layer img')).toHaveCSS('filter','none');await expect(page.locator('.ve-layer img')).toHaveCSS('opacity','1');
   await page.getByRole('button',{name:'Undo',exact:true}).click();expect(await page.evaluate(()=>window.snapshotEditor())).toEqual(before);
   await page.getByRole('button',{name:'Redo',exact:true}).click();expect(await page.evaluate(()=>window.snapshotEditor())).toEqual(after);

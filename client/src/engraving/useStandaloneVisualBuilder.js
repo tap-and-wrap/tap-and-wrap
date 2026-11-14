@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSession } from '../auth/SessionProvider.jsx';
@@ -63,6 +64,7 @@ export default function useStandaloneVisualBuilder(saved, editId) {
         return { ...previous, editorRevision: previous.editorRevision + 1, visual: { ...visual, assets,
           ...(role === 'surface' ? { design: { ...visual.design, surface: { assetId: ids[0], aspectRatio: ratio }, layers: visual.design.layers.map(layer => fitLayer(layer, ratio)) } } : { itemPhotos: [...visual.itemPhotos, ...ids].slice(0, 3) }) } };
       }); setError(''); setQuote(null);
+      toast.success(role === 'surface' ? 'Surface photo selected in your draft.' : 'Item photos selected in your draft.');
     } catch { if (alive.current && generation === authGeneration()) setError('Choose a clear JPEG, PNG or WebP photo of your surface.'); }
   }
   function validate(designRequired = false) {

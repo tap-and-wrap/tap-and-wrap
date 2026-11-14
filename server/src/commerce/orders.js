@@ -51,7 +51,7 @@ async function checkoutQuoteCore(owner, input, { session, userId } = {}, capabil
   if (!cart.items.length) throw commerceError(400, 'CART_EMPTY', 'Add an eligible product before checking out.');
   const policyFences = await readGiftBoxCheckoutPolicyFences(cart.items, { session });
   const promotions = await calculatePromotions(cart.items, { code: input.discountCode, session, userId });
-  if (!GOVERNORATES.some(area => area.id === input.governorate)) throw commerceError(400, 'INVALID_GOVERNORATE', 'Choose a supported governorate.');
+  if (input.governorate !== undefined && !GOVERNORATES.some(area => area.id === input.governorate)) throw commerceError(400, 'INVALID_GOVERNORATE', 'Choose a supported governorate.');
   const shipping = pendingShipping();
   const totals = { subtotalPiastres: promotions.subtotalPiastres, discountPiastres: promotions.discountPiastres,
     shippingPiastres: null, totalPiastres: checkedMoney(promotions.totalPiastres), applied: promotions.applied };
@@ -59,7 +59,7 @@ async function checkoutQuoteCore(owner, input, { session, userId } = {}, capabil
     ...(line.kind === 'gift_box_v2' ? { kind: line.kind, configuration: line.configuration,
       components: line.giftComponents.map(component => ({ ...component, priceApprovedAt: new Date(component.priceApprovedAt).toISOString() })),
       personalization: line.giftPersonalization, fulfillment: line.giftFulfillment, policyHash: line.giftPolicyHash } : {}) })), totals,
-    paymentPolicyVersion: ALL_METHODS_POLICY, engravingPaymentPolicy: cart.items.some(line => isEngravingKind(line.kind)) ? UPFRONT_ENGRAVING_POLICY : null, governorate: input.governorate, paymentMethod: input.paymentMethod, discountCode: input.discountCode?.trim().toUpperCase() || null });
+    paymentPolicyVersion: ALL_METHODS_POLICY, engravingPaymentPolicy: cart.items.some(line => isEngravingKind(line.kind)) ? UPFRONT_ENGRAVING_POLICY : null, paymentMethod: input.paymentMethod, discountCode: input.discountCode?.trim().toUpperCase() || null });
   return { cart, totals, fingerprint: digest, shipping, policyFences };
 }
 export async function prepareCheckout(owner, input, userId) {
