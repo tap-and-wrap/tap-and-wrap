@@ -74,6 +74,8 @@ try {
       inventory: { mode: 'tracked', quantity: 0, approved: true, available: false }, enabledForCustomization: true, configurationApproved: true, reviewRequired: false },
   ]);
   giftComponents[0].requestPolicy = { enabled:true, services:['gift_box'], availability:'available', pricing:'fixed', unitPricePiastres:1550 }; await giftComponents[0].save();
+  // Dedicated disposable merchandise for the production restart regression.
+  await Product.create([28000,241000].map(pricePiastres=>({name:`Restart fixture ${pricePiastres}`,slug:`restart-${pricePiastres}`,categoryId:category._id,visibility:'public',status:'ready',mainImageKey:'fixtures/restart.webp',galleryKeys:['fixtures/restart.webp'],pricePiastres,priceApproved:true,inventory:{mode:'tracked',quantity:10,approved:true,available:true}})));
   const giftTemplate = await CustomizationTemplate.create({ key: 'connected-gift-box', name: 'Connected approved gift configuration', kind: 'gift_box', status: 'approved', active: true,
     fields: [{ key: 'gift-message', label: 'Gift box message', type: 'textarea', required: true, maxChars: 80 }],
     groups: [{ key: 'contents', label: 'Gift box contents', minChoices: 1, maxChoices: 2, allowedActions: ['add', 'remove'], options: [

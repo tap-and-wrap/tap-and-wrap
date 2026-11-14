@@ -170,7 +170,7 @@ commerceRoutes.post('/checkout/quote', checkoutLimit, async (req, res) => {
 });
 commerceRoutes.get('/checkout/payments/:checkoutKey', submissionStatusLimit, async (req, res) => {
   const intent = await CheckoutIntent.findOne({ owner: req.commerceOwner, checkoutKey: uuid.parse(req.params.checkoutKey) }).lean();
-  res.json({ ok: true, data: { payment: intent?.payment ? presentCheckoutPayment(intent) : null, state: intent?.state || null, orderId: intent?.orderId ? String(intent.orderId) : null, quoteSequence: intent?.quoteSequence || 0 } });
+  res.json({ ok: true, data: { payment: intent?.payment ? presentCheckoutPayment(intent) : null, state: intent?.state || null, paymentMethod: intent?.paymentMethod || null, paymentRecoverable: intent?.payment?.state === 'prepared', canCancel: Boolean(intent?.state === 'open' && ['prepared','cancelled_no_transfer'].includes(intent.payment?.state) && !intent.payment?.proofId), orderId: intent?.orderId ? String(intent.orderId) : null, quoteSequence: intent?.quoteSequence || 0 } });
 });
 commerceRoutes.post('/checkout/payments', checkoutLimit, async (req, res) => {
   const input = checkoutSchema.parse(req.body);

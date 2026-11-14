@@ -23,7 +23,7 @@ async function checkout(page, options = {}) {
     }
     if(path.endsWith('/payments')){preparations++;payment={reference:'12345678-1234-4123-8123-123456789012',state:'prepared',destination:'01060673073',amountPiastres:25000,expiresAt:new Date(Date.now()+600000).toISOString(),proofReceived:false};return reply(route,{payment});}
     if(path.endsWith('/proof')){proofs++;payment={...payment,proofReceived:true,state:'proof_received'};return reply(route,{payment});}
-    if(path.includes('/payments/'))return reply(route,{payment});
+    if(path.includes('/payments/'))return reply(route,{payment,paymentMethod:payment?'instapay':null,state:payment?'open':null});
     return route.fallback();
   });
   return {...fixture,release:()=>release?.(),counts:()=>({preparations,proofs})};
@@ -36,7 +36,7 @@ for(const width of [320,390,768,1024,1440])test(`checkout and clean receipt at $
   await page.goto('/checkout');await fillCheckout(page);
   await page.getByRole('radio',{name:/InstaPay/}).check();
   await expect(page.getByRole('region',{name:'InstaPay transfer details'})).toBeVisible();
-  await expect(page.getByLabel('Transfer sender name *')).toBeVisible();
+  await expect(page.getByLabel('Transfer sender name *')).toHaveCount(0);
   await expect(page.locator('.checkout-transfer-placeholder')).toBeVisible();
   await expect(page.getByText('01060673073',{exact:true})).toHaveCount(0);
   fixture.release();await expect(page.getByText('01060673073',{exact:true})).toBeVisible();
