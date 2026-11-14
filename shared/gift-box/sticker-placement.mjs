@@ -3,12 +3,14 @@ import { deepFreeze } from './definitions.mjs';
 export const STICKER_PROOF_VERSION = 'box-sticker-proof-v1';
 // Keep original default placement geometry; the inspected exterior face permits
 // a wider movement area. Historical saved coordinates are never rewritten.
-const heart = (file, width = 1882) => ({ file, width, height: 836, surface: { x: .14, y: .36, width: .72, height: .46 }, usableSurface: { x: .07, y: .32, width: .86, height: .50 } });
-const round = (file, width = 1672, height = 941) => ({ file, width, height, surface: { x: .18, y: .43, width: .64, height: .32 }, usableSurface: { x: .10, y: .37, width: .80, height: .41 } });
+const heart = (file, width = 1882) => ({ file, width, height: 836, surface: { x: .14, y: .36, width: .72, height: .46 }, usableSurface: { x: .055, y: .31, width: .89, height: .54 } });
+// These are side-wall photographs, not overhead circular faces. The lower
+// shoulders follow the photographed wall and exclude the transparent corners.
+const round = (file, width = 1672, height = 941) => ({ file, width, height, surface: { x: .18, y: .43, width: .64, height: .32 }, usableSurface: { x: .075, y: .34, width: .85, height: .53 }, face: [[.075,.34],[.925,.34],[.925,.77],[.84,.87],[.16,.87],[.075,.77]] });
 const pair = family => ({ left: heart(`${family}-left-sticker.webp`, family === 'box-4-6' ? 1881 : 1882), right: heart(`${family}-right-sticker.webp`, family === 'box-4-6' ? 1881 : 1882) });
 export const STICKER_PROOFS = deepFreeze({
   'box-1': pair('box-1'),
-  'box-2': { exterior: { file: 'box-2-sticker.webp', width: 1312, height: 1199, surface: { x: .22, y: .36, width: .56, height: .36 }, usableSurface: { x: .18, y: .30, width: .64, height: .44 } } },
+  'box-2': { exterior: { file: 'box-2-sticker.webp', width: 1312, height: 1199, surface: { x: .22, y: .36, width: .56, height: .36 }, usableSurface: { x: .18, y: .30, width: .64, height: .60 } } },
   'box-3': pair('box-3-5'), 'box-4': pair('box-4-6'), 'box-5': pair('box-3-5'), 'box-6': pair('box-4-6'),
   'box-7': { exterior: round('box-7-sticker.webp') }, 'box-8': { exterior: round('box-8-sticker.webp') },
   // Genuine nonopaque alpha verified against the owner-supplied original before inclusion.
@@ -32,9 +34,31 @@ export function boundStickerPlacement(value) {
   const rotated = extent(), scale = Math.min(1, s.width / rotated.width, s.height / rotated.height);
   width *= scale; height *= scale;
   const bounds = extent();
+  let x = clamp(value.x, s.x + bounds.width / 2, s.x + s.width - bounds.width / 2), y = clamp(value.y, s.y + bounds.height / 2, s.y + s.height - bounds.height / 2);
+  if (proof.face) {
+    // Erode each convex face edge by the support of the rotated text rectangle.
+    // Projection in proof pixels accounts for rotation and the image's aspect.
+    const edges = proof.face.map(([ax,ay], i) => {
+      const [bx,by] = proof.face[(i + 1) % proof.face.length];
+      const dx = (bx-ax)*proof.width, dy = (by-ay)*proof.height, length = Math.hypot(dx,dy);
+      return { nx:dy/length, ny:-dx/length, limit:(dy/length)*ax*proof.width-(dx/length)*ay*proof.height };
+    });
+    let px=x*proof.width, py=y*proof.height;
+    for (let pass=0;pass<100;pass+=1) {
+      let overflow=0;
+      for (const {nx,ny,limit} of edges) {
+        const support=Math.abs(nx*Math.cos(radians)+ny*Math.sin(radians))*width*proof.width/2+Math.abs(-nx*Math.sin(radians)+ny*Math.cos(radians))*height*proof.height/2;
+        const excess=nx*px+ny*py+support-limit;
+        if(excess>0){px-=nx*excess;py-=ny*excess;overflow=Math.max(overflow,excess);}
+      }
+      if(overflow<1e-10)break;
+      if(pass===49){width*=.9;height*=.9;px=proof.width*.5;py=proof.height*.6;}
+    }
+    x=px/proof.width;y=py/proof.height;
+  }
   return { version: STICKER_PROOF_VERSION, boxId: value.boxId, view: value.view, width, height,
     ...(Object.hasOwn(value, 'rotation') ? { rotation } : {}),
-    x: clamp(value.x, s.x + bounds.width / 2, s.x + s.width - bounds.width / 2), y: clamp(value.y, s.y + bounds.height / 2, s.y + s.height - bounds.height / 2) };
+    x, y };
 }
 export function validStickerPlacement(value) {
   if (!value || Object.keys(value).sort().join() !== ['version','boxId','view','x','y','width','height', ...(Object.hasOwn(value, 'rotation') ? ['rotation'] : [])].sort().join() || value.version !== STICKER_PROOF_VERSION || !stickerProof(value.boxId, value.view) || !['x','y','width','height'].every(key => Number.isFinite(value[key])) || Object.hasOwn(value, 'rotation') && (!Number.isFinite(value.rotation) || Math.abs(value.rotation) > 180)) return false;

@@ -177,15 +177,26 @@ test('F14 deadline and cancellation stop claims without resetting durable record
   const result = await runNotificationBatch({ budget }); assert.equal(result.claimed, 0); assert.equal(result.sent, 0);
   assert.throws(() => createWorkBudget({ maxDurationMs: 99 }), /duration/);
 });
+test('notification dispatch leaves queued mail untouched when the cycle cannot cover a complete send', async () => {
+  await enqueueOrderEvent({ _id: new mongoose.Types.ObjectId(), customer, orderNumber: '123456', totals: { totalPiastres: 10000 } }, 'order_received');
+  let sends = 0;
+  setNotificationProviderForTests({ supportsIdempotency: false, send: async () => { sends += 1; return { id: 'unexpected' }; } });
+  const result = await runNotificationBatch({ budget: createWorkBudget({ maxDurationMs: 45000, clock: () => 0 }) });
+  assert.equal(result.claimed, 0); assert.equal(result.stopped, true); assert.equal(sends, 0);
+  const event = await NotificationEvent.findOne().lean(); assert.equal(event.state, 'queued'); assert.equal(event.attempts, 0);
+});
+
 test('F14 a hung non-idempotent SMTP mock is uncertain, does not replay, and clears its secret', async () => {
   await enqueueOrderEvent({ _id: new mongoose.Types.ObjectId(), customer, orderNumber: '123456', totals: { totalPiastres: 10000 } }, 'order_received');
   let dispatches = 0;
-  setNotificationProviderForTests({ supportsIdempotency: false, send: () => { dispatches += 1; return new Promise(() => {}); } });
+  const budget = createWorkBudget({ maxDurationMs: 50000, clock: () => 0 });
+  setNotificationProviderForTests({ supportsIdempotency: false, send: () => { dispatches += 1; budget.deadline = 100; return new Promise(() => {}); } });
   // This case exercises the deadline *after* dispatch. Wall-clock database fixture
-  // contention must not consume the entire 100 ms before a send is even claimed.
+  // contention must not consume the budget before a send is claimed; the mock
+  // consumes it after the new pre-dispatch reserve check.
   // The provider's bounded operation still uses a real 100 ms timer and must
   // classify the dispatched non-idempotent SMTP attempt as uncertain.
-  const result = await runNotificationBatch({ budget: createWorkBudget({ maxDurationMs: 100, clock: () => 0 }) });
+  const result = await runNotificationBatch({ budget });
   assert.equal(dispatches, 1, 'The mocked SMTP send must actually have been dispatched.');
   assert.equal(result.uncertain, 1); const record = await NotificationEvent.findOne().select('+sealedActionToken'); assert.equal(record.state, 'uncertain'); assert.equal(record.sealedActionToken, undefined);
   let sends = 0; setNotificationProviderForTests({ supportsIdempotency: false, send: async () => { sends += 1; return { id: 'never' }; } });

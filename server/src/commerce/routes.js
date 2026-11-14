@@ -49,7 +49,9 @@ const uuid = z.string().uuid();
 const paymentMethod = z.enum(['cod', 'instapay']);
 const discountCode = z.string().trim().max(40).optional();
 
-const checkoutSchema = z.object({ checkoutKey: uuid, paymentMethod, governorate: customer.shape.governorate, discountCode }).strict();
+// Initial merchandise/services contain no delivery charge. The final order's
+// customer schema still requires a valid Egyptian destination.
+const checkoutSchema = z.object({ checkoutKey: uuid, paymentMethod, governorate: customer.shape.governorate.optional(), discountCode }).strict();
 const orderSchema = z.object({ checkoutKey: uuid, customer, paymentMethod, discountCode, paymentProofId: id.optional() }).strict();
 const states = z.object({ revision: z.number().int().nonnegative(), fulfillmentState: z.enum(['received', 'confirmed', 'preparing', 'out_for_delivery', 'delivered', 'delivery_failed', 'returned', 'cancelled']).optional(),
   paymentState: z.enum(['unpaid', 'awaiting_transfer', 'awaiting_verification', 'partially_paid', 'paid', 'rejected', 'refunded']).optional(), reason: z.string().trim().max(500).optional(), internalNote: z.string().trim().max(500).optional(), publicReason: z.string().trim().max(500).optional() }).strict();

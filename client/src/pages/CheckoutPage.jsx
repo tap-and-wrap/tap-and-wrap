@@ -1,3 +1,4 @@
+import { assertAuthGeneration, authGeneration } from '../services/api.js';
 import CheckoutInstaPay from '../commerce/CheckoutInstaPay.jsx';
 import ConfirmationDialog from '../components/ConfirmationDialog.jsx';
 import { ChevronDown } from 'lucide-react';
@@ -44,7 +45,7 @@ export default function CheckoutPage() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [uploadStatus, setUploadStatus] = useState('');
   const prefix = useId();
-  const submissionKey = useRef(null);
+  const submissionKey = useRef(null), placing = useRef(false);
   const requestSnapshot = useRef(null);
   const [uncertainOwner, setUncertainOwner] = useState(null);
   const [recoveryMessage, setRecoveryMessage] = useState('');
@@ -69,8 +70,8 @@ export default function CheckoutPage() {
 
   const quote = useQuery({ queryKey: privateQueryKey(session.ownerKey, 'checkout-quote', customer.governorate, paymentMethod, appliedCode, cart.items.map((item) => ({ id: item.id, kind: item.kind, productId: item.productId, variantKey: item.variantKey, quantity: item.quantity, unitPricePiastres: item.unitPricePiastres, personalization: item.personalization, customization: item.customization })), cart.subtotalPiastres, cart.quantity), queryFn: ({ signal }) => {
     submissionKey.current ||= checkoutSession(checkoutOwner).key;
-    return commercePost('/checkout/quote', { checkoutKey: submissionKey.current, paymentMethod, governorate: customer.governorate, ...(appliedCode ? { discountCode: appliedCode } : {}) }, { signal });
-  }, enabled: session.ready && enabled && !paymentRecovery.isPending && !uncertain && Boolean(customer.governorate) && cart.items.length > 0, retry: false, staleTime: 0 });
+    return commercePost('/checkout/quote', { checkoutKey: submissionKey.current, paymentMethod, ...(customer.governorate ? { governorate: customer.governorate } : {}), ...(appliedCode ? { discountCode: appliedCode } : {}) }, { signal });
+  }, enabled: session.ready && enabled && !paymentRecovery.isPending && !uncertain && cart.items.length > 0, retry: false, staleTime: 0 });
   const totals = quote.data?.totals || quote.data?.quote || quote.data;
   useEffect(() => { if (quote.data?.tracking) emitTracking(quote.data.tracking); }, [quote.data]);
   function confirmed(result) {
@@ -90,7 +91,13 @@ export default function CheckoutPage() {
   } });
   const submit = useMutation({ mutationFn: async () => {
     if (requestSnapshot.current) return commercePost('/orders', requestSnapshot.current);
-    if (paymentMethod === 'instapay' && !checkoutPayment?.ready) throw new Error('Save your payment evidence against the current reference first. Do not transfer again.');
+    if (paymentMethod === 'instapay') {
+      if (!checkoutPayment?.ready) throw new Error('Enter the sender name and choose your transaction screenshot. Do not transfer again.');
+      const generation = authGeneration();
+      setUploadStatus('Saving your payment evidence securely...');
+      await checkoutPayment.ensureProof?.();
+      assertAuthGeneration(generation);
+    }
     if (!enabled) throw new Error('Ordering has not been enabled yet.');
     submissionKey.current ||= checkoutSession(checkoutOwner).key;
     setUploadStatus('Submitting your order securely…');
@@ -103,14 +110,14 @@ export default function CheckoutPage() {
     else if (requestSnapshot.current && (!error.response || error.response.status >= 500 || error.response.status === 409)) setUncertainOwner(checkoutOwner);
     else if (requestSnapshot.current) { markCheckoutRejected(checkoutOwner); requestSnapshot.current = null; }
     setFieldErrors(Object.fromEntries(Object.entries(validationFieldErrors(error)).map(([key, value]) => [key.replace(/^customer\./, ''), value])));
-  }, onSettled: () => setUploadStatus('') });
+  }, onSettled: () => { placing.current = false; setUploadStatus(''); } });
   function change(event) { setCustomer((previous) => ({ ...previous, [event.target.name]: event.target.value })); }
   function place(event) {
-    event.preventDefault(); setFieldError('');
+    event.preventDefault(); if (placing.current) return; setFieldError('');
     const errors = nativeFieldErrors(event.currentTarget);
     setFieldErrors(errors);
     if (Object.keys(errors).length) { focusInvalidField(event.currentTarget); return; }
-    submit.mutate();
+    placing.current = true; submit.mutate();
   }
   async function refreshAccepted() {
     const owner = session.ownerKey;
@@ -138,9 +145,9 @@ export default function CheckoutPage() {
         {paymentMethod === 'instapay' && <CheckoutInstaPay key={`${session.ownerKey}:${checkoutSession(checkoutOwner).key}`} owner={session.ownerKey} checkoutOwner={checkoutOwner} checkoutKey={checkoutSession(checkoutOwner).key} governorate={customer.governorate} discountCode={appliedCode} quote={quote} onChange={setCheckoutPayment} disabled={submit.isPending || uncertain}/>}
       </fieldset></fieldset></section>
       <aside className="commerce-summary"><h2>Your Order</h2>{cart.items.map(item => <CheckoutLine key={`${session.ownerKey}:${item.id}`} item={item} owner={session.ownerKey}/>)}
-        {!engravingOnly && <details className="commerce-discount"><summary>Have a discount code?<ChevronDown size={18} aria-hidden="true"/></summary><label className="commerce-field">Discount code<input value={discountCode} maxLength={40} disabled={submit.isPending || uncertain} onChange={(event) => setDiscountCode(event.target.value)} /></label><button className="button button-secondary" type="button" disabled={uncertain || !customer.governorate || quote.isFetching || submit.isPending} onClick={() => setAppliedCode(discountCode.trim())}>Apply code</button></details>}
+        {!engravingOnly && <details className="commerce-discount"><summary>Have a discount code?<ChevronDown size={18} aria-hidden="true"/></summary><label className="commerce-field">Discount code<input value={discountCode} maxLength={40} disabled={submit.isPending || uncertain} onChange={(event) => setDiscountCode(event.target.value)} /></label><button className="button button-secondary" type="button" disabled={uncertain || quote.isFetching || submit.isPending} onClick={() => setAppliedCode(discountCode.trim())}>Apply code</button></details>}
         {quote.isFetching && <p role="status">Calculating your total…</p>}{quote.error && <p className="form-error" role="alert">{commerceError(quote.error)}</p>}
-        {customer.governorate && <button className="commerce-link-button" type="button" disabled={uncertain || quote.isFetching || submit.isPending} onClick={() => quote.refetch()}>Refresh order total</button>}
+        {<button className="commerce-link-button" type="button" disabled={uncertain || quote.isFetching || submit.isPending} onClick={() => quote.refetch()}>Refresh order total</button>}
         {quote.data?.paymentGroups && <dl>{quote.data.paymentGroups.map(group => <div key={group.id}><dt>{group.label}{group.method === 'cod' ? ' - COD' : ' - InstaPay'}</dt><dd>{money(group.amountPiastres)}</dd></div>)}</dl>}{totals && <dl><div><dt>Subtotal</dt><dd>{money(totals.subtotalPiastres)}</dd></div>{(totals.discountPiastres || 0) > 0 && <div><dt>Discounts</dt><dd>−{money(totals.discountPiastres)}</dd></div>}<div><dt>Delivery</dt><dd>Confirmed separately</dd></div><div className="commerce-total"><dt>Order total</dt><dd>{money(totals.totalPiastres)}</dd></div></dl>}
         {(fieldError || submit.error) && <p className="form-error" role="alert">{fieldError || commerceError(submit.error)}</p>}
         {submit.isPending && <p className="upload-progress" role="status"><progress aria-label="Placing your order"/>{uploadStatus || 'Preparing your order…'}</p>}

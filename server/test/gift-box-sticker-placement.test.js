@@ -42,6 +42,24 @@ test('rotated text stays inside every canonical surface and historical poses rem
  const raw=intent();raw.sticker.placement=boundStickerPlacement({...raw.sticker.placement,rotation:25});
  assert.deepEqual(parseGiftBoxPersonalizationIntent(JSON.parse(JSON.stringify(raw))),raw);
 });
+test('expanded round faces contain all rotated rectangle corners including lower shoulders',()=>{
+ for(const [boxId,views]of Object.entries(STICKER_PROOFS))for(const [view,proof]of Object.entries(views)){
+  if(!proof.face)continue;
+  for(const rotation of [-175,-120,-65,-15,0,40,95,150])for(const x of [-1,.5,2])for(const y of [-1,.5,2]){
+   const pose=boundStickerPlacement({...defaultStickerPlacement(boxId,view),rotation,x,y,width:.7,height:.4});
+   assert.ok(validStickerPlacement(pose));
+   const r=rotation*Math.PI/180;
+   for(const sx of [-1,1])for(const sy of [-1,1]){
+    const dx=sx*pose.width*proof.width/2,dy=sy*pose.height*proof.height/2;
+    const px=pose.x*proof.width+dx*Math.cos(r)-dy*Math.sin(r),py=pose.y*proof.height+dx*Math.sin(r)+dy*Math.cos(r);
+    proof.face.forEach(([ax,ay],i)=>{const [bx,by]=proof.face[(i+1)%proof.face.length];assert.ok((bx-ax)*proof.width*(py-ay*proof.height)-(by-ay)*proof.height*(px-ax*proof.width)>=-1e-5,`${boxId}: rotated corner must stay inside photographed face`);});
+   }
+  }
+  const edge=boundStickerPlacement({...defaultStickerPlacement(boxId,view),x:1,y:.5,width:.06,height:.04});
+  assert.ok(edge.x>.88,'short text reaches the visible right edge');
+ }
+});
+
 test('new sticker intent is strict and legacy v2 remains unchanged',()=>{
  const raw=intent();assert.deepEqual(parseGiftBoxPersonalizationIntent(raw),raw);
  const old={...raw,version:'gift-box-personalization-intent-v2',sticker:{...raw.sticker,application:'exterior-front'}};delete old.sticker.placement;assert.deepEqual(parseGiftBoxPersonalizationIntent(old),old);

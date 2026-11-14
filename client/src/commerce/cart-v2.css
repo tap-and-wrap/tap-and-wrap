@@ -21,6 +21,7 @@
 .cart-v2-links{display:flex;gap:8px 18px;align-items:center;flex-wrap:wrap;margin-top:12px}
 .cart-v2-disclosure,.cart-v2-links>a{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:4px 0;border:0;background:transparent;color:var(--tw-rose-dark);font:inherit;font-size:.75rem;text-decoration:underline;text-underline-offset:4px;cursor:pointer}
 .cart-v2-disclosure svg{transition:transform .2s}.cart-v2-disclosure[aria-expanded=true] svg{transform:rotate(180deg)}
+.cart-v2-links .cart-v2-disclosure{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:1 1 100%;width:100%;min-width:0;min-height:48px;padding:12px 14px;border:1px solid var(--tw-border);border-radius:12px;background:var(--tw-white,#fff);color:var(--tw-text,#62483f);font:inherit;font-size:.9rem;text-align:left;text-decoration:none}.cart-v2-links .cart-v2-disclosure[aria-expanded=true]{border-color:var(--tw-rose-dark);background:var(--tw-bg,#fffcfb)}.cart-v2-disclosure svg{flex:none}
 .cart-v2-expansion{grid-column:1/-1;display:grid;grid-template-rows:0fr;visibility:hidden;transition:grid-template-rows .22s,visibility .22s}
 .cart-v2-expansion.is-open{grid-template-rows:1fr;visibility:visible}.cart-v2-expansion>div{overflow:hidden;min-height:0}
 .cart-v2-details{border-top:1px solid var(--tw-border);padding-top:18px;margin-top:18px;font-size:.85rem;line-height:1.6}

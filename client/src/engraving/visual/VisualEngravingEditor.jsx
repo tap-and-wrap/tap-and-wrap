@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { FONT_REGISTRY } from '../../../../shared/engraving/definitions.mjs';
 import ImageSourceChooser from '../../components/ImageSourceChooser.jsx';
@@ -90,6 +91,7 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
   if (assetCache.current.supplied !== suppliedAssets || assetCache.current.local !== localAssets) assetCache.current = { supplied: suppliedAssets, local: localAssets, value: { ...suppliedAssets, ...localAssets } };
   const [sources, rejectSource] = useAssetSources(assetCache.current.value, ownerScope);
   const design = preview || history.present, layer = design.layers.find(item => item.id === selected);
+  const editorRoot = useRef(null);
   const board = useRef(null), viewport = useRef(null), gesture = useRef(null), pointers = useRef(new Map()), mounted = useRef(true), selectionVersion = useRef(0), live = useRef({ design, zoom });
   live.current = { design, zoom };
   const changeHandler = useRef(onChange); changeHandler.current = onChange;
@@ -99,7 +101,8 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
   const errorHandler = useRef(onError); errorHandler.current = onError;
   const visibleError = error || (unsupportedError());
   function unsupportedError() { return design.layers.some(item => item.type === 'text' && !fonts.some(font => font.id === item.fontId)) ? 'A saved text style is no longer approved. Select that text and choose a current style before continuing.' : ''; }
-  useEffect(() => { errorHandler.current?.(visibleError); if (visibleError && !errorHandler.current && errorRef.current?.getClientRects().length) errorRef.current.focus(); }, [visibleError]);
+  useEffect(() => { errorHandler.current?.(visibleError); if (visibleError && !errorHandler.current) toast.error(visibleError, { id: 'visual-engraving-error' }); }, [visibleError]);
+  useEffect(() => { const deselect = event => { if (!editorRoot.current?.contains(event.target)) setSelected(null); }; document.addEventListener('pointerdown', deselect, true); return () => document.removeEventListener('pointerdown', deselect, true); }, []);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => {
     // Metadata + memory-only resources. The host decides when/how to save using
@@ -126,6 +129,7 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
         const added = fitLayer({ id: crypto.randomUUID(), type: 'image', assetId, aspectRatio, x: .5, y: .5, width: .35 }, current.surface.aspectRatio);
         commit({ ...current, layers: [...current.layers, added] }); setSelected(added.id);
       }
+      toast.success(role === 'surface' ? 'Surface photo selected in your draft.' : 'Artwork selected in your draft.');
     } catch { if (mounted.current && version === selectionVersion.current && generation === authGeneration()) setError('This image could not be opened. Choose a JPEG, PNG or WebP image with a less narrow shape.'); }
   }
   function addText() {
@@ -134,7 +138,7 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
     commit({ ...design, layers: [...design.layers, added] }); setSelected(added.id);
   }
   const artworkGesture = useArtworkGestures({ board,
-    read: event => { const id = event.target.closest('[data-layer-id]')?.dataset.layerId || selected; const item = history.present.layers.find(value => value.id === id); if (item) setSelected(item.id); return item; },
+    read: event => { const id = event.target.closest('[data-layer-id]')?.dataset.layerId; const item = history.present.layers.find(value => value.id === id); setSelected(item?.id || null); return item; },
     fit: value => fitLayer(value, history.present.surface.aspectRatio),
     onPreview: value => setPreview(value ? editLayer(history.present, value.id, value) : null),
     onCommit: value => commit(editLayer(history.present, value.id, value)),
@@ -165,11 +169,11 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
   function move(dx, dy) { if (layer) patch({ x: layer.x + dx, y: layer.y + dy }); }
   const surfaceMissing = design.surface && !sources[design.surface.assetId];
   function resetDesign() { cancelGesture(); commit({ ...design, layers: [] }); setSelected(null); setResetTarget(null); }
-  return <section className="visual-engraving" aria-label="Visual engraving editor">
+  return <section ref={editorRoot} className="visual-engraving" aria-label="Visual engraving editor">
     {visibleError && !onError && <p ref={errorRef} tabIndex={-1} role="alert" className="sv-error">{visibleError}</p>}
-    <header className="ve-heading"><div><p className="eyebrow">Make it personal</p><h2>Your engraving, your way</h2></div><div className="ve-history" aria-label="Design history"><button type="button" disabled={Boolean(viewBefore) || !history.past.length || Boolean(gesture.current)} onClick={() => { cancelGesture(); setHistory(undoHistory); }} aria-label="Undo"><Undo2 size={18} aria-hidden="true"/></button><button type="button" disabled={Boolean(viewBefore) || !history.future.length || Boolean(gesture.current)} onClick={() => { cancelGesture(); setHistory(redoHistory); }} aria-label="Redo"><Redo2 size={18} aria-hidden="true"/></button><button type="button" disabled={Boolean(viewBefore) || !design.layers.length} onClick={event => confirmReset ? setResetTarget(event.currentTarget) : resetDesign()} aria-label="Reset design"><RotateCcw size={18} aria-hidden="true"/></button></div></header>
+    <header className="ve-heading"><div><p className="eyebrow">Make it personal</p><h2>Your engraving, your way</h2></div></header>
     <div className="ve-layout"><div className="ve-workspace">
-      <div className="ve-view-controls">{viewBefore ? <><span>Adjusting editor view</span><button type="button" aria-label="Zoom out workspace" disabled={zoom <= 1} onClick={() => setZoom(value => Math.max(1, value - .25))}>-</button><output aria-label="Workspace zoom">{Math.round(zoom * 100)}%</output><button type="button" aria-label="Zoom in workspace" disabled={zoom >= 3} onClick={() => setZoom(value => Math.min(3, value + .25))}>+</button><button type="button" onClick={() => { setZoom(1); viewport.current.scrollTo(0, 0); }}>Fit view</button><button type="button" onClick={() => { cancelGesture(); setViewBefore(null); }}>Save view</button><button type="button" onClick={() => { cancelGesture(); setZoom(viewBefore.zoom); const { left, top } = viewBefore; requestAnimationFrame(() => viewport.current?.scrollTo(left, top)); setViewBefore(null); }}>Cancel</button></> : <button type="button" onClick={() => { cancelGesture(); setViewBefore({ zoom, left: viewport.current.scrollLeft, top: viewport.current.scrollTop }); }}>Adjust View</button>}</div>
+      <div className="ve-editor-toolbar"><div className="ve-history" aria-label="Design history"><button type="button" disabled={Boolean(viewBefore) || !history.past.length || Boolean(gesture.current)} onClick={() => { cancelGesture(); setHistory(undoHistory); }} aria-label="Undo"><Undo2 size={18} aria-hidden="true"/></button><button type="button" disabled={Boolean(viewBefore) || !history.future.length || Boolean(gesture.current)} onClick={() => { cancelGesture(); setHistory(redoHistory); }} aria-label="Redo"><Redo2 size={18} aria-hidden="true"/></button><button type="button" disabled={Boolean(viewBefore) || !design.layers.length} onClick={event => confirmReset ? setResetTarget(event.currentTarget) : resetDesign()} aria-label="Reset design"><RotateCcw size={18} aria-hidden="true"/></button></div><div className="ve-view-controls">{viewBefore ? <><span>Adjusting editor view</span><button type="button" aria-label="Zoom out workspace" disabled={zoom <= 1} onClick={() => setZoom(value => Math.max(1, value - .25))}>-</button><output aria-label="Workspace zoom">{Math.round(zoom * 100)}%</output><button type="button" aria-label="Zoom in workspace" disabled={zoom >= 3} onClick={() => setZoom(value => Math.min(3, value + .25))}>+</button><button type="button" onClick={() => { setZoom(1); viewport.current.scrollTo(0, 0); }}>Fit view</button><button type="button" onClick={() => { cancelGesture(); setViewBefore(null); }}>Save view</button><button type="button" onClick={() => { cancelGesture(); setZoom(viewBefore.zoom); const { left, top } = viewBefore; requestAnimationFrame(() => viewport.current?.scrollTo(left, top)); setViewBefore(null); }}>Cancel</button></> : <button type="button" onClick={() => { cancelGesture(); setViewBefore({ zoom, left: viewport.current.scrollLeft, top: viewport.current.scrollTop }); }}>Adjust View</button>}</div></div>
       <div className={`ve-viewport ${viewBefore ? 'is-adjusting' : ''}`} ref={viewport} tabIndex={viewBefore ? 0 : undefined} aria-label="Engraving editor view"><div className="ve-scroll-space" style={{ width: `calc(min(100%, ${50 * (design.surface?.aspectRatio || 1)}svh) * ${zoom})` }}>
         <div ref={board} className="ve-board" style={{ aspectRatio: design.surface?.aspectRatio || 1 }} aria-label="Engraving surface workspace" aria-describedby={helpId} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={cancelGesture} onLostPointerCapture={event => { if (!viewBefore) artworkGesture.onLostPointerCapture(event); else if (pointers.current.has(event.pointerId)) cancelGesture(); }}>
           {sources[design.surface?.assetId] ? <img className="ve-surface" src={sources[design.surface.assetId]} alt="Engraving surface" draggable="false" onError={() => rejectSource(design.surface.assetId)}/> : <p className="ve-empty">{surfaceMissing ? 'This surface photo is unavailable. Choose or open it again.' : 'Start with a photo of your engraving surface.'}</p>}
@@ -190,7 +194,7 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
         {design.layers.length > 0 && <div className="ve-layers" role="group" aria-label="Design layers">{design.layers.map((item, index) => <span className="ve-layer-chip" key={item.id}><button type="button" aria-pressed={selected === item.id} onClick={() => setSelected(item.id)}>{index + 1}. {item.type === 'text' ? item.text.slice(0, 25) || 'Text' : 'Image artwork'}</button>{selected === item.id && <button type="button" className="ve-delete-layer" aria-label={`Delete ${item.type === 'text' ? 'text' : 'image'} layer ${index + 1}`} onClick={() => { commit({ ...design, layers: design.layers.filter(value => value.id !== item.id) }); setSelected(null); }}><X size={16} aria-hidden="true"/></button>}</span>)}</div>}
 
       </section>
-      {layer && <section className="ve-selection" aria-label="Selected design controls"><h3>Edit selected design</h3>
+      {layer && <section className="ve-selection" aria-label="Selected design controls">
         {layer.type === 'text' && <><label htmlFor={textId}>Your text</label><textarea id={textId} dir="auto" maxLength={500} value={layer.text} onChange={event => { const text = event.target.value, eligible = fonts.filter(font => !/\p{Script=Arabic}/u.test(text) || font.language === 'ar'); if (!eligible.length) { setError('No approved Arabic style is available for this item.'); return; } setError(''); patch({ text, fontId: eligible.some(font => font.id === layer.fontId) ? layer.fontId : eligible[0].id }); }}/><LetteringControls text={layer.text} fontId={layer.fontId} color={layer.color} fontIds={approvedFontIds} onChange={patch}/></>}
       </section>}
 

@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 import { StickerProof } from '../gift-box/StickerWorkspace.jsx';
 import { defaultStickerPlacement } from '../../../shared/gift-box/sticker-placement.mjs';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -161,7 +162,7 @@ export default function GiftBoxBuilderPage() {
       }
       await cart.addGiftBox(pendingGiftOperation.current.payload);
       finishAdded(sourceSignature);
-    } catch (error) { if (mounted.current && draft.isCurrent()) setNotice(commerceError(error)); }
+    } catch (error) { if (mounted.current && draft.isCurrent()) toast.error(commerceError(error), { id: 'gift-box-error' }); }
     finally { setAddingGift(false); }
   }
   function choose(id) {
@@ -176,7 +177,7 @@ export default function GiftBoxBuilderPage() {
       else dispatch({ type: 'ribbon', id });
     }
     else if (canAdd(state, id, draftMode ? undefined : item, publishedBoxLimits, { study, flexible: !draftMode })) { dispatch({ type: 'add', id, instanceId: crypto.randomUUID(), study, flexible: !draftMode, component: draftMode ? undefined : item, boxLimits: publishedBoxLimits }); setNotice(''); }
-    else setNotice('This item is unavailable. Reduce the quantity or choose another item.');
+    else toast.error('This item is unavailable. Reduce the quantity or choose another item.', { id: 'gift-box-error' });
   }
   const category = categories[step], options = components.filter(item => item.category === category);
   const label = id => componentLabel(components.find(item => item.componentId === id) || { componentId: id, category: 'item' });
