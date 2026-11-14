@@ -122,9 +122,10 @@ export default function GiftBoxBuilderPage() {
   async function addConfiguredGiftToCart() {
     if (addingGift || !cartConfigurationReady || !currentEstimate || !catalog.data?.freePlacementCommerceEnabled
       || !catalog.data.orderableBoxIds?.includes(state.boxId) || personal.hasContent && !personalizationOptions.data?.personalizationCheckoutEnabled) return;
+    if (cart.preparing) return;
     setAddingGift(true);
     setNotice('Verifying your gift box and current prices…');
-    try {
+    try { await cart.runPersonalizedAdd(async ({signal, isCurrent, onProgress}) => {
       const sourceSignature = `${session.ownerKey}:${JSON.stringify(state)}:${draftSignature}`;
       if (pendingGiftOperation.current?.sourceSignature === sourceSignature) {
         // The previous response may have been lost after the server attached
@@ -144,12 +145,12 @@ export default function GiftBoxBuilderPage() {
         const signatureBefore = draftSignature, arrangementBefore = JSON.stringify(state), ownerKey = session.ownerKey;
         const result = await verifyGiftBoxPersonalDraft({ boxId: state.boxId, personal, ownerKey,
           options: personalizationOptions.data?.options, printOptionsByPhoto, surfaceOptionsByEngraving,
-          uploadFile: uploadPrivateFile, quote: getGiftBoxPersonalizationQuote,
+          uploadFile: (file, options, ids) => uploadPrivateFile(file, {...options, signal}, ids), signal, quote: getGiftBoxPersonalizationQuote,
           cache: uploadCache.current, uploadedIds: uploadIds.current,
-          ownerIsCurrent: () => draft.isCurrent() && latest.current.ownerKey === ownerKey,
-          draftIsCurrent: () => mounted.current && latest.current.draftSignature === signatureBefore
+          ownerIsCurrent: () => isCurrent() && draft.isCurrent() && latest.current.ownerKey === ownerKey,
+          draftIsCurrent: () => latest.current.draftSignature === signatureBefore
             && latest.current.arrangementSignature === arrangementBefore,
-          onProgress: message => setNotice(message),
+          onProgress,
         });
         try { assertGiftBoxPersonalizationPriceUnchanged(result.quote, personalPriceEstimate); }
         catch (error) { void personalizationOptions.refetch(); throw error; }
@@ -161,9 +162,12 @@ export default function GiftBoxBuilderPage() {
         pendingGiftOperation.current = { signature, sourceSignature,
           payload: { kind: 'gift_box_v2', operationKey: crypto.randomUUID(), quantity: 1, configuration } };
       }
+      if (!isCurrent() || latest.current.sourceSignature !== sourceSignature) throw Error('Your session or design changed. Review your gift before adding.');
       await cart.addGiftBox(pendingGiftOperation.current.payload);
       finishAdded(sourceSignature);
-    } catch (error) { if (mounted.current && draft.isCurrent()) toast.error(commerceError(error), { id: 'gift-box-error' }); }
+    }, 'Preparing your gift'); } catch (error) {
+      if (mounted.current && draft.isCurrent()) toast.error(commerceError(error), { id: 'personalized-add' });
+    }
     finally { setAddingGift(false); }
   }
   function choose(id) {

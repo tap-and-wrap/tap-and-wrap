@@ -1,6 +1,14 @@
 // Only an opaque idempotency key and uncertainty marker are persisted. Never
 // store delivery details, payment proofs, or another owner's request payload.
 const sessions = new Map();
+// Ordering counters are memory-only and scoped to one opaque checkout key.
+const quoteSequences = new Map();
+export function nextQuoteSequence(owner, key, observed = 0) {
+  const scope = `${owner}:${key}`;
+  const value = Math.max(quoteSequences.get(scope) || 0, observed) + 1;
+  quoteSequences.set(scope, value);
+  return value;
+}
 const validKey = value => typeof value === 'string' && /^[a-f\d]{8}-[a-f\d]{4}-4[a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/i.test(value);
 const storageKey = owner => `tw-checkout:${owner.startsWith('user:') ? owner.replace(/:\d+$/, '') : owner}`;
 export function checkoutSession(owner) {

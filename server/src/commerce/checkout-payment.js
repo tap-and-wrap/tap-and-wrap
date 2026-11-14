@@ -14,7 +14,7 @@ export function presentCheckoutPayment(intent, { actionable = false, admin = fal
   if (!p) return null;
   const valid = p.state === 'prepared' && new Date(p.expiresAt) > new Date() && intent.state === 'open' && intent.paymentMethod === 'instapay';
   return { reference: p.reference, state: intent.state === 'consumed' ? 'consumed' : valid ? p.proofId ? 'proof_received' : 'prepared' : 'reconciliation',
-    amountPiastres: p.amountPiastres, expiresAt: p.expiresAt, proofReceived: Boolean(p.proofId), orderId: intent.orderId ? String(intent.orderId) : null,
+    amountPiastres: p.amountPiastres, expiresAt: p.expiresAt, revalidated: Boolean(p.revalidatedAt), proofReceived: Boolean(p.proofId), orderId: intent.orderId ? String(intent.orderId) : null,
     ...(actionable && valid ? { destination: p.destination } : {}), ...(admin ? { senderName: p.senderName, proofId: p.proofId ? String(p.proofId) : null, destination: p.destination, allocations: p.allocations } : {}) };
 }
 export async function ownedCheckoutPayment(owner, checkoutKey) {
@@ -34,7 +34,7 @@ export async function prepareCheckoutPayment(owner, checkoutKey, fingerprint, al
       if (intent.payment.state !== 'prepared' || new Date(intent.payment.expiresAt) <= new Date()) throw review();
     } else {
       if (intent.expiresAt <= new Date() || !Number.isSafeInteger(intent.quote.totalPiastres) || intent.quote.totalPiastres <= 0) throw review();
-      if (await CheckoutIntent.countDocuments({ owner, state: 'open', payment: { $exists: true } }).session(session) >= 10) throw review();
+      if (await CheckoutIntent.countDocuments({ owner, state: 'open', payment: { $exists: true } }).session(session) >= 10) throw commerceError(409, 'CHECKOUT_REFERENCE_LIMIT', 'Your earlier transfer references need checking. Do not transfer again. Contact the store with your references.');
       intent.payment = { version: 'checkout-payment-v1', reference: randomUUID(), state: 'prepared', destination: approvedInstaPayDestination,
         amountPiastres: intent.quote.totalPiastres, allocations: allocations.map(group => ({ scope: group.id, amountPiastres: group.amountPiastres })),
         expiresAt: intent.expiresAt, createdAt: new Date() };

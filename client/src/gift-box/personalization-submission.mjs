@@ -57,7 +57,7 @@ export function giftBoxConfigurationWithPersonalization(state, { cardId, intent 
 
 export async function verifyGiftBoxPersonalDraft({ boxId, personal, ownerKey, options,
   printOptionsByPhoto, surfaceOptionsByEngraving, uploadFile, quote, cache, uploadedIds,
-  ownerIsCurrent, draftIsCurrent, onProgress }) {
+  ownerIsCurrent, draftIsCurrent, onProgress, signal }) {
   if (!personal.hasContent) throw new Error('Choose a photo or enter an engraving before verification.');
   if (typeof ownerIsCurrent !== 'function' || typeof draftIsCurrent !== 'function'
     || !ownerIsCurrent() || !draftIsCurrent()) throw new Error('Your session or Gift Box changed. Review it again.');
@@ -73,7 +73,7 @@ export async function verifyGiftBoxPersonalDraft({ boxId, personal, ownerKey, op
       throw new Error('Choose an approved lettering style, color and surface for each engraving.');
   }
   const uploaded = await uploadGiftBoxPrivatePhotos({ photos: personal.photos, boxId, ownerKey,
-    uploadFile, cache, uploadedIds, onProgress });
+    uploadFile, cache, uploadedIds, onProgress, signal });
   if (!ownerIsCurrent() || !draftIsCurrent()) throw new Error('Your session or Gift Box changed during upload. Review it again.');
   const intent = prepareGiftBoxPersonalizationHandoff({ boxId, personal, uploaded, printOptionsByPhoto, surfaceOptionsByEngraving });
   const result = await quote(boxId, intent);

@@ -64,7 +64,13 @@ async function checkoutQuoteCore(owner, input, { session, userId } = {}, capabil
   return { cart, totals, fingerprint: digest, shipping, policyFences };
 }
 export async function prepareCheckout(owner, input, userId) {
-  return prepareCheckoutCore(owner, input, userId);
+  try { return await prepareCheckoutCore(owner, input, userId); }
+  catch (error) {
+    // Two first quotes can race on the unique owner/key insert. Re-read and
+    // apply the sequence fence once; never replace a consumed/payment record.
+    if (error.code !== 11000) throw error;
+    return prepareCheckoutCore(owner, input, userId);
+  }
 }
 export async function prepareGiftBoxCheckoutForDisposableTest(owner, input, userId) {
   const capability = await createGiftBoxCheckoutCapabilityForDisposableTest(owner);
@@ -79,11 +85,21 @@ async function prepareCheckoutCore(owner, input, userId, capability = null) {
   await mongoose.connection.transaction(async session => {
     const existing = await CheckoutIntent.findOne({ owner, checkoutKey: input.checkoutKey }).session(session);
     if (existing?.state === 'consumed') throw commerceError(409, 'CHECKOUT_USED', 'This checkout has already been submitted.');
+    const sequence = input.quoteSequence ?? (existing?.quoteSequence || 0) + 1;
+    if (sequence < (existing?.quoteSequence || 0) || sequence === existing?.quoteSequence && existing.fingerprint !== quote.fingerprint) throw commerceError(409, 'CHECKOUT_QUOTE_SUPERSEDED', 'A newer checkout choice is already saved. Refresh your total before continuing.');
     if (existing?.payment) {
       const payment = existing.payment;
       const originalFingerprint = payment.quoteFingerprint || existing.fingerprint;
       if (input.paymentMethod === 'instapay') {
-        if (originalFingerprint !== quote.fingerprint || payment.state !== 'prepared' || new Date(payment.expiresAt) <= new Date()) throw commerceError(409, 'CHECKOUT_PAYMENT_REVIEW_REQUIRED', 'Transfer details have changed or expired. Do not transfer again. Contact the store to check your payment.');
+        if (originalFingerprint !== quote.fingerprint) throw commerceError(409, 'CHECKOUT_PAYMENT_CHANGED', 'Your cart or total changed after transfer instructions were issued. Do not transfer again. Contact the store to check your payment reference.');
+        if (payment.state !== 'prepared') throw commerceError(409, 'CHECKOUT_PAYMENT_REVIEW_REQUIRED', 'This transfer reference needs review. Do not transfer again. Contact the store.');
+        // Revalidate the exact original obligation, never create a replacement
+        // transfer or infer that an absent screenshot means no funds were sent.
+        if (new Date(payment.expiresAt) <= new Date()) {
+          payment.firstExpiresAt ||= payment.expiresAt;
+          payment.expiresAt = new Date(Date.now() + 10 * 60000);
+          payment.revalidatedAt = new Date();
+        }
       } else if (payment.proofId || payment.state !== 'prepared') {
         throw commerceError(409, 'CHECKOUT_PAYMENT_REVIEW_REQUIRED', 'Your transfer evidence is saved. Contact the store before changing how you pay.');
       }
@@ -91,16 +107,19 @@ async function prepareCheckoutCore(owner, input, userId, capability = null) {
       // instructions, amount and original quote for reconciliation and re-entry.
       existing.payment = { ...payment, quoteFingerprint: originalFingerprint };
       existing.markModified('payment');
-      existing.fingerprint = quote.fingerprint; existing.quote = quote.totals; existing.paymentMethod = input.paymentMethod;
+      existing.fingerprint = quote.fingerprint; existing.quote = quote.totals; existing.paymentMethod = input.paymentMethod; existing.quoteSequence = sequence;
+      // The order gate checks the intent window as well as the transfer window.
+      // COD refreshes no transfer instructions; InstaPay uses the same expiry.
+      existing.expiresAt = input.paymentMethod === 'instapay' ? payment.expiresAt : new Date(Date.now() + 10 * 60000);
       await existing.save({ session });
-      result = { ...quote.totals, totals: quote.totals, summaryRows: orderSummaryRows(quote.cart.items), paymentGroups: initialPaymentGroups(quote.cart.items, quote.totals, input.paymentMethod, UPFRONT_ENGRAVING_POLICY), fingerprint: quote.fingerprint, expiresAt: payment.expiresAt,
+      result = { ...quote.totals, totals: quote.totals, quoteSequence: sequence, summaryRows: orderSummaryRows(quote.cart.items), paymentGroups: initialPaymentGroups(quote.cart.items, quote.totals, input.paymentMethod, UPFRONT_ENGRAVING_POLICY), fingerprint: quote.fingerprint, expiresAt: payment.expiresAt,
         ...(input.paymentMethod === 'instapay' ? { payment: presentCheckoutPayment(existing, { actionable: true }) } : {}) };
       return;
     }
     const expiresAt = new Date(Date.now() + 10 * 60000);
-    await CheckoutIntent.updateOne({ owner, checkoutKey: input.checkoutKey, state: 'open', payment: { $exists: false } }, { $set: { fingerprint: quote.fingerprint, quote: quote.totals, paymentMethod: input.paymentMethod, expiresAt },
+    await CheckoutIntent.updateOne({ owner, checkoutKey: input.checkoutKey, state: 'open', payment: { $exists: false } }, { $set: { fingerprint: quote.fingerprint, quote: quote.totals, paymentMethod: input.paymentMethod, expiresAt, quoteSequence: sequence },
       $setOnInsert: { owner, checkoutKey: input.checkoutKey, state: 'open' } }, { upsert: true, session });
-    result = { ...quote.totals, totals: quote.totals, summaryRows: orderSummaryRows(quote.cart.items), paymentGroups: initialPaymentGroups(quote.cart.items, quote.totals, input.paymentMethod, UPFRONT_ENGRAVING_POLICY), fingerprint: quote.fingerprint, expiresAt };
+    result = { ...quote.totals, totals: quote.totals, quoteSequence: sequence, summaryRows: orderSummaryRows(quote.cart.items), paymentGroups: initialPaymentGroups(quote.cart.items, quote.totals, input.paymentMethod, UPFRONT_ENGRAVING_POLICY), fingerprint: quote.fingerprint, expiresAt };
   });
   return result;
 }

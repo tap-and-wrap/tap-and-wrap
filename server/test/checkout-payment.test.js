@@ -94,7 +94,7 @@ test('expired instructions suppress destination; expired or changed checkout kee
 test('price and cart changes do not replace a possible transfer or destroy uploaded evidence',async()=>{
  const value=await prepared(),id=await proof(value);await submitCheckoutPaymentProof(owner,value.checkoutKey,{uploadId:id,senderName:'Fixture Sender'});
  await Product.updateOne({_id:product._id},{$set:{pricePiastres:13000}});
- await assert.rejects(prepareCheckout(owner,value),error=>error.code==='CHECKOUT_PAYMENT_REVIEW_REQUIRED');
+ await assert.rejects(prepareCheckout(owner,value),error=>error.code==='CHECKOUT_PAYMENT_CHANGED');
  await assert.rejects(placeOrder(owner,request(value)),error=>error.code==='CHECKOUT_PAYMENT_REVIEW_REQUIRED');
  assert.equal((await ownedCheckoutPayment(owner,value.checkoutKey)).payment.amountPiastres,12000);
  assert.equal((await Upload.findById(id)).state,'retained');
@@ -174,4 +174,81 @@ test('a saved screenshot cannot be silently switched to COD and remains owner-bo
  await assert.rejects(prepareCheckout(owner,{checkoutKey:value.checkoutKey,paymentMethod:'cod'}),error=>error.code==='CHECKOUT_PAYMENT_REVIEW_REQUIRED');
  assert.equal((await ownedCheckoutPayment(owner,value.checkoutKey)).payment.proofId.toString(),id);
  assert.equal((await Upload.findById(id)).state,'retained');assert.equal(await OrderSettlement.countDocuments(),0);
+});
+
+
+test('expired unchanged reference revalidates the same obligation and preserves possible funds and proof',async()=>{
+ const value=await prepared(),id=await proof(value);
+ await submitCheckoutPaymentProof(owner,value.checkoutKey,{uploadId:id,senderName:'Fixture Sender'});
+ const original=await ownedCheckoutPayment(owner,value.checkoutKey);
+ const expired=new Date(Date.now()-1000);
+ await CheckoutIntent.updateOne({owner,checkoutKey:value.checkoutKey},{$set:{expiresAt:expired,'payment.expiresAt':expired}});
+ const renewed=await prepareCheckout(owner,value),stored=await ownedCheckoutPayment(owner,value.checkoutKey);
+ assert.equal(renewed.payment.reference,value.payment.reference);
+ assert.equal(renewed.payment.destination,value.payment.destination);
+ assert.equal(renewed.payment.amountPiastres,value.payment.amountPiastres);
+ assert.equal(renewed.payment.revalidated,true);assert.ok(new Date(stored.expiresAt)>new Date());
+ assert.equal(String(stored.payment.proofId),id);
+ assert.deepEqual(stored.payment.allocations,original.payment.allocations);
+ assert.equal(new Date(stored.payment.firstExpiresAt).getTime(),expired.getTime());
+ assert.equal(await CheckoutIntent.countDocuments(),1);
+ const order=await placeOrder(owner,request(value));
+ assert.equal(order.paymentState,'awaiting_verification');assert.equal(await OrderSettlement.countDocuments(),0);
+});
+
+test('revalidation without proof keeps the original reference and never assumes no transfer',async()=>{
+ const value=await prepared();
+ await CheckoutIntent.updateOne({owner,checkoutKey:value.checkoutKey},{$set:{expiresAt:new Date(Date.now()-1),'payment.expiresAt':new Date(Date.now()-1)}});
+ const renewed=await prepareCheckout(owner,value);
+ assert.equal(renewed.payment.reference,value.payment.reference);assert.equal(renewed.payment.proofReceived,false);
+ await assert.rejects(placeOrder(owner,request(value)),error=>error.code==='CHECKOUT_PAYMENT_REVIEW_REQUIRED');
+ await Product.updateOne({_id:product._id},{$set:{pricePiastres:13000}});
+ await assert.rejects(prepareCheckout(owner,value),error=>error.code==='CHECKOUT_PAYMENT_CHANGED');
+ assert.equal((await ownedCheckoutPayment(owner,value.checkoutKey)).payment.amountPiastres,12000);
+});
+
+test('a delayed earlier quote cannot overwrite a newer method, including concurrent first insertion',async()=>{
+ const checkoutKey=randomUUID();
+ const outcomes=await Promise.allSettled([
+  prepareCheckout(owner,{checkoutKey,paymentMethod:'cod',quoteSequence:1}),
+  prepareCheckout(owner,{checkoutKey,paymentMethod:'instapay',quoteSequence:2}),
+ ]);
+ assert.equal(outcomes[1].status,'fulfilled');
+ const current=await CheckoutIntent.findOne({owner,checkoutKey});
+ assert.equal(current.paymentMethod,'instapay');assert.equal(current.quoteSequence,2);
+ await assert.rejects(prepareCheckout(owner,{checkoutKey,paymentMethod:'cod',quoteSequence:1}),error=>error.code==='CHECKOUT_QUOTE_SUPERSEDED');
+ const again=await prepareCheckout(owner,{checkoutKey,paymentMethod:'instapay',quoteSequence:2});
+ assert.equal(again.fingerprint,current.fingerprint);
+ assert.equal(await CheckoutIntent.countDocuments(),1);
+});
+
+test('an unused expired quote can reprice but a consumed key cannot become a new purchase',async()=>{
+ const checkoutKey=randomUUID();await prepareCheckout(owner,{checkoutKey,paymentMethod:'cod'});
+ await CheckoutIntent.updateOne({owner,checkoutKey},{$set:{expiresAt:new Date(Date.now()-1)}});
+ await Product.updateOne({_id:product._id},{$set:{pricePiastres:13000}});
+ assert.equal((await prepareCheckout(owner,{checkoutKey,paymentMethod:'cod'})).totalPiastres,13000);
+ const order=await placeOrder(owner,{checkoutKey,paymentMethod:'cod',customer});
+ await addCartItem(owner,{productId:String(product._id),quantity:1});
+ await assert.rejects(prepareCheckout(owner,{checkoutKey,paymentMethod:'cod'}),error=>error.code==='CHECKOUT_USED');
+ assert.equal(String((await CheckoutIntent.findOne({owner,checkoutKey})).orderId),order.id);
+ assert.equal((await prepareCheckout(owner,{checkoutKey:randomUUID(),paymentMethod:'cod'})).totalPiastres,13000);
+});
+
+test('the open-reference cap has a distinct reconciliation reason and preserves all history',async()=>{
+ for(let index=0;index<10;index++)await prepared();
+ const input={checkoutKey:randomUUID(),paymentMethod:'instapay'},quote=await prepareCheckout(owner,input);
+ await assert.rejects(prepareCheckoutPayment(owner,input.checkoutKey,quote.fingerprint,quote.paymentGroups),error=>error.code==='CHECKOUT_REFERENCE_LIMIT');
+ assert.equal(await CheckoutIntent.countDocuments({'payment.reference':{$exists:true}}),10);
+});
+
+
+test('a fully discounted checkout issues no transfer reference and needs no private proof',async()=>{
+ await DiscountCode.create({code:'ZERO',name:'Isolated full discount',active:true,kind:'percentage',value:10000});
+ const input={checkoutKey:randomUUID(),paymentMethod:'instapay',discountCode:'ZERO'};
+ const quote=await prepareCheckout(owner,input);assert.equal(quote.totalPiastres,0);
+ await assert.rejects(prepareCheckoutPayment(owner,input.checkoutKey,quote.fingerprint,quote.paymentGroups),error=>error.code==='CHECKOUT_PAYMENT_REVIEW_REQUIRED');
+ assert.equal(await CheckoutIntent.countDocuments({'payment.reference':{$exists:true}}),0);
+ const accepted=await placeOrder(owner,request(input));assert.equal(accepted.totals.totalPiastres,0);
+ assert.equal(await Upload.countDocuments(),0);assert.equal(await OrderSettlement.countDocuments(),0);
+ assert.equal((await placeOrder(owner,request(input))).id,accepted.id);
 });
