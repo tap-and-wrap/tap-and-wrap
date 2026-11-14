@@ -1,3 +1,4 @@
+import LoadingState from '../components/LoadingState.jsx';
 import SavedProductPhotos from '../product-photos/SavedProductPhotos.jsx';
 import SavedProductEngraving from '../product-engraving/SavedProductEngraving.jsx';
 import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
@@ -16,7 +17,7 @@ export default function CartPage() {
   const { cart,checkoutEnabled,mixedCheckout,loading,error,pending,setQuantity,remove,refresh }=useCart();
   const session=useSession();
   const invalid=cart.items.some(item=>!item.valid);
-  if(loading) return <main className="commerce-page"><p role="status">Loading your cart…</p></main>;
+  if(loading) return <main className="commerce-page"><LoadingState label="Loading your cart" kind="rows"/></main>;
   if(error) return <main className="commerce-page"><h1>Your Cart</h1><p role="alert">{commerceError(error)}</p><div className="button-group"><button type="button" className="button button-dark" onClick={()=>refresh()}>Try again</button><Link className="button button-secondary" to="/shop">Return to shop</Link></div></main>;
   return <main className="commerce-page"><div className="commerce-heading"><div><p className="eyebrow">Thoughtful gifts, ready for you</p><h1 tabIndex={-1}>Your Cart</h1></div></div>
     {!cart.items.length ? <div className="commerce-empty"><p>Your cart is empty.</p><Link className="button button-primary" to="/shop">Explore the shop</Link></div> : <div className="commerce-cart-layout">
@@ -29,14 +30,14 @@ export default function CartPage() {
         const hasDetails = gift || Boolean(item.variantKey || item.productEngraving || item.customization || photos && photos.mode !== 'as_is' || item.personalization && Object.keys(item.personalization).length || item.attachments?.expiresAt);
         const photo=item.mainImageUrl?<img src={item.mainImageUrl} alt={name} loading="lazy"/>:<span>Product image unavailable</span>;
         return <CartLine key={key} hasDetails={hasDetails} edit={photos && url && !item.productEngraving ? <Link to={`${url}?photoEdit=${item.id}`}>Edit photo choices</Link> : null} item={item} name={name} title={!gift&&url?<Link to={url}>{name}</Link>:null} image={gift?<GiftBoxPreview giftBox={item.giftBox}/>:url?<Link to={url} aria-label={`View ${name}`}>{photo}</Link>:photo} pending={pending} setQuantity={setQuantity} remove={remove} recovery={item.attachments?.replacementRequired&&url?<Link to={url}>Review product and replace files</Link>:null} design={gift || Boolean(item.productEngraving || item.customization || item.personalization && Object.keys(item.personalization).length)}>
-          {gift?<GiftBoxCartSummary giftBox={item.giftBox}/>:<>
+          {open => <>{gift?<GiftBoxCartSummary giftBox={item.giftBox} lineId={item.id} open={open}/>:<>
             <dl>{item.variantKey&&<div><dt>Option</dt><dd>{item.variantLabel||item.variantKey}</dd></div>}</dl>
             <PersonalizationSummary values={item.personalization} definitions={item.personalizationDefinitions}/>
             {(item.photoPurchase || item.photoSelection) && <><SavedProductPhotos purchase={item.photoPurchase || { ...item.photoSelection, slots: [] }} values={item.personalization}/></>}
             {item.productEngraving && <><p>Product engraving ? {money(item.productEngraving.surchargePiastres)} per item</p><SavedProductEngraving cartLineId={item.id}/>{url && <Link to={`${url}?engravingEdit=${item.id}`}>Edit engraving design</Link>}</>}
             {item.customization&&<p>Configured for you{item.customization.templateName?` · ${item.customization.templateName}`:''}</p>}
           </>}
-          {item.attachments?.expiresAt&&<p className="commerce-muted">Private files expire <time dateTime={item.attachments.expiresAt}>{new Date(item.attachments.expiresAt).toLocaleString()}</time>. Adding to cart does not extend their lifetime.</p>}
+          {item.attachments?.expiresAt&&<p className="commerce-muted">Private files expire <time dateTime={item.attachments.expiresAt}>{new Date(item.attachments.expiresAt).toLocaleString()}</time>. Adding to cart does not extend their lifetime.</p>}</>}
         </CartLine>;
       })}</section>
       <aside className="commerce-summary"><h2>Order Summary</h2><dl><div><dt>Subtotal</dt><dd>{money(cart.subtotalPiastres)}</dd></div><div><dt>Delivery</dt><dd>Confirmed separately</dd></div></dl>

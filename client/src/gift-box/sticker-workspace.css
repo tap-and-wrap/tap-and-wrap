@@ -3,3 +3,6 @@
 .sticker-viewport{overflow:hidden}.sticker-toolbar[aria-label="Sticker text rotation"]{justify-content:flex-start}
 
 .sticker-viewport{overflow:hidden;max-height:none}.sticker-viewport>div{width:100%}.sticker-position{touch-action:none}
+
+.sticker-rotation-row{justify-content:space-between}.sticker-placement-note{font-size:.8rem;line-height:1.5;margin:0;color:var(--tw-ink)}.sticker-proof-image{background:#fff}.commerce-gift-summary>.sticker-proof-image{max-width:320px;margin:16px auto;border:1px solid var(--tw-border,#eadad5);border-radius:12px;overflow:hidden}
+.sticker-workspace{container-type:inline-size}.sticker-toolbar{flex-wrap:nowrap}@container(max-width:300px){.sticker-toolbar button{width:32px;height:44px}.sticker-toolbar output{min-width:36px}}

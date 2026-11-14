@@ -172,13 +172,13 @@ test('foreign owners/customers cannot mutate payments and legacy snapshots fail 
 test('order-first email is merchandise-only with pending delivery; no email provider is invoked', async () => {
   const { order } = await create(); const event = await NotificationEvent.findOne({ event: 'order_received' }).lean();
   const rendered = renderEmailTemplate(event, { clientOrigin: 'https://shop.example.test' });
-  assert.match(rendered.text, /merchandise amount/i); assert.match(rendered.text, /01060673073/); assert.match(rendered.text, /12 hours/);
+  assert.match(rendered.text, /Order total: EGP 120.00/); assert.match(rendered.text, /Delivery confirmed separately/); assert.doesNotMatch(rendered.text, /01060673073/);
   assert.doesNotMatch(rendered.text, /including shipping/);
   await readyProof(order.id); await operation(order.id, collection(6000));
   const partial = renderEmailTemplate(await NotificationEvent.findOne({ event: 'payment_confirmed' }).lean(), { clientOrigin: 'https://shop.example.test' });
-  assert.match(partial.text, /Merchandise payment status: partially paid/);
-  assert.match(partial.text, /Recorded collections: EGP 60.00/);
-  assert.match(partial.text, /Agreed outstanding balance: EGP 60.00/);
+  assert.match(partial.text, /Payment partially received/);
+  assert.match(partial.text, /Received: EGP 60.00/);
+  assert.match(partial.text, /Outstanding balance: EGP 60.00/);
 });
 test('combined COD collection allocates merchandise and shipping once under one receipt reference', async () => {
   const { order } = await create('cod'); await acceptDelivery(order.id, 9000, 'cod');

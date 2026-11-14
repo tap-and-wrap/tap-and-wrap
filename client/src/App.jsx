@@ -1,4 +1,5 @@
 import SignOutProvider from './auth/SignOutProvider.jsx';
+import LoadingState from './components/LoadingState.jsx';
 import { EngravingDraftProvider } from './engraving/EngravingDraftProvider.jsx';
 import { PasswordResetResultProvider } from './auth/PasswordResetResultProvider.jsx';
 import { GiftBoxDraftProvider } from './gift-box/GiftBoxDraftProvider.jsx';
@@ -55,7 +56,7 @@ export default function App() {
  const session = useSession();
  const location = useLocation();
  const privateRoute = /^\/(?:admin|orders|my-orders|cart|checkout|track-order)(?:\/|$)/.test(location.pathname) || /^\/products\/[^/]+(?:\/customize)?$/.test(location.pathname) || /^\/customize\/(?:gift-box|laser-engraving)$/.test(location.pathname);
- return <PasswordResetResultProvider><CartProvider><SignOutProvider><GiftBoxDraftProvider ownerKey={session.ownerKey}><EngravingDraftProvider ownerKey={session.ownerKey}><a href="#main-content" className="skip-navigation" onClick={focusMainContent}>Skip to main content</a><RouteMetadata/><Header/><div id="main-content" className="route-content" tabIndex={-1}><RouteFocus/><PageErrorBoundary key={`${location.pathname}:${privateRoute ? session.ownerKey : 'public'}`}><Suspense key={privateRoute ? session.ownerKey : 'public'} fallback={<main className="page-shell" role="status">Loading…</main>}><Routes>
+ return <PasswordResetResultProvider><CartProvider><SignOutProvider><GiftBoxDraftProvider ownerKey={session.ownerKey}><EngravingDraftProvider ownerKey={session.ownerKey}><a href="#main-content" className="skip-navigation" onClick={focusMainContent}>Skip to main content</a><RouteMetadata/><Header/><div id="main-content" className="route-content" tabIndex={-1}><RouteFocus/><PageErrorBoundary key={`${location.pathname}:${privateRoute ? session.ownerKey : 'public'}`}><Suspense key={privateRoute ? session.ownerKey : 'public'} fallback={<main className="page-shell"><LoadingState label="Opening page"/></main>}><Routes>
   <Route path="/" element={<HomePage/>}/>
   <Route path="/shop" element={<ShopPage/>}/>
   <Route path="/reviews" element={<ReviewsPage/>}/>

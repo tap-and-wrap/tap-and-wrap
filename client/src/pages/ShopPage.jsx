@@ -1,3 +1,4 @@
+import LoadingState from '../components/LoadingState.jsx';
 import { categoryHref } from '../../../shared/category-paths.mjs';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -151,7 +152,7 @@ export default function ShopPage({ categorySlug, heading, categoryContext, categ
           </div>
           {params.q && <p className="catalog-search-summary">Results for “{params.q}” <button type="button" className="catalog-text-button" onClick={() => update('q', '')}>Clear search</button></p>}
           {invalidPrices ? <div className="catalog-state" role="alert"><h2>Check your price filters</h2><p>{priceErrors.range || 'A price in the URL is invalid. Correct it in Filters or clear the filters.'}</p><button type="button" className="catalog-secondary-button" onClick={clearFilters}>Clear All</button></div>
-            : products.isLoading ? <div className="catalog-grid" aria-hidden="true">{Array.from({ length: 8 }, (_, index) => <div className="catalog-skeleton" key={index}><div /><span /><span /></div>)}</div>
+            : products.isLoading ? <LoadingState kind="cards" count={8} label="Loading products"/>
             : products.isError ? <div className="catalog-state" role="alert"><h2>We couldn’t load the shop</h2><p>{products.error?.message || 'Please try again in a moment.'}</p><button type="button" className="button button-dark" onClick={() => products.refetch()}>Try again</button></div>
               : rows.length === 0 ? <div className="catalog-state"><h2>No products found</h2><p>Try another search or adjust your filters.</p><button type="button" className="catalog-secondary-button" onClick={clearFilters}>Clear All</button></div>
                 : <div className="catalog-grid">{rows.map((product) => <ProductCard key={product._id} product={product} />)}</div>}

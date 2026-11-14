@@ -1,3 +1,4 @@
+import { STICKER_WORKSPACE_VERSION, workspaceStickerPlacement, stickerOnPhysicalFace } from '../../shared/gift-box/sticker-placement.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
@@ -81,4 +82,22 @@ test('immutable order saves exact sticker pose, rejects tampering and exposes pr
  const line=giftBoxOrderLine({...base,...configuration,giftFulfillment:base.fulfillment,giftComponents:base.components.map(c=>({...c,priceApprovedBy:actor,priceApprovedAt:new Date('2026-01-01')})),giftPersonalization:personal,unitPricePiastres:base.unitPricePiastres+2000,lineTotalPiastres:base.lineTotalPiastres+2000});
  assert.deepEqual(line.giftBox.personalization.sticker.placement,raw.sticker.placement);const broken=structuredClone(line);broken.giftBox.personalization.sticker.placement.x+=.01;assert.equal(giftBoxOrderLineInput.safeParse(broken).success,false);
  const dto=presentOrder({_id:actor,orderNumber:'123456',lines:[line],totals:{subtotalPiastres:4000,totalPiastres:4000},customer:{},history:[]});assert.deepEqual(dto.lines[0].giftBox.personalization.sticker.placement,raw.sticker.placement);
+});
+
+test('square canvas reaches every edge with rotated bounds and preserves legacy photograph coordinates',()=>{
+ for(const [boxId,views] of Object.entries(STICKER_PROOFS))for(const view of Object.keys(views)){
+  const old=defaultStickerPlacement(boxId,view),copy=structuredClone(old),canvas=workspaceStickerPlacement(old);
+  assert.deepEqual(old,copy);assert.equal(canvas.version,STICKER_WORKSPACE_VERSION);
+  assert.ok(validStickerPlacement(canvas));
+  for(const rotation of [-180,-135,-90,-35,0,35,90,135,180])for(const x of [0,1])for(const y of [0,1]){
+   const pose=boundStickerPlacement({...canvas,x,y,width:.08,height:.04,rotation});
+   assert.ok(validStickerPlacement(pose));
+   const r=rotation*Math.PI/180,c=Math.abs(Math.cos(r)),s=Math.abs(Math.sin(r)),w=c*pose.width+s*pose.height,h=s*pose.width+c*pose.height;
+   assert.ok(pose.x-w/2>=-1e-7&&pose.x+w/2<=1+1e-7);assert.ok(pose.y-h/2>=-1e-7&&pose.y+h/2<=1+1e-7);
+   assert.ok(pose.x<.15||pose.x>.85);assert.ok(pose.y<.15||pose.y>.85);
+   assert.equal(stickerOnPhysicalFace(pose),false);
+  }
+ }
+ const raw=intent();raw.sticker.placement=boundStickerPlacement({...workspaceStickerPlacement(raw.sticker.placement),x:.05,y:.05,width:.08,height:.04,rotation:135});
+ assert.deepEqual(parseGiftBoxPersonalizationIntent(JSON.parse(JSON.stringify(raw))),raw);
 });

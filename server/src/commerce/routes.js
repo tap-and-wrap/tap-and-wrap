@@ -5,7 +5,8 @@ import { Product } from '../models/Product.js';
 import { legacyPhotoFields, optionalPhotoFields } from '../../../shared/product-personalization.mjs';
 import { photoEditFingerprint } from './product-photos.js';
 import { productEngravingRoutes, adminProductEngravingRoutes } from '../product-engraving/routes.js';
-import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
+import { isEngravingKind, UPFRONT_ENGRAVING_POLICY } from '../../../shared/engraving/definitions.mjs';
+import { initialPaymentGroups } from './payment-groups.js';
 import { engravingCollectionAllowed } from '../engraving/payment-policy.js';
 import { engravingRoutes, adminEngravingRoutes } from '../engraving/routes.js';
 import { whatsappQuotation } from './whatsapp-quotation.js';
@@ -28,7 +29,7 @@ import { OrderSettlement } from '../models/OrderSettlement.js';
 import { fingerprint } from './pricing.js';
 import { commerceOwner, guestOwner, rotateGuestCookie } from './ownership.js';
 import { readCart, cartResponse, addCartItem, updateCartQuantity, removeCartItem, clearCart, mergeGuestCart } from './cart.js';
-import { prepareCheckout, placeOrder, normalizePhone, presentOrder, getOwnedOrder, changeOrderState, orderFiles, findOwnedCheckoutSubmission } from './orders.js';
+import { checkoutQuote, prepareCheckout, placeOrder, normalizePhone, presentOrder, getOwnedOrder, changeOrderState, orderFiles, findOwnedCheckoutSubmission } from './orders.js';
 import { GOVERNORATES, shippingForGovernorate } from './promotions.js';
 
 import { openPrivateUpload } from './uploads.js';
@@ -63,12 +64,13 @@ const adminPageSchema = pageSchema.extend({ view: z.enum(['all', 'requires_actio
 const shoppingLimit = rateLimit({ windowMs: 60000, limit: 90, standardHeaders: 'draft-8', legacyHeaders: false });
 const checkoutLimit = rateLimit({ windowMs: 15 * 60000, limit: 20, standardHeaders: 'draft-8', legacyHeaders: false });
 const trackingLimit = rateLimit({ windowMs: 15 * 60000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false });
+const cartPhotoLimit = rateLimit({ windowMs: 5 * 60000, limit: 100, standardHeaders: 'draft-8', legacyHeaders: false });
 const submissionStatusLimit = rateLimit({ windowMs: 5 * 60000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false });
 // Isolated suites reset counters between independent simulated clients. Runtime
 // rate limits remain unchanged, including inside rate-limit acceptance tests.
 export function resetCommerceLimitsForTests() {
   if (process.env.NODE_ENV !== 'test') throw new Error('Rate-limit reset is restricted to isolated tests.');
-  for (const limiter of [shoppingLimit, checkoutLimit, trackingLimit, submissionStatusLimit]) limiter.resetKey('127.0.0.1');
+  for (const limiter of [shoppingLimit, checkoutLimit, trackingLimit, submissionStatusLimit, cartPhotoLimit]) limiter.resetKey('127.0.0.1');
 }
 export function requireCommerceDatabase(req, res, next) {
   if (!isDatabaseReady()) throw commerceError(503, 'COMMERCE_UNAVAILABLE', 'Commerce database is unavailable.');
@@ -118,6 +120,16 @@ async function optionalPurchaseReceipt(order, req) {
 export const commerceRoutes = Router();
 commerceRoutes.use(requireCommerceDatabase, shoppingLimit, commerceOwner, csrfProtection);
 commerceRoutes.get('/cart', async (req, res) => res.json({ ok: true, data: await cartResponse(req.commerceOwner) }));
+commerceRoutes.get('/cart/items/:id/gift-photos/:index', cartPhotoLimit, async (req, res) => {
+  const lineId = uuid.parse(req.params.id);
+  const index = z.coerce.number().int().min(0).max(47).parse(req.params.index);
+  const cart = await readCart(req.commerceOwner);
+  const line = cart?.items?.find(item => item.id === lineId && item.kind === 'gift_box_v2');
+  const photo = line?.configuration?.personalizationIntent?.photoPrints?.[index];
+  if (!photo?.uploadId) throw commerceError(404, 'PRIVATE_FILE_UNAVAILABLE', 'This photo is unavailable.');
+  res.set('X-Robots-Tag', 'noindex, nofollow, noarchive'); res.vary('Cookie');
+  await streamUpload(req, res, photo.uploadId, req.commerceOwner);
+});
 commerceRoutes.post('/cart/items', async (req, res) => res.status(201).json({ ok: true, data: await addCartItem(req.commerceOwner, cartItemInput.parse(req.body), {
   onAdded: async (item) => {
     // Builder contents/messages/configuration hashes have no approved public
@@ -161,8 +173,12 @@ commerceRoutes.get('/checkout/payments/:checkoutKey', submissionStatusLimit, asy
   res.json({ ok: true, data: { payment: intent?.payment ? presentCheckoutPayment(intent) : null } });
 });
 commerceRoutes.post('/checkout/payments', checkoutLimit, async (req, res) => {
-  const input = checkoutSchema.parse(req.body), quote = await prepareCheckout(req.commerceOwner, input, req.user?._id);
-  const payment = await prepareCheckoutPayment(req.commerceOwner, input.checkoutKey, quote.fingerprint, quote.paymentGroups);
+  const input = checkoutSchema.parse(req.body);
+  // Preparing instructions may not overwrite a newer payment-method/cart quote.
+  // The UI obtains the current authoritative quote first; the transaction below
+  // fences it again before creating any transfer instruction.
+  const quote = await checkoutQuote(req.commerceOwner, input, { userId: req.user?._id });
+  const payment = await prepareCheckoutPayment(req.commerceOwner, input.checkoutKey, quote.fingerprint, initialPaymentGroups(quote.cart.items, quote.totals, input.paymentMethod, UPFRONT_ENGRAVING_POLICY));
   res.json({ ok: true, data: { payment } });
 });
 commerceRoutes.post('/checkout/payments/:checkoutKey/proof', checkoutLimit, async (req, res) => {

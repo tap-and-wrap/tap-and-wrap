@@ -174,12 +174,12 @@ export function cartWithProduct(product = commerceProduct) {
 }
 
 export async function fillCheckout(page) {
-  await page.getByLabel('Full name', { exact: true }).fill('Isolated Customer');
-  await page.getByLabel('Email (optional)', { exact: true }).fill('isolated@example.test');
-  await page.getByLabel('Egyptian mobile number').fill('01012345678');
+  await page.getByLabel(/^Full name/).fill('Isolated Customer');
+  await page.getByLabel('Email', { exact: true }).fill('isolated@example.test');
+  await page.getByLabel('Phone number').fill('01012345678');
   await chooseOption(page.getByRole('combobox', { name: /^Governorate/ }), 'cairo');
-  await page.getByLabel('City / Area', { exact: true }).fill('Isolated City');
-  await page.getByLabel('Street address', { exact: true }).fill('Isolated test delivery address');
+  await page.getByLabel(/^City \/ Area/).fill('Isolated City');
+  await page.getByLabel(/^Street address/).fill('Isolated test delivery address');
   await expect(page.getByRole('button', { name: 'Place Order', exact: true })).toBeEnabled();
 }
 

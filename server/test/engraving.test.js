@@ -161,8 +161,8 @@ test('new checkout permits priced payment while blocking early engraving work', 
   const event=await NotificationEvent.findOne({orderId:order._id,event:'order_received'}).lean();
   assert.equal(event.snapshot.engravingReviewPending,false);
   const email=renderEmailTemplate(event).text;
-  assert.ok(email.includes('engraving price is included at checkout')); assert.ok(!email.includes('01060673073'));
-  assert.ok(!email.includes('within 12 hours')); assert.ok(email.includes('Item handoff, return arrangements'));
+  assert.ok(email.includes('Order total: EGP 100.00')); assert.ok(!email.includes('01060673073'));
+  assert.ok(!email.includes('within 12 hours')); assert.ok(email.includes('Item handoff and return confirmed separately.'));
   assert.ok(whatsappQuotation(order,await orderAccounting(order)).text.includes('01060673073'));
   assert.ok((await operationMessages('order',order)).length > 0);
 });

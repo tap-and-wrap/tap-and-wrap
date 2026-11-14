@@ -1,3 +1,4 @@
+import LoadingState from '../components/LoadingState.jsx';
 import Select from '../components/form/Select.jsx';
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -101,5 +102,5 @@ function RequestForm({ service, owner }) {
 export default function ServiceRequestPage({ service }) {
   const session = useSession(), cart = useCart();
   const title = titleFor(service), path = service === 'gift_box' ? '/customize/gift-box' : '/customize/laser-engraving';
-  return <main className="commerce-page service-request-page"><PageMetadata title={`${title} | Tap & Wrap`} description="Submit your bespoke request. Initial WhatsApp contact within 12 hours; quotation and acceptance follow review. No upfront payment." pathname={path} indexable={false} /><p className="eyebrow">Something thoughtfully yours</p><h1>{title}</h1><p className="service-request-intro">Share your idea. We will contact you on WhatsApp within 12 hours to discuss a personal quotation. No account or upfront payment is needed.</p>{session.ready && !cart.loading ? <RequestForm key={`${session.ownerKey}:${service}`} service={service} owner={cart.checkoutOwnerKey || session.ownerKey} /> : <p role="status">Preparing your secure request session…</p>}</main>;
+  return <main className="commerce-page service-request-page"><PageMetadata title={`${title} | Tap & Wrap`} description="Submit your bespoke request. Initial WhatsApp contact within 12 hours; quotation and acceptance follow review. No upfront payment." pathname={path} indexable={false} /><p className="eyebrow">Something thoughtfully yours</p><h1>{title}</h1><p className="service-request-intro">Share your idea. We will contact you on WhatsApp within 12 hours to discuss a personal quotation. No account or upfront payment is needed.</p>{session.ready && !cart.loading ? <RequestForm key={`${session.ownerKey}:${service}`} service={service} owner={cart.checkoutOwnerKey || session.ownerKey} /> : <LoadingState label="Preparing your request" kind="rows"/>}</main>;
 }

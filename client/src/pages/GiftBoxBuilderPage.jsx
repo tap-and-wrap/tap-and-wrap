@@ -1,3 +1,4 @@
+import LoadingState from '../components/LoadingState.jsx';
 import { toast } from 'sonner';
 import { StickerProof } from '../gift-box/StickerWorkspace.jsx';
 import { defaultStickerPlacement } from '../../../shared/gift-box/sticker-placement.mjs';
@@ -200,7 +201,7 @@ export default function GiftBoxBuilderPage() {
   return <main className={`gb-page gb-shopping ${review ? 'gb-final-review' : ''}`} ref={pageRef} aria-busy={catalog.isPending}>
     <h1 className="sr-only">Build your gift box</h1>
     {removal && <ConfirmRemoval target={removal} onCancel={() => setRemoval(null)} onConfirm={confirmRemoval}/>}
-    {catalog.isPending ? <p role="status">Loading your choices...</p> : catalog.error ? <div className="gb-empty"><p role="alert">{commerceError(catalog.error)}</p><button className="button button-secondary" onClick={() => catalog.refetch()}>Retry choices</button></div> : <>
+    {catalog.isPending ? <LoadingState label="Loading gift choices" kind="cards"/> : catalog.error ? <div className="gb-empty"><p role="alert">{commerceError(catalog.error)}</p><button className="button button-secondary" onClick={() => catalog.refetch()}>Retry choices</button></div> : <>
       <BuilderStepper step={step} reached={reached} review={review} boxSelected={Boolean(state.boxId)} onNavigate={navigate}/>
       <div className="gb-workspace">
         <section className="gb-preview" aria-label="Your gift box">

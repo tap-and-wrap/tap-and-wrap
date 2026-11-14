@@ -1,3 +1,4 @@
+import LoadingState from '../components/LoadingState.jsx';
 import { categoryHref } from '../../../shared/category-paths.mjs';
 import { useQuery } from '@tanstack/react-query';
 import { Link, Navigate, useParams, useLocation } from 'react-router-dom';
@@ -28,6 +29,6 @@ export default function CategoryPage() {
   if (ready && pathname !== categoryHref(category)) return <Navigate replace to={`${categoryHref(category)}${search}`} />;
   return <>
     <PageMetadata title={title} description={ready ? `Browse ${cleanText(category.name, 100)} gifts at Tap & Wrap. Price and availability are confirmed before ordering.` : 'This category is not available.'} pathname={ready ? categoryHref(category) : pathname} imageUrl={category?.imageUrl} categoryProductCount={category?.productCount} indexable={ready && !category.browseOnly && category.productCount > 0 && !search} pending={categoryQuery.isLoading} structuredData={crumb ? [crumb] : []} />
-    {categoryQuery.isLoading ? <main className="page-shell" role="status">Loading category…</main> : !ready ? <main className="page-shell"><h1>Category unavailable</h1><p>{categoryQuery.error?.response?.status === 404 ? 'This category is not available.' : 'We could not load this category. Please try again.'}</p><Link className="button button-dark" to="/shop">Browse the shop</Link>{categoryQuery.isError && categoryQuery.error?.response?.status !== 404 && <button type="button" className="catalog-secondary-button" onClick={() => categoryQuery.refetch()}>Try again</button>}</main> : <ShopPage categorySlug={category.slug} heading={`${category.name} Gifts`} categoryContext={category} categoryBreadcrumbs={categoryBreadcrumbs} />}
+    {categoryQuery.isLoading ? <main className="page-shell"><LoadingState label="Loading category" kind="cards"/></main> : !ready ? <main className="page-shell"><h1>Category unavailable</h1><p>{categoryQuery.error?.response?.status === 404 ? 'This category is not available.' : 'We could not load this category. Please try again.'}</p><Link className="button button-dark" to="/shop">Browse the shop</Link>{categoryQuery.isError && categoryQuery.error?.response?.status !== 404 && <button type="button" className="catalog-secondary-button" onClick={() => categoryQuery.refetch()}>Try again</button>}</main> : <ShopPage categorySlug={category.slug} heading={`${category.name} Gifts`} categoryContext={category} categoryBreadcrumbs={categoryBreadcrumbs} />}
   </>;
 }

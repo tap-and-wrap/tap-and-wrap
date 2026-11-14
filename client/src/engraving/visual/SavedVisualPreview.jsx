@@ -1,3 +1,4 @@
+import { LoadingSpinner } from '../../components/LoadingState.jsx';
 import { useEffect, useRef, useState } from 'react';
 import { useSession } from '../../auth/SessionProvider.jsx';
 import { useCart } from '../../commerce/CartContext.jsx';
@@ -28,5 +29,5 @@ export default function SavedVisualPreview({ cartLineId, orderId, itemKey, admin
     } catch (caught) { if (!controller.signal.aborted && generation === authGeneration() && currentScope.current === ownerScope) setError(commerceError(caught)); }
     finally { if (!controller.signal.aborted && generation === authGeneration() && currentScope.current === ownerScope) setLoading(false); }
   }
-  return <div className="saved-visual-preview"><button type="button" className={`button button-secondary${admin ? '' : ' customer-design-disclosure'}`} disabled={loading} aria-expanded={state?.ownerScope === ownerScope} aria-controls={previewId} onClick={state?.ownerScope === ownerScope ? close : open}>{loading ? 'Opening private design...' : state?.ownerScope === ownerScope ? 'Hide design' : 'View design'}{!admin && <ChevronDown size={18} aria-hidden="true"/>}</button>{state?.ownerScope === ownerScope && <div id={previewId}><VisualDesignPreview design={state.design} assets={state.assets} ownerScope={ownerScope}/></div>} {error && <p role="alert">{error}</p>}</div>;
+  return <div className="saved-visual-preview"><button type="button" className={`button button-secondary${admin ? '' : ' customer-design-disclosure'}`} disabled={loading} aria-expanded={state?.ownerScope === ownerScope} aria-controls={previewId} onClick={state?.ownerScope === ownerScope ? close : open}>{loading ? <LoadingSpinner label="Opening design"/> : state?.ownerScope === ownerScope ? 'Hide design' : 'View design'}{!admin && <ChevronDown size={18} aria-hidden="true"/>}</button>{state?.ownerScope === ownerScope && <div id={previewId}><VisualDesignPreview design={state.design} assets={state.assets} ownerScope={ownerScope}/></div>} {error && <p role="alert">{error}</p>}</div>;
 }

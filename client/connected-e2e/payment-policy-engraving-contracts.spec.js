@@ -54,11 +54,11 @@ for(const family of ['normal','photos','text','required','gift','standalone','mi
     for(const kind of family==='mixed'?['normal','photos','text','required','gift','standalone']:[family]) await item(page,kind);
     const before=await cart(context); expect(before.items.length).toBe(family==='mixed'?6:1);
     await page.goto('/checkout');
-    await page.getByLabel('Full name',{exact:true}).fill('Synthetic policy customer');
-    await page.getByLabel('Egyptian mobile number').fill('01012345678');
-    await page.getByLabel('Governorate',{exact:true}).selectOption('cairo');
-    await page.getByLabel('City / Area',{exact:true}).fill('Synthetic city');
-    await page.getByLabel('Street address',{exact:true}).fill('10 Synthetic street');
+    await page.getByLabel(/^Full name/).fill('Synthetic policy customer');
+    await page.getByLabel('Phone number').fill('01012345678');
+    await page.getByLabel(/^Governorate/).selectOption('cairo');
+    await page.getByLabel(/^City \/ Area/).fill('Synthetic city');
+    await page.getByLabel(/^Street address/).fill('10 Synthetic street');
     for(const [name,value] of [['Building','A'],['Floor','2'],['Apartment','3']]) await page.getByLabel(`${name} (optional)`,{exact:true}).fill(value);
     await expect(page.getByRole('radio',{name:/Cash on Delivery|COD on agreed/})).toBeVisible();
     await expect(page.getByRole('radio',{name:/InstaPay/})).toBeVisible();
@@ -80,7 +80,7 @@ for(const family of ['normal','photos','text','required','gift','standalone','mi
     expect(order.lines).toHaveLength(before.items.length);
     expect(order.totals.totalPiastres).toBe(before.subtotalPiastres);
     if(order.engravingWorkflow) expect(order.engravingWorkflow.collectionAuthorized).toBe(false);
-    await expect(page.getByRole('heading',{name:/Thank you, order/})).toBeVisible();
+    await expect(page.getByRole('heading',{name:/Thank you for your order!/})).toBeVisible();
     const saved=(await(await context.request.get(`${api}/commerce/orders/${order.id}`)).json()).data.order;
     expect(saved.accounting.collectedPiastres).toBe(0);expect(saved.customer.apartment).toBe('3');expect((await cart(context)).items).toHaveLength(0);expect(errors).toEqual([]);
   });

@@ -13,7 +13,7 @@ const settings = {
   NODE_ENV: 'development', DATABASE_TARGET: 'staging',
 };
 const event = { eventKey: 'isolated-order:order_received:1', event: 'order_received', recipient: 'safe@example.test',
-  snapshot: { orderNumber: '234567', totalPiastres: 14990, paymentMethod: 'instapay', proof: 'PRIVATE_PROOF', artwork: 'PRIVATE_ARTWORK', password: 'PRIVATE_PASSWORD' } };
+  snapshot: { orderNumber: '234567', totalPiastres: 14990, paymentMethod: 'instapay', paymentState: 'awaiting_verification', proof: 'PRIVATE_PROOF', artwork: 'PRIVATE_ARTWORK', password: 'PRIVATE_PASSWORD' } };
 
 test('Gmail uses one explicit email flag and keeps staging recipients allowlisted', () => {
   assert.equal(emailSettings({ ...settings, EMAIL_ENABLED: 'false', NOTIFICATIONS_ENABLED: 'true' }).enabled, false);
@@ -39,7 +39,7 @@ test('every order and account event has branded HTML and plain text without priv
   }
   const received = renderEmailTemplate(event);
   assert.ok(received.text.includes('EGP 149.90'));
-  assert.ok(received.text.includes('awaiting manual verification'));
+  assert.ok(received.text.includes('awaiting verification'));
   assert.equal(received.text.includes('has manually confirmed'), false);
 });
 

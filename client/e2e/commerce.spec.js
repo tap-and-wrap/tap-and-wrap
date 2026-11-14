@@ -316,7 +316,7 @@ test('COD checkout quotes shipping and discount server-side then confirms one un
   await expect.poll(() => fixture.calls.some((call) => call.path === '/commerce/checkout/quote' && call.body.discountCode === 'ISOLATED')).toBe(true);
   await expect(page.getByRole('button', { name: 'Place Order', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Place Order', exact: true }).click();
-  await expect(page.getByRole('heading', { name: `Thank you, order #${commerceOrder.orderNumber}`, exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Thank you for your order!', exact: true })).toBeVisible();
   expect(fixture.orders).toHaveLength(1);
   expect(fixture.orders[0].paymentState).toBe('unpaid');
   expect(fixture.calls.find((call) => call.path === '/commerce/orders' && call.method === 'POST').body).not.toHaveProperty('totalPiastres');
@@ -332,7 +332,7 @@ test('InstaPay cannot collect proof or instruct a transfer before order creation
   await expect(page.getByText('01060673073', { exact: true })).toHaveCount(0);
   expect(fixture.uploads).toHaveLength(0);
   await page.getByRole('button', { name: 'Place Order', exact: true }).click();
-  await expect(page.getByRole('heading', { name: `Thank you, order #${commerceOrder.orderNumber}` })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Thank you for your order!' })).toBeVisible();
   expect(fixture.orders).toHaveLength(1);
   expect(fixture.calls.find(call => call.path === '/commerce/orders' && call.method === 'POST').body).not.toHaveProperty('paymentProofId');
   expect(fixture.uploads).toHaveLength(0);
@@ -350,7 +350,7 @@ test('failed InstaPay order retries the identical owner-bound request without pr
   expect(fixture.uploads).toHaveLength(0);
   options.rejectOrder = false;
   await page.getByRole('button', { name: 'Retry same submission', exact: true }).click();
-  await expect(page.getByRole('heading', { name: `Thank you, order #${commerceOrder.orderNumber}` })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Thank you for your order!' })).toBeVisible();
   const requests = fixture.calls.filter(call => call.path === '/commerce/orders' && call.method === 'POST');
   expect(requests).toHaveLength(2);
   expect(requests[0].body).toEqual(requests[1].body);
@@ -490,7 +490,7 @@ for (const width of [320, 390, 768, 1440]) {
       await page.goto(route, { waitUntil: 'domcontentloaded' });
       await expect(page.locator('main h1')).toBeVisible();
       if (route === '/cart') await expect(page.locator('.cart-v2-line')).toBeVisible();
-      if (route === '/checkout') await expect(page.getByLabel('Full name', { exact: true })).toBeVisible();
+      if (route === '/checkout') await expect(page.getByLabel(/^Full name/)).toBeVisible();
       if (route.endsWith('/customize')) await expect(page.locator('.commerce-configurator')).toBeVisible();
       await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       if (route === '/cart' && [320, 1440].includes(width)) await page.screenshot({ path: testInfo.outputPath(`commerce-cart-${width}.png`), fullPage: true });
