@@ -166,6 +166,7 @@ export async function mutateOrderAccounting(id, owner, input, actor) {
         if (collected < order.totals.totalPiastres) order.paymentState = collected > 0 ? 'partially_paid' : 'rejected'; publicReason = input.publicReason || 'Payment evidence requires attention. Contact the store before making another transfer.'; event = 'payment_rejected';
       } else if (['collection', 'refund'].includes(input.action)) {
         if (!input.reconciled) fail('Confirm the actual receiving/refund account or COD collection before recording money.');
+        if (input.action === 'collection' && input.method === 'cod' && order.history.some(entry => entry.event === 'checkout_transfer_instructions_retained') && !input.exceptionConfirmed) fail('InstaPay instructions were issued before COD selection. Reconcile possible transfers and explicitly confirm the collection exception before recording cash.');
         const charge = charges.find(value => value.id === input.scope);
         const combined = input.action === 'collection' && input.scope === 'all_agreed';
         if (!groupedOrder(order) && input.action === 'collection' && (combined || input.scope === 'merchandise') && order.orderChannel !== 'owner_quotation' && order.paymentMethod === 'instapay' && !order.paymentProofId && !((closed || isEngravingOrder(order) && !engravingCollectionAllowed(order)) && input.exceptionConfirmed)) fail('Ordinary website InstaPay orders require their secure order-bound proof before initial verification. Late closed-order funds need explicit exception reconciliation.');

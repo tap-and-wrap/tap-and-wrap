@@ -1,6 +1,23 @@
 import { deepFreeze } from './definitions.mjs';
 // Dedicated exterior proofs. This registry never changes arrangement imagery or geometry.
 export const STICKER_PROOF_VERSION = 'box-sticker-proof-v1';
+export const STICKER_WORKSPACE_VERSION = 'box-sticker-workspace-v2';
+// V1 coordinates belong to the original photograph. V2 coordinates belong to
+// the whole square canvas, with that photograph contained without cropping.
+export function workspaceStickerPlacement(value) {
+  if (value.version === STICKER_WORKSPACE_VERSION) return value;
+  const proof = stickerProof(value.boxId, value.view);
+  const w = Math.min(1, proof.width / proof.height), h = Math.min(1, proof.height / proof.width);
+  return { ...value, version: STICKER_WORKSPACE_VERSION, x: (1-w)/2 + value.x*w, y: (1-h)/2 + value.y*h, width: value.width*w, height: value.height*h };
+}
+export function stickerOnPhysicalFace(value) {
+  if (value.version !== STICKER_WORKSPACE_VERSION) return true;
+  const proof = stickerProof(value.boxId, value.view);
+  const w = Math.min(1, proof.width / proof.height), h = Math.min(1, proof.height / proof.width);
+  const legacy = { ...value, version: STICKER_PROOF_VERSION, x: (value.x-(1-w)/2)/w, y: (value.y-(1-h)/2)/h, width: value.width/w, height: value.height/h };
+  const fit = boundStickerPlacement(legacy);
+  return ['x','y','width','height'].every(key => Math.abs(fit[key]-legacy[key]) < 1e-7);
+}
 // Keep original default placement geometry; the inspected exterior face permits
 // a wider movement area. Historical saved coordinates are never rewritten.
 const heart = (file, width = 1882) => ({ file, width, height: 836, surface: { x: .14, y: .36, width: .72, height: .46 }, usableSurface: { x: .055, y: .31, width: .89, height: .54 } });
@@ -25,6 +42,17 @@ export function defaultStickerPlacement(boxId, view = Object.keys(STICKER_PROOFS
 }
 export function boundStickerPlacement(value) {
   const proof = stickerProof(value?.boxId, value?.view); if (!proof) throw Error('Choose a supported sticker view.');
+  if (value.version === STICKER_WORKSPACE_VERSION) {
+    const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+    const rotation = (((value.rotation ?? 0) + 180) % 360 + 360) % 360 - 180;
+    const r = rotation * Math.PI / 180, c = Math.abs(Math.cos(r)), s = Math.abs(Math.sin(r));
+    let width = clamp(value.width, .02, 1), height = clamp(value.height, .02, 1);
+    const scale = Math.min(1, 1/(c*width+s*height), 1/(s*width+c*height));
+    width *= scale; height *= scale;
+    const halfX = (c*width+s*height)/2, halfY = (s*width+c*height)/2;
+    return { version: STICKER_WORKSPACE_VERSION, boxId: value.boxId, view: value.view, width, height,
+      ...(Object.hasOwn(value, 'rotation') ? {rotation} : {}), x: clamp(value.x,halfX,1-halfX), y: clamp(value.y,halfY,1-halfY) };
+  }
   const s = proof.usableSurface || proof.surface, clamp = (n, a, b) => Math.max(a, Math.min(b, n));
   const rotation = (((value.rotation ?? 0) + 180) % 360 + 360) % 360 - 180, radians = rotation * Math.PI / 180;
   const cos = Math.abs(Math.cos(radians)), sin = Math.abs(Math.sin(radians));
@@ -61,7 +89,7 @@ export function boundStickerPlacement(value) {
     x, y };
 }
 export function validStickerPlacement(value) {
-  if (!value || Object.keys(value).sort().join() !== ['version','boxId','view','x','y','width','height', ...(Object.hasOwn(value, 'rotation') ? ['rotation'] : [])].sort().join() || value.version !== STICKER_PROOF_VERSION || !stickerProof(value.boxId, value.view) || !['x','y','width','height'].every(key => Number.isFinite(value[key])) || Object.hasOwn(value, 'rotation') && (!Number.isFinite(value.rotation) || Math.abs(value.rotation) > 180)) return false;
+  if (!value || Object.keys(value).sort().join() !== ['version','boxId','view','x','y','width','height', ...(Object.hasOwn(value, 'rotation') ? ['rotation'] : [])].sort().join() || ![STICKER_PROOF_VERSION, STICKER_WORKSPACE_VERSION].includes(value.version) || !stickerProof(value.boxId, value.view) || !['x','y','width','height'].every(key => Number.isFinite(value[key])) || Object.hasOwn(value, 'rotation') && (!Number.isFinite(value.rotation) || Math.abs(value.rotation) > 180)) return false;
   const bounded = boundStickerPlacement(value);
   return ['x','y','width','height'].every(key => Math.abs(bounded[key] - value[key]) < .0000001);
 }

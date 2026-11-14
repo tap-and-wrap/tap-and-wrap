@@ -75,12 +75,12 @@ for(const lost of ['none','proof','order','changed-quote','upload','double-click
   await expect(page.getByRole('button',{name:'Copy transfer destination'})).toBeVisible();
   await page.getByRole('button',{name:'Copy transfer destination'}).click();expect(await page.evaluate(()=>window.copiedTransferValue)).toBe('01060673073');
   await page.getByRole('button',{name:'Copy transfer amount'}).click();expect(await page.evaluate(()=>window.copiedTransferValue)).toBe('250.00');
-  await expect(page.getByLabel('Governorate',{exact:true})).toHaveValue('');
-  await page.getByLabel('Full name', {exact:true}).fill('Isolated Customer');
-  await page.getByLabel('Egyptian mobile number').fill('01012345678');
-  await page.getByLabel('Governorate', {exact:true}).selectOption('cairo');
-  await page.getByLabel('City / Area', {exact:true}).fill('Isolated City');
-  await page.getByLabel('Street address', {exact:true}).fill('Isolated test delivery address');
+  await expect(page.getByLabel(/^Governorate/)).toHaveValue('');
+  await page.getByLabel(/^Full name/).fill('Isolated Customer');
+  await page.getByLabel('Phone number').fill('01012345678');
+  await page.getByLabel(/^Governorate/).selectOption('cairo');
+  await page.getByLabel(/^City \/ Area/).fill('Isolated City');
+  await page.getByLabel(/^Street address/).fill('Isolated test delivery address');
   await expect(page.getByRole('button',{name:'Copy transfer destination'})).toBeVisible();
   await expect(page.getByRole('button',{name:'Place Order',exact:true})).toBeDisabled();
   if(lost==='none'){

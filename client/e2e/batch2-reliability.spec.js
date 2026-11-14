@@ -555,12 +555,12 @@ test('checkout links invalid delivery fields and preserves the globally disabled
   const options = { cart: cartWithProduct(), checkoutEnabled: true };
   const fixture = await mockCommerce(page, options);
   await page.goto('/checkout');
-  await chooseOption(page.getByLabel('Governorate', { exact: true }), 'cairo');
+  await chooseOption(page.getByLabel(/^Governorate/), 'cairo');
   await expect(page.getByRole('button', { name: 'Place Order', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Place Order', exact: true }).click();
-  await expect(page.getByLabel('Full name', { exact: true })).toBeFocused();
-  await expectLinkedError(page.getByLabel('Full name', { exact: true }), 'fill out');
-  await expectLinkedError(page.getByLabel('Delivery address', { exact: true }), 'fill out');
+  await expect(page.getByLabel(/^Full name/)).toBeFocused();
+  await expectLinkedError(page.getByLabel(/^Full name/), 'fill out');
+  await expectLinkedError(page.getByLabel(/^Street address/), 'fill out');
   expect(fixture.orders).toHaveLength(0);
   expect(fixture.calls.filter((call) => call.path === '/commerce/orders' && call.method === 'POST')).toHaveLength(0);
   options.checkoutEnabled = false;

@@ -1,3 +1,4 @@
+import { Image as ImageIcon } from 'lucide-react';
 import ConfirmRemoval from './ConfirmRemoval.jsx';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Trash2, Maximize2 } from 'lucide-react';
@@ -69,7 +70,7 @@ export default function FreeArrangementCanvas({ state, components, dispatch, per
       {objects.map(item => {
         const position = moving?.id === item.id ? moving : item;
         const style = { left: `${position.x * 100}%`, top: `${position.y * 100}%`, width: `${item.width * 100}%`, height: `${item.height * 100}%`, zIndex: item.id === 'ribbon' ? 190 : ((moving?.id === item.id ? freePlacementZone(state.boxId,item,position,state.presentationVersion) : item.zone) === 'beside' ? 160 : 20) + Math.round(position.y * 60) };
-        const art = item.photo ? (item.url ? <img src={item.url} alt={item.label}/> : <span className="gb-photo-placeholder">{item.label}</span>) : item.id === 'ribbon' ? <RibbonBow componentId={item.componentId}/> : <Artwork componentId={item.componentId} role="placement" normalize/>;
+        const art = item.photo ? (item.url ? <img src={item.url} alt={item.label}/> : <span className="gb-photo-placeholder" role="img" aria-label={item.label}><ImageIcon size={20} aria-hidden="true"/></span>) : item.id === 'ribbon' ? <RibbonBow componentId={item.componentId}/> : <Artwork componentId={item.componentId} role="placement" normalize/>;
         if (readOnly) return <div key={item.id} className={`gb-placed ${item.photo ? 'gb-free-photo' : ''}`} style={style} title={`${item.label} - ${item.zone}`}>{art}</div>;
         return <button key={item.id} type="button" className={`gb-placed ${item.photo ? 'gb-free-photo' : ''} ${selected === item.id ? 'is-active' : ''}`} style={style}
           data-instance-id={item.id} aria-label={`Move ${item.label}`} aria-pressed={selected === item.id}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { privateQueryKey } from '../auth/session.js';
@@ -6,22 +6,24 @@ import { authGeneration } from '../services/api.js';
 import ImageSourceChooser from '../components/ImageSourceChooser.jsx';
 import { prepareSelectedImages } from '../components/selected-images.mjs';
 import { commerceGet, commercePost, commerceError, uploadPrivateFile, money } from './api.js';
+import LoadingState, { LoadingSpinner } from '../components/LoadingState.jsx';
 import { persistCheckoutSession } from './checkout-session.js';
 import { Copy, Check } from 'lucide-react';
 
-export default function CheckoutInstaPay({ owner, checkoutOwner, checkoutKey, governorate, discountCode, quote, onChange, disabled }) {
+export default function CheckoutInstaPay({ owner, checkoutOwner, checkoutKey, governorate, discountCode, quote, onChange, disabled, active = true }) {
   const [files, setFiles] = useState([]), [preview, setPreview] = useState(''), [senderName, setSenderName] = useState(''), [fileError, setFileError] = useState(''), [expired, setExpired] = useState(false);
+  const senderId = useId();
   const uploaded = useRef(null), pending = useRef(null), mounted = useRef(true), generation = useRef(authGeneration());
-  const status = useQuery({ queryKey: privateQueryKey(owner, 'checkout-payment', checkoutKey), queryFn: ({signal}) => commerceGet(`/checkout/payments/${checkoutKey}`, undefined, signal), retry: false, staleTime: 0, gcTime: 0 });
   const zeroDue = !quote.error && !quote.isFetching && quote.data?.totals?.totalPiastres === 0;
   const prepared = useQuery({ queryKey: privateQueryKey(owner, 'checkout-payment-prepare', checkoutKey, quote.data?.fingerprint),
     queryFn: ({signal}) => commercePost('/checkout/payments', { checkoutKey, ...(governorate ? {governorate} : {}), paymentMethod: 'instapay', ...(discountCode ? {discountCode} : {}) }, {signal}),
-    enabled: !disabled && !zeroDue && Boolean(quote.data?.fingerprint) && !quote.error && !quote.isFetching, retry: false, staleTime: Infinity, gcTime: 0, refetchOnWindowFocus: false });
+    enabled: active && !disabled && !quote.data?.payment && !zeroDue && Boolean(quote.data?.fingerprint) && !quote.error && !quote.isFetching, retry: false, staleTime: Infinity, gcTime: 0, refetchOnWindowFocus: false });
   const [saved, setSaved] = useState(null);
   useEffect(() => { if (prepared.data?.payment) setSaved(prepared.data.payment); }, [prepared.data]);
-  const payment = saved || prepared.data?.payment || status.data?.payment;
-  const fingerprintMatches = Boolean(quote.data?.fingerprint) && !quote.error && !quote.isFetching && prepared.isSuccess && !prepared.isFetching && !prepared.error;
-  const actionable = payment && !expired && fingerprintMatches && ['prepared','proof_received'].includes(payment.state);
+  const current = quote.data?.payment || prepared.data?.payment;
+  const payment = saved?.reference === current?.reference ? saved : current;
+  const fingerprintMatches = Boolean(quote.data?.fingerprint) && !quote.error && !quote.isFetching && (Boolean(quote.data?.payment) || prepared.isSuccess && !prepared.isFetching && !prepared.error);
+  const actionable = active && payment && !expired && fingerprintMatches && ['prepared','proof_received'].includes(payment.state);
   useEffect(() => {
     if (!payment) return;
     const remaining = new Date(payment.expiresAt).getTime() - Date.now();
@@ -51,8 +53,8 @@ export default function CheckoutInstaPay({ owner, checkoutOwner, checkoutKey, go
       if (!mounted.current || generation.current !== authGeneration()) return;
       // An acknowledgement may have been lost after the server retained proof.
       // Recover that record before offering any further upload or submission.
-      const result = await status.refetch();
-      if (mounted.current && generation.current === authGeneration() && result.data?.payment?.proofReceived) { setSaved({...payment,...result.data.payment}); setFiles([]); uploaded.current=null; }
+      const result = await commerceGet(`/checkout/payments/${checkoutKey}`).catch(() => null);
+      if (mounted.current && generation.current === authGeneration() && result?.payment?.proofReceived) { setSaved({...payment,...result.payment}); setFiles([]); uploaded.current=null; }
     } });
   useEffect(() => {
     onChange(payment ? { ...payment, ready: Boolean(actionable && (payment.proofReceived || files.length && senderName.trim().length >= 2) && !save.isPending), ensureProof: payment.proofReceived ? undefined : save.mutateAsync, busy: prepared.isFetching || save.isPending } : zeroDue ? {ready:true,noTransferDue:true} : prepared.isFetching ? {busy:true} : null);
@@ -65,23 +67,18 @@ export default function CheckoutInstaPay({ owner, checkoutOwner, checkoutKey, go
     catch(error) { if (generation === authGeneration()) setFileError(error.message); }
   }
   return <section className="checkout-instapay" aria-label="InstaPay transfer details">
-    {zeroDue && <p>No transfer is due for this order.</p>}
-    {(prepared.isFetching || status.isPending) && <p role="status">Preparing your secure payment reference...</p>}
-    {(prepared.error || quote.error) && <p role="alert">{commerceError(prepared.error || quote.error)} Do not transfer again. <Link to="/contact">Contact the store</Link>.</p>}
-    {payment && <><p className="checkout-transfer-instructions">Transfer the exact merchandise and services total below, then choose your screenshot. Delivery is confirmed separately.</p>
-      {!actionable ? quote.isFetching || prepared.isFetching ? <p role="status">Checking the current transfer details. Please wait before transferring.</p> : <p role="alert">This payment reference requires review. Keep it for support; do not transfer again or start a replacement order. <Link to="/contact">Contact the store</Link>.</p> : <>
-        {!payment.proofReceived && payment.destination && <div className="checkout-transfer-card"><span>TRANSFER TO</span><div><strong><bdi>{payment.destination}</bdi></strong><CopyValue value={payment.destination} label="Copy transfer destination" text="Copy"/></div><div className="checkout-transfer-amount"><span>Exact amount to transfer</span><CopyValue value={(payment.amountPiastres / 100).toFixed(2)} label="Copy transfer amount" text={money(payment.amountPiastres)} preserveText/></div></div>}
-
-        {payment.proofReceived ? <p role="status">Your payment evidence is saved. Place your order below. Payment remains subject to owner verification; do not transfer again.</p> : <fieldset disabled={disabled || save.isPending}>
-          <label className="commerce-field">Transfer sender name<input value={senderName} minLength={2} maxLength={100} onChange={event=>setSenderName(event.target.value)} autoComplete="name"/></label>
-          <p className="checkout-proof-label">Transaction Screenshot</p><div className="checkout-proof-drop" onDragOver={event=>event.preventDefault()} onDrop={drop}><ImageSourceChooser uploadArea label={files.length ? 'Replace transaction screenshot' : 'Choose screenshot'} inputLabel="Transaction screenshot" context="InstaPay" maxFiles={1} maxBytes={5*1024*1024} onSelect={selected => {setFiles(selected);setFileError('');}} onError={setFileError} helperText="Upload a clear screenshot of the successful transfer. JPEG, PNG or WebP, up to 5 MB. You can also drag and drop it here."/>
+    {zeroDue ? <p>No transfer is due for this order.</p> : <>
+      <p>Upload your transfer screenshot to complete your order.</p>
+      {quote.error || prepared.error || expired ? <p role="alert">Transfer details need checking. Please don&apos;t transfer again. <Link to="/contact">Contact the store</Link>.</p> : null}
+      {actionable && !payment.proofReceived && payment.destination ? <div className="checkout-transfer-card"><span>TRANSFER TO</span><div><strong><bdi>{payment.destination}</bdi></strong><CopyValue value={payment.destination} label="Copy transfer destination" text="Copy"/></div><div className="checkout-transfer-amount"><span>Exact amount to transfer</span><CopyValue value={(payment.amountPiastres / 100).toFixed(2)} label="Copy transfer amount" text={money(payment.amountPiastres)} preserveText/></div></div>
+        : payment?.proofReceived ? <p role="status">Your screenshot is saved. Place your order below.</p> : <div className="checkout-transfer-placeholder"><span>TRANSFER TO</span>{quote.error || prepared.error || expired ? <p>Transfer details unavailable.</p> : <LoadingState label="Verifying transfer details. Please wait before transferring." count={1}/>}</div>}
+      {!payment?.proofReceived && <fieldset disabled={!active || disabled || save.isPending}>
+        <label className="commerce-field" htmlFor={senderId}>Transfer sender name *<input id={senderId} name="senderName" value={senderName} required={active} minLength={2} maxLength={100} onChange={event=>setSenderName(event.target.value)} autoComplete="name"/></label>
+        <p className="checkout-proof-label">Transaction Screenshot *</p><div className="checkout-proof-drop" onDragOver={event=>event.preventDefault()} onDrop={drop}><ImageSourceChooser uploadArea label={files.length ? 'Replace transaction screenshot' : 'Choose screenshot'} inputLabel="Transaction screenshot" context="InstaPay" maxFiles={1} maxBytes={5*1024*1024} onSelect={selected => {setFiles(selected);setFileError('');}} onError={setFileError} helperText="JPEG, PNG or WebP, up to 5 MB."/>
           {preview && <div className="checkout-proof-preview"><img src={preview} alt="Selected transaction screenshot"/><button className="commerce-link-button" type="button" onClick={()=>setFiles([])}>Remove screenshot</button></div>}</div>
-          {fileError && <p role="alert">{fileError}</p>}<p>Payment awaits owner verification. Do not transfer again if uploading or submitting fails.</p>
-          <p role="status">{save.isPending ? 'Saving payment evidence...' : files.length ? 'Screenshot selected. Place Order saves it securely.' : 'Choose a screenshot to place your order.'}</p>
-          {save.error && <p role="alert">{commerceError(save.error)} Your payment reference remains saved; do not transfer again.</p>}
-        </fieldset>}
-      </>}
-      <details className="checkout-payment-reference"><summary>Payment reference for support</summary><bdi>{payment.reference}</bdi></details>
+        {fileError && <p role="alert">{fileError}</p>}{save.isPending && <LoadingSpinner label="Saving screenshot"/>}
+        {save.error && <p role="alert">{commerceError(save.error)} Please don&apos;t transfer again.</p>}
+      </fieldset>}
     </>}
   </section>;
 }

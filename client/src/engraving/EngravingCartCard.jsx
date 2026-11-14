@@ -1,3 +1,4 @@
+import LoadingState from '../components/LoadingState.jsx';
 import { useEffect, useState } from 'react';
 import './engraving.css';
 import { useSession } from '../auth/SessionProvider.jsx';
@@ -43,7 +44,7 @@ export function PrivateImage({item,owner,role,label}) {
     return ()=>{controller.abort();clearTimeout(timer);urls.forEach(url=>URL.revokeObjectURL(url));};
   },[lineId,valid,attachmentVersion,owner,scope,role]);
   const current=valid&&state?.scope===scope&&state.lineId===lineId?state:null;
-  return current?.url && !current.error ? <img src={current.url} alt={label} onError={()=>setState(value=>value?.url===current.url?{...value,error:true}:value)}/> : <span role="status">{!valid||current?.error?'Private image unavailable':label}</span>;
+  return current?.url && !current.error ? <img src={current.url} alt={label} onError={()=>setState(value=>value?.url===current.url?{...value,error:true}:value)}/> : !valid || current?.error ? <span role="status">Private image unavailable</span> : <LoadingState kind="image" count={1} label={`Loading ${label}`}/>;
 }
 
 export default function EngravingCartCard({item,pending,remove}) {

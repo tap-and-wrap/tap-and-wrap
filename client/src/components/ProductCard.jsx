@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { formatCatalogPrice } from '../utils/catalog.js';
 import { useSession } from '../auth/SessionProvider.jsx';
 import { useCart } from '../commerce/CartContext.jsx';
+import { LoadingSpinner } from './LoadingState.jsx';
 
 export default function ProductCard({ product }) {
   const cardRef = useRef(null);
@@ -34,7 +35,7 @@ export default function ProductCard({ product }) {
           <img src={product.mainImageUrl} alt={product.name} width="600" height="600" loading="lazy" decoding="async" />
         ) : <span className="catalog-image-placeholder" aria-hidden="true">Image coming soon</span>}
         <span className="catalog-card-badges">
-          {!enquiryRequired && product.bestSeller === true && <span>Best Seller</span>}
+          {!enquiryRequired && product.bestSeller === true && <span className="catalog-best-seller">Best Seller</span>}
           {enquiryRequired ? <span>{approvedPrice ? 'Confirm availability' : 'Price on Request'}</span> : !orderingAvailable && <span>Out of Stock</span>}
         </span>
       </div>
@@ -50,7 +51,7 @@ export default function ProductCard({ product }) {
         {enquiryRequired ? <a className="catalog-card-action" href={enquiryUrl} target="_blank" rel="noopener noreferrer" aria-label={`Enquire on WhatsApp about ${product.name}`}>Enquire on WhatsApp</a>
           : !orderingAvailable ? <Link className="catalog-card-action" to={detailUrl} aria-label={`View details: ${product.name}`}>View Details</Link>
           : product.requiresOptions ? <Link className="catalog-card-action" to={detailUrl} aria-label={`Choose Options: ${product.name}`}>Choose Options</Link>
-            : <button type="button" className="catalog-card-action" disabled={cart.pending} aria-label={`Add to Cart: ${product.name}`} onClick={add}>{adding ? 'Please wait…' : action}</button>}
+            : <button type="button" className="catalog-card-action" disabled={cart.pending} aria-label={`Add to Cart: ${product.name}`} onClick={add}>{adding ? <LoadingSpinner label="Adding"/> : action}</button>}
       </div>
     </article>
   );

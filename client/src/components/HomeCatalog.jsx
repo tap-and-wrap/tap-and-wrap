@@ -1,3 +1,4 @@
+import LoadingState from './LoadingState.jsx';
 import { categoryHref } from '../../../shared/category-paths.mjs';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueries } from '@tanstack/react-query';
@@ -59,7 +60,7 @@ export function FeaturedCategories() {
     const left = Math.min(maxLeft, Math.max(0, index * step));
     node.scrollTo({ left, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
   };
-  if (query.isPending) return <p className="catalog-state" role="status">Loading categories…</p>;
+  if (query.isPending) return <LoadingState label="Loading categories" kind="cards"/>;
   if (query.isError) return <div className="catalog-state" role="alert"><p>Categories are unavailable at the moment.</p><button className="button button-outline" onClick={() => query.refetch()}>Try again</button></div>;
   if (!query.data.categories.length) return <p className="catalog-state">Explore our gifts in the <Link to="/shop">shop</Link>.</p>;
   return <div className="home-categories-wrap">
@@ -104,7 +105,7 @@ export function BestSellerProducts() {
     enabled: needsFallback,
     staleTime: 300_000,
   })) });
-  if (selected.isPending || (needsFallback && (fallback.isPending || roots.isPending || picks.some(query => query.isLoading)))) return <p className="catalog-state" role="status">Loading featured gifts…</p>;
+  if (selected.isPending || (needsFallback && (fallback.isPending || roots.isPending || picks.some(query => query.isLoading)))) return <LoadingState label="Loading featured gifts" kind="cards"/>;
   if (selected.isError || (needsFallback && fallback.isError)) return <div className="catalog-state" role="alert"><p>Featured gifts are unavailable at the moment.</p><button className="button button-outline" onClick={() => { selected.refetch(); if (needsFallback) { fallback.refetch(); roots.refetch(); } }}>Try again</button></div>;
   const ownerPicks = selected.data.products;
   const ids = new Set(ownerPicks.map(item => item._id));

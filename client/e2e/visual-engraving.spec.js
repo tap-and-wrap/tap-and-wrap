@@ -200,7 +200,8 @@ test('host receives readiness changes when a font approval is withdrawn', async 
   await expect.poll(() => page.evaluate(() => window.visualReadiness.ready)).toBe(true);
   const approvedFont = (await snapshot(page)).design.layers[0].fontId;
   await page.evaluate(() => window.setApprovedEditorFonts([]));
-  await expect(page.getByRole('alert')).toContainText('no longer approved');
+  await page.locator('.ve-layers button').first().click();
+  await expect(page.getByRole('alert')).toContainText('Choose a current lettering style for this text.');
   await expect.poll(() => page.evaluate(() => window.visualReadiness.ready)).toBe(false);
   await page.evaluate(id => window.setApprovedEditorFonts([id]), approvedFont);
   await expect.poll(() => page.evaluate(() => window.visualReadiness.ready)).toBe(true);

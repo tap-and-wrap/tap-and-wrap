@@ -12,7 +12,7 @@ const retainedUntilReview = new Date('9999-01-01T00:00:00Z');
 export function presentCheckoutPayment(intent, { actionable = false, admin = false } = {}) {
   const p = intent.payment;
   if (!p) return null;
-  const valid = p.state === 'prepared' && new Date(p.expiresAt) > new Date() && intent.state === 'open';
+  const valid = p.state === 'prepared' && new Date(p.expiresAt) > new Date() && intent.state === 'open' && intent.paymentMethod === 'instapay';
   return { reference: p.reference, state: intent.state === 'consumed' ? 'consumed' : valid ? p.proofId ? 'proof_received' : 'prepared' : 'reconciliation',
     amountPiastres: p.amountPiastres, expiresAt: p.expiresAt, proofReceived: Boolean(p.proofId), orderId: intent.orderId ? String(intent.orderId) : null,
     ...(actionable && valid ? { destination: p.destination } : {}), ...(admin ? { senderName: p.senderName, proofId: p.proofId ? String(p.proofId) : null, destination: p.destination, allocations: p.allocations } : {}) };
@@ -53,7 +53,7 @@ export async function submitCheckoutPaymentProof(owner, checkoutKey, { uploadId,
   assertDatabaseWriteAllowed(CheckoutIntent.db, env);
   await mongoose.connection.transaction(async session => {
     const intent = await CheckoutIntent.findOne({ owner, checkoutKey }).session(session);
-    if (!intent?.payment || intent.state !== 'open' || intent.payment.state !== 'prepared') throw review();
+    if (!intent?.payment || intent.state !== 'open' || intent.paymentMethod !== 'instapay' || intent.payment.state !== 'prepared') throw review();
     if (intent.payment.proofId) {
       if (String(intent.payment.proofId) !== uploadId || intent.payment.senderName !== senderName.trim()) throw review();
     } else {

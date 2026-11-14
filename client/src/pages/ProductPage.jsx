@@ -1,3 +1,4 @@
+import LoadingState from '../components/LoadingState.jsx';
 import ProductPhotoPurchase from '../product-photos/ProductPhotoPurchase.jsx';
 import { positiveProductPrice } from '../../../shared/product-business-state.mjs';
 import { lazy, Suspense } from 'react';
@@ -215,7 +216,7 @@ function ProductContentBody({ product, relatedProducts = [], preview = false, pr
           </div>
         </section>
       </div>
-      {engravingOpen && !preview && product.productEngraving && <Suspense fallback={<p role="status">Opening engraving editor...</p>}><ProductEngravingBuilder key={`${product._id}:${product.productEngraving.version}:${editEngravingId || 'new'}`} product={product} variantKey={variantKey} quantity={quantity} fields={personalizationFields} personalization={personalization} editId={editEngravingId} onClose={() => setEngravingOpen(false)}/></Suspense>}
+      {engravingOpen && !preview && product.productEngraving && <Suspense fallback={<LoadingState kind="workspace" label="Opening engraving editor"/>}><ProductEngravingBuilder key={`${product._id}:${product.productEngraving.version}:${editEngravingId || 'new'}`} product={product} variantKey={variantKey} quantity={quantity} fields={personalizationFields} personalization={personalization} editId={editEngravingId} onClose={() => setEngravingOpen(false)}/></Suspense>}
       {customizing && <ProductPersonalizationDialog product={product} fields={personalizationFields} values={personalization} onChange={setPersonalization} onComplete={finishPersonalization} onClose={() => setCustomizing(false)} />}
       {!preview && <CustomerWords/>}
       {relatedProducts.length > 0 && <section className="product-related" aria-labelledby="product-related-heading"><h2 id="product-related-heading">You May Also Like</h2><div className="catalog-grid catalog-related-grid">{relatedProducts.slice(0, 4).map((item) => <ProductCard key={item._id} product={item} />)}</div></section>}
@@ -237,7 +238,7 @@ export default function ProductPage() {
   const query = useQuery({ queryKey: ['catalog', 'product', slug], queryFn: ({ signal }) => getProduct(slug, signal) });
   useEffect(() => { if (query.data?.tracking) emitTracking(query.data.tracking); }, [query.data]);
   const metadata = <ProductMetadata product={query.data?.product} loading={query.isLoading} error={Boolean(query.error)} checkoutEnabled={checkoutEnabled}/>;
-  if (query.isLoading) return <main className="catalog-product-page">{metadata}<div className="catalog-state" role="status"><h1>Loading product…</h1></div></main>;
+  if (query.isLoading) return <main className="catalog-product-page">{metadata}<LoadingState kind="workspace" label="Loading product"/></main>;
   if (query.isError) return <main className="catalog-product-page">{metadata}<div className="catalog-state" role="alert"><h1>{query.error?.status === 404 ? 'Product not found' : 'We couldn’t load this product'}</h1><p>{query.error?.message || 'Please try again in a moment.'}</p><div className="catalog-state-actions"><Link className="catalog-secondary-button" to="/shop">Back to Shop</Link>{query.error?.status !== 404 && <button type="button" className="button button-dark" onClick={() => query.refetch()}>Try again</button>}</div></div></main>;
   if (!query.data?.product) return <main className="catalog-product-page">{metadata}<div className="catalog-state"><h1>Product not found</h1><Link className="catalog-secondary-button" to="/shop">Back to Shop</Link></div></main>;
   if (location.pathname !== productHref(query.data.product)) return <Navigate replace to={`${productHref(query.data.product)}${location.search}`} />;

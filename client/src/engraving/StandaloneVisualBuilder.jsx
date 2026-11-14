@@ -1,3 +1,4 @@
+import LoadingState from '../components/LoadingState.jsx';
 import { toast } from 'sonner';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -18,7 +19,7 @@ const steps = ['Your Item', 'Design Your Engraving', 'Review Your Engraving'];
 export default function StandaloneVisualBuilder({ saved, editId }) {
   const state = useStandaloneVisualBuilder(saved, editId), [, setParams] = useSearchParams();
   const { draft, setDraft, ownerKey, pending, options, types, type, hydrating, error, setError, progress, quote, setQuote, added, setAdded, acceptedOrder, uncertain, recovering, update, selectPhotos, validate, review, add, check, editorChange, reset, attempt } = state;
-  const [editorError, setEditorError] = useState('');
+  const [, setEditorError] = useState('');
   const stepStart = useRef(null), lastStep = useRef(draft.step);
   useEffect(() => {
     if (lastStep.current === draft.step) return;
@@ -29,9 +30,9 @@ export default function StandaloneVisualBuilder({ saved, editId }) {
     });
     return () => cancelAnimationFrame(frame);
   }, [draft.step]);
-  const shownError = error || (draft.step === 1 ? editorError : '');
+  const shownError = error;
   useEffect(() => { if (shownError) toast.error(shownError, { id: 'standalone-engraving-error' }); }, [shownError]);
-  if (options.isPending || hydrating) return <main className="commerce-page" role="status">Opening your engraving studio...</main>;
+  if (options.isPending || hydrating) return <main className="commerce-page"><LoadingState label="Opening your engraving studio" kind="workspace"/></main>;
   if (options.error) return <main className="commerce-page"><h1>Laser Engraving</h1><p role="alert">{commerceError(options.error)}</p><button onClick={() => options.refetch()}>Try again</button></main>;
   if (!options.data.enabled) return <ServiceRequestPage service="laser_engraving"/>;
   return <main className="standalone-visual-page">
@@ -48,7 +49,7 @@ export default function StandaloneVisualBuilder({ saved, editId }) {
         <details className="sv-overall"><summary><span><strong>Additional item photos</strong><small>Optional - up to 3 photos</small></span><ChevronDown size={18} aria-hidden="true"/></summary><p>Show the whole item or another angle. These are separate from your surface and artwork.</p><ImageSourceChooser uploadArea helperText="Add another angle or a view of the whole item." label="Add overall photos" inputLabel="Overall item photos" multiple maxFiles={Math.max(1, 3 - draft.visual.itemPhotos.length)} maxBytes={8388608} disabled={draft.visual.itemPhotos.length >= 3} onSelect={files => selectPhotos(files, 'overall')} onError={setError}/><div className="sv-photo-strip">{draft.visual.itemPhotos.map((id, index) => <div key={id}>{draft.visual.assets[id]?.blob ? <LocalPhoto file={draft.visual.assets[id].blob} alt={`Overall item photo ${index + 1}`}/> : <p>Photo unavailable</p>}<button type="button" onClick={() => update({ visual: { ...draft.visual, itemPhotos: draft.visual.itemPhotos.filter(value => value !== id) } })} aria-label={`Remove photo ${index + 1}`}><X size={17} aria-hidden="true"/></button></div>)}</div></details>
         <label>{type?.typeId === 'other' ? 'Describe your item' : 'About your item (optional)'}<textarea rows={2} maxLength={300} value={draft.description} onChange={event => update({ description: event.target.value })}/></label>
       </section><section className="sv-surface-preview" aria-label="Your selected surface"><VisualDesignPreview design={draft.visual.design} assets={draft.visual.assets} ownerScope={ownerKey}/></section></div>}
-      <div hidden={draft.step !== 1} className="sv-editor"><VisualEngravingEditor key={`${draft.itemKey}:${draft.editorRevision}`} ownerScope={ownerKey} initialDraft={{ ownerScope: ownerKey, design: draft.visual.design }} assets={draft.visual.assets} approvedFontIds={type?.fontIds || []} surfaceControls={false} confirmReset onError={setEditorError} onChange={editorChange}/></div>
+      <div hidden={draft.step !== 1} className="sv-editor"><VisualEngravingEditor key={`${draft.itemKey}:${draft.editorRevision}`} ownerScope={ownerKey} initialDraft={{ ownerScope: ownerKey, design: draft.visual.design }} assets={draft.visual.assets} approvedFontIds={type?.fontIds || []} stylesReady={Boolean(type)} surfaceControls={false} confirmReset onError={setEditorError} onChange={editorChange}/></div>
       {draft.step === 2 && <div className="sv-review-layout"><div><h2>Review Your Engraving</h2><VisualDesignPreview design={draft.visual.design} assets={draft.visual.assets} ownerScope={ownerKey} label="Your complete engraving design"/></div><section className="sv-review-details"><h3>{type?.name}, made yours</h3><dl>{draft.visual.design.layers.map(layer => <div key={layer.id}><dt>{layer.type === 'text' ? 'Text' : 'Image artwork'}</dt><dd>{layer.type === 'text' ? <><bdi>{layer.text}</bdi><br/>{FONT_REGISTRY.find(font => font.id === layer.fontId)?.language === 'ar' ? 'Arabic lettering' : 'English lettering'} · {layer.color}</> : 'Your original uploaded artwork'}</dd></div>)}</dl>{draft.description && <p>{draft.description}</p>}
         {draft.visual.itemPhotos.length > 0 && <div className="sv-photo-strip">{draft.visual.itemPhotos.map((id, index) => draft.visual.assets[id]?.blob && <LocalPhoto key={id} file={draft.visual.assets[id].blob} alt={`Overall item photo ${index + 1}`}/>)}</div>}
         <button type="button" onClick={() => setDraft(previous => ({ ...previous, step: 1 }))}>Edit Design</button></section></div>}

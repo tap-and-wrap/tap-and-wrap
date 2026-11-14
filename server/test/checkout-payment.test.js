@@ -142,3 +142,36 @@ for(const discounted of [false,true])test(`mixed checkout allocations reconcile 
  const entries=await OrderSettlement.find({orderId:accepted.id}).lean(),row=await Order.findById(accepted.id).lean();assert.equal(accountingSummary(row,entries).outstandingPiastres,0);
  await assert.rejects(mutateOrderAccounting(accepted.id,null,{...operation,revision:row.revision,operationKey:randomUUID()},actor));
 });
+
+test('ordinary COD switch retains issued instructions, supports re-entry and cannot bypass possible-transfer reconciliation', async () => {
+ const value=await prepared();
+ const cod={checkoutKey:value.checkoutKey,paymentMethod:'cod'};
+ const quote=await prepareCheckout(owner,cod);
+ assert.equal(quote.payment,undefined);
+ const retained=await ownedCheckoutPayment(owner,value.checkoutKey);
+ assert.equal(retained.payment.reference,value.payment.reference);
+ assert.equal(retained.payment.amountPiastres,12000);
+ assert.equal(presentCheckoutPayment(retained,{actionable:true}).destination,undefined);
+ await assert.rejects(prepareCheckoutPayment(owner,value.checkoutKey,value.quote.fingerprint,value.quote.paymentGroups));
+ const again=await prepareCheckout(owner,value);
+ assert.equal(again.payment.reference,value.payment.reference);
+ await prepareCheckout(owner,cod);
+ const accepted=await placeOrder(owner,request(cod));
+ assert.equal(accepted.paymentMethod,'cod');assert.equal(accepted.paymentState,'unpaid');
+ assert.equal(await OrderSettlement.countDocuments(),0);
+ const stored=await Order.findById(accepted.id).lean();
+ assert.ok(stored.history.some(entry=>entry.event==='checkout_transfer_instructions_retained'));
+ assert.equal(String((await ownedCheckoutPayment(owner,value.checkoutKey)).orderId),accepted.id);
+ assert.equal((await placeOrder(owner,request(cod))).id,accepted.id);
+ await Order.updateOne({_id:stored._id},{$set:{fulfillmentState:'out_for_delivery'}});
+ const actor={_id:new mongoose.Types.ObjectId(),role:'admin'};
+ const collection={revision:0,operationKey:randomUUID(),action:'collection',scope:'merchandise',amountPiastres:12000,method:'cod',reference:'fixture-cash',reason:'Isolated collection review',reconciled:true};
+ await assert.rejects(mutateOrderAccounting(accepted.id,owner,collection,actor),error=>error.code==='ACCOUNTING_REVIEW_REQUIRED');
+ assert.equal(await OrderSettlement.countDocuments(),0);
+});
+test('a saved screenshot cannot be silently switched to COD and remains owner-bound',async()=>{
+ const value=await prepared(),id=await proof(value);await submitCheckoutPaymentProof(owner,value.checkoutKey,{uploadId:id,senderName:'Fixture Sender'});
+ await assert.rejects(prepareCheckout(owner,{checkoutKey:value.checkoutKey,paymentMethod:'cod'}),error=>error.code==='CHECKOUT_PAYMENT_REVIEW_REQUIRED');
+ assert.equal((await ownedCheckoutPayment(owner,value.checkoutKey)).payment.proofId.toString(),id);
+ assert.equal((await Upload.findById(id)).state,'retained');assert.equal(await OrderSettlement.countDocuments(),0);
+});

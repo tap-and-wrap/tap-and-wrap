@@ -8,11 +8,11 @@ async function screenshot(page, name, width) {
   await page.screenshot({path:`${screenshotDir}/${name}-${width}.png`,fullPage:true});
 }
 async function details(page) {
-  await page.getByLabel('Full name',{exact:true}).fill('Synthetic Handover Customer');
-  await page.getByLabel('Egyptian mobile number').fill('01012345678');
-  await page.getByLabel('Governorate',{exact:true}).selectOption('cairo');
-  await page.getByLabel('City / Area',{exact:true}).fill('Synthetic City');
-  await page.getByLabel('Street address',{exact:true}).fill('10 Synthetic Street');
+  await page.getByLabel(/^Full name/).fill('Synthetic Handover Customer');
+  await page.getByLabel('Phone number').fill('01012345678');
+  await page.getByLabel(/^Governorate/).selectOption('cairo');
+  await page.getByLabel(/^City \/ Area/).fill('Synthetic City');
+  await page.getByLabel(/^Street address/).fill('10 Synthetic Street');
 }
 
 test('standalone compact steps and original-color artwork remain usable at all handover widths', async ({page,context}) => {
@@ -23,7 +23,20 @@ test('standalone compact steps and original-color artwork remain usable at all h
   await page.getByRole('button',{name:'Design Your Engraving',exact:true}).click();
   await words(page,'A lasting memory');
   await choose(page,/Engraving artwork: Add image artwork/,await image(page,400,200));
-  for(const width of [320,390,768,1024,1440]) await screenshot(page,'engraving-design',width);
+  for(const width of [320,390,768,1024,1440]) {
+    await screenshot(page,'engraving-design',width);
+    const footer=await page.locator('.sv-footer').boundingBox(), price=await page.locator('.sv-total strong').boundingBox();
+    const back=await page.getByRole('button',{name:'Back',exact:true}).boundingBox(), primary=await page.getByRole('button',{name:'Review Your Engraving',exact:true}).boundingBox();
+    expect(Math.abs(price.x+price.width-footer.x-footer.width)).toBeLessThan(2);
+    expect(Math.abs(primary.x+primary.width-footer.x-footer.width)).toBeLessThan(2);
+    expect(Math.abs(back.x-footer.x)).toBeLessThan(2);
+    expect(Math.abs(back.y+back.height/2-primary.y-primary.height/2)).toBeLessThan(2);
+    for(const control of await page.locator('.ve-transform-controls button').all()) {
+      const bounds=await control.boundingBox(), panel=await page.locator('.ve-workspace').boundingBox();
+      expect(bounds.x+bounds.width).toBeLessThanOrEqual(panel.x+panel.width+1);
+    }
+    expect(await page.locator('.ve-layout').evaluate(node=>getComputedStyle(node).display)).toBe(width>=1024?'grid':'flex');
+  }
   await review(page);
   for(const width of [320,390,768,1024,1440]) await screenshot(page,'engraving-review',width);
   await page.getByRole('button',{name:'Add to Cart',exact:true}).click();
@@ -41,9 +54,9 @@ test('guest checkout owns one accepted order and recovers the integrated private
   await page.getByRole('radio',{name:/InstaPay/}).check();
   await expect(page.getByRole('button',{name:'Place Order',exact:true})).toBeEnabled();
   await page.getByRole('button',{name:'Place Order',exact:true}).click();
-  await expect(page.getByRole('heading',{name:/Thank you, order/})).toBeVisible();
+  await expect(page.getByRole('heading',{name:/Thank you for your order!/})).toBeVisible();
   await expect(page.getByRole('button',{name:'Copy recipient'})).toBeVisible();
-  const link=await page.getByRole('link',{name:'View order status'}).getAttribute('href'), id=link.split('/').at(-1);
+  const link=await page.getByRole('main').getByRole('link',{name:'Track Order'}).getAttribute('href'), id=link.split('/').at(-1);
   for(const width of [320,390,768,1024,1440]) await screenshot(page,'instapay',width);
   const proofRequests=[], signedProofs=[];let lostProofResponse=false;
   let failedStatusRefresh=false;await page.route(`**/commerce/orders/${id}`,async route=>{if(!failedStatusRefresh){failedStatusRefresh=true;await route.fulfill({status:503,json:{ok:false,error:{code:'SYNTHETIC_STATUS_OUTAGE',message:'Synthetic order-status refresh outage.'}}});}else await route.fallback();});
@@ -56,12 +69,12 @@ test('guest checkout owns one accepted order and recovers the integrated private
   expect(signedProofs).toHaveLength(1);await expect.poll(()=>proofRequests.length).toBe(2);expect(proofRequests[0]).toEqual(proofRequests[1]);
   await expect(page.getByText(/Your accepted order remains saved/)).toBeVisible();await page.getByRole('button',{name:'Refresh payment status',exact:true}).click();
   await expect(page.getByText('Your proof is awaiting review. Do not send another transfer. You can replace the screenshot if needed.')).toBeVisible();
-  await page.reload();await expect(page.getByRole('heading',{name:/Thank you, order/})).toBeVisible();
+  await page.reload();await expect(page.getByRole('heading',{name:/Thank you for your order!/})).toBeVisible();
   const accepted=(await(await context.request.get(`${api}/commerce/orders/${id}`)).json()).data.order;
   expect(accepted.paymentState).toBe('awaiting_verification');expect(accepted.customer.email).toBe('');expect(accepted.customer.addressVersion).toBe('delivery-address-v3');
   const outsider=await browser.newContext();try{expect((await outsider.request.get(`${api}/commerce/orders/${id}`)).status()).toBe(404);}finally{await outsider.close();}
   expect(JSON.stringify(await page.evaluate(()=>({...localStorage,...sessionStorage})))).not.toMatch(/Synthetic Handover|Synthetic Street|blob:|data:image|synthetic-private/);
-  await page.getByRole('link',{name:'View order status'}).click();await expect(page).toHaveURL(new RegExp(`/orders/${id}$`));
+  await page.getByRole('main').getByRole('link',{name:'Track Order'}).click();await expect(page).toHaveURL(new RegExp(`/orders/${id}$`));
 });
 
 test('all five line families share safe InstaPay checkout; sticker details and manual scroll remain intact',async({page,context})=>{
@@ -78,7 +91,7 @@ test('all five line families share safe InstaPay checkout; sticker details and m
   await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();await page.getByRole('button',{name:'Next: Review',exact:true}).click();await page.getByRole('button',{name:'Add Your Gift to Cart',exact:true}).click();await expect(page).toHaveURL('/cart');
   const gift=page.getByRole('article',{name:'Gift Box',exact:true});await gift.getByRole('button',{name:'View Design Details',exact:true}).click();await expect(gift.locator('dl').getByText('Photo prints',{exact:true})).toBeVisible();await expect(gift.locator('dl').getByText('A special day',{exact:true})).toBeVisible();await expect(gift.getByText(/Personal touches per box/)).toHaveCount(0);await expect(gift.locator('.sticker-proof-image')).toBeVisible();
   const mixed=await cart(context);expect(mixed.items).toHaveLength(5);expect(mixed.items.filter(item=>item.kind==='product')).toHaveLength(3);
-  await page.goto('/checkout');await details(page);await expect(page.getByRole('radio',{name:/Cash on Delivery/})).toBeChecked();await expect(page.getByRole('radio',{name:/InstaPay/})).toBeVisible();await page.getByRole('radio',{name:/InstaPay/}).check();await expect(page.getByRole('button',{name:'Place Order',exact:true})).toBeEnabled();await page.getByRole('button',{name:'Place Order',exact:true}).click();await expect(page.getByRole('heading',{name:/Thank you, order/})).toBeVisible();
-  const id=(await page.getByRole('link',{name:'View order status'}).getAttribute('href')).split('/').at(-1),accepted=(await(await context.request.get(`${api}/commerce/orders/${id}`)).json()).data.order;
+  await page.goto('/checkout');await details(page);await expect(page.getByRole('radio',{name:/Cash on Delivery/})).toBeChecked();await expect(page.getByRole('radio',{name:/InstaPay/})).toBeVisible();await page.getByRole('radio',{name:/InstaPay/}).check();await expect(page.getByRole('button',{name:'Place Order',exact:true})).toBeEnabled();await page.getByRole('button',{name:'Place Order',exact:true}).click();await expect(page.getByRole('heading',{name:/Thank you for your order!/})).toBeVisible();
+  const id=(await page.getByRole('main').getByRole('link',{name:'Track Order'}).getAttribute('href')).split('/').at(-1),accepted=(await(await context.request.get(`${api}/commerce/orders/${id}`)).json()).data.order;
   expect(accepted.lines).toHaveLength(5);expect(accepted.lines.find(line=>line.kind==='gift_box_v2').giftBox.personalization.sticker.placement).toEqual(mixed.items.find(line=>line.kind==='gift_box_v2').giftBox.personalization.sticker.placement);expect(accepted.lines.find(line=>line.kind==='gift_box_v2').unitPricePiastres).toBe(mixed.items.find(line=>line.kind==='gift_box_v2').unitPricePiastres);expect(accepted.engravingPaymentPolicy).toBe('standalone-checkout-payment-v1');expect(accepted.paymentObligations.reduce((sum,group)=>sum+group.amountPiastres,0)).toBe(accepted.totals.totalPiastres);expect(accepted.engravingWorkflow.collectionAuthorized).toBe(false);
 });

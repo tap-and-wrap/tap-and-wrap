@@ -11,8 +11,10 @@ import LetteringControls from '../LetteringControls.jsx';
 import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Minus, Plus, Undo2, Redo2, RotateCcw, X } from 'lucide-react';
 
 import useArtworkGestures from './useArtworkGestures.js';
+import LoadingState from '../../components/LoadingState.jsx';
 
 const colors = { black: '#242020', white: '#ffffff', grey: '#888888' };
+const emptySources = Object.freeze({});
 
 /** No route, upload, price, cart or browser-storage side effects. Mount under the
  * host's verified owner + cart context. New scope discards all local resources. */
@@ -21,7 +23,7 @@ export default function VisualEngravingEditor({ ownerScope, ...props }) {
   const boundary = useRef({ ownerScope, generation });
   if (boundary.current.ownerScope !== ownerScope) boundary.current = { ownerScope, generation };
   if (boundary.current.generation !== generation) return <p role="status">Your private session changed. Open this design again.</p>;
-  if (!ownerScope) return <p role="status">Preparing your private design session...</p>;
+  if (!ownerScope) return <LoadingState kind="workspace" label="Opening your private design"/>;
   return <OwnedEditor key={`${ownerScope}:${generation}`} ownerScope={ownerScope} {...props}/>;
 }
 
@@ -33,17 +35,21 @@ function safePublicSource(asset) {
 }
 
 export function useAssetSources(assets, ownerScope) {
-  const [resolved, setResolved] = useState({});
+  const [resolved, setResolved] = useState(null);
   useEffect(() => {
     const urls = [], next = {};
     for (const [id, asset] of Object.entries(assets)) {
       if (asset.ownerScope === ownerScope && asset.blob instanceof Blob) { next[id] = URL.createObjectURL(asset.blob); urls.push(next[id]); }
       else if (safePublicSource(asset)) next[id] = safePublicSource(asset);
     }
-    setResolved(next);
+    setResolved({ assets, ownerScope, sources: next });
     return () => urls.forEach(url => URL.revokeObjectURL(url));
   }, [assets, ownerScope]);
-  return [resolved, id => setResolved(current => { const next = { ...current }; delete next[id]; return next; })];
+  const current = resolved?.assets === assets && resolved.ownerScope === ownerScope;
+  return [current ? resolved.sources : emptySources, id => setResolved(value => {
+    if (!value || value.assets !== assets || value.ownerScope !== ownerScope) return value;
+    const sources = { ...value.sources }; delete sources[id]; return { ...value, sources };
+  }), !current];
 }
 
 export async function imageRatio(file) {
@@ -74,7 +80,7 @@ export function TextArtwork({ layer, font, appearance }) {
   return <svg viewBox={`0 0 1000 ${height}`} aria-hidden="true" style={{ fontFamily: font.family, fill: appearance || colors[layer.color] }}><text textAnchor="middle" direction={/\p{Script=Arabic}/u.test(layer.text) ? 'rtl' : 'ltr'}>{lines.map((line, index) => <tspan key={index} x="500" y={height / 2 + (index - (lines.length - 1) / 2) * size * 1.3 + size * .28} fontSize={size}>{line || '\u00a0'}</tspan>)}</text></svg>;
 }
 
-function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approvedFontIds = [], onChange, surfaceControls = true, confirmReset = false, onError }) {
+function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approvedFontIds = [], onChange, surfaceControls = true, confirmReset = false, stylesReady = true, onError }) {
   const fonts = FONT_REGISTRY.filter(font => approvedFontIds.includes(font.id));
   const initial = useRef(null);
   if (!initial.current) {
@@ -85,6 +91,7 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
   const [preview, setPreview] = useState(null), [selected, setSelected] = useState(null), [zoom, setZoom] = useState(1), [error, setError] = useState(initial.current.error);
   const [localAssets, setLocalAssets] = useState({});
   const [resetTarget, setResetTarget] = useState(null);
+  const [textInput, setTextInput] = useState(null);
   const [viewBefore, setViewBefore] = useState(null);
   // Keep resource identity stable between geometry edits and expose only owned blobs.
   const assetCache = useRef({ supplied: null, local: null, value: {} });
@@ -97,12 +104,15 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
   const changeHandler = useRef(onChange); changeHandler.current = onChange;
   const approvedFonts = useRef(approvedFontIds); approvedFonts.current = approvedFontIds;
   const approvedFontKey = approvedFontIds.join(',');
-  const helpId = useId(), textId = useId(), errorRef = useRef(null);
+  const helpId = useId(), textId = useId();
+  const textEditVersion = useRef(0);
   const errorHandler = useRef(onError); errorHandler.current = onError;
   const visibleError = error || (unsupportedError());
-  function unsupportedError() { return design.layers.some(item => item.type === 'text' && !fonts.some(font => font.id === item.fontId)) ? 'A saved text style is no longer approved. Select that text and choose a current style before continuing.' : ''; }
-  useEffect(() => { errorHandler.current?.(visibleError); if (visibleError && !errorHandler.current) toast.error(visibleError, { id: 'visual-engraving-error' }); }, [visibleError]);
-  useEffect(() => { const deselect = event => { if (!editorRoot.current?.contains(event.target)) setSelected(null); }; document.addEventListener('pointerdown', deselect, true); return () => document.removeEventListener('pointerdown', deselect, true); }, []);
+  function unsupportedError() { return stylesReady && design.layers.some(item => item.type === 'text' && !fonts.some(font => font.id === item.fontId)) ? 'Choose a current lettering style for the highlighted text.' : ''; }
+  useEffect(() => { errorHandler.current?.(visibleError); if (error && !errorHandler.current) toast.error(error, { id: 'visual-engraving-error' }); }, [visibleError, error]);
+  // Let the outside control receive its click before collapsing selection tools;
+  // moving the footer between pointerdown and pointerup can swallow its action.
+  useEffect(() => { const deselect = event => { if (!editorRoot.current?.contains(event.target)) setSelected(null); }; document.addEventListener('click', deselect); return () => document.removeEventListener('click', deselect); }, []);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => {
     // Metadata + memory-only resources. The host decides when/how to save using
@@ -115,6 +125,26 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
     setError(''); setHistory(value => commitHistory(value, next));
   }
   function patch(patchValue) { if (layer) commit(editLayer(design, layer.id, patchValue)); }
+  async function editText(patchValue) {
+    if (!layer || layer.type !== 'text') return;
+    const version = ++textEditVersion.current, id = layer.id, current = layer;
+    const next = { ...current, ...patchValue };
+    if (Object.hasOwn(patchValue, 'text')) setTextInput({ id, text: patchValue.text });
+    const oldFont = FONT_REGISTRY.find(font => font.id === current.fontId), newFont = FONT_REGISTRY.find(font => font.id === next.fontId);
+    try {
+      await Promise.all([document.fonts.load(`100px "${oldFont.family}"`), document.fonts.load(`100px "${newFont.family}"`)]);
+      if (!mounted.current || version !== textEditVersion.current) return;
+      const context = document.createElement('canvas').getContext('2d');
+      const measure = (text, font) => { context.font = `100px "${font.family}"`; return Math.max(100, ...(text || 'Your words').split('\n').map(line => { const m = context.measureText(line); return Math.max(m.width, m.actualBoundingBoxLeft + m.actualBoundingBoxRight); })); };
+      const oldLines = (current.text || 'Your words').split('\n').length;
+      const em = current.width * Math.min(1000 / (measure(current.text, oldFont)/100+.2), 1000/current.aspectRatio/(oldLines*1.4)) / 1000;
+      const contentWidth = measure(next.text, newFont)+20, contentHeight = (next.text || 'Your words').split('\n').length*140;
+      // Only explicit text/font edits fit the frame. Restored rectangles, image
+      // geometry, rotation and untouched saved proofs retain their exact bounds.
+      commit(editLayer(live.current.design, id, { ...patchValue, width: em*contentWidth/100, aspectRatio: clamp(contentWidth/contentHeight,.05,40) }));
+      setTextInput(null);
+    } catch { if (version === textEditVersion.current) { setTextInput(null); setError('This lettering could not be loaded. Choose another style.'); } }
+  }
   async function selectFile(files, role) {
     const file = files[0], version = ++selectionVersion.current, generation = authGeneration();
     try {
@@ -129,7 +159,7 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
         const added = fitLayer({ id: crypto.randomUUID(), type: 'image', assetId, aspectRatio, x: .5, y: .5, width: .35 }, current.surface.aspectRatio);
         commit({ ...current, layers: [...current.layers, added] }); setSelected(added.id);
       }
-      toast.success(role === 'surface' ? 'Surface photo selected in your draft.' : 'Artwork selected in your draft.');
+      toast.success(role === 'surface' ? 'Surface photo selected.' : 'Artwork selected.');
     } catch { if (mounted.current && version === selectionVersion.current && generation === authGeneration()) setError('This image could not be opened. Choose a JPEG, PNG or WebP image with a less narrow shape.'); }
   }
   function addText() {
@@ -165,12 +195,11 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
     if(pointers.current.size===1){const [p]=[...pointers.current.values()];gesture.current={kind:'pan',x:p.x,y:p.y,left:viewport.current.scrollLeft,top:viewport.current.scrollTop};}
     if(board.current.hasPointerCapture(event.pointerId))board.current.releasePointerCapture(event.pointerId);
   }
-  function cancelGesture() { artworkGesture.cancel(); pointers.current.clear(); gesture.current = null; setPreview(null); }
+  function cancelGesture() { textEditVersion.current += 1; setTextInput(null); artworkGesture.cancel(); pointers.current.clear(); gesture.current = null; setPreview(null); }
   function move(dx, dy) { if (layer) patch({ x: layer.x + dx, y: layer.y + dy }); }
   const surfaceMissing = design.surface && !sources[design.surface.assetId];
   function resetDesign() { cancelGesture(); commit({ ...design, layers: [] }); setSelected(null); setResetTarget(null); }
   return <section ref={editorRoot} className="visual-engraving" aria-label="Visual engraving editor">
-    {visibleError && !onError && <p ref={errorRef} tabIndex={-1} role="alert" className="sv-error">{visibleError}</p>}
     <header className="ve-heading"><div><p className="eyebrow">Make it personal</p><h2>Your engraving, your way</h2></div></header>
     <div className="ve-layout"><div className="ve-workspace">
       <div className="ve-editor-toolbar"><div className="ve-history" aria-label="Design history"><button type="button" disabled={Boolean(viewBefore) || !history.past.length || Boolean(gesture.current)} onClick={() => { cancelGesture(); setHistory(undoHistory); }} aria-label="Undo"><Undo2 size={18} aria-hidden="true"/></button><button type="button" disabled={Boolean(viewBefore) || !history.future.length || Boolean(gesture.current)} onClick={() => { cancelGesture(); setHistory(redoHistory); }} aria-label="Redo"><Redo2 size={18} aria-hidden="true"/></button><button type="button" disabled={Boolean(viewBefore) || !design.layers.length} onClick={event => confirmReset ? setResetTarget(event.currentTarget) : resetDesign()} aria-label="Reset design"><RotateCcw size={18} aria-hidden="true"/></button></div><div className="ve-view-controls">{viewBefore ? <><span>Adjusting editor view</span><button type="button" aria-label="Zoom out workspace" disabled={zoom <= 1} onClick={() => setZoom(value => Math.max(1, value - .25))}>-</button><output aria-label="Workspace zoom">{Math.round(zoom * 100)}%</output><button type="button" aria-label="Zoom in workspace" disabled={zoom >= 3} onClick={() => setZoom(value => Math.min(3, value + .25))}>+</button><button type="button" onClick={() => { setZoom(1); viewport.current.scrollTo(0, 0); }}>Fit view</button><button type="button" onClick={() => { cancelGesture(); setViewBefore(null); }}>Save view</button><button type="button" onClick={() => { cancelGesture(); setZoom(viewBefore.zoom); const { left, top } = viewBefore; requestAnimationFrame(() => viewport.current?.scrollTo(left, top)); setViewBefore(null); }}>Cancel</button></> : <button type="button" onClick={() => { cancelGesture(); setViewBefore({ zoom, left: viewport.current.scrollLeft, top: viewport.current.scrollTop }); }}>Adjust View</button>}</div></div>
@@ -195,7 +224,7 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
 
       </section>
       {layer && <section className="ve-selection" aria-label="Selected design controls">
-        {layer.type === 'text' && <><label htmlFor={textId}>Your text</label><textarea id={textId} dir="auto" maxLength={500} value={layer.text} onChange={event => { const text = event.target.value, eligible = fonts.filter(font => !/\p{Script=Arabic}/u.test(text) || font.language === 'ar'); if (!eligible.length) { setError('No approved Arabic style is available for this item.'); return; } setError(''); patch({ text, fontId: eligible.some(font => font.id === layer.fontId) ? layer.fontId : eligible[0].id }); }}/><LetteringControls text={layer.text} fontId={layer.fontId} color={layer.color} fontIds={approvedFontIds} onChange={patch}/></>}
+        {layer.type === 'text' && <>{stylesReady && !fonts.some(font => font.id === layer.fontId) && <p className="form-error" role="alert">Choose a current lettering style for this text.</p>}<label htmlFor={textId}>Your text</label><textarea id={textId} dir="auto" maxLength={500} value={textInput?.id === layer.id ? textInput.text : layer.text} onChange={event => { const text = event.target.value, eligible = fonts.filter(font => !/\p{Script=Arabic}/u.test(text) || font.language === 'ar'); if (!eligible.length) { setError('No approved Arabic style is available for this item.'); return; } setError(''); void editText({ text, fontId: eligible.some(font => font.id === layer.fontId) ? layer.fontId : eligible[0].id }); }}/><LetteringControls text={layer.text} fontId={layer.fontId} color={layer.color} fontIds={approvedFontIds} onChange={value => value.fontId ? void editText(value) : patch(value)}/></>}
       </section>}
 
     </fieldset></div>

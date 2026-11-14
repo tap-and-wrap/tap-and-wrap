@@ -220,7 +220,8 @@ test('shop presents loading while the catalog response is pending', async ({ pag
   await mockCatalog(page, { beforeList: () => pending });
   await page.goto('/shop');
   await expect(page.locator('.catalog-results-toolbar')).toContainText('Loading products…');
-  await expect(page.locator('.catalog-skeleton')).toHaveCount(8);
+  await expect(page.getByRole('status').filter({ hasText: /^Loading products$/ })).toBeVisible();
+  await expect(page.locator('.tw-loading-cards .tw-skeleton-row')).toHaveCount(8);
   release();
   await expect(page.locator('.catalog-card')).toHaveCount(20);
 });

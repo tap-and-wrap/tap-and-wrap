@@ -249,9 +249,9 @@ test('customer notification contains escaped immutable gift selection without me
   assert.equal(event.snapshot.items.length, 1); assert.equal(event.snapshot.items[0].kind, 'gift_box_v2');
   const snapshot = JSON.stringify(event.snapshot); assert.equal(snapshot.includes(message), false); assert.equal(snapshot.includes('configurationId'), false); assert.equal(snapshot.includes('placements'), false);
   const rendered = renderEmailTemplate(event, { clientOrigin: 'https://shop.example.test' });
-  assert.match(rendered.text, /Build Your Gift Box x 1/); assert.match(rendered.text, /Synthetic rose-red x 3/);
-  assert.match(rendered.html, /Chocolate &lt;img/); assert.equal(rendered.html.includes('<img src=x'), false); assert.equal(rendered.html.includes(message), false);
-  assert.match(rendered.text, /Delivery is separate/);
+  assert.match(rendered.text, /Gift Box x 1/); assert.doesNotMatch(rendered.text, /Synthetic rose-red x 3/);
+  assert.doesNotMatch(rendered.html, /Chocolate &lt;img/); assert.equal(rendered.html.includes('<img src=x'), false); assert.equal(rendered.html.includes(message), false);
+  assert.match(rendered.text, /Delivery confirmed separately/);
 });
 
 test('authorized Gift Box COD stays unpaid and order-first proof rules remain enforced', async () => {

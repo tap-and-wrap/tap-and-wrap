@@ -1,3 +1,4 @@
+import { orderSummaryRows } from '../../../shared/order-summary.mjs';
 import { ALL_METHODS_POLICY } from '../../../shared/order-payment-policy.mjs';
 import { checkoutCustomer } from './checkout-customer.js';
 import { fenceProductEngravingPrice } from '../product-engraving/service.js';
@@ -73,17 +74,35 @@ async function prepareCheckoutCore(owner, input, userId, capability = null) {
   if (capability) assertGiftBoxCheckoutCapability(capability, owner);
   requireCheckout();
   const quote = await checkoutQuoteCore(owner, input, { userId }, capability);
-  const existing = await CheckoutIntent.findOne({ owner, checkoutKey: input.checkoutKey }).lean();
-  if (existing?.state === 'consumed') throw commerceError(409, 'CHECKOUT_USED', 'This checkout has already been submitted.');
-  if (existing?.payment) {
-    if (existing.fingerprint !== quote.fingerprint || existing.paymentMethod !== input.paymentMethod || existing.payment.state !== 'prepared' || new Date(existing.payment.expiresAt) <= new Date()) throw commerceError(409, 'CHECKOUT_PAYMENT_REVIEW_REQUIRED', 'Your prepared transfer reference needs reconciliation. Do not transfer again or create another order. Contact the store.');
-    return { ...quote.totals, totals: quote.totals, paymentGroups: initialPaymentGroups(quote.cart.items, quote.totals, input.paymentMethod, UPFRONT_ENGRAVING_POLICY), fingerprint: quote.fingerprint, expiresAt: existing.payment.expiresAt, payment: presentCheckoutPayment(existing, { actionable: true }) };
-  }
-  const expiresAt = new Date(Date.now() + 10 * 60000);
+  let result;
   assertDatabaseWriteAllowed(CheckoutIntent.db, env);
-  await CheckoutIntent.updateOne({ owner, checkoutKey: input.checkoutKey, state: 'open', payment: { $exists: false } }, { $set: { fingerprint: quote.fingerprint, quote: quote.totals, paymentMethod: input.paymentMethod, expiresAt },
-    $setOnInsert: { owner, checkoutKey: input.checkoutKey, state: 'open' } }, { upsert: true });
-  return { ...quote.totals, totals: quote.totals, paymentGroups: initialPaymentGroups(quote.cart.items, quote.totals, input.paymentMethod, UPFRONT_ENGRAVING_POLICY), fingerprint: quote.fingerprint, expiresAt };
+  await mongoose.connection.transaction(async session => {
+    const existing = await CheckoutIntent.findOne({ owner, checkoutKey: input.checkoutKey }).session(session);
+    if (existing?.state === 'consumed') throw commerceError(409, 'CHECKOUT_USED', 'This checkout has already been submitted.');
+    if (existing?.payment) {
+      const payment = existing.payment;
+      const originalFingerprint = payment.quoteFingerprint || existing.fingerprint;
+      if (input.paymentMethod === 'instapay') {
+        if (originalFingerprint !== quote.fingerprint || payment.state !== 'prepared' || new Date(payment.expiresAt) <= new Date()) throw commerceError(409, 'CHECKOUT_PAYMENT_REVIEW_REQUIRED', 'Transfer details have changed or expired. Do not transfer again. Contact the store to check your payment.');
+      } else if (payment.proofId || payment.state !== 'prepared') {
+        throw commerceError(409, 'CHECKOUT_PAYMENT_REVIEW_REQUIRED', 'Your transfer evidence is saved. Contact the store before changing how you pay.');
+      }
+      // A method switch never asserts that no transfer occurred. Keep the issued
+      // instructions, amount and original quote for reconciliation and re-entry.
+      existing.payment = { ...payment, quoteFingerprint: originalFingerprint };
+      existing.markModified('payment');
+      existing.fingerprint = quote.fingerprint; existing.quote = quote.totals; existing.paymentMethod = input.paymentMethod;
+      await existing.save({ session });
+      result = { ...quote.totals, totals: quote.totals, summaryRows: orderSummaryRows(quote.cart.items), paymentGroups: initialPaymentGroups(quote.cart.items, quote.totals, input.paymentMethod, UPFRONT_ENGRAVING_POLICY), fingerprint: quote.fingerprint, expiresAt: payment.expiresAt,
+        ...(input.paymentMethod === 'instapay' ? { payment: presentCheckoutPayment(existing, { actionable: true }) } : {}) };
+      return;
+    }
+    const expiresAt = new Date(Date.now() + 10 * 60000);
+    await CheckoutIntent.updateOne({ owner, checkoutKey: input.checkoutKey, state: 'open', payment: { $exists: false } }, { $set: { fingerprint: quote.fingerprint, quote: quote.totals, paymentMethod: input.paymentMethod, expiresAt },
+      $setOnInsert: { owner, checkoutKey: input.checkoutKey, state: 'open' } }, { upsert: true, session });
+    result = { ...quote.totals, totals: quote.totals, summaryRows: orderSummaryRows(quote.cart.items), paymentGroups: initialPaymentGroups(quote.cart.items, quote.totals, input.paymentMethod, UPFRONT_ENGRAVING_POLICY), fingerprint: quote.fingerprint, expiresAt };
+  });
+  return result;
 }
 export async function placeOrder(owner, input, userId, { trackingConsentId = null } = {}) {
   return placeOrderCore(owner, input, userId, { trackingConsentId });
@@ -129,7 +148,8 @@ async function placeOrderCore(owner, input, userId, { trackingConsentId = null }
         const quote = await checkoutQuoteCore(owner, normalized.customer.governorate ? { ...normalized, governorate: normalized.customer.governorate } : normalized, { session, userId }, capability);
         if (intent.fingerprint !== quote.fingerprint || intent.paymentMethod !== input.paymentMethod) throw commerceError(409, intent.payment ? 'CHECKOUT_PAYMENT_REVIEW_REQUIRED' : 'CHECKOUT_CHANGED', intent.payment ? 'Your payment reference requires reconciliation because checkout changed. Do not transfer again. Contact the store.' : 'Prices or cart contents changed. Review the updated total before submitting again.');
         let checkoutProof;
-        if (intent.payment) {
+        if (intent.payment && input.paymentMethod === 'cod' && (intent.payment.proofId || intent.payment.state !== 'prepared')) throw commerceError(409, 'CHECKOUT_PAYMENT_REVIEW_REQUIRED', 'Your transfer evidence requires review before changing payment method.');
+        if (intent.payment && input.paymentMethod === 'instapay') {
           const payment = intent.payment;
           if (input.paymentMethod !== 'instapay' || payment.state !== 'prepared' || new Date(payment.expiresAt) <= new Date() || payment.amountPiastres !== quote.totals.totalPiastres || !payment.proofId || input.paymentProofId && String(payment.proofId) !== input.paymentProofId) throw commerceError(409, 'CHECKOUT_PAYMENT_REVIEW_REQUIRED', 'This payment reference requires reconciliation. Do not transfer again. Contact the store with your reference.');
           checkoutProof = await Upload.findOne({ _id: payment.proofId, owner, checkoutKey: input.checkoutKey, purpose: 'payment_proof', state: 'retained', orderId: { $exists: false } }).session(session);
@@ -165,6 +185,7 @@ async function placeOrderCore(owner, input, userId, { trackingConsentId = null }
           checkoutProof.proofOrderId = order._id; checkoutProof.orderId = order._id; await checkoutProof.save({ session });
           await releaseRetainedUploadQuota(checkoutProof, session);
         }
+        if (intent.payment && input.paymentMethod === 'cod') order.history.push({ at: new Date(), event: 'checkout_transfer_instructions_retained', actor: 'system', internalNote: `InstaPay instructions were issued before COD selection. Reconcile possible transfers before collecting cash. Reference: ${intent.payment.reference}; amount: ${intent.payment.amountPiastres} piastres. Original intent retained under this order's checkout key.` });
         order.financialSummary = accountingSummary(order, []);
         assertDatabaseWriteAllowed(Order.db, env); await order.save({ session });
         await retainUploads(uploadIds, owner, order._id, { session });
