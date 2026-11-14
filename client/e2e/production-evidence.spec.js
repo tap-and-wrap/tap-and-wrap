@@ -1,0 +1,26 @@
+import {writeFile} from 'node:fs/promises';
+import {test,expect} from '@playwright/test';
+import {mockCommerce,cartWithProduct,isolatedImageFile} from './commerce-fixtures.js';
+import {mockCatalog} from './catalog-fixtures.js';
+import {ASSET_VERSION} from '../../shared/gift-box/definitions.mjs';
+const headers={'Access-Control-Allow-Origin':'http://127.0.0.1:5191','Access-Control-Allow-Credentials':'true'};
+for(const width of [320,390,768,1024,1440])test(`matched visual evidence ${width}`,async({page},info)=>{
+  test.setTimeout(60000);await page.setViewportSize({width,height:1000});const errors=[];page.on('pageerror',error=>errors.push(error.message));
+  const cart=cartWithProduct();Object.assign(cart.items[0],{kind:'gift_box_v2',giftBox:{box:{componentId:'box-2',displayName:'Gift Box'},items:[],artwork:{assetVersion:ASSET_VERSION},design:{presentationVersion:'gift-box-presentation-v2',placements:[],photos:[{x:.34,y:.4,width:.18,height:.23,zone:'inside'}]},personalization:{photoCount:1}}});
+  const privatePhoto=Buffer.from(await page.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=120;canvas.height=160;const ctx=canvas.getContext('2d');ctx.fillStyle='#408fc2';ctx.fillRect(0,0,120,160);ctx.fillStyle='#f7db65';ctx.beginPath();ctx.arc(85,35,17,0,Math.PI*2);ctx.fill();ctx.fillStyle='#43895a';ctx.fillRect(0,90,120,70);return canvas.toDataURL('image/png').split(',')[1];}),'base64');
+  await mockCommerce(page,{cart});await page.route('**/commerce/cart/items/*/gift-photos/*',route=>route.fulfill({headers,body:privatePhoto,contentType:'image/png'}));
+  await page.goto('/cart');await expect(page.getByRole('heading',{name:'Gift Box',exact:true})).toBeVisible();
+  await page.getByText('View Design Details',{exact:true}).click();
+  const capture=async name=>{await page.evaluate(()=>document.fonts.ready);await page.evaluate(()=>scrollTo(0,0));expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:info.outputPath(`${name}-${width}.png`),fullPage:true,animations:'disabled'});};
+  await capture('cart');
+  await mockCatalog(page);await page.goto('/e2e/fixtures/sticker-workspace/index.html');
+  await page.getByLabel('Write a name, special date, or heartfelt message').fill('With care');
+  await capture('sticker');
+  const stickerBounds=await page.locator('.sticker-viewport').boundingBox();
+  await page.route('**/fixture-product.png',route=>route.fulfill({body:isolatedImageFile().buffer,contentType:'image/png'}));
+  await page.goto('/e2e/fixtures/visual-engraving/index.html');await page.evaluate(()=>window.openApprovedProduct());
+  await page.getByRole('button',{name:'Add text',exact:true}).click();await page.getByLabel('Your text',{exact:true}).fill('A real memory');await capture('engraving');
+  await page.goto('/',{waitUntil:'domcontentloaded'});await page.locator('.faq-section').waitFor();await capture('homepage');
+  const backgrounds=await page.evaluate(()=>({faq:getComputedStyle(document.querySelector('.faq-section')).backgroundColor,featured:getComputedStyle(document.querySelector('[aria-labelledby="home-featured-heading"]')).backgroundColor}));
+  await writeFile(info.outputPath('bounds.json'),JSON.stringify({width,stickerBounds,backgrounds,errors},null,2));await info.attach('bounds.json',{path:info.outputPath('bounds.json'),contentType:'application/json'});expect(errors).toEqual([]);
+});

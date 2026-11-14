@@ -6,3 +6,6 @@
 
 .sticker-rotation-row{justify-content:space-between}.sticker-placement-note{font-size:.8rem;line-height:1.5;margin:0;color:var(--tw-ink)}.sticker-proof-image{background:#fff}.commerce-gift-summary>.sticker-proof-image{max-width:320px;margin:16px auto;border:1px solid var(--tw-border,#eadad5);border-radius:12px;overflow:hidden}
 .sticker-workspace{container-type:inline-size}.sticker-toolbar{flex-wrap:nowrap}@container(max-width:300px){.sticker-toolbar button{width:32px;height:44px}.sticker-toolbar output{min-width:36px}}
+
+/* Scale the square canvas; its normalized coordinate system stays intact. */
+.sticker-viewport{width:min(100%,280px,42svh);justify-self:center}

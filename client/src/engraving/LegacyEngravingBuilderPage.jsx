@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 import ConfirmationDialog from '../components/ConfirmationDialog.jsx';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -27,7 +28,7 @@ function EngravingBuilder() {
   const {draft,setDraft,reset,attempt,cache,ownerKey,pending,setPending}=state;
   const [resetTarget,setResetTarget]=useState(null);
   const [editLoading,setEditLoading]=useState(Boolean(params.get('edit'))),[editFailure,setEditFailure]=useState('');
-  const [page,setPage]=useState(1), [error,setError]=useState(''),[progress,setProgress]=useState(''),[added,setAdded]=useState(false),[acceptedOrder,setAcceptedOrder]=useState(null),[recovering,setRecovering]=useState(false);
+  const [page,setPage]=useState(1), [error,setError]=useState(''),[progress,setProgress]=useState(''),[added,setAdded]=useState(false),[recovering,setRecovering]=useState(false);
   const scope=`tw-engraving-add:${cart.checkoutOwnerKey || ownerKey}`;
   const [uncertain,setUncertain]=useState(()=>{try{return JSON.parse(sessionStorage.getItem(scope))?.pending===true;}catch{return false;}});
   const options=useQuery({queryKey:privateQueryKey(session.ownerKey,'engraving-types',page),queryFn:({signal})=>commerceGet('/engraving/types',{page},signal),enabled:session.ready,retry:false,staleTime:0});
@@ -74,7 +75,7 @@ function EngravingBuilder() {
     let key=attempt.current?.operationKey;try{key ||= JSON.parse(sessionStorage.getItem(scope))?.key;}catch{/* Optional storage. */}
     if(!key)throw Error('The previous attempt cannot be recovered here. Review the cart before starting another item.');
     const result=await commerceGet(`/cart/operations/${key}`);
-    if(result.applied){setAcceptedOrder(result.alreadyOrdered||null);setUncertain(false);remember({key,pending:false});setAdded(true);attempt.current=null;await cart.refresh();}
+    if(result.applied){toast.success(result.alreadyOrdered ? 'Your engraving is already ordered.' : 'Engraving added to cart.', {id:'cart-update'});setUncertain(false);remember({key,pending:false});setAdded(true);attempt.current=null;await cart.refresh();}
     else setError('This add is not confirmed. Retry the same saved request, or check the cart again. A missing result does not prove an in-flight request failed.');
   }catch(caught){setError(commerceError(caught));}finally{setRecovering(false);}}
   async function add(){
@@ -94,8 +95,7 @@ function EngravingBuilder() {
         attempt.current={kind:'engraving_service_v1',operationKey:crypto.randomUUID(),quantity:1,specification:specification(ids),reviewFingerprint:quote.reviewFingerprint,...(draft.replaceLineId?{replaceLineId:draft.replaceLineId,replaceFingerprint:draft.replaceFingerprint}:{})};
       }
       remember({key:attempt.current.operationKey,pending:true});setUncertain(true);
-      const addedResult = await cart.add(attempt.current);
-      setAcceptedOrder(addedResult.alreadyOrdered || null);
+      await cart.add(attempt.current);
       if(generation!==authGeneration())return;
       remember({key:attempt.current.operationKey,pending:false});setUncertain(false);setAdded(true);attempt.current=null;
     }catch(caught){if(generation===authGeneration()){
@@ -140,7 +140,7 @@ function EngravingBuilder() {
       </>}
       {draft.step===2&&<><div className="studio-review-heading"><div><p className="eyebrow">A piece of your story</p><h3>{type?.name}, made personal</h3></div><strong className="engraving-price">{money(type?.pricePiastres)}</strong></div><div className="studio-review-item"><LocalPhoto file={draft.files.item_photo} alt="Your physical item"/>{draft.files.surface_photo&&<LocalPhoto file={draft.files.surface_photo} alt="Engraving surface"/>}<div><span>Your actual item</span><p>{draft.description||'One physical item, one engraving location'}</p></div></div><DesignPreview content={specification().content} appearance={draft.requestedAppearance} artwork={draft.files.personal_artwork}/><EngravingSummary engraving={summary} preview={false}/><div className="studio-edit-actions"><button type="button" className="commerce-link-button" onClick={()=>update({step:0})}>Edit item and photos</button><button type="button" className="commerce-link-button" onClick={()=>update({step:1})}>Edit engraving choices</button></div><p className="commerce-notice">We inspect your item and confirm the design with you before payment. This request does not approve suitability or start engraving.</p></>}
     </fieldset>{draft.step===0&&<details className="studio-private-details"><summary>Photos, privacy &amp; your draft</summary><p>Your draft stays in this tab while you browse. Refreshing clears it. Photos upload privately only when you add to cart.</p></details>}{error&&!error.includes('photograph')&&<p id="engraving-error" className="form-error" role="alert">{error}</p>}{progress&&<p role="status">{progress}</p>}
-    {added?<div role="status"><h3>{acceptedOrder ? 'Your engraving is already ordered' : 'Your engraving is in the cart'}</h3><Link className="button button-primary" to={acceptedOrder ? `/orders/${acceptedOrder}` : '/cart'}>{acceptedOrder ? 'View accepted order' : 'View cart'}</Link><button type="button" className="button button-secondary" onClick={()=>{reset();setParams({});setAdded(false);}}>Start a new engraving</button></div>:<div className="engraving-actions">{draft.step>0&&<button type="button" className="button button-secondary" disabled={pending||uncertain} onClick={()=>update({step:draft.step-1})}>Back</button>}{draft.step<2?<button type="button" className="button button-primary" disabled={pending||uncertain} onClick={()=>{const invalid=validate(draft.step);if(invalid)setError(invalid);else update({step:draft.step+1});}}>Continue</button>:<button type="button" className="button button-primary" disabled={pending||uncertain} onClick={add}>{pending?'Adding securely…':'Add Engraving to Cart'}</button>}</div>}</section>
+    {!added&&<div className="engraving-actions">{draft.step>0&&<button type="button" className="button button-secondary" disabled={pending||uncertain} onClick={()=>update({step:draft.step-1})}>Back</button>}{draft.step<2?<button type="button" className="button button-primary" disabled={pending||uncertain} onClick={()=>{const invalid=validate(draft.step);if(invalid)setError(invalid);else update({step:draft.step+1});}}>Continue</button>:<button type="button" className="button button-primary" disabled={pending||uncertain} onClick={add}>{pending?'Adding securely…':'Add Engraving to Cart'}</button>}</div>}</section>
     <aside className="engraving-aside">{draft.step===1?<DesignPreview content={specification().content} appearance={draft.requestedAppearance} artwork={draft.files.personal_artwork}/>:<img className="studio-aside-illustration" src={`/assets/engraving/v2/${['perfume','necklace','bracelet','watch','lip-gloss','makeup','bag','office-set','other'].includes(type?.typeId)?type.typeId:'perfume'}-item.svg`} width="240" height="240" alt="Illustrative item"/>}<p className="eyebrow">{type?.name||'Something only yours'}</p><strong className="engraving-price">{type?money(type.pricePiastres):'Choose your piece'}</strong><p>One item. One location. No option surcharges.</p><details><summary>Your item, thoughtfully handled</summary><p>Inspection and design acceptance come before payment. The final finish depends on your material.</p><p>Your draft and photos stay in this tab while you explore. Refreshing clears them. Files upload privately only at Add to Cart.</p></details><button type="button" className="commerce-link-button" disabled={pending||uncertain} onClick={event=>setResetTarget(event.currentTarget)}>Start again</button></aside></div>
   {resetTarget&&<ConfirmationDialog title="Clear this engraving draft?" description="Your current engraving choices and local photos will be removed from this tab." returnFocus={resetTarget} onCancel={()=>setResetTarget(null)} onConfirm={()=>{reset();setParams({});setAdded(false);setResetTarget(null);}} cancelLabel="Keep editing" confirmLabel="Clear draft"/>}</main>;
 }

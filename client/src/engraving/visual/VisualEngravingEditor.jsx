@@ -1,5 +1,5 @@
 import { toast } from 'sonner';
-import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { FONT_REGISTRY } from '../../../../shared/engraving/definitions.mjs';
 import ImageSourceChooser from '../../components/ImageSourceChooser.jsx';
 import ConfirmationDialog from '../../components/ConfirmationDialog.jsx';
@@ -12,6 +12,7 @@ import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Minus, Plus, Undo2, Redo2, R
 
 import useArtworkGestures from './useArtworkGestures.js';
 import LoadingState from '../../components/LoadingState.jsx';
+import { artworkMetrics, loadArtworkFont } from './text-metrics.js';
 
 const colors = { black: '#242020', white: '#ffffff', grey: '#888888' };
 const emptySources = Object.freeze({});
@@ -63,25 +64,22 @@ export async function imageRatio(file) {
 }
 
 export function TextArtwork({ layer, font, appearance }) {
-  const [metrics, setMetrics] = useState(null);
+  const [readyFamily, fontReady] = useState(() => document.fonts.check(`100px "${font.family}"`) ? font.family : null);
   useEffect(() => {
     let current = true;
-    async function measure() {
-      await document.fonts.load(`100px "${font.family}"`);
-      if (!current) return;
-      const context = document.createElement('canvas').getContext('2d'); context.font = `100px "${font.family}"`;
-      setMetrics({ text: layer.text, fontId: font.id, width: Math.max(100, ...layer.text.split('\n').map(line => context.measureText(line).width)) });
-    }
-    void measure().catch(() => {});
+    void loadArtworkFont(font.family).then(() => { if (current) fontReady(font.family); }).catch(() => {});
     return () => { current = false; };
-  }, [layer.text, font.id, font.family]);
-  const lines = (layer.text || 'Your words').split('\n'), height = 1000 / layer.aspectRatio;
-  const size = Math.min(1000 / ((metrics?.text === layer.text && metrics?.fontId === font.id ? metrics.width : 800) / 100 + .2), height / (lines.length * 1.4));
-  return <svg viewBox={`0 0 1000 ${height}`} aria-hidden="true" style={{ fontFamily: font.family, fill: appearance || colors[layer.color] }}><text textAnchor="middle" direction={/\p{Script=Arabic}/u.test(layer.text) ? 'rtl' : 'ltr'}>{lines.map((line, index) => <tspan key={index} x="500" y={height / 2 + (index - (lines.length - 1) / 2) * size * 1.3 + size * .28} fontSize={size}>{line || '\u00a0'}</tspan>)}</text></svg>;
+  }, [font.family]);
+  if (!layer.text) return null;
+  const metrics = artworkMetrics(layer.text, font.family);
+  const lines = layer.text.split('\n'), height = 1000 / layer.aspectRatio;
+  const size = Math.min(1000 / (metrics.width / 100 + .2), height / (lines.length * 1.4));
+  return <svg viewBox={`0 0 1000 ${height}`} aria-hidden="true" style={{ fontFamily: font.family, fill: appearance || colors[layer.color], visibility: readyFamily === font.family || document.fonts.check(`100px "${font.family}"`) ? 'visible' : 'hidden' }}><text textAnchor="middle" direction={/\p{Script=Arabic}/u.test(layer.text) ? 'rtl' : 'ltr'}>{lines.map((line, index) => <tspan key={index} x="500" y={height / 2 + (index - (lines.length - 1) / 2) * size * 1.3 + size * .28} fontSize={size}>{line || '\u00a0'}</tspan>)}</text></svg>;
 }
 
 function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approvedFontIds = [], onChange, surfaceControls = true, confirmReset = false, stylesReady = true, onError }) {
-  const fonts = FONT_REGISTRY.filter(font => approvedFontIds.includes(font.id));
+  const approvedFontKey = approvedFontIds.join(',');
+  const fonts = useMemo(() => FONT_REGISTRY.filter(font => approvedFontKey.split(',').includes(font.id)), [approvedFontKey]);
   const initial = useRef(null);
   if (!initial.current) {
     try { initial.current = { design: initialDraft ? restoreVisualDraft(initialDraft, ownerScope) : emptyDesign(), error: '' }; }
@@ -91,7 +89,8 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
   const [preview, setPreview] = useState(null), [selected, setSelected] = useState(null), [zoom, setZoom] = useState(1), [error, setError] = useState(initial.current.error);
   const [localAssets, setLocalAssets] = useState({});
   const [resetTarget, setResetTarget] = useState(null);
-  const [textInput, setTextInput] = useState(null);
+  const [removeTarget, setRemoveTarget] = useState(null);
+  const textScale = useRef(null), addTextControl = useRef(null);
   const [viewBefore, setViewBefore] = useState(null);
   // Keep resource identity stable between geometry edits and expose only owned blobs.
   const assetCache = useRef({ supplied: null, local: null, value: {} });
@@ -103,7 +102,7 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
   live.current = { design, zoom };
   const changeHandler = useRef(onChange); changeHandler.current = onChange;
   const approvedFonts = useRef(approvedFontIds); approvedFonts.current = approvedFontIds;
-  const approvedFontKey = approvedFontIds.join(',');
+  useEffect(() => { fonts.forEach(font => { void loadArtworkFont(font.family).catch(() => {}); }); }, [fonts]);
   const helpId = useId(), textId = useId();
   const textEditVersion = useRef(0);
   const errorHandler = useRef(onError); errorHandler.current = onError;
@@ -112,38 +111,38 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
   useEffect(() => { errorHandler.current?.(visibleError); if (error && !errorHandler.current) toast.error(error, { id: 'visual-engraving-error' }); }, [visibleError, error]);
   // Let the outside control receive its click before collapsing selection tools;
   // moving the footer between pointerdown and pointerup can swallow its action.
-  useEffect(() => { const deselect = event => { if (!editorRoot.current?.contains(event.target)) setSelected(null); }; document.addEventListener('click', deselect); return () => document.removeEventListener('click', deselect); }, []);
+  useEffect(() => { const deselect = event => { if (!event.target.closest?.('dialog') && !editorRoot.current?.contains(event.target)) setSelected(null); }; document.addEventListener('click', deselect); return () => document.removeEventListener('click', deselect); }, []);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => {
     // Metadata + memory-only resources. The host decides when/how to save using
     // an existing owned persistence contract; this editor never stores files.
-    changeHandler.current?.(createVisualDraft(ownerScope, history.present), assetCache.current.value, designReadiness(history.present, { approvedFontIds: approvedFonts.current, availableAssetIds: Object.keys(sources) }));
-  }, [history.present, ownerScope, sources, approvedFontKey]);
+    changeHandler.current?.(createVisualDraft(ownerScope, history.present), assetCache.current.value, { ...designReadiness(history.present, { approvedFontIds: approvedFonts.current, availableAssetIds: Object.keys(sources) }), ...(visibleError ? {ready:false} : {}) });
+  }, [history.present, ownerScope, sources, approvedFontKey, visibleError]);
   function commit(next) {
     setPreview(null);
     try { validateDesign(next); } catch { setError('This design could not be updated. Check your text and try again.'); return; }
     setError(''); setHistory(value => commitHistory(value, next));
   }
-  function patch(patchValue) { if (layer) commit(editLayer(design, layer.id, patchValue)); }
-  async function editText(patchValue) {
+  function patch(patchValue) { textScale.current = null; if (layer) commit(editLayer(design, layer.id, patchValue)); }
+  function editText(patchValue) {
     if (!layer || layer.type !== 'text') return;
-    const version = ++textEditVersion.current, id = layer.id, current = layer;
-    const next = { ...current, ...patchValue };
-    if (Object.hasOwn(patchValue, 'text')) setTextInput({ id, text: patchValue.text });
-    const oldFont = FONT_REGISTRY.find(font => font.id === current.fontId), newFont = FONT_REGISTRY.find(font => font.id === next.fontId);
-    try {
-      await Promise.all([document.fonts.load(`100px "${oldFont.family}"`), document.fonts.load(`100px "${newFont.family}"`)]);
+    const version = ++textEditVersion.current, id = layer.id;
+    const next = { ...layer, ...patchValue };
+    const oldFont = FONT_REGISTRY.find(font => font.id === layer.fontId), newFont = FONT_REGISTRY.find(font => font.id === next.fontId);
+    if (textScale.current?.id !== id) {
+      const old = artworkMetrics(layer.text, oldFont?.family || newFont.family);
+      textScale.current = { id, em: layer.text ? layer.width * Math.min(1000 / (old.width / 100 + .2), 1000 / layer.aspectRatio / (old.lines * 1.4)) / 1000 : Math.min(layer.width / 6, .08) };
+    }
+    const em = textScale.current.em;
+    const apply = () => {
       if (!mounted.current || version !== textEditVersion.current) return;
-      const context = document.createElement('canvas').getContext('2d');
-      const measure = (text, font) => { context.font = `100px "${font.family}"`; return Math.max(100, ...(text || 'Your words').split('\n').map(line => { const m = context.measureText(line); return Math.max(m.width, m.actualBoundingBoxLeft + m.actualBoundingBoxRight); })); };
-      const oldLines = (current.text || 'Your words').split('\n').length;
-      const em = current.width * Math.min(1000 / (measure(current.text, oldFont)/100+.2), 1000/current.aspectRatio/(oldLines*1.4)) / 1000;
-      const contentWidth = measure(next.text, newFont)+20, contentHeight = (next.text || 'Your words').split('\n').length*140;
-      // Only explicit text/font edits fit the frame. Restored rectangles, image
-      // geometry, rotation and untouched saved proofs retain their exact bounds.
-      commit(editLayer(live.current.design, id, { ...patchValue, width: em*contentWidth/100, aspectRatio: clamp(contentWidth/contentHeight,.05,40) }));
-      setTextInput(null);
-    } catch { if (version === textEditVersion.current) { setTextInput(null); setError('This lettering could not be loaded. Choose another style.'); } }
+      const metrics = artworkMetrics(next.text, newFont.family), width = metrics.width + 20, height = metrics.lines * 140;
+      commit(editLayer(live.current.design, id, { ...patchValue, width: em * width / 100, aspectRatio: clamp(width / height, .05, 40) }));
+    };
+    // Commit real input synchronously. Measure the currently rendered font,
+    // then refine once if loading completes; older keystrokes cannot overwrite it.
+    apply();
+    if (!document.fonts.check(`100px "${newFont.family}"`)) void loadArtworkFont(newFont.family).then(apply).catch(() => { if (mounted.current && version === textEditVersion.current) setError('This lettering could not be loaded. Choose another style.'); });
   }
   async function selectFile(files, role) {
     const file = files[0], version = ++selectionVersion.current, generation = authGeneration();
@@ -195,7 +194,7 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
     if(pointers.current.size===1){const [p]=[...pointers.current.values()];gesture.current={kind:'pan',x:p.x,y:p.y,left:viewport.current.scrollLeft,top:viewport.current.scrollTop};}
     if(board.current.hasPointerCapture(event.pointerId))board.current.releasePointerCapture(event.pointerId);
   }
-  function cancelGesture() { textEditVersion.current += 1; setTextInput(null); artworkGesture.cancel(); pointers.current.clear(); gesture.current = null; setPreview(null); }
+  function cancelGesture() { textEditVersion.current += 1; textScale.current = null; artworkGesture.cancel(); pointers.current.clear(); gesture.current = null; setPreview(null); }
   function move(dx, dy) { if (layer) patch({ x: layer.x + dx, y: layer.y + dy }); }
   const surfaceMissing = design.surface && !sources[design.surface.assetId];
   function resetDesign() { cancelGesture(); commit({ ...design, layers: [] }); setSelected(null); setResetTarget(null); }
@@ -219,15 +218,16 @@ function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approve
       <p id={helpId} className="sr-only">{viewBefore ? 'Drag to pan or pinch to zoom. This editor view does not change the final engraving.' : 'Drag selected artwork to move. Pinch with two fingers to resize and twist to rotate. Arrow keys move the focused layer. Adjust View changes only your workspace view.'}</p>
     </div><fieldset className="ve-controls" disabled={Boolean(viewBefore)}><legend className="sr-only">Design controls</legend>
       {surfaceControls && <section aria-label="Surface photo"><h3>Your surface</h3><ImageSourceChooser uploadArea helperText="Choose a clear photo of the area to engrave." label={design.surface ? 'Replace surface photo' : 'Choose surface photo'} inputLabel="Surface photo" context="Engraving surface" maxBytes={8388608} onSelect={files => selectFile(files, 'surface')} onError={setError}/><p className="ve-help">Your surface and engraving artwork stay separate.</p></section>}
-      <section aria-label="Add design"><h3>Add your design</h3><div className="ve-actions"><button type="button" disabled={!design.surface || !fonts.length || design.layers.length >= MAX_LAYERS} onClick={addText}>Add text</button><ImageSourceChooser label="Add image artwork" inputLabel="Image artwork" context="Engraving artwork" disabled={!design.surface || design.layers.length >= MAX_LAYERS} maxBytes={8388608} onSelect={files => selectFile(files, 'artwork')} onError={setError}/></div>{!fonts.length && <p className="ve-help">Approved text styles are not available for this item.</p>}
-        {design.layers.length > 0 && <div className="ve-layers" role="group" aria-label="Design layers">{design.layers.map((item, index) => <span className="ve-layer-chip" key={item.id}><button type="button" aria-pressed={selected === item.id} onClick={() => setSelected(item.id)}>{index + 1}. {item.type === 'text' ? item.text.slice(0, 25) || 'Text' : 'Image artwork'}</button>{selected === item.id && <button type="button" className="ve-delete-layer" aria-label={`Delete ${item.type === 'text' ? 'text' : 'image'} layer ${index + 1}`} onClick={() => { commit({ ...design, layers: design.layers.filter(value => value.id !== item.id) }); setSelected(null); }}><X size={16} aria-hidden="true"/></button>}</span>)}</div>}
+      <section aria-label="Add design"><h3>Add your design</h3><div className="ve-actions"><button type="button" disabled={!design.surface || !fonts.length || design.layers.length >= MAX_LAYERS} ref={addTextControl} onClick={addText}>Add text</button><ImageSourceChooser label="Add image artwork" inputLabel="Image artwork" context="Engraving artwork" disabled={!design.surface || design.layers.length >= MAX_LAYERS} maxBytes={8388608} onSelect={files => selectFile(files, 'artwork')} onError={setError}/></div>{!fonts.length && <p className="ve-help">Approved text styles are not available for this item.</p>}
+        {design.layers.length > 0 && <div className="ve-layers" role="group" aria-label="Design layers">{design.layers.map((item, index) => <span className="ve-layer-chip" key={item.id}><button type="button" aria-pressed={selected === item.id} onClick={() => setSelected(item.id)}>{index + 1}. {item.type === 'text' ? item.text.slice(0, 25) || 'Text' : 'Image artwork'}</button>{selected === item.id && <button type="button" className="ve-delete-layer" aria-label={`Delete ${item.type === 'text' ? 'text' : 'image'} layer ${index + 1}`} onClick={event => setRemoveTarget({ id: item.id, type: item.type, opener: event.currentTarget })}><X size={16} aria-hidden="true"/></button>}</span>)}</div>}
 
       </section>
       {layer && <section className="ve-selection" aria-label="Selected design controls">
-        {layer.type === 'text' && <>{stylesReady && !fonts.some(font => font.id === layer.fontId) && <p className="form-error" role="alert">Choose a current lettering style for this text.</p>}<label htmlFor={textId}>Your text</label><textarea id={textId} dir="auto" maxLength={500} value={textInput?.id === layer.id ? textInput.text : layer.text} onChange={event => { const text = event.target.value, eligible = fonts.filter(font => !/\p{Script=Arabic}/u.test(text) || font.language === 'ar'); if (!eligible.length) { setError('No approved Arabic style is available for this item.'); return; } setError(''); void editText({ text, fontId: eligible.some(font => font.id === layer.fontId) ? layer.fontId : eligible[0].id }); }}/><LetteringControls text={layer.text} fontId={layer.fontId} color={layer.color} fontIds={approvedFontIds} onChange={value => value.fontId ? void editText(value) : patch(value)}/></>}
+        {layer.type === 'text' && <>{stylesReady && !fonts.some(font => font.id === layer.fontId) && <p className="form-error" role="alert">Choose a current lettering style for this text.</p>}<label htmlFor={textId}>Your text</label><textarea id={textId} dir="auto" maxLength={500} value={layer.text} onChange={event => { const text = event.target.value, eligible = fonts.filter(font => !/\p{Script=Arabic}/u.test(text) || font.language === 'ar'); if (!eligible.length) { setError('No approved Arabic style is available for this item.'); return; } setError(''); void editText({ text, fontId: eligible.some(font => font.id === layer.fontId) ? layer.fontId : eligible[0].id }); }}/><LetteringControls text={layer.text} fontId={layer.fontId} color={layer.color} fontIds={approvedFontIds} onChange={value => value.fontId ? void editText(value) : patch(value)}/></>}
       </section>}
 
     </fieldset></div>
+    {removeTarget && <ConfirmationDialog title={`Remove ${removeTarget.type === 'text' ? 'text' : 'image artwork'}?`} description="Only this layer will be removed. You can undo the change." returnFocus={removeTarget.opener} onCancel={() => setRemoveTarget(null)} onConfirm={() => { cancelGesture(); commit({ ...live.current.design, layers: live.current.design.layers.filter(item => item.id !== removeTarget.id) }); setSelected(null); setRemoveTarget(null); requestAnimationFrame(() => addTextControl.current?.focus({preventScroll:true})); }} confirmLabel="Remove" cancelLabel="Cancel"/>}
     {resetTarget && <ConfirmationDialog title="Reset your engraving design?" description="Your text and artwork will be cleared. Your surface photo stays ready." returnFocus={resetTarget} onCancel={() => setResetTarget(null)} onConfirm={resetDesign} confirmLabel="Reset design" cancelLabel="Keep editing"/>}
   </section>;
 }

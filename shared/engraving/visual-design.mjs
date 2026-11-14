@@ -36,7 +36,7 @@ export function fitLayer(layer, surfaceRatio) {
   const angle = (layer.rotation ?? 0) * Math.PI / 180, c = Math.abs(Math.cos(angle)), s = Math.abs(Math.sin(angle));
   const heightPerWidth = surfaceRatio / layer.aspectRatio;
   const maxWidth = Math.min(1, 1 / (c + s / layer.aspectRatio), 1 / (s * surfaceRatio + c * heightPerWidth));
-  const width = clamp(layer.width, Math.min(.04, maxWidth), maxWidth), height = width * heightPerWidth;
+  const width = clamp(layer.width, Math.min(layer.type === 'text' ? .0001 : .04, maxWidth), maxWidth), height = width * heightPerWidth;
   const halfX = (c * width + s * height / surfaceRatio) / 2, halfY = (s * width * surfaceRatio + c * height) / 2;
   return { ...layer, width, x: clamp(layer.x, halfX, 1 - halfX), y: clamp(layer.y, halfY, 1 - halfY) };
 }

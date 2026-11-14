@@ -1,6 +1,7 @@
 // Gift Box specific private upload handoff. Invoked only from an explicit
 // customer submission action. Do not persist local Files, object URLs or
 // filenames in the cart payload, localStorage or public telemetry.
+import { mapUploads } from '../commerce/upload-batch.mjs';
 import { getFixedComponent } from '../../../shared/gift-box/definitions.mjs';
 
 const MAX_PRIVATE_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -29,22 +30,20 @@ export function validateGiftBoxPhotoBatch(photos, boxId) {
 // Only opaque verified Upload IDs may leave this helper. The existing upload
 // client provides short-lived direct PUT, signature verification, owner-change
 // cancellation and an object copy away from the temporary signed key.
-export async function uploadGiftBoxPrivatePhotos({ photos, boxId, ownerKey, uploadFile, cache = new Map(), uploadedIds = [], onProgress }) {
+export async function uploadGiftBoxPrivatePhotos({ photos, boxId, ownerKey, uploadFile, cache = new Map(), uploadedIds = [], onProgress, signal }) {
   validateGiftBoxPhotoBatch(photos, boxId);
   if (typeof uploadFile !== 'function') throw new Error('Private storage is not configured.');
   if (typeof ownerKey !== 'string' || !ownerKey || ownerKey.length > 200) throw new Error('A current private shopping session is required.');
-  const result = [];
-  for (const photo of photos) {
+  return mapUploads(photos, async photo => {
     const cached = cache.get(photo.file);
     let id = cached?.boxId === boxId && cached?.ownerKey === ownerKey ? cached.id : null;
     if (!id) {
       id = await uploadFile(photo.file, {
-        purpose: 'gift_box_photo', giftBoxId: boxId, onProgress,
+        purpose: 'gift_box_photo', giftBoxId: boxId, signal,
       }, uploadedIds);
       if (typeof id !== 'string' || !/^[a-f0-9]{24}$/.test(id)) throw new Error('The private photo could not be verified.');
       cache.set(photo.file, { id, boxId, ownerKey });
     }
-    result.push({ photoId: photo.id, uploadId: id });
-  }
-  return result;
+    return { photoId: photo.id, uploadId: id };
+  }, { signal, onProgress });
 }

@@ -14,7 +14,7 @@ import GiftBoxPreview from '../commerce/GiftBoxPreview.jsx';
 import CartLine from '../commerce/CartLine.jsx';
 
 export default function CartPage() {
-  const { cart,checkoutEnabled,mixedCheckout,loading,error,pending,setQuantity,remove,refresh }=useCart();
+  const { cart,checkoutEnabled,mixedCheckout,loading,error,pending,preparing,setQuantity,remove,refresh }=useCart();
   const session=useSession();
   const invalid=cart.items.some(item=>!item.valid);
   if(loading) return <main className="commerce-page"><LoadingState label="Loading your cart" kind="rows"/></main>;
@@ -29,7 +29,7 @@ export default function CartPage() {
         const photos = item.photoPurchase || item.photoSelection;
         const hasDetails = gift || Boolean(item.variantKey || item.productEngraving || item.customization || photos && photos.mode !== 'as_is' || item.personalization && Object.keys(item.personalization).length || item.attachments?.expiresAt);
         const photo=item.mainImageUrl?<img src={item.mainImageUrl} alt={name} loading="lazy"/>:<span>Product image unavailable</span>;
-        return <CartLine key={key} hasDetails={hasDetails} edit={photos && url && !item.productEngraving ? <Link to={`${url}?photoEdit=${item.id}`}>Edit photo choices</Link> : null} item={item} name={name} title={!gift&&url?<Link to={url}>{name}</Link>:null} image={gift?<GiftBoxPreview giftBox={item.giftBox}/>:url?<Link to={url} aria-label={`View ${name}`}>{photo}</Link>:photo} pending={pending} setQuantity={setQuantity} remove={remove} recovery={item.attachments?.replacementRequired&&url?<Link to={url}>Review product and replace files</Link>:null} design={gift || Boolean(item.productEngraving || item.customization || item.personalization && Object.keys(item.personalization).length)}>
+        return <CartLine key={key} hasDetails={hasDetails} edit={photos && url && !item.productEngraving ? <Link to={`${url}?photoEdit=${item.id}`}>Edit photo choices</Link> : null} item={item} name={name} title={!gift&&url?<Link to={url}>{name}</Link>:null} image={gift?<GiftBoxPreview giftBox={item.giftBox} lineId={item.id}/>:url?<Link to={url} aria-label={`View ${name}`}>{photo}</Link>:photo} pending={pending} setQuantity={setQuantity} remove={remove} recovery={item.attachments?.replacementRequired&&url?<Link to={url}>Review product and replace files</Link>:null} design={gift || Boolean(item.productEngraving || item.customization || item.personalization && Object.keys(item.personalization).length)}>
           {open => <>{gift?<GiftBoxCartSummary giftBox={item.giftBox} lineId={item.id} open={open}/>:<>
             <dl>{item.variantKey&&<div><dt>Option</dt><dd>{item.variantLabel||item.variantKey}</dd></div>}</dl>
             <PersonalizationSummary values={item.personalization} definitions={item.personalizationDefinitions}/>
@@ -42,7 +42,7 @@ export default function CartPage() {
       })}</section>
       <aside className="commerce-summary"><h2>Order Summary</h2><dl><div><dt>Subtotal</dt><dd>{money(cart.subtotalPiastres)}</dd></div><div><dt>Delivery</dt><dd>Confirmed separately</dd></div></dl>
         {invalid&&<p className="form-error" role="alert">Review unavailable items before checkout.</p>}
-        {checkoutEnabled&&!invalid?<Link className="button button-primary" to="/checkout">Proceed to Checkout</Link>:<><button className="button button-primary" disabled>Checkout unavailable</button>{!mixedCheckout&&!invalid&&<p className="commerce-muted">Online ordering is currently unavailable for this cart. Your items remain saved.</p>}</>}
+        {preparing ? <button className="button button-primary" disabled>Finishing your personalized item</button> : checkoutEnabled&&!invalid?<Link className="button button-primary" to="/checkout">Proceed to Checkout</Link>:<><button className="button button-primary" disabled>Checkout unavailable</button>{!mixedCheckout&&!invalid&&<p className="commerce-muted">Online ordering is currently unavailable for this cart. Your items remain saved.</p>}</>}
         <Link to="/shop" className="commerce-continue">Continue shopping</Link>
       </aside>
     </div>}

@@ -90,7 +90,7 @@ for(const width of [320,390,768,1024,1440])test(`canvas movement, fitted engravi
   await expect.poll(()=>page.evaluate(()=>window.snapshotSticker().placements?.['box-1']?.version)).toBe('box-sticker-workspace-v2');
   for(let i=0;i<30;i++)await page.getByRole('button',{name:'Move sticker up',exact:true}).click();
   expect((await page.evaluate(()=>window.snapshotSticker())).placements['box-1'].y).toBeLessThan(.1);
-  await expect(page.getByText(/Placement outside the box/)).toBeVisible();
+  await expect(page.getByText(/Placement outside the box/)).toHaveCount(0);
   const trash=page.getByRole('button',{name:'Remove sticker',exact:true});await trash.click();await page.getByRole('button',{name:'Keep sticker',exact:true}).click();
   await expect(page.getByLabel('Write a name, special date, or heartfelt message')).toHaveValue('AB');
   await page.evaluate(()=>{document.activeElement?.blur();window.scrollTo(0,0);});await page.screenshot({path:info.outputPath(`sticker-${width}.png`),fullPage:true});
@@ -117,25 +117,4 @@ test('customer email renders compactly on mobile with escaped content and no ext
   await mockCatalog(page);
   const message=renderEmailTemplate({event:'order_received',snapshot:{orderNumber:'123456',totalPiastres:61000,paymentMethod:'instapay',paymentState:'awaiting_verification',items:[{name:'Gift Box',kind:'gift_box_v2',quantity:2},{name:'Perfume engraving',quantity:1}]}},{clientOrigin:'http://127.0.0.1:5191'});
   for(const width of [320,390,768]){await page.setViewportSize({width,height:900});await page.setContent(message.html);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await expect(page.getByRole('heading',{name:'We received your order'})).toBeVisible();await page.evaluate(()=>{document.activeElement?.blur();window.scrollTo(0,0);});await page.screenshot({path:info.outputPath(`email-${width}.png`),fullPage:true});}
-});
-
-test('private cart photos load only on expansion with a bounded fallback and reduced motion',async({page},info)=>{
-  await page.setViewportSize({width:320,height:900});await page.emulateMedia({reducedMotion:'reduce'});
-  const cart=cartWithProduct();Object.assign(cart.items[0],{kind:'gift_box_v2',giftBox:{box:{displayName:'Gift Box'},items:[],personalization:{photoCount:2}}});
-  await mockCommerce(page,{cart});let requests=0,release;
-  const gate=new Promise(resolve=>{release=resolve;});
-  await page.route('**/commerce/cart/items/*/gift-photos/*',async route=>{
-    requests++;await gate;
-    return route.request().url().endsWith('/0')?route.fulfill({headers,body:isolatedImageFile().buffer,contentType:'image/png'}):route.fulfill({headers,status:404,json:{ok:false,error:{message:'Photo unavailable'}}});
-  });
-  await page.goto('/cart');expect(requests).toBe(0);
-  await page.getByText('View Design Details',{exact:true}).click();
-  await expect(page.locator('.private-photo-thumbnail')).toHaveCount(2);
-  await expect.poll(()=>requests).toBe(2);
-  expect(await page.locator('.private-photo-thumbnail .tw-skeleton-row>span').first().evaluate(node=>getComputedStyle(node).animationName)).toBe('none');
-  release();await expect(page.getByRole('img',{name:'Photo 1',exact:true})).toBeVisible();
-  await expect(page.getByRole('img',{name:'Photo 2 unavailable',exact:true})).toBeVisible();
-  expect(await page.locator('.private-photo-thumbnail').first().evaluate(node=>Math.round(node.getBoundingClientRect().width))).toBe(88);
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  await page.screenshot({path:info.outputPath('private-cart-320.png'),fullPage:true});expect(requests).toBe(2);
 });

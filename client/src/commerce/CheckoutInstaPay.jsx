@@ -69,6 +69,8 @@ export default function CheckoutInstaPay({ owner, checkoutOwner, checkoutKey, go
   return <section className="checkout-instapay" aria-label="InstaPay transfer details">
     {zeroDue ? <p>No transfer is due for this order.</p> : <>
       <p>Upload your transfer screenshot to complete your order.</p>
+      {payment?.revalidated && <p role="status">Your existing transfer reference is ready. If you already transferred, upload that screenshot. Do not transfer again.</p>}
+      {expired && !quote.error && <button type="button" className="button button-secondary" disabled={quote.isFetching || disabled} onClick={()=>quote.refetch()}>Check existing transfer reference</button>}
       {quote.error || prepared.error || expired ? <p role="alert">Transfer details need checking. Please don&apos;t transfer again. <Link to="/contact">Contact the store</Link>.</p> : null}
       {actionable && !payment.proofReceived && payment.destination ? <div className="checkout-transfer-card"><span>TRANSFER TO</span><div><strong><bdi>{payment.destination}</bdi></strong><CopyValue value={payment.destination} label="Copy transfer destination" text="Copy"/></div><div className="checkout-transfer-amount"><span>Exact amount to transfer</span><CopyValue value={(payment.amountPiastres / 100).toFixed(2)} label="Copy transfer amount" text={money(payment.amountPiastres)} preserveText/></div></div>
         : payment?.proofReceived ? <p role="status">Your screenshot is saved. Place your order below.</p> : <div className="checkout-transfer-placeholder"><span>TRANSFER TO</span>{quote.error || prepared.error || expired ? <p>Transfer details unavailable.</p> : <LoadingState label="Verifying transfer details. Please wait before transferring." count={1}/>}</div>}

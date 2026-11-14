@@ -1,4 +1,5 @@
-import { Image as ImageIcon } from 'lucide-react';
+import { ImageOff } from 'lucide-react';
+import LoadingState from '../components/LoadingState.jsx';
 import ConfirmRemoval from './ConfirmRemoval.jsx';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Trash2, Maximize2 } from 'lucide-react';
@@ -9,6 +10,13 @@ import { photoPrintFootprint,defaultPhotoPosition } from '../../../shared/gift-b
 import { isFreePresentation,sceneY,ribbonFootprint } from '../../../shared/gift-box/presentation.mjs';
 import { customerGiftComponentName } from '../../../shared/gift-box/customer-label.mjs';
 import { freePresentation, freeForegroundMasks, freePlacementZone } from './free-presentation.mjs';
+
+function ArrangementPhoto({ photo }) {
+  const [failed, setFailed] = useState(null);
+  if (photo.url && failed !== photo.url) return <img src={photo.url} alt={photo.label} onError={() => setFailed(photo.url)}/>;
+  if (photo.loading) return <LoadingState kind="image" count={1} label={`Loading ${photo.label}`}/>;
+  return <span className="gb-photo-placeholder" role="img" aria-label={`${photo.label} unavailable`}><ImageOff size={20} aria-hidden="true"/></span>;
+}
 
 export default function FreeArrangementCanvas({ state, components, dispatch, personal, undo, canUndo, readOnly = false, photoUrls = {}, selectedId, onSelect, onExpand }) {
   const canvas = useRef(null),root=useRef(null), drag = useRef(null);
@@ -24,7 +32,7 @@ export default function FreeArrangementCanvas({ state, components, dispatch, per
     ...(state.ribbonId ? [{ id: 'ribbon', componentId: state.ribbonId, label: name(state.ribbonId), ...ribbonFootprint(state.presentationVersion),
       x: state.presentationVersion ? .385 : .32, y: sceneY(state.presentationVersion ? .67 : .65,state.presentationVersion), zone: 'inside', ...state.ribbonPosition }] : []),
     ...(personal?.photos || []).map((photo, index) => ({ id: photo.id, photo: true, label: `Photo ${index + 1}`, ...photoPrintFootprint(personal.photoAspectRatios === false ? undefined : photo.aspectRatio,presentation?.aspect || 1,state.presentationVersion),
-      ...defaultPhotoPosition(index,state.presentationVersion), ...personal.photoPositions?.[photo.id], zone: personal.photoPositions?.[photo.id]?.placementZone || 'beside', url: photo.url || photoUrls[photo.id] }))].map(item=>{const position=readOnly ? item : boundFreePlacement(item,item);return {...item,...position,zone:readOnly ? item.zone : freePlacementZone(state.boxId,item,position,state.presentationVersion)};});
+      ...defaultPhotoPosition(index,state.presentationVersion), ...personal.photoPositions?.[photo.id], zone: personal.photoPositions?.[photo.id]?.placementZone || 'beside', url: photo.url || photoUrls[photo.id], loading: photo.loading }))].map(item=>{const position=readOnly ? item : boundFreePlacement(item,item);return {...item,...position,zone:readOnly ? item.zone : freePlacementZone(state.boxId,item,position,state.presentationVersion)};});
   useEffect(() => {
     if (readOnly || !selected || removal) return undefined;
     const deselect = event => { if (event.key === 'Escape') { setSelected(null); drag.current = null; setMoving(null); } };
@@ -70,7 +78,7 @@ export default function FreeArrangementCanvas({ state, components, dispatch, per
       {objects.map(item => {
         const position = moving?.id === item.id ? moving : item;
         const style = { left: `${position.x * 100}%`, top: `${position.y * 100}%`, width: `${item.width * 100}%`, height: `${item.height * 100}%`, zIndex: item.id === 'ribbon' ? 190 : ((moving?.id === item.id ? freePlacementZone(state.boxId,item,position,state.presentationVersion) : item.zone) === 'beside' ? 160 : 20) + Math.round(position.y * 60) };
-        const art = item.photo ? (item.url ? <img src={item.url} alt={item.label}/> : <span className="gb-photo-placeholder" role="img" aria-label={item.label}><ImageIcon size={20} aria-hidden="true"/></span>) : item.id === 'ribbon' ? <RibbonBow componentId={item.componentId}/> : <Artwork componentId={item.componentId} role="placement" normalize/>;
+        const art = item.photo ? <ArrangementPhoto photo={item}/> : item.id === 'ribbon' ? <RibbonBow componentId={item.componentId}/> : <Artwork componentId={item.componentId} role="placement" normalize/>;
         if (readOnly) return <div key={item.id} className={`gb-placed ${item.photo ? 'gb-free-photo' : ''}`} style={style} title={`${item.label} - ${item.zone}`}>{art}</div>;
         return <button key={item.id} type="button" className={`gb-placed ${item.photo ? 'gb-free-photo' : ''} ${selected === item.id ? 'is-active' : ''}`} style={style}
           data-instance-id={item.id} aria-label={`Move ${item.label}`} aria-pressed={selected === item.id}

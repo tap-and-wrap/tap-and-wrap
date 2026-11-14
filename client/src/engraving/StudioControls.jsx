@@ -59,7 +59,7 @@ export function DesignPreview({ content, appearance = 'black', artwork, artworkU
   return <div className={`studio-design ${compact ? 'compact' : ''} appearance-${appearance}`} aria-label="Digital design preview">
     <span className="studio-design-caption">Your design</span>
     <div className="studio-design-art">
-      {content?.mode === 'text' ? <p dir="auto" style={{ fontFamily: font?.family }}>{content.text || 'Your words, beautifully kept'}</p>
+      {content?.mode === 'text' ? <p dir="auto" style={{ fontFamily: font?.family }}>{content.text || ''}</p>
         : content?.mode === 'icons' ? icon ? <img data-symbol="true" src={icon.asset} alt={icon.label}/> : <p>Choose your symbol</p>
           : artwork ? <LocalPhoto file={artwork} alt="Your private artwork"/> : artworkUrl ? <img src={artworkUrl} alt="Your private artwork"/> : <p>A little piece of you</p>}
     </div><small>Digital design only · finish depends on your item</small>

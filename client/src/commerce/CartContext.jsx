@@ -1,11 +1,13 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { commerceDelete, commerceError, commerceGet, commercePatch, commercePost } from './api';
 import { animateToCart } from './animation';
 import { emitTracking } from '../tracking/client.js';
 import { useSession } from '../auth/SessionProvider.jsx';
-import { privateQueryKey, refreshSession, sessionOwner, sessionSnapshot } from '../auth/session.js';
+import { privateQueryKey, refreshSession, sessionOwner, sessionSnapshot, subscribeSession } from '../auth/session.js';
 import { authGeneration } from '../services/api.js';
+import { Link } from 'react-router-dom';
+import { LoadingSpinner } from '../components/LoadingState.jsx';
 import { toast } from 'sonner';
 
 const CartContext = createContext(null);
@@ -15,11 +17,31 @@ export function CartProvider({ children }) {
   const session = useSession();
   const cartKey = privateQueryKey(session.ownerKey, 'cart');
   const [feedbackState, setFeedback] = useState(null);
+  const job = useRef(null), cartOwner = useRef(null);
+  const [preparation, setPreparation] = useState(null);
+  const preparing = preparation?.generation === session.generation;
+  useEffect(() => () => job.current?.controller.abort(), []);
+  const runPersonalizedAdd = useCallback(async (task, label) => {
+    const generation = authGeneration(), owner = sessionOwner(), ownerContext = cartOwner.current;
+    if (sessionSnapshot().phase !== 'ready' || !ownerContext) throw Error('Please wait while your private shopping session is verified.');
+    if (job.current?.generation === generation) throw Error('Your personalized item is still being prepared.');
+    const currentJob = { generation, ownerContext, controller: new AbortController() }; job.current = currentJob;
+    const signal = currentJob.controller.signal;
+    const isCurrent = () => !signal.aborted && generation === authGeneration() && owner === sessionOwner() && ownerContext === cartOwner.current;
+    const unsubscribe = subscribeSession(() => { if (!isCurrent()) currentJob.controller.abort(); });
+    const onProgress = text => { if (isCurrent()) setPreparation({ generation, text }); };
+    onProgress(label);
+    try { return await task({ signal, isCurrent, onProgress }); }
+    catch (error) { if (isCurrent()) toast.error(commerceError(error), { id: 'personalized-add' }); throw error; }
+    finally { unsubscribe(); if (job.current === currentJob) job.current = null; setPreparation(value => value?.generation === generation ? null : value); }
+  }, []);
   const mutationGeneration = useRef(null);
   const [pendingGeneration, setPending] = useState(null);
   const feedback = feedbackState?.generation === session.generation ? feedbackState.text : '';
   const pending = pendingGeneration === session.generation;
   const query = useQuery({ queryKey: cartKey, queryFn: ({ signal }) => commerceGet('/cart', undefined, signal), enabled: session.ready, retry: false, staleTime: 30_000, refetchOnWindowFocus: false });
+  cartOwner.current = session.ready ? query.data?.checkoutOwnerKey : null;
+  useEffect(() => { if (job.current && job.current.ownerContext !== cartOwner.current) job.current.controller.abort(); }, [query.data?.checkoutOwnerKey, session.ready]);
   const update = useCallback(async (operation, success, source) => {
     const generation = authGeneration();
     if (mutationGeneration.current === generation) throw new Error('Your cart is updating. Please wait for this change to finish.');
@@ -56,8 +78,9 @@ export function CartProvider({ children }) {
     mixedCheckout: session.ready && query.data?.mixedCheckout === true,
     checkoutEnabled: session.ready && query.data?.checkoutEnabled === true,
     checkoutOwnerKey: session.ready && /^[a-f0-9]{64}$/.test(query.data?.checkoutOwnerKey || '') ? query.data.checkoutOwnerKey : null,
+    preparing, runPersonalizedAdd,
     loading: session.phase === 'checking' || session.phase === 'transition' || session.ready && query.isPending, error: session.error || query.error, pending, feedback,
-    add: (item, source) => update(() => commercePost('/cart/items', item), 'Added to your cart.', source),
+    add: (item, source) => update(() => commercePost('/cart/items', item), item.kind?.startsWith('engraving_service') ? 'Engraving added to cart.' : 'Added to your cart.', source),
     // Prepared for future approved builder integration; public builder controls
     // do not invoke this method while fulfillment and media are unapproved.
     addGiftBox: (item, source) => update(() => commercePost('/cart/items', { ...item, kind: 'gift_box_v2' }), 'Added to your cart.', source),
@@ -71,14 +94,14 @@ export function CartProvider({ children }) {
       if (sessionSnapshot().phase === 'error') await refreshSession();
       return queryClient.invalidateQueries({ queryKey: privateQueryKey(sessionOwner(), 'cart') });
     },
-  }), [query.data, query.isPending, query.error, session.ready, session.phase, session.error, pending, feedback, update, queryClient]);
+  }), [query.data, query.isPending, query.error, session.ready, session.phase, session.error, pending, preparing, runPersonalizedAdd, feedback, update, queryClient]);
   function dismissFeedback() {
     const opener = feedbackState?.generation === session.generation ? feedbackState.opener : null;
     setFeedback(null);
     if (opener instanceof HTMLElement && opener.isConnected && !opener.matches(':disabled')) opener.focus({ preventScroll: true });
     else document.querySelector('[data-cart-anchor]')?.focus({ preventScroll: true });
   }
-  return <CartContext.Provider value={value}>{children}<div className="commerce-announcement" role="status" aria-live="polite">{feedback && <><span>{feedback}</span><button type="button" className="commerce-feedback-dismiss" aria-label="Dismiss cart feedback" onClick={dismissFeedback}>×</button></>}</div></CartContext.Provider>;
+  return <CartContext.Provider value={value}>{children}{preparing && <aside className="personalized-add-progress" aria-live="polite"><LoadingSpinner label={preparation.text}/><Link to="/cart">View cart</Link></aside>}<div className="commerce-announcement" role="status" aria-live="polite">{feedback && <><span>{feedback}</span><button type="button" className="commerce-feedback-dismiss" aria-label="Dismiss cart feedback" onClick={dismissFeedback}>×</button></>}</div></CartContext.Provider>;
 }
 
 export function useCart() {

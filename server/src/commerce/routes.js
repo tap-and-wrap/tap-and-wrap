@@ -52,7 +52,7 @@ const discountCode = z.string().trim().max(40).optional();
 
 // Initial merchandise/services contain no delivery charge. The final order's
 // customer schema still requires a valid Egyptian destination.
-const checkoutSchema = z.object({ checkoutKey: uuid, paymentMethod, governorate: customer.shape.governorate.optional(), discountCode }).strict();
+const checkoutSchema = z.object({ checkoutKey: uuid, paymentMethod, governorate: customer.shape.governorate.optional(), discountCode, quoteSequence: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER).optional() }).strict();
 const orderSchema = z.object({ checkoutKey: uuid, customer, paymentMethod, discountCode, paymentProofId: id.optional() }).strict();
 const states = z.object({ revision: z.number().int().nonnegative(), fulfillmentState: z.enum(['received', 'confirmed', 'preparing', 'out_for_delivery', 'delivered', 'delivery_failed', 'returned', 'cancelled']).optional(),
   paymentState: z.enum(['unpaid', 'awaiting_transfer', 'awaiting_verification', 'partially_paid', 'paid', 'rejected', 'refunded']).optional(), reason: z.string().trim().max(500).optional(), internalNote: z.string().trim().max(500).optional(), publicReason: z.string().trim().max(500).optional() }).strict();
@@ -170,7 +170,7 @@ commerceRoutes.post('/checkout/quote', checkoutLimit, async (req, res) => {
 });
 commerceRoutes.get('/checkout/payments/:checkoutKey', submissionStatusLimit, async (req, res) => {
   const intent = await CheckoutIntent.findOne({ owner: req.commerceOwner, checkoutKey: uuid.parse(req.params.checkoutKey) }).lean();
-  res.json({ ok: true, data: { payment: intent?.payment ? presentCheckoutPayment(intent) : null } });
+  res.json({ ok: true, data: { payment: intent?.payment ? presentCheckoutPayment(intent) : null, state: intent?.state || null, orderId: intent?.orderId ? String(intent.orderId) : null, quoteSequence: intent?.quoteSequence || 0 } });
 });
 commerceRoutes.post('/checkout/payments', checkoutLimit, async (req, res) => {
   const input = checkoutSchema.parse(req.body);

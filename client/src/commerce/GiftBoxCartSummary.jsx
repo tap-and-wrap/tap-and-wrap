@@ -1,10 +1,9 @@
-import PrivatePhotoThumbnail from './PrivatePhotoThumbnail.jsx';
 import { StickerProof } from '../gift-box/StickerWorkspace.jsx';
 import { customerGiftComponentName } from '../../../shared/gift-box/customer-label.mjs';
 import { ENGRAVING_COLORS } from '../../../shared/gift-box/lettering-styles.mjs';
 const groups = [['flower', 'Flowers'], ['plush', 'Soft Toys'], ['chocolate', 'Chocolates']];
 
-export default function GiftBoxCartSummary({ giftBox, lineId, open = true }) {
+export default function GiftBoxCartSummary({ giftBox }) {
   if (!giftBox || typeof giftBox !== 'object') return <p className="commerce-muted">Saved gift details are unavailable. Remove this item and build it again.</p>;
   const items = Array.isArray(giftBox.items) ? giftBox.items : [];
   const ribbon = giftBox.ribbon;
@@ -23,7 +22,6 @@ export default function GiftBoxCartSummary({ giftBox, lineId, open = true }) {
       <div><dt>Photo prints</dt><dd>{giftBox.personalization?.photoCount || 0}</dd></div>
     {giftBox.personalization?.sticker && <div><dt>Personalized sticker</dt><dd dir="auto"> <bdi>{giftBox.personalization.sticker.text}</bdi> · {ENGRAVING_COLORS.find(color=>color.id===giftBox.personalization.sticker.colorId)?.label || 'Saved color'} · {giftBox.personalization.sticker.placement ? giftBox.personalization.sticker.placement.view === 'exterior' ? 'Exterior sticker' : `${giftBox.personalization.sticker.placement.view} side` : 'Apply to exterior front'}</dd></div>}
     </dl>
-    {open && lineId && giftBox.personalization?.photoCount > 0 && <div className="gift-photo-previews" aria-label="Your selected photos">{Array.from({length:Math.min(48,giftBox.personalization.photoCount)},(_,index) => <PrivatePhotoThumbnail key={index} lineId={lineId} index={index} label={`Photo ${index+1}`}/>)}</div>}
     {cardSelected && <p className="commerce-gift-message" dir="auto">{message || 'Gift card without a message.'}</p>}
     {giftBox.personalization?.sticker?.placement && <StickerProof sticker={giftBox.personalization.sticker} placement={giftBox.personalization.sticker.placement}/>}
 

@@ -7,7 +7,7 @@ import GiftBoxPreview from '../commerce/GiftBoxPreview.jsx';
 import { PrivateImage } from '../engraving/EngravingCartCard.jsx';
 import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 import PersonalizationSummary from '../commerce/PersonalizationSummary.jsx';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useCart } from '../commerce/CartContext';
@@ -16,18 +16,18 @@ import { emitTracking } from '../tracking/client';
 import { useSession } from '../auth/SessionProvider.jsx';
 import { privateQueryKey } from '../auth/session.js';
 import { FieldError, fieldErrorProps, focusInvalidField, nativeFieldErrors, validationFieldErrors } from '../components/FormFeedback.jsx';
-import { checkoutSession, completedCheckout, clearCheckoutSession, markCheckoutPending, markCheckoutRejected } from '../commerce/checkout-session.js';
+import { checkoutSession, completedCheckout, clearCheckoutSession, markCheckoutPending, markCheckoutRejected, nextQuoteSequence } from '../commerce/checkout-session.js';
 
 
 function CheckoutLine({ item, owner }) {
   const gift = item.kind === 'gift_box_v2', engraving = isEngravingKind(item.kind);
   const name = gift ? 'Gift Box' : engraving ? `${item.engraving?.typeName || String(item.name || 'Item').replace(/\s+engraving$/i, '')} Engraving` : item.name;
   const layers = item.engraving?.layers || (item.engraving?.content ? [item.engraving.content] : []);
-  return <div className="commerce-summary-item"><div className="checkout-line-thumbnail">{gift ? <GiftBoxPreview giftBox={item.giftBox}/> : engraving ? <PrivateImage key={`${owner}:${item.id}`} item={item} owner={owner} role="surface" label="Your engraving surface"/> : item.mainImageUrl ? <img src={item.mainImageUrl} alt="" width="58" height="58"/> : null}</div><div className="checkout-line-description"><span>{name} × {item.quantity}</span>{item.variantKey && <small>{item.variantLabel || item.variantKey}</small>}{gift && <small>{item.giftBox?.personalization?.photoCount || 0} photo prints{item.giftBox?.personalization?.sticker && <> · Sticker: <bdi>{item.giftBox.personalization.sticker.text}</bdi></>}</small>}{item.productEngraving && <small>Engraving{item.productEngraving.text && <>: <bdi>{item.productEngraving.text}</bdi> · {item.productEngraving.colorId}</>}</small>}{engraving && layers.map((layer,index) => <small key={layer.id || index}>{layer.text ? <bdi>{layer.text}</bdi> : 'Uploaded engraving artwork'}</small>)}<PersonalizationSummary values={item.personalization} definitions={item.personalizationDefinitions}/></div><strong>{money(item.lineTotalPiastres)}</strong></div>;
+  return <div className="commerce-summary-item"><div className="checkout-line-thumbnail">{gift ? <GiftBoxPreview giftBox={item.giftBox} lineId={item.id}/> : engraving ? <PrivateImage key={`${owner}:${item.id}`} item={item} owner={owner} role="surface" label="Your engraving surface"/> : item.mainImageUrl ? <img src={item.mainImageUrl} alt="" width="58" height="58"/> : null}</div><div className="checkout-line-description"><span>{name} × {item.quantity}</span>{item.variantKey && <small>{item.variantLabel || item.variantKey}</small>}{gift && <small>{item.giftBox?.personalization?.photoCount || 0} photo prints{item.giftBox?.personalization?.sticker && <> · Sticker: <bdi>{item.giftBox.personalization.sticker.text}</bdi></>}</small>}{item.productEngraving && <small>Engraving{item.productEngraving.text && <>: <bdi>{item.productEngraving.text}</bdi> · {item.productEngraving.colorId}</>}</small>}{engraving && layers.map((layer,index) => <small key={layer.id || index}>{layer.text ? <bdi>{layer.text}</bdi> : 'Uploaded engraving artwork'}</small>)}<PersonalizationSummary values={item.personalization} definitions={item.personalizationDefinitions}/></div><strong>{money(item.lineTotalPiastres)}</strong></div>;
 }
 
 export default function CheckoutPage() {
-  const { cart, refresh, checkoutOwnerKey } = useCart();
+  const { cart, refresh, checkoutOwnerKey, preparing } = useCart();
   const session = useSession();
   const checkoutOwner = checkoutOwnerKey ? `checkout:${checkoutOwnerKey}` : session.ownerKey;
   const [customer, setCustomer] = useState({ name: '', email: '', phone: '', governorate: '', addressVersion: 'delivery-address-v3', city: '', street: '', building: '', floor: '', apartment: '', notes: '' });
@@ -45,6 +45,8 @@ export default function CheckoutPage() {
   const [uploadStatus, setUploadStatus] = useState('');
   const prefix = useId();
   const submissionKey = useRef(null), placing = useRef(false);
+  const [, setKeyRevision] = useState(0);
+  const checkoutKey = checkoutSession(checkoutOwner).key;
   const requestSnapshot = useRef(null);
   const [uncertainOwner, setUncertainOwner] = useState(null);
   const [recoveryMessage, setRecoveryMessage] = useState('');
@@ -56,34 +58,59 @@ export default function CheckoutPage() {
     setFieldErrors({}); setFieldError(''); setRecoveryMessage('');
     setUncertainOwner(null);
   }, [session.ownerKey, checkoutOwner, session.user?.name, session.user?.email, session.user?.phone]);
+  const confirmed = useCallback((result) => {
+    const order = result.order;
+    if (!order?.id && !order?._id) throw new Error('The server did not return an order confirmation. Check submission status before trying again.');
+    completedCheckout(checkoutOwner, order.id || order._id);
+    clearCheckoutSession(checkoutOwner); submissionKey.current = null;
+    try { emitTracking(result.tracking); emitTracking(result.paymentTracking); } catch { /* Optional tracking cannot hide an accepted order. */ }
+    // A failed cart refresh must not conceal an already accepted order.
+    void refresh().catch(() => {});
+    acceptedOwner.current = session.ownerKey;
+    setAccepted(order);
+  }, [checkoutOwner, refresh, session.ownerKey]);
   const config = useQuery({ queryKey: privateQueryKey(session.ownerKey, 'checkout-config'), queryFn: ({ signal }) => commerceGet('/checkout/config', undefined, signal), enabled: session.ready, retry: false, staleTime: 60_000 });
   const enabled = config.data?.enabled === true;
   const completedId = session.ready ? completedCheckout(checkoutOwner) : null;
-  const paymentRecovery = useQuery({ queryKey: privateQueryKey(session.ownerKey,'checkout-payment',checkoutSession(checkoutOwner).key), queryFn:({signal})=>commerceGet(`/checkout/payments/${checkoutSession(checkoutOwner).key}`,undefined,signal), enabled:session.ready && !accepted && (!completedId || cart.items.length > 0), retry:false,gcTime:0 });
-  useEffect(()=>{ if(!methodChosen.current && paymentRecovery.data?.payment && paymentRecovery.data.payment.state!=='consumed')setPaymentMethod('instapay'); },[paymentRecovery.data]);
+  const paymentRecovery = useQuery({ queryKey: privateQueryKey(session.ownerKey,'checkout-payment',checkoutOwner,checkoutKey), queryFn: async ({signal}) => {
+    const result = await commerceGet(`/checkout/payments/${checkoutKey}`,undefined,signal);
+    if (result.state === 'consumed' && result.orderId && checkoutSession(checkoutOwner).pending) {
+      const recovered = await commerceGet(`/orders/${result.orderId}`,undefined,signal);
+      return {...result, order: recovered.order};
+    }
+    return result;
+  }, enabled:session.ready && !accepted && (!completedId || cart.items.length > 0), retry:false,gcTime:0, refetchOnWindowFocus:false });
+  useEffect(()=>{
+    if (accepted) return;
+    const recovered = paymentRecovery.data;
+    if (recovered?.order) { confirmed({order:recovered.order}); return; }
+    if (recovered?.state === 'consumed' && !uncertain && cart.items.length && checkoutSession(checkoutOwner).key === checkoutKey) {
+      if (recovered.orderId) completedCheckout(checkoutOwner,recovered.orderId);
+      clearCheckoutSession(checkoutOwner); submissionKey.current = null;
+      setCheckoutPayment(null); setKeyRevision(value=>value+1);
+      return;
+    }
+    if(!methodChosen.current && recovered?.payment && recovered.payment.state!=='consumed')setPaymentMethod('instapay');
+  },[paymentRecovery.data, checkoutOwner, checkoutKey, uncertain, cart.items.length, confirmed, accepted]);
   const recoveredPayment = useQuery({ queryKey: privateQueryKey(session.ownerKey, 'checkout-completed-order', completedId), queryFn: ({signal}) => commerceGet(`/orders/${completedId}`, undefined, signal), enabled: session.ready && !cart.items.length && Boolean(completedId) && !accepted, retry: false, gcTime: 0 });
   useEffect(() => {
     if (recoveredPayment.data?.order) { acceptedOwner.current = session.ownerKey; setAccepted(recoveredPayment.data.order); }
   }, [recoveredPayment.data, session.ownerKey]);
   useEffect(() => { setAccepted(null); acceptedOwner.current = null; }, [session.ownerKey]);
 
-  const quote = useQuery({ queryKey: privateQueryKey(session.ownerKey, 'checkout-quote', paymentMethod, appliedCode, cart.items.map((item) => ({ id: item.id, kind: item.kind, productId: item.productId, variantKey: item.variantKey, quantity: item.quantity, unitPricePiastres: item.unitPricePiastres, personalization: item.personalization, customization: item.customization })), cart.subtotalPiastres, cart.quantity), queryFn: ({ signal }) => {
-    submissionKey.current ||= checkoutSession(checkoutOwner).key;
-    return commercePost('/checkout/quote', { checkoutKey: submissionKey.current, paymentMethod, ...(customer.governorate ? { governorate: customer.governorate } : {}), ...(appliedCode ? { discountCode: appliedCode } : {}) }, { signal });
-  }, enabled: session.ready && enabled && !paymentRecovery.isPending && !uncertain && cart.items.length > 0, retry: false, staleTime: 0, refetchOnMount: 'always', refetchOnWindowFocus: false });
+  const quote = useQuery({ queryKey: privateQueryKey(session.ownerKey, 'checkout-quote', checkoutOwner, checkoutKey, paymentMethod, appliedCode, cart.items, cart.subtotalPiastres, cart.quantity), queryFn: async ({ signal }) => {
+    submissionKey.current = checkoutKey;
+    const payload = { checkoutKey, paymentMethod, ...(customer.governorate ? { governorate: customer.governorate } : {}), ...(appliedCode ? { discountCode: appliedCode } : {}) };
+    const send = observed => commercePost('/checkout/quote', { ...payload, quoteSequence: nextQuoteSequence(checkoutOwner,checkoutKey,observed) }, { signal });
+    try { return await send(paymentRecovery.data?.quoteSequence || 0); }
+    catch(error) {
+      if (signal.aborted || error.response?.data?.error?.code !== 'CHECKOUT_QUOTE_SUPERSEDED') throw error;
+      const latest = await commerceGet(`/checkout/payments/${checkoutKey}`,undefined,signal);
+      return send(latest.quoteSequence || 0);
+    }
+  }, enabled: session.ready && enabled && !accepted && !preparing && paymentRecovery.isSuccess && paymentRecovery.data?.state !== 'consumed' && !(paymentRecovery.data?.payment && !methodChosen.current && paymentMethod !== 'instapay') && !uncertain && cart.items.length > 0, retry: false, staleTime: 0, refetchOnMount: 'always', refetchOnWindowFocus: false });
   const totals = quote.data?.totals || quote.data?.quote || quote.data;
   useEffect(() => { if (quote.data?.tracking) emitTracking(quote.data.tracking); }, [quote.data]);
-  function confirmed(result) {
-    const order = result.order;
-    if (!order?.id && !order?._id) throw new Error('The server did not return an order confirmation. Check submission status before trying again.');
-    completedCheckout(checkoutOwner, order.id || order._id);
-    clearCheckoutSession(checkoutOwner);
-    try { emitTracking(result.tracking); emitTracking(result.paymentTracking); } catch { /* Optional tracking cannot hide an accepted order. */ }
-    // A failed cart refresh must not conceal an already accepted order.
-    void refresh().catch(() => {});
-    acceptedOwner.current = session.ownerKey;
-    setAccepted(order);
-  }
   const recover = useMutation({ mutationFn: () => commerceGet(`/checkout/submissions/${checkoutSession(checkoutOwner).key}`), onSuccess: result => {
     if (result.order) confirmed(result);
     else setRecoveryMessage('No confirmation is available yet. An earlier request may still be processing. Retry the same submission below, if available, or contact the store before placing a new order.');
@@ -140,12 +167,12 @@ export default function CheckoutPage() {
       </fieldset></fieldset></section>
       <aside className="commerce-summary"><h2>Your Order</h2>{cart.items.map(item => <CheckoutLine key={`${session.ownerKey}:${item.id}`} item={item} owner={session.ownerKey}/>)}
         {!engravingOnly && <details className="commerce-discount"><summary>Have a discount code?<ChevronDown size={18} aria-hidden="true"/></summary><label className="commerce-field">Discount code<input value={discountCode} maxLength={40} disabled={submit.isPending || uncertain} onChange={(event) => setDiscountCode(event.target.value)} /></label><button className="button button-secondary" type="button" disabled={uncertain || quote.isFetching || submit.isPending} onClick={() => setAppliedCode(discountCode.trim())}>Apply code</button>{appliedCode && <button type="button" className="button button-secondary" disabled={uncertain || submit.isPending} onClick={() => { setAppliedCode(''); setDiscountCode(''); }}>Remove code</button>}</details>}
-        {quote.isFetching && <LoadingState label="Updating your total" count={1}/>}{quote.error && <p className="form-error" role="alert">{commerceError(quote.error)}</p>}
+        {paymentRecovery.error && <><p role="alert">{commerceError(paymentRecovery.error)}</p><button type="button" className="button button-secondary" onClick={()=>paymentRecovery.refetch()}>Check checkout again</button></>}{quote.isFetching && <LoadingState label="Updating your total" count={1}/>}{quote.error && <p className="form-error" role="alert">{commerceError(quote.error)}</p>}
         {quote.data?.summaryRows && <dl>{quote.data.summaryRows.map(row => <div key={row.id}><dt>{row.label}</dt><dd>{money(row.amountPiastres)}</dd></div>)}</dl>}
         {totals && <dl>{(totals.discountPiastres || 0) > 0 && <div><dt>Discounts</dt><dd>-{money(totals.discountPiastres)}</dd></div>}<div><dt>Subtotal</dt><dd>{money(totals.subtotalPiastres - (totals.discountPiastres || 0))}</dd></div><div><dt>Delivery</dt><dd>Confirmed separately</dd></div><div className="commerce-total"><dt>Order total</dt><dd>{money(totals.totalPiastres)}</dd></div></dl>}
         {(fieldError || submit.error) && <p className="form-error" role="alert">{fieldError || commerceError(submit.error)}</p>}
         {submit.isPending && <p className="upload-progress" role="status"><progress aria-label="Placing your order"/>{uploadStatus || 'Preparing your order…'}</p>}
-        <button className="button button-primary" type="submit" disabled={uncertain || submit.isPending || paymentMethod === 'instapay' && !checkoutPayment?.ready || !totals || quote.isFetching || Boolean(quote.error) || cart.items.some((item) => !item.valid)}>{submit.isPending ? 'Placing your order…' : 'Place Order'}</button>
+        <button className="button button-primary" type="submit" disabled={preparing || uncertain || submit.isPending || paymentMethod === 'instapay' && !checkoutPayment?.ready || !totals || quote.isFetching || Boolean(quote.error) || cart.items.some((item) => !item.valid)}>{submit.isPending ? 'Placing your order…' : 'Place Order'}</button>
       </aside>
     </form>}
 
