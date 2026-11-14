@@ -79,6 +79,7 @@ test('order acceptance retains proof atomically, stays awaiting verification and
  const [a,b]=await Promise.all([placeOrder(owner,request(value)),placeOrder(owner,request(value))]);
  assert.equal(a.id,b.id);assert.equal(await Order.countDocuments(),1);assert.equal(a.paymentState,'awaiting_verification');assert.equal(await OrderSettlement.countDocuments(),0);
  assert.equal(String((await Upload.findById(id)).orderId),a.id);
+ await assert.rejects(cancelCheckoutPayment(owner,value.checkoutKey),error=>error.code==='CHECKOUT_PAYMENT_REVIEW_REQUIRED');
  assert.equal(String((await findOwnedCheckoutSubmission(value.checkoutKey,owner))._id),a.id);
  await assert.rejects(placeOrder(owner,{...request(value),customer:{...customer,name:'Changed sender'}}),error=>error.code==='IDEMPOTENCY_CONFLICT');
 });
@@ -251,4 +252,24 @@ test('a fully discounted checkout issues no transfer reference and needs no priv
  const accepted=await placeOrder(owner,request(input));assert.equal(accepted.totals.totalPiastres,0);
  assert.equal(await Upload.countDocuments(),0);assert.equal(await OrderSettlement.countDocuments(),0);
  assert.equal((await placeOrder(owner,request(input))).id,accepted.id);
+});
+
+
+for(const member of [false,true])test(`changed 280 to 2410 requires explicit cancellation; member=${member}`,async()=>{
+ const who=member?`user:${new mongoose.Types.ObjectId()}`:owner;
+ if(member)await addCartItem(who,{productId:String(product._id),quantity:1});
+ await Product.updateOne({_id:product._id},{$set:{pricePiastres:28000}});
+ const checkoutKey=randomUUID(),input={checkoutKey,paymentMethod:'instapay'};
+ const quote=await prepareCheckout(who,input),old=await prepareCheckoutPayment(who,checkoutKey,quote.fingerprint,quote.paymentGroups);assert.equal(old.amountPiastres,28000);
+ await Product.updateOne({_id:product._id},{$set:{pricePiastres:241000}});
+ await prepareCheckout(who,{checkoutKey,paymentMethod:'cod'});
+ await assert.rejects(prepareCheckout(who,input),e=>e.code==='CHECKOUT_PAYMENT_CHANGED');
+ assert.equal((await ownedCheckoutPayment(who,checkoutKey)).payment.state,'prepared');
+ await cancelCheckoutPayment(who,checkoutKey);await cancelCheckoutPayment(who,checkoutKey);
+ const stored=await ownedCheckoutPayment(who,checkoutKey);assert.equal(stored.payment.reference,old.reference);assert.equal(stored.payment.state,'cancelled_no_transfer');
+ const next={checkoutKey:randomUUID(),paymentMethod:'instapay'},freshQuote=await prepareCheckout(who,next),fresh=await prepareCheckoutPayment(who,next.checkoutKey,freshQuote.fingerprint,freshQuote.paymentGroups);
+ assert.equal(fresh.amountPiastres,241000);assert.notEqual(fresh.reference,old.reference);
+ await DiscountCode.create({code:'RESTART',name:'Isolated changed discount',active:true,kind:'percentage',value:1000});
+ await assert.rejects(prepareCheckout(who,{...next,discountCode:'RESTART'}),e=>e.code==='CHECKOUT_PAYMENT_CHANGED');
+ assert.equal((await ownedCheckoutPayment(who,next.checkoutKey)).payment.reference,fresh.reference);assert.equal(await Order.countDocuments(),0);assert.equal(await OrderSettlement.countDocuments(),0);
 });

@@ -1,3 +1,4 @@
+import ConfirmationDialog from '../components/ConfirmationDialog.jsx';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -10,14 +11,23 @@ import LoadingState, { LoadingSpinner } from '../components/LoadingState.jsx';
 import { persistCheckoutSession } from './checkout-session.js';
 import { Copy, Check } from 'lucide-react';
 
-export default function CheckoutInstaPay({ owner, checkoutOwner, checkoutKey, governorate, discountCode, quote, onChange, disabled, active = true }) {
+export default function CheckoutInstaPay({ owner, checkoutOwner, checkoutKey, governorate, discountCode, quote, onChange, recovery, onRestart, onCheckStatus, disabled, active = true }) {
   const [files, setFiles] = useState([]), [preview, setPreview] = useState(''), [senderName, setSenderName] = useState(''), [fileError, setFileError] = useState(''), [expired, setExpired] = useState(false);
   const senderId = useId();
+  const [restartTarget, setRestartTarget] = useState(null), [restartError, setRestartError] = useState(''), [cancelling, setCancelling] = useState(false);
+
   const uploaded = useRef(null), pending = useRef(null), mounted = useRef(true), generation = useRef(authGeneration());
   const zeroDue = !quote.error && !quote.isFetching && quote.data?.totals?.totalPiastres === 0;
   const prepared = useQuery({ queryKey: privateQueryKey(owner, 'checkout-payment-prepare', checkoutKey, quote.data?.fingerprint),
     queryFn: ({signal}) => commercePost('/checkout/payments', { checkoutKey, ...(governorate ? {governorate} : {}), paymentMethod: 'instapay', ...(discountCode ? {discountCode} : {}) }, {signal}),
     enabled: active && !disabled && !quote.data?.payment && !zeroDue && Boolean(quote.data?.fingerprint) && !quote.error && !quote.isFetching, retry: false, staleTime: Infinity, gcTime: 0, refetchOnWindowFocus: false });
+  const code = (quote.error || prepared.error)?.response?.data?.error?.code;
+  const canRestart = code === 'CHECKOUT_PAYMENT_CHANGED' && recovery?.canCancel === true && recovery?.state === 'open' && !recovery.payment?.proofReceived;
+  async function confirmRestart() {
+    setCancelling(true); setRestartError('');
+    try { await onRestart(); }
+    catch (error) { if (mounted.current) { setRestartError(`${commerceError(error)} Your original checkout is retained. Retry this confirmation or contact us; do not transfer again.`); setCancelling(false); } }
+  }
   const [saved, setSaved] = useState(null);
   useEffect(() => { if (prepared.data?.payment) setSaved(prepared.data.payment); }, [prepared.data]);
   const current = quote.data?.payment || prepared.data?.payment;
@@ -71,10 +81,10 @@ export default function CheckoutInstaPay({ owner, checkoutOwner, checkoutKey, go
       <p>Upload your transfer screenshot to complete your order.</p>
       {payment?.revalidated && <p role="status">Your existing transfer reference is ready. If you already transferred, upload that screenshot. Do not transfer again.</p>}
       {expired && !quote.error && <button type="button" className="button button-secondary" disabled={quote.isFetching || disabled} onClick={()=>quote.refetch()}>Check existing transfer reference</button>}
-      {quote.error || prepared.error || expired ? <p role="alert">Transfer details need checking. Please don&apos;t transfer again. <Link to="/contact">Contact the store</Link>.</p> : null}
+      {canRestart ? <div role="alert"><p>Your cart has changed since your previous payment attempt. If you haven&apos;t transferred any money, you can restart checkout with the updated amount.</p><button type="button" className="button button-secondary" disabled={disabled} onClick={event=>setRestartTarget(event.currentTarget)}>Start fresh checkout</button><p>If you already transferred, <Link to="/contact">Contact Us</Link> before continuing.</p></div> : quote.error || prepared.error || expired ? <div role="alert"><p>{code === 'CHECKOUT_REFERENCE_LIMIT' ? 'Your earlier transfer references need checking before another can be issued.' : code === 'CHECKOUT_USED' ? 'This checkout was already submitted. Check your order status before starting another order.' : code === 'CHECKOUT_QUOTE_SUPERSEDED' ? 'A newer checkout choice is saved. Refresh your total before continuing.' : code === 'CHECKOUT_PAYMENT_CHANGED' ? 'Your cart changed after transfer instructions were issued. Contact us to check the existing transfer.' : 'Transfer details need checking. Do not transfer again.'}</p>{['CHECKOUT_USED','CHECKOUT_QUOTE_SUPERSEDED'].includes(code) && <button type="button" onClick={()=>code === 'CHECKOUT_USED' ? onCheckStatus() : quote.refetch()}>Check checkout status</button>}<Link to="/contact">Contact Us</Link></div> : null}
       {actionable && !payment.proofReceived && payment.destination ? <div className="checkout-transfer-card"><span>TRANSFER TO</span><div><strong><bdi>{payment.destination}</bdi></strong><CopyValue value={payment.destination} label="Copy transfer destination" text="Copy"/></div><div className="checkout-transfer-amount"><span>Exact amount to transfer</span><CopyValue value={(payment.amountPiastres / 100).toFixed(2)} label="Copy transfer amount" text={money(payment.amountPiastres)} preserveText/></div></div>
         : payment?.proofReceived ? <p role="status">Your screenshot is saved. Place your order below.</p> : <div className="checkout-transfer-placeholder"><span>TRANSFER TO</span>{quote.error || prepared.error || expired ? <p>Transfer details unavailable.</p> : <LoadingState label="Verifying transfer details. Please wait before transferring." count={1}/>}</div>}
-      {!payment?.proofReceived && <fieldset disabled={!active || disabled || save.isPending}>
+      {actionable && !payment?.proofReceived && payment.destination && <fieldset disabled={!active || disabled || save.isPending}>
         <label className="commerce-field" htmlFor={senderId}>Transfer sender name *<input id={senderId} name="senderName" value={senderName} required={active} minLength={2} maxLength={100} onChange={event=>setSenderName(event.target.value)} autoComplete="name"/></label>
         <p className="checkout-proof-label">Transaction Screenshot *</p><div className="checkout-proof-drop" onDragOver={event=>event.preventDefault()} onDrop={drop}><ImageSourceChooser uploadArea label={files.length ? 'Replace transaction screenshot' : 'Choose screenshot'} inputLabel="Transaction screenshot" context="InstaPay" maxFiles={1} maxBytes={5*1024*1024} onSelect={selected => {setFiles(selected);setFileError('');}} onError={setFileError} helperText="JPEG, PNG or WebP, up to 5 MB."/>
           {preview && <div className="checkout-proof-preview"><img src={preview} alt="Selected transaction screenshot"/><button className="commerce-link-button" type="button" onClick={()=>setFiles([])}>Remove screenshot</button></div>}</div>
@@ -82,6 +92,7 @@ export default function CheckoutInstaPay({ owner, checkoutOwner, checkoutKey, go
         {save.error && <p role="alert">{commerceError(save.error)} Please don&apos;t transfer again.</p>}
       </fieldset>}
     </>}
+    {restartTarget && <ConfirmationDialog title="Have you already made an InstaPay transfer for this checkout?" description="Only continue if you have not transferred any money. If you have transferred, cancel and contact us." returnFocus={restartTarget} onCancel={()=>{setRestartTarget(null);setRestartError('');}} onConfirm={confirmRestart} confirmLabel="No, I haven't transferred" cancelLabel="Cancel" pending={cancelling} error={restartError}/>}
   </section>;
 }
 
