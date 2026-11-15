@@ -47,7 +47,7 @@ test('authorized draft preview preserves numbered image positions without publis
   await expect(page.getByRole('button', { name: 'Ordering disabled', exact: true })).toBeDisabled();
   await expect(page.getByRole('link', { name: 'Customize This' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Upload Image$/ })).toBeDisabled();
-  await expect(page.locator('input[type="file"]')).toHaveCount(3);
+  await expect(page.locator('input[type="file"]')).toHaveCount(1);
   for (const input of await page.locator('input[type="file"]').all()) {
     await expect(input).toBeHidden();
     await expect(input).toBeDisabled();
@@ -58,20 +58,22 @@ test('authorized draft preview preserves numbered image positions without publis
   expect(errors).toEqual([]);
 });
 
-test('preview uses safe configured gallery URLs in source order and hides provisional variant prices', async ({ page }) => {
+test('preview preserves gallery order, unpriced enquiry and saved prices independently of unconfirmed stock', async ({ page }) => {
   const fixture = {
     ...previewProduct, pricePiastres: 1000, priceApproved: true,
     mainImageUrl: 'https://fixture.invalid/main.svg', galleryUrls: ['https://fixture.invalid/main.svg', 'https://fixture.invalid/second.svg'],
     gallerySlots: [{ position: 1, url: 'https://fixture.invalid/main.svg', isMain: true }, { position: 2, url: 'https://fixture.invalid/second.svg', isMain: false }],
-    variants: [{ key: 'unapproved', attributes: [{ name: 'Size', value: 'Fixture size' }], pricePiastres: 98765, priceApproved: false, inventory: { mode: 'tracked', quantity: 10, approved: false }, orderingAvailable: false }],
+    variants: [{ key: 'unpriced', attributes: [{ name: 'Size', value: 'Unpriced size' }], pricePiastres: null, priceApproved: false, inventory: { mode: 'tracked', quantity: 10, approved: false }, orderingAvailable: false }, {key:'priced',attributes:[{name:'Size',value:'Priced size'}],pricePiastres:98765,priceApproved:true,inventory:{mode:'tracked',quantity:10,approved:false},orderingAvailable:false}],
   };
   await mockCatalog(page, { role: 'admin', previewProduct: fixture });
   await page.goto(previewPath);
   await expect(page.locator('.product-main-image img')).toHaveAttribute('src', fixture.mainImageUrl);
   await page.getByRole('button', { name: 'View image 2', exact: true }).click();
   await expect(page.locator('.product-main-image img')).toHaveAttribute('src', fixture.gallerySlots[1].url);
-  await chooseOption(page.getByLabel('Choose size / color'), 'unapproved');
+  await chooseOption(page.getByLabel('Choose size / color'), 'unpriced');
   await expect(page.locator('.product-price')).toHaveText('Price on Request');
+  await chooseOption(page.getByLabel('Choose size / color'),'priced');
+  await expect(page.locator('.product-price')).toContainText('987.65');
   await expect(page.getByRole('button', { name: 'Ordering disabled', exact: true })).toBeDisabled();
 });
 

@@ -22,7 +22,7 @@ async function foundation(page, { role, loseFirst = false } = {}) {
     const path = new URL(route.request().url()).pathname.replace('/api/v1', ''), method = route.request().method();
     if (path === '/commerce/orders' && method === 'POST') {
       const body = route.request().postDataJSON(); submissions.push(body);
-      order.paymentMethod = body.paymentMethod; order.paymentState = body.paymentMethod === 'instapay' ? 'awaiting_transfer' : 'unpaid';
+      order.paymentMethod = body.paymentMethod; order.paymentState = body.paymentMethod === 'instapay' ? 'awaiting_verification' : 'unpaid';
       if (body.paymentMethod === 'instapay') order.paymentInstructions = { destination: '01060673073', amountPiastres: 25000, orderReference: order.orderNumber };
       if (loseFirst && submissions.length === 1) return route.abort('failed');
       return reply(route, { order });
@@ -54,35 +54,41 @@ test('COD mobile checkout shows merchandise-only amount and Pending Confirmation
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/batch3-checkout-320.png', fullPage: true });
   await page.getByRole('button', { name: 'Place Order', exact: true }).click();
-  await expect(page).toHaveURL(/\/orders\//); expect(fixture.submissions).toHaveLength(1);
+  await expect(page.getByRole('heading',{name:'Thank you for your order!',exact:true})).toBeVisible(); expect(fixture.submissions).toHaveLength(1);
   expect(fixture.uploads).toHaveLength(0); expect(fixture.submissions[0].paymentProofId).toBeUndefined();
   expect(errors).toEqual([]);
 });
-test('InstaPay creates order before revealing instructions or uploading order-bound proof', async ({ page },info) => {
-  const fixture = await foundation(page);
-  await page.goto('/checkout'); await fillCheckout(page);
-  await page.getByRole('radio', { name: /InstaPay/ }).check();
-  await expect(page.getByText('01060673073', { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel(/^InstaPay payment proof/)).toHaveCount(0);
-  await page.getByRole('button', { name: 'Place Order', exact: true }).click();
-  await expect(page.getByText('01060673073', { exact: true })).toBeVisible();
-  expect(fixture.submissions).toHaveLength(1); expect(fixture.uploads).toHaveLength(0);
-  await chooseImageFiles(page, page, /^InstaPay payment proof/, isolatedImageFile());
-  for(const width of [320,390,440,768,1024,1440]){await page.setViewportSize({width,height:900});const panel=page.getByRole('heading',{name:'Submit or replace private payment proof',exact:true}).locator('..');await panel.locator('img').evaluate(n=>n.decode());await panel.screenshot({path:info.outputPath(width+'-private-proof.png')});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);}
-  await page.getByRole('button', { name: 'Submit proof for this order', exact: true }).click();
-  await expect(page.getByText('Proof submitted. Payment awaits account reconciliation.', { exact: true })).toBeVisible();
-  expect(fixture.uploads[0].orderId).toBe(fixture.order.id);
-  expect(fixture.operations[0].action).toBe('submit_proof'); expect(fixture.order.paymentState).toBe('awaiting_verification');
+test('InstaPay saves checkout-bound proof before accepting one unpaid order', async ({page},info)=>{
+  const fixture=await foundation(page);
+  await page.goto('/checkout');await fillCheckout(page);
+  await page.getByRole('radio',{name:/InstaPay/}).check();
+  await expect(page.getByText('01060673073',{exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'View transfer details',exact:true}).click();
+  await expect(page.getByText('01060673073',{exact:true})).toBeVisible();
+  expect(fixture.submissions).toHaveLength(0);expect(fixture.uploads).toHaveLength(0);
+  await page.getByLabel(/^Transfer sender name/).fill('Fixture Sender');
+  await page.getByLabel('Transaction screenshot',{exact:true}).setInputFiles(isolatedImageFile());
+  for(const width of [320,390,768,1024,1440]) {
+    await page.setViewportSize({width,height:900});
+    await page.locator('.checkout-instapay').screenshot({path:info.outputPath(`${width}-private-proof.png`)});
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  }
+  await page.getByRole('button',{name:'Place Order',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Thank you for your order!',exact:true})).toBeVisible();
+  expect(fixture.uploads).toHaveLength(1);expect(fixture.uploads[0].checkoutKey).toBe(fixture.submissions[0].checkoutKey);
+  expect(fixture.uploads[0].orderId).toBeUndefined();expect(fixture.order.paymentState).toBe('awaiting_verification');
 });
-test('uncertain order response retries the identical order-first request without proof or second transfer', async ({ page }) => {
-  const fixture = await foundation(page, { loseFirst: true });
-  await page.goto('/checkout'); await fillCheckout(page);
-  await page.getByRole('radio', { name: /InstaPay/ }).check();
-  await page.getByRole('button', { name: 'Place Order', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Retry same submission' })).toBeVisible();
-  await page.getByRole('button', { name: 'Retry same submission' }).click();
-  await expect(page).toHaveURL(/\/orders\//);
-  expect(fixture.submissions[0]).toEqual(fixture.submissions[1]); expect(fixture.uploads).toHaveLength(0);
+test('uncertain order response retries the identical request without a duplicate upload or transfer',async({page})=>{
+  const fixture=await foundation(page,{loseFirst:true});
+  await page.goto('/checkout');await fillCheckout(page);
+  await page.getByRole('radio',{name:/InstaPay/}).check();
+  await page.getByRole('button',{name:'View transfer details',exact:true}).click();
+  await page.getByLabel(/^Transfer sender name/).fill('Fixture Sender');
+  await page.getByLabel('Transaction screenshot',{exact:true}).setInputFiles(isolatedImageFile());
+  await page.getByRole('button',{name:'Place Order',exact:true}).click();
+  await page.getByRole('button',{name:'Retry same submission',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Thank you for your order!',exact:true})).toBeVisible();
+  expect(fixture.submissions).toHaveLength(2);expect(fixture.submissions[0]).toEqual(fixture.submissions[1]);expect(fixture.uploads).toHaveLength(1);
 });
 test('admin quotes shipping, opens saved WhatsApp text and records explicit acceptance and real collection', async ({ page }) => {
   const fixture = await foundation(page, { role: 'admin' });
@@ -95,7 +101,7 @@ test('admin quotes shipping, opens saved WhatsApp text and records explicit acce
   expect(fixture.operations).toHaveLength(0);
   await page.getByRole('button', { name: 'Keep editing', exact: true }).focus();
   await page.keyboard.press('Shift+Tab');
-  await expect(page.getByRole('button', { name: 'Close review order operation' })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Confirm and record operation' })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Record operation', exact: true })).toBeFocused();

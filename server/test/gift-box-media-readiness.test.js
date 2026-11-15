@@ -1,3 +1,4 @@
+import {pinnedGiftSources} from './helpers/pinned-gift-sources.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
@@ -7,7 +8,11 @@ import { auditGiftBoxMediaReadiness, verifyPinnedImage } from '../scripts/lib/au
 
 const cacheRoot = path.join(PROJECT_ROOT,'server','.cache');
 test('full local source, bow and Box 1 derivative inventories reconcile with production still blocked', async () => {
-  const result = await auditGiftBoxMediaReadiness();
+  await mkdir(cacheRoot,{recursive:true});
+  const temp=await mkdtemp(path.join(cacheRoot,'pinned-readiness-'));
+  try {
+  const sourceRoot=await pinnedGiftSources(temp);
+  const result = await auditGiftBoxMediaReadiness({sourceRoot});
   assert.equal(result.developmentMediaIntegrityVerified,true);
   assert.equal(result.productionReady,false);
   assert.equal(result.publicationAuthorized,false);
@@ -23,6 +28,7 @@ test('full local source, bow and Box 1 derivative inventories reconcile with pro
   assert.equal(result.databaseConnections,false);
   assert.equal(result.networkRequests,false);
   assert.equal(result.writes,false);
+  } finally {await rm(temp,{recursive:true,force:true});}
 });
 test('per-file verifier detects changed bytes, omitted hashes and disallowed placement alpha', async () => {
   await mkdir(cacheRoot,{recursive:true});
@@ -43,6 +49,6 @@ test('reconciliation rejects a tampered bow collection before any release claim'
   const temp=await mkdtemp(path.join(cacheRoot,'gift-box-media-tamper-'));
   try {
     await writeFile(path.join(temp,'ribbon-red-bow.webp'),'tampered');
-    await assert.rejects(auditGiftBoxMediaReadiness({ribbonsSourceRoot:temp}), /Gift-box media readiness:/);
+    await assert.rejects(auditGiftBoxMediaReadiness({sourceRoot:await pinnedGiftSources(temp),ribbonsSourceRoot:temp}), /Gift-box media readiness:/);
   } finally { await rm(temp,{recursive:true,force:true}); }
 });

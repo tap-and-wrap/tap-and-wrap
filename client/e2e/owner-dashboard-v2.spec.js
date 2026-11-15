@@ -40,8 +40,10 @@ test('eight primary destinations, drawer containment, customization and storefro
   for (let index = 0; index < 18; index++) { await page.keyboard.press('Tab'); expect(await dialog.evaluate(element => element.contains(document.activeElement))).toBe(true); }
   for (let index = 0; index < 18; index++) { await page.keyboard.press('Shift+Tab'); expect(await dialog.evaluate(element => element.contains(document.activeElement))).toBe(true); }
   await page.keyboard.press('Escape'); await expect(dialog).toHaveCount(0); await expect(opener).toBeFocused();
-  await page.getByRole('link', { name: 'Home — storefront' }).click();
-  await expect(page.getByRole('link', { name: 'Account', exact: true })).toHaveAttribute('href', '/admin');
+  await opener.click(); await page.getByRole('dialog', { name: 'Administration menu' }).getByRole('link', { name: 'View storefront', exact: true }).click();
+  await page.getByRole('button',{name:'Open menu',exact:true}).click();
+  await expect(page.getByRole('dialog',{name:'Main menu'}).getByRole('link',{name:'Dashboard',exact:true})).toHaveAttribute('href','/admin');
+  await page.keyboard.press('Escape');
   await expect(page.locator('.announcement')).toBeVisible();
 });
 

@@ -153,7 +153,9 @@ test('incomplete, oversized or non-advancing pages abort rather than publishing 
 
 test('fixed content export cannot be authorized or overridden by legacy database approvals', () => {
   const result = exportApprovedContent({ about: { approved: true, title: 'Legacy override', body: 'Never publish legacy policy' }, contact: { approved: true, email: 'wrong@example.test' } });
-  assert.deepEqual(result.routes, {});
+  assert.deepEqual(result, exportApprovedContent());
+  assert.ok(result.routes['/about']?.approved);
+  assert.doesNotMatch(JSON.stringify(result), /Legacy override|Never publish legacy policy|wrong@example.test/);
 
 });
 

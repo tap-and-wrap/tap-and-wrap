@@ -58,6 +58,15 @@ async function create(kinds,method='instapay') {
   const result=await placeOrder(owner,request);
   return {order:await Order.findById(result.id).lean(),request};
 }
+// Explicit historical snapshot fixture: new purchases retain their upfront policy.
+async function historical(kinds) {
+  const {order}=await create(kinds);
+  const snapshot={...order,_id:new mongoose.Types.ObjectId(),orderNumber:'987652',checkoutKey:randomUUID(),paymentState:kinds.some(kind=>kind!=='engraving')?'awaiting_transfer':'unpaid'};
+  delete snapshot.paymentPolicyVersion; delete snapshot.engravingPaymentPolicy; delete snapshot.createdAt; delete snapshot.updatedAt;
+  snapshot.financialSummary=await orderAccounting(snapshot);
+  await Order.create(snapshot);
+  return {order:snapshot};
+}
 async function account(order,input,who=actor) {
   const current=await Order.findById(order._id).lean();
   return mutateOrderAccounting(String(order._id),owner,{revision:current.revision,...input},who);
@@ -78,19 +87,19 @@ async function freeCharge(order,chargeId) {
 for(const kinds of [['product'],['gift'],['engraving'],['product','gift'],['product','engraving'],['gift','engraving'],['product','gift','engraving']]) for(const method of ['cod','instapay']) {
   test(`one immutable ${method} order: ${kinds.join(' + ')}`,async()=>{
     const {order,request}=await create(kinds,method);
-    assert.equal(order.lines.length,kinds.length);assert.equal(order.paymentState,method==='instapay'&&!kinds.includes('engraving')?'awaiting_transfer':'unpaid');
+    assert.equal(order.lines.length,kinds.length);assert.equal(order.paymentState,method==='instapay'?'awaiting_transfer':'unpaid');
     assert.equal((await placeOrder(owner,request)).id,String(order._id));assert.equal(await Order.countDocuments(),1);
     assert.equal((await Product.findById(product._id)).inventory.quantity,kinds.includes('product')?2:3);
     if(order.accountingVersion===2){
       assert.equal(order.paymentGroups.reduce((sum,group)=>sum+group.amountPiastres,0),order.totals.totalPiastres);
       assert.equal(order.inventoryClaims.some(claim=>claim.kind==='engraving_service_v1'),false);
-      if(kinds.includes('engraving'))assert.equal((await orderAccounting(order)).groups.find(group=>group.id==='engraving').status,'deferred');
+      if(kinds.includes('engraving'))assert.equal((await orderAccounting(order)).groups.find(group=>group.id==='engraving').status,'unpaid');
     }
     await assert.rejects(placeOrder(owner,{...request,customer:{...customer,name:'Changed request'}}),{code:'IDEMPOTENCY_CONFLICT'});
   });
 }
-test('mixed obligations: merchandise payment never authorizes engraving; COD commitment is not collected cash',async()=>{
-  let {order}=await create(['product','gift','engraving']);
+test('historical mixed obligations: merchandise payment never authorizes engraving; COD commitment is not collected cash',async()=>{
+  let {order}=await historical(['product','gift','engraving']);
   const merchandise=order.paymentGroups.find(group=>group.id==='merchandise').amountPiastres;
   await assert.rejects(account(order,{action:'collection',scope:'engraving',operationKey:randomUUID(),amountPiastres:10000,method:'instapay',reference:'EARLY',reconciled:true,exceptionConfirmed:true,reason:'Must never bypass inspection'}),{code:'ACCOUNTING_REVIEW_REQUIRED'});
   assert.deepEqual(presentOrder(order).paymentInstructionsByGroup.map(group=>group.scope),['merchandise']);
@@ -167,8 +176,8 @@ test('returned merchandise can be reconciled while customer engraving custody st
   await account(order,{action:'inventory_return',inspected:true,quantities:current.inventoryClaims.map(claim=>claim.quantity),reason:'Inspected actual resellable return'});
   assert.equal((await Product.findById(product._id)).inventory.quantity,3);
 });
-test('unsuitable unengraved property returns without a service charge or fictitious delivery',async()=>{
-  const {order}=await create(['engraving']);await work(order,'receive',{condition:'Actually received'});await work(order,'inspect');await work(order,'unsuitable',{publicReason:'Material unsuitable for safe engraving'});
+test('historical unsuitable unengraved property returns without a service charge or fictitious delivery',async()=>{
+  const {order}=await historical(['engraving']);await work(order,'receive',{condition:'Actually received'});await work(order,'inspect');await work(order,'unsuitable',{publicReason:'Material unsuitable for safe engraving'});
   await freeCharge(order,'return_shipping');await work(order,'arrange_return',{publicReason:'Agreed safe return without work'});await work(order,'return_to_customer',{publicReason:'Actually returned unengraved'});
   const saved=await Order.findById(order._id).lean(),financial=await orderAccounting(saved);
   assert.equal(saved.totals.totalPiastres,10000);assert.equal(saved.fulfillmentState,'completed_with_changes');assert.equal(saved.paymentState,'unpaid');assert.equal(saved.engraving.items[0].inCustody,false);

@@ -96,6 +96,46 @@ export default function GiftBoxBuilderPage() {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     titleRef.current?.focus({ preventScroll: true });
   }, [step, review]);
+  // Focus can change the purchase bar's layout, and the mobile keyboard can
+  // resize the viewport after the browser's native focus scroll has finished.
+  useEffect(() => {
+    const root = pageRef.current;
+    if (!root) return;
+    let frame;
+    const keepVisible = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const control = document.activeElement;
+        if (!root.contains(control) || !control.matches('input, textarea, select')) return;
+        const rect = control.getBoundingClientRect();
+        const top = Math.max(0, document.querySelector('.site-header-stack')?.getBoundingClientRect().bottom || 0) + 12;
+        const viewport = window.visualViewport;
+        const bottom = (viewport ? viewport.offsetTop + viewport.height : window.innerHeight) - 12;
+        const delta = rect.top < top ? rect.top - top : rect.bottom > bottom ? rect.bottom - bottom : 0;
+        if (delta) window.scrollBy({ top: delta, behavior: 'instant' });
+      });
+    };
+    const viewportSize = () => `${window.visualViewport?.width || window.innerWidth}:${window.visualViewport?.height || window.innerHeight}`;
+    let previousSize = viewportSize();
+    const resized = () => { const size = viewportSize(); if(size !== previousSize){previousSize = size; keepVisible();} };
+    const manualScroll = () => cancelAnimationFrame(frame);
+    const observer = new ResizeObserver(keepVisible);
+    observer.observe(root);
+    root.addEventListener('focusin', keepVisible);
+    root.addEventListener('wheel', manualScroll, {passive:true});
+    root.addEventListener('touchstart', manualScroll, {passive:true});
+    window.addEventListener('resize', resized);
+    window.visualViewport?.addEventListener('resize', resized);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      root.removeEventListener('focusin', keepVisible);
+      root.removeEventListener('wheel', manualScroll);
+      root.removeEventListener('touchstart', manualScroll);
+      window.removeEventListener('resize', resized);
+      window.visualViewport?.removeEventListener('resize', resized);
+    };
+  }, [step, review, catalog.isPending]);
   function navigate(next, showReview = false) {
     if (addingGift || next === step && showReview === review) return;
     shouldFocus.current = true;

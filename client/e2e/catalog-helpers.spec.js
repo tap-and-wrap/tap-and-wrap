@@ -156,11 +156,11 @@ test('catalog URL filters normalize search and reject invalid price and availabi
   expect(readCatalogParams(new URLSearchParams({ q: 'x'.repeat(150) })).q).toHaveLength(100);
 });
 
-test('all eight catalog sorts are preserved and invalid sorts return Discover', () => {
+test('seven public sorts are preserved and legacy or invalid sorts normalize to Featured', () => {
   for (const sort of ['discovery', 'featured', 'best_sellers', 'newest', 'price_asc', 'price_desc', 'name_asc', 'name_desc']) {
-    expect(readCatalogParams(new URLSearchParams({ sort })).sort, sort).toBe(sort);
+    expect(readCatalogParams(new URLSearchParams({ sort })).sort, sort).toBe(sort==='discovery'?'featured':sort);
   }
-  expect(readCatalogParams(new URLSearchParams('sort=unverified-ranking')).sort).toBe('discovery');
+  expect(readCatalogParams(new URLSearchParams('sort=unverified-ranking')).sort).toBe('featured');
 });
 
 test('applying catalog filters resets the page while preserving search and sorting', () => {

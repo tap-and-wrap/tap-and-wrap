@@ -3,11 +3,10 @@ import { test, expect } from '@playwright/test';
 import { mockCatalog } from './catalog-fixtures.js';
 import { fixedPages, fixedFaq, publicContacts } from '../../shared/storefront-content.mjs';
 
-test('information pages remain centered and readable at phone, tablet and desktop sizes', async ({ page }) => {
+for(const width of [320,390,768,1024,1440])test(`information pages remain centered and readable at ${width}px`,async({page})=>{
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await mockCatalog(page);
-  for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     for (const [slug, record] of Object.entries(fixedPages)) {
       await page.goto(`/${slug}`);
@@ -25,7 +24,11 @@ test('information pages remain centered and readable at phone, tablet and deskto
       for (const target of ['privacy-policy', 'refund-policy', 'shipping-policy', 'terms-of-service', 'contact']) await expect(information.getByRole('link', { name: fixedPages[target].title, exact: true })).toHaveAttribute('href', `/${target}`);
     }
     await page.screenshot({ path: `test-results/batch6-policy-${width}.png`, fullPage: true });
-  }
+  expect(errors).toEqual([]);
+});
+
+test('contact questions retain all code-managed FAQ categories',async({page})=>{
+  const errors=[];page.on('pageerror',error=>errors.push(error.message));await mockCatalog(page);
   await page.goto('/about');
   await page.goto('/contact#questions');
   await expect(page.locator('#questions')).toBeVisible();
@@ -46,6 +49,12 @@ test('code-managed FAQ and policies describe the same contact, delivery and quot
   expect(fixedPages['shipping-policy'].sections.flatMap(s => s.paragraphs).join(' ')).toContain('not EGP 0 or free shipping');
   expect(fixedPages['refund-policy'].sections.flatMap(s => s.paragraphs).join(' ')).toContain('Personalization never excludes remedies');
   expect(publicContacts.whatsapp).not.toBe('01060673073');
+  const paymentTerms=fixedPages['terms-of-service'].sections.flatMap(s=>s.paragraphs).join(' ');
+  expect(paymentTerms).toContain('upload your screenshot at checkout and place your order');
+  expect(paymentTerms).not.toContain('create the order first');
+  expect(fixedFaq.find(item=>item.question==='Which payment methods do you accept?').answer).toContain('authorized amount and recipient shown at checkout');
+  const screenshotAnswer=fixedFaq.find(item=>item.question==='How do I submit my InstaPay screenshot?').answer;
+  expect(screenshotAnswer).toContain('upload your screenshot before placing your order');expect(screenshotAnswer).not.toContain('Place your order first');
 });
 
 test('retired content bookmark redirects to the owner dashboard on a small phone', async ({ page }) => {

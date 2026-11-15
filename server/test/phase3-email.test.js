@@ -39,7 +39,7 @@ test('every order and account event has branded HTML and plain text without priv
   }
   const received = renderEmailTemplate(event);
   assert.ok(received.text.includes('EGP 149.90'));
-  assert.ok(received.text.includes('awaiting verification'));
+  assert.match(received.text,/awaiting verification/i);
   assert.equal(received.text.includes('has manually confirmed'), false);
 });
 

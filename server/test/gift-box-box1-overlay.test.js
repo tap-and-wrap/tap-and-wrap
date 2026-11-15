@@ -1,3 +1,4 @@
+import {pinnedGiftSources} from './helpers/pinned-gift-sources.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -12,7 +13,8 @@ test('pinned original and reviewed corrected candidate produce a repeatable, unp
   await mkdir(cache, { recursive: true });
   const temp = await mkdtemp(path.join(cache, 'box1-overlay-test-'));
   try {
-    const first = await prepareBox1Overlay({ outputRoot: temp });
+    const sourceRoot=await pinnedGiftSources(temp);
+    const first = await prepareBox1Overlay({ sourceRoot, outputRoot: temp });
     assert.equal(first.created, true);
     assert.equal(first.productionApproved, false);
     assert.equal(first.uploadAuthorized, false);
@@ -24,7 +26,7 @@ test('pinned original and reviewed corrected candidate produce a repeatable, unp
     assert.equal(manifest.original.manifestUnchanged, true);
     assert.equal(manifest.derivative.path, BOX1_OVERLAY.derivativePath);
     assert.equal(sha256(await readFile(path.join(temp, BOX1_OVERLAY.version, ...BOX1_OVERLAY.derivativePath.split('/')))), manifest.derivative.sha256);
-    const again = await prepareBox1Overlay({ outputRoot: temp });
+    const again = await prepareBox1Overlay({ sourceRoot, outputRoot: temp });
     assert.equal(again.created, false);
     assert.equal(again.unchanged, true);
     assert.match(BOX1_OVERLAY_URL, /^\/__gift-box-box1-overlay\/box1-alpha-rgb-/);
@@ -36,7 +38,8 @@ test('Box 1 overlay refuses tampered corrected image without rewriting existing 
   try {
     const tampered = path.join(temp, BOX1_OVERLAY.candidateFilename);
     await writeFile(tampered, Buffer.from('not the reviewed candidate'));
-    await assert.rejects(prepareBox1Overlay({ candidateFile: tampered, outputRoot: temp }), /candidate hash mismatch/);
+    const sourceRoot=await pinnedGiftSources(temp);
+    await assert.rejects(prepareBox1Overlay({ sourceRoot, candidateFile: tampered, outputRoot: temp }), /candidate hash mismatch/);
   } finally { await rm(temp, { recursive: true, force: true }); }
 });
 test('local Box 1 overlay restricts derivative lookup to its one exact path', async () => {

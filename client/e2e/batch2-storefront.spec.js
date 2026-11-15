@@ -224,7 +224,9 @@ test('footer omits Explore and uses approved accessible icon destinations only',
   await page.route('**/api/v1/public/site-content', route => route.fulfill({ headers, json: { ok: true, data: { contact, featuredReviews: [], faq: [], policies: {} } } }));
   await page.goto('/'); const footer = page.getByRole('contentinfo');
   await expect(footer.getByText('Explore', { exact: true })).toHaveCount(0);
-  await expect(footer.getByRole('navigation', { name: 'Information' }).getByRole('link')).toHaveCount(6);
+  const information=footer.getByRole('navigation',{name:'Information'}).getByRole('link');
+  await expect(information).toHaveCount(5);
+  expect(await information.evaluateAll(links=>links.map(link=>link.getAttribute('href')))).toEqual(['/privacy-policy','/refund-policy','/shipping-policy','/terms-of-service','/contact']);
   // Fixed merchant contacts are code-managed; forged site-content contacts must
   // not replace them with the synthetic fixture's account.
   await expect(footer.getByRole('link', { name: 'Instagram', exact: true })).toHaveAttribute('href', publicContacts.instagram);

@@ -6,6 +6,7 @@ const api = `http://127.0.0.1:${process.env.TAP_WRAP_CONTRACT_API_PORT}/api/v1`;
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWO4NbsXAARVAgOYIL6CAAAAAElFTkSuQmCC','base64');
 test.skip(process.env.TAP_WRAP_CONTRACT_GIFT_SHOPPING !== 'true', 'Requires the explicit disposable shopping fixture.');
 test.beforeEach(async ({ context, page }) => {
+  expect((await context.request.post(api.replace('/api/v1','')+'/__fixture/reset-client-limits',{headers:{'x-fixture-key':'connected-fixture-only'}})).status()).toBe(204);
   await context.route('**/*', route => {
     const url = new URL(route.request().url());
     return ['127.0.0.1','localhost'].includes(url.hostname) || ['blob:','data:'].includes(url.protocol) ? route.continue() : route.abort();
@@ -64,10 +65,10 @@ for (const [navigation, firstPhoto, secondPhoto] of [
     await page.route('**/api/v1/commerce/cart/items',route=>{
       if (route.request().method() !== 'POST' || !reject) return route.continue();
       reject = false;
-      return route.fulfill({status:409,json:{ok:false,error:{code:'GIFT_BOX_COMPONENT_UNAVAILABLE',message:'This component is unavailable. Choose another item or try again.'}}});
+      return route.fulfill({status:409,headers:{'access-control-allow-origin':`http://127.0.0.1:${process.env.TAP_WRAP_CONTRACT_WEB_PORT}`,'access-control-allow-credentials':'true'},json:{ok:false,error:{code:'GIFT_BOX_COMPONENT_UNAVAILABLE',message:'This component is unavailable. Choose another item or try again.'}}});
     });
     await page.getByRole('button',{name:'Add Your Gift to Cart'}).click();
-    await expect(page.locator('.gb-announcement')).toContainText('Choose another item');
+    await expect(page.getByRole('region',{name:'Notifications alt+T'})).toContainText('Choose another item');
     expect((await cart(context)).items).toHaveLength(1);
   }
   await add(page);
@@ -82,8 +83,8 @@ for (const [navigation, firstPhoto, secondPhoto] of [
     await page.getByLabel('Email', {exact:true}).fill('gift-buyer@example.test');
     await page.getByLabel('Phone number').fill('01012345678');
     await chooseOption(page.getByLabel(/^Governorate/), 'cairo');
-    await page.getByLabel('Delivery address', {exact:true}).fill('10 Synthetic Gift Test Street');
-    await expect(page.getByRole('radio',{name:/Cash on Delivery/})).toHaveCount(0);
+    await page.getByLabel(/^City \/ Area/).fill('Synthetic Cairo');await page.getByLabel(/^Street address/).fill('10 Synthetic Gift Test Street');
+    await expect(page.getByRole('radio',{name:/Cash on Delivery/})).toBeChecked();
     await expect(page.getByRole('button',{name:'Place Order',exact:true})).toBeEnabled();
     await page.getByRole('button',{name:'Place Order',exact:true}).click();
     await page.getByRole('main').getByRole('link',{name:'Track Order',exact:true}).click();await expect(page).toHaveURL(/\/orders\/[a-f0-9]{24}$/);
@@ -166,8 +167,8 @@ test('three photo orientations reconstruct unchanged after real isolated checkou
   const current=await cart(context);expect(current.items[0].giftBox.design.photos.map(photo=>photo.aspectRatio)).toEqual([2/3,1.5,1]);
   await expect(page.locator('.cart-v2-photo .gb-free-photo')).toHaveCount(3);
   await page.getByRole('button',{name:'View Design Details',exact:true}).click();
-  await expect(page.locator('.gift-photo-previews img')).toHaveCount(3);
-  await expect.poll(()=>page.locator('.gift-photo-previews img').evaluateAll(images=>images.every(image=>image.complete&&image.naturalWidth>0))).toBe(true);
+  await expect(page.locator('.cart-v2-photo .gb-free-photo img')).toHaveCount(3);
+  await expect.poll(()=>page.locator('.cart-v2-photo .gb-free-photo img').evaluateAll(images=>images.every(image=>image.complete&&image.naturalWidth>0))).toBe(true);
   const lineId=current.items[0].id;
   const source=await context.request.get(`${api}/commerce/cart/items/${lineId}/gift-photos/0`);
   expect(source.status()).toBe(200);expect(source.headers()['cache-control']).toContain('private');expect((await source.body()).equals(files[0].buffer)).toBe(true);

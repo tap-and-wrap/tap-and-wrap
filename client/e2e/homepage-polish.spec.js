@@ -21,10 +21,12 @@ for (const width of [320, 1440]) {
       await page.getByRole('button', { name: 'Open menu' }).click();
       const drawer = page.getByRole('dialog', { name: 'Main menu' });
       await expect(drawer).toBeVisible();
-      await expect(drawer.locator('.drawer-account')).toHaveCount(0);
+      await expect(drawer.locator('.drawer-account')).toHaveCount(1);
+      await expect(drawer.getByRole('link',{name:'Sign In',exact:true})).toHaveAttribute('href',/^\/login/);
+      await expect(drawer.getByRole('link',{name:/Dashboard|My Account/})).toHaveCount(0);
       await expect(drawer.getByRole('link', { name: 'Account' })).toHaveCount(0);
       await expect(drawer.getByRole('button', { name: 'Sign out' })).toHaveCount(0);
-      await expect(page.locator('.site-header .header-actions .icon-button').first()).toBeVisible();
+      await expect(page.getByRole('link', { name: /^Shopping bag|^Cart/ }).first()).toBeVisible();
     }
   });
 }

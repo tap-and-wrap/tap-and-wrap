@@ -1,3 +1,4 @@
+import { saveCartItem } from './cart-assertions.js';
 import { test, expect, api, image, choose, start, words, add, cart } from './visual-engraving-fixture.js';
 
 async function item(page, family) {
@@ -26,8 +27,7 @@ async function item(page, family) {
     await page.getByRole('button',{name:'Customize This',exact:true}).click();
     await choose(page,/^Audit photo/,await image(page,150,100));
     await page.getByRole('button',{name:'Save personalization',exact:true}).click();
-    await page.getByRole('button',{name:'Add to Cart',exact:true}).click();
-    await expect(page.locator('[data-sonner-toast]').filter({hasText:'Added to your cart.'})).toBeVisible();
+    await saveCartItem(page, () => page.getByRole('button',{name:'Add to Cart',exact:true}).click());
   } else if (family === 'gift') {
     await page.goto('/customize/gift-box');
     await page.getByRole('button',{name:'Choose Synthetic box-2',exact:true}).click();
@@ -59,7 +59,7 @@ for(const family of ['normal','photos','text','required','gift','standalone','mi
     await page.getByLabel(/^Governorate/).selectOption('cairo');
     await page.getByLabel(/^City \/ Area/).fill('Synthetic city');
     await page.getByLabel(/^Street address/).fill('10 Synthetic street');
-    for(const [name,value] of [['Building','A'],['Floor','2'],['Apartment','3']]) await page.getByLabel(`${name} (optional)`,{exact:true}).fill(value);
+    for(const [name,value] of [['Building','A'],['Floor','2'],['Apartment','3']]) await page.getByLabel(name,{exact:true}).fill(value);
     await expect(page.getByRole('radio',{name:/Cash on Delivery|COD on agreed/})).toBeVisible();
     await expect(page.getByRole('radio',{name:/InstaPay/})).toBeVisible();
     await page.getByRole('radio',{name:method==='cod'?/Cash on Delivery|COD on agreed/:/InstaPay/}).check();
@@ -68,6 +68,7 @@ for(const family of ['normal','photos','text','required','gift','standalone','mi
       expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
       await page.screenshot({path:info.outputPath(`checkout-${width}.png`),fullPage:true});
     }
+    if(method==='instapay'){await expect(page.getByRole('button',{name:'Place Order',exact:true})).toBeDisabled();await page.getByRole('button',{name:'View transfer details',exact:true}).click();await page.getByLabel(/^Transfer sender name/).fill('Synthetic Policy Sender');await choose(page,/InstaPay: Choose screenshot/,photo);}
     await expect(page.getByRole('button',{name:'Place Order',exact:true})).toBeEnabled();
     const response=page.waitForResponse(r=>r.url().endsWith('/commerce/orders')&&r.request().method()==='POST');
     await page.getByRole('button',{name:'Place Order',exact:true}).click();
@@ -75,7 +76,7 @@ for(const family of ['normal','photos','text','required','gift','standalone','mi
     const order=(await accepted.json()).data.order;
     expect(order.paymentPolicyVersion).toBe('all-methods-v1');
     expect(order.allowedPaymentMethods).toEqual(['cod','instapay']);
-    expect(order.paymentMethod).toBe(method);expect(order.paymentState).toBe(method==='cod'?'unpaid':'awaiting_transfer');
+    expect(order.paymentMethod).toBe(method);expect(order.paymentState).toBe(method==='cod'?'unpaid':'awaiting_verification');
     expect(order.customer).toMatchObject({addressVersion:'delivery-address-v3',building:'A',floor:'2',apartment:'3'});
     expect(order.lines).toHaveLength(before.items.length);
     expect(order.totals.totalPiastres).toBe(before.subtotalPiastres);

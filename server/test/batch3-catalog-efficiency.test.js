@@ -37,7 +37,7 @@ test('one authoritative category graph read preserves approval/hierarchy gates a
   assert.equal(graphReads, 1, 'Category eligibility must use one fresh graph read, not a global stale cache.');
   const browse = await listProducts({ page: 1, limit: 20, includePriceRange: false });
   assert.equal(browse.pagination.total, 24, '23 active Ready products and one explicitly public Draft; inactive/orphan categories stay excluded.');
-  assert.equal(browse.products.find(product => product.slug === 'synthetic-24')?.orderingAvailable, false, 'Visible draft must remain unorderable.');
+  assert.equal(result.products.find(product => product.slug === 'synthetic-24')?.orderingAvailable, false, 'Visible draft must remain unorderable.');
   assert.equal(browse.products.some(product => product.slug === 'synthetic-25'), false, 'Inactive-category products must remain hidden, not merely nonorderable.');
   assert.equal(browse.products.some(product => product.slug === 'synthetic-26'), false, 'Orphan child-category products must remain hidden.');
 });

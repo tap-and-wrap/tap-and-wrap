@@ -14,7 +14,7 @@ test('only the clicked product card shows loading during a delayed add', async (
   const first = page.getByRole('button', { name: `Add to Cart: ${commerceProduct.name}`, exact: true });
   const other = page.getByRole('button', { name: `Add to Cart: ${second.name}`, exact: true });
   await first.click();
-  await expect(first).toHaveText('Please wait…');
+  await expect(first).toHaveText('Adding');
   await expect(other).toHaveText('Add to Cart');
   await expect(other).toBeDisabled();
   release();
@@ -56,7 +56,7 @@ for (const width of [320,390,768,1024,1440]) test(`storefront, product, cart and
   await page.goto('/checkout');
   await fillCheckout(page);
   await page.getByLabel('Email',{exact:true}).fill('');
-  await page.getByLabel('Building (optional)').fill('Building A, floor 2');
+  await page.getByLabel('Building',{exact:true}).fill('Building A, floor 2');
   await expect(page.locator('input[type=date]')).toHaveCount(0);
   await page.evaluate(() => window.scrollTo(0,0));
   await page.screenshot({path:`${screenshots}/checkout-${width}.png`,fullPage:true});
@@ -85,7 +85,7 @@ test('rapid rejected card clicks produce one operation and restore both ordinary
 test('a pending guest add cannot leave loading labels in the signed-in storefront',async({page})=>{
   await mockCommerce(page);let release;
   await page.route('**/commerce/cart/items',async route=>{await new Promise(resolve=>{release=resolve;});await route.fallback().catch(()=>{});});
-  await page.goto('/shop');await page.getByRole('button',{name:`Add to Cart: ${commerceProduct.name}`,exact:true}).click();await expect(page.getByRole('button',{name:`Add to Cart: ${commerceProduct.name}`,exact:true})).toHaveText('Please wait…');
+  await page.goto('/shop');await page.getByRole('button',{name:`Add to Cart: ${commerceProduct.name}`,exact:true}).click();await expect(page.getByRole('button',{name:`Add to Cart: ${commerceProduct.name}`,exact:true})).toHaveText('Adding');
   await page.goto('/login');await page.getByLabel('Email Address').fill('isolated@example.test');await page.getByLabel('Password',{exact:true}).fill('isolated-test-password');await page.getByRole('button',{name:'Log In',exact:true}).click();await expect(page).not.toHaveURL(/\/login/);await page.goto('/shop');
   const button=page.getByRole('button',{name:`Add to Cart: ${commerceProduct.name}`,exact:true});await expect(button).toHaveText('Add to Cart');await expect(button).toBeEnabled();release();await expect(button).toHaveText('Add to Cart');
 });

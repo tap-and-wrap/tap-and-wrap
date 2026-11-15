@@ -72,6 +72,7 @@ for(const lost of ['none','proof','order','changed-quote','upload','double-click
     return reply({payment});
   });
   await page.goto('/checkout');await page.getByRole('radio',{name:/InstaPay/}).check();
+  await page.getByRole('button',{name:'View transfer details',exact:true}).click();
   await expect(page.getByRole('button',{name:'Copy transfer destination'})).toBeVisible();
   await page.getByRole('button',{name:'Copy transfer destination'}).click();expect(await page.evaluate(()=>window.copiedTransferValue)).toBe('01060673073');
   await page.getByRole('button',{name:'Copy transfer amount'}).click();expect(await page.evaluate(()=>window.copiedTransferValue)).toBe('250.00');
@@ -99,8 +100,8 @@ for(const lost of ['none','proof','order','changed-quote','upload','double-click
     await page.getByText('Have a discount code?',{exact:true}).click();await page.getByLabel('Discount code',{exact:true}).fill('CHANGED');await page.getByRole('button',{name:'Apply code',exact:true}).click();
     await expect(page.getByText(/This payment reference requires review/)).toBeVisible();await expect(page.getByRole('button',{name:'Copy transfer destination'})).toHaveCount(0);await expect(page.getByRole('button',{name:'Place Order',exact:true})).toBeDisabled();expect(fixture.orders).toHaveLength(0);return;
   }
-  if(lost==='cod'){await page.getByRole('radio',{name:'Cash on Delivery',exact:true}).click();await page.getByRole('button',{name:'I have not transferred',exact:true}).click();await page.getByRole('button',{name:'Place Order',exact:true}).click();await expect(page.getByRole('heading',{name:/Thank you/})).toBeVisible();expect(fixture.orders[0].paymentMethod).toBe('cod');expect(fixture.uploads).toHaveLength(0);return;}
-  await page.getByLabel('Transfer sender name').fill('Fixture Sender');await page.getByLabel('Transaction screenshot',{exact:true}).setInputFiles(isolatedImageFile());
+  if(lost==='cod'){await page.getByRole('radio',{name:'Cash on Delivery',exact:true}).click();await page.getByRole('button',{name:'Place Order',exact:true}).click();await expect(page.getByRole('heading',{name:/Thank you/})).toBeVisible();expect(fixture.orders[0].paymentMethod).toBe('cod');expect(fixture.uploads).toHaveLength(0);expect(payment.reference).toBe('22222222-2222-4222-8222-222222222222');expect(payment.proofReceived).toBe(false);return;}
+  await page.getByLabel(/^Transfer sender name/).fill('Fixture Sender');await page.getByLabel('Transaction screenshot',{exact:true}).setInputFiles(isolatedImageFile());
   await expect(page.getByAltText('Selected transaction screenshot')).toBeVisible();
   await page.screenshot({path:info.outputPath('checkout-instapay-upload-mobile.png'),fullPage:true});
   await expect(page.getByRole('button',{name:'Save payment proof'})).toHaveCount(0);

@@ -33,7 +33,8 @@ for (const width of [320, 768, 1440]) {
     const chooser = page.getByRole('combobox', { name: 'Browse Fixture Gifts' });
     await expect(chooser).toBeEnabled();
     await chooser.click();
-    await expect(page.getByRole('option')).toHaveCount(24);
+    if(await chooser.evaluate(node=>node.tagName==='SELECT'))await expect(chooser.locator('option')).toHaveCount(24);
+    else {const popupId=await chooser.getAttribute('aria-controls');await expect(page.locator(`[id=${JSON.stringify(popupId)}]`).getByRole('option')).toHaveCount(24);}
     await page.keyboard.press('Escape');
     if (width !== 768) await page.screenshot({ path: `test-results/category-chooser-${width}.png`, fullPage: true });
     expect(calls).toEqual([1, 2].map(pageNumber => ({ parent: category.slug, page: String(pageNumber), limit: '20', includeProductCounts: 'false' })));

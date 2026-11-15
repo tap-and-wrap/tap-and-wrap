@@ -35,6 +35,13 @@ const contentLimiter = rateLimit({
   message: { ok: false, error: { code: 'FILE_VIEW_RATE_LIMIT', message: 'Too many file requests. Please try again later.' } },
 });
 
+// Independent disposable clients share loopback during connected tests. This
+// helper never changes limits within a scenario or in a running merchant API.
+export function resetUploadLimitsForTests() {
+  if (process.env.NODE_ENV !== 'test') throw new Error('Rate-limit reset is restricted to isolated tests.');
+  for (const limiter of [signingLimiter, contentLimiter]) limiter.resetKey('127.0.0.1');
+}
+
 router.use((req, res, next) => {
   res.set('Cache-Control', 'private, no-store');
   res.set('X-Robots-Tag', 'noindex, nofollow, noarchive');

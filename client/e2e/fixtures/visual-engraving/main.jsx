@@ -18,11 +18,12 @@ window.changeEditorSession = sessionChangedElsewhere;
 window.snapshotEditor = () => window.latestVisualDraft;
 function Harness() {
   const [scope, setScope] = useState('guest:0:cart-fixture'), [revision, setRevision] = useState(0), [initial, setInitial] = useState(), [assets, setAssets] = useState({});
+  const [error, setError] = useState('');
   const [fonts, setFonts] = useState(FONT_REGISTRY.map(font => font.id));
   window.setApprovedEditorFonts = setFonts;
   window.restoreEditor = (draft, resources = window.latestVisualAssets) => { setInitial(draft); setAssets(resources); setRevision(value => value + 1); };
   window.rotateEditorOwner = () => { setScope('guest:1:cart-rotated'); };
   window.openApprovedProduct = () => { setInitial({ ownerScope: scope, design: { version: 'visual-engraving-v1', surface: { assetId: 'product-image', aspectRatio: 1.5 }, layers: [] } }); setAssets({ 'product-image': { approved: true, src: '/fixture-product.png' } }); setRevision(value => value + 1); };
-  return <><VisualEngravingEditor key={revision} ownerScope={scope} initialDraft={initial} assets={assets} approvedFontIds={fonts} onChange={(draft, resources, readiness) => { window.latestVisualDraft = draft; window.latestVisualAssets = resources; window.visualReadiness = readiness; }}/><div hidden><DesignPreview content={{ mode: 'icons', iconId: 'engraving-heart-v1' }}/></div></>;
+  return <><VisualEngravingEditor onError={setError} key={revision} ownerScope={scope} initialDraft={initial} assets={assets} approvedFontIds={fonts} onChange={(draft, resources, readiness) => { window.latestVisualDraft = draft; window.latestVisualAssets = resources; window.visualReadiness = readiness; }}/>{error && <p role="alert">{error}</p>}<div hidden><DesignPreview content={{ mode: 'icons', iconId: 'engraving-heart-v1' }}/></div></>;
 }
 createRoot(document.getElementById('root')).render(<Harness/>);
