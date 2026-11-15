@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 const api=`http://127.0.0.1:${process.env.TAP_WRAP_CONTRACT_API_PORT}`,web=`http://127.0.0.1:${process.env.TAP_WRAP_CONTRACT_WEB_PORT}`;
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWO4NbsXAARVAgOYIL6CAAAAAElFTkSuQmCC','base64');
-test('real API + browser: all three line types share one unpaid COD order, with deferred engraving and owner-scoped access',async({page,context,browser},info)=>{
+test('real API + browser: all three line types share one unpaid COD order, with upfront engraving and owner-scoped access',async({page,context,browser},info)=>{
   await context.route('**/*',route=>{const url=new URL(route.request().url());return ['127.0.0.1','localhost'].includes(url.hostname)||['blob:','data:'].includes(url.protocol)?route.continue():route.abort();});
   const get=async path=>(await(await context.request.get(api+'/api/v1'+path)).json()).data;
   const post=async(path,data)=>context.request.post(api+'/api/v1'+path,{headers:{Origin:web,'x-csrf-token':(await get('/auth/csrf')).csrfToken},data});
@@ -18,9 +18,9 @@ test('real API + browser: all three line types share one unpaid COD order, with 
   response=await post('/commerce/cart/items',{kind:'engraving_service_v1',quantity:1,operationKey:crypto.randomUUID(),specification,reviewFingerprint:quote.reviewFingerprint});expect(response.status(),await response.text()).toBe(201);
   await page.goto('/cart');await expect(page.getByRole('link',{name:'Proceed to Checkout'})).toBeVisible();await expect(page.getByText(/Engraving needs a separate order/)).toHaveCount(0);
   const checkoutKey=crypto.randomUUID();response=await post('/commerce/checkout/quote',{checkoutKey,paymentMethod:'cod',governorate:'cairo'});expect(response.ok(),await response.text()).toBe(true);
-  const input={checkoutKey,paymentMethod:'cod',customer:{name:'Connected release 3',email:'release3@example.test',phone:'01012345678',governorate:'cairo',address:'Disposable connected address 10'}};
+  const input={checkoutKey,paymentMethod:'cod',customer:{name:'Connected release 3',email:'release3@example.test',phone:'01012345678',governorate:'cairo',addressVersion:'delivery-address-v3',city:'Fixture Cairo',street:'10 Disposable Connected Street',building:'',floor:'',apartment:'',notes:''}};
   response=await post('/commerce/orders',input);expect(response.status(),await response.text()).toBe(201);const order=(await response.json()).data.order;
-  expect(order.lines).toHaveLength(3);expect(order.paymentState).toBe('unpaid');expect(order.paymentObligations.find(group=>group.id==='engraving').status).toBe('deferred');expect(order.paymentInstructionsByGroup).toEqual([]);
+  expect(order.lines).toHaveLength(3);expect(order.paymentMethod).toBe('cod');expect(order.allowedPaymentMethods).toEqual(['cod','instapay']);expect(order.totals.totalPiastres).toBe(117000);expect(order.paymentState).toBe('unpaid');expect(order.paymentObligations.find(group=>group.id==='engraving').status).toBe('unpaid');expect(order.paymentInstructionsByGroup).toEqual([]);
   const repeated=await post('/commerce/orders',input);expect((await repeated.json()).data.order.id).toBe(order.id);
   await page.goto('/orders/'+order.id);await expect(page.getByRole('heading',{name:'Order #'+order.orderNumber,exact:true})).toBeVisible();
   await page.setViewportSize({width:390,height:900});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:info.outputPath('real-mixed-order-390.png'),fullPage:true});

@@ -51,7 +51,8 @@ test('variant stock and Made by Request control the actual selected purchase opt
   await expect(page.getByRole('button', { name: 'Add to Cart', exact: true })).toHaveCount(0);
   await chooseOption(page.getByLabel('Choose size / color'), 'made');
   await expect(page.locator('.product-price')).toContainText('200.00');
-  await expect(page.locator('.product-stock-status')).toHaveText('Made by Request');
+  // The approved storefront removed the separate made-to-order label; eligibility remains enforced.
+  await expect(page.locator('.product-stock-status')).toBeEmpty();
   await expect(page.getByRole('button', { name: 'Add to Cart', exact: true })).toBeEnabled();
 });
 

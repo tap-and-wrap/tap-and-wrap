@@ -20,13 +20,18 @@ test('WhatsApp remains a separate action from its full-card product link',async(
   const popup=page.waitForEvent('popup');await action.click();const opened=await popup;await opened.close();await expect(page).toHaveURL('/shop');
 });
 
-for (const width of [390,768,1440]) test(`mixed checkout presents deferred engraving and both methods at ${width}`,async({page},info)=>{
+for (const width of [390,768,1440]) test(`mixed checkout includes engraving upfront and offers both methods at ${width}`,async({page},info)=>{
   await page.setViewportSize({width,height:950});
   const cart=cartWithProduct();cart.items.push({id:'engraving-fixture',kind:'engraving_service_v1',name:'Watch Engraving',valid:true,quantity:1,unitPricePiastres:10000,lineTotalPiastres:10000});cart.quantity++;cart.subtotalPiastres+=10000;
   await mockCommerce(page,{cart,checkoutEnabled:true,mixedCheckout:true});await page.goto('/checkout');
-  await expect(page.getByText('One order, separate payment arrangements.')).toBeVisible();
+  await expect(page.locator('.commerce-total')).toContainText('350.00');
+  await expect(page.getByText('One order, separate payment arrangements.')).toHaveCount(0);
   await expect(page.getByRole('radio',{name:'Cash on Delivery',exact:true})).toBeVisible();await expect(page.getByRole('radio',{name:'InstaPay',exact:true})).toBeVisible();
-  await expect(page.getByText(/Engraving is unpaid until physical inspection/)).toBeVisible();
+  await expect(page.getByText(/Engraving is unpaid until physical inspection/)).toHaveCount(0);
+  await page.getByRole('radio',{name:'InstaPay',exact:true}).check();
+  await page.getByRole('button',{name:'View transfer details',exact:true}).click();
+  await expect(page.locator('.checkout-transfer-amount')).toContainText('350.00');
+  await expect(page.getByRole('button',{name:'Place Order',exact:true})).toBeDisabled();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:info.outputPath(`mixed-checkout-${width}.png`),fullPage:true});
 });

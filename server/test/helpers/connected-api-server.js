@@ -192,6 +192,15 @@ try {
     if (!grant || grant.expiresAt < Date.now() || req.headers['content-type'] !== grant.mimeType || !Buffer.isBuffer(req.body) || req.body.length !== grant.sizeBytes) return res.sendStatus(400);
     storage.put(grant.key, req.body, grant.mimeType); grants.delete(req.params.token); puts += 1; res.sendStatus(200);
   });
+  // Each browser case models an independent client on one loopback IP. Reset
+  // only between cases, through the existing guarded test helper; real limits
+  // remain active throughout each case (including limit acceptance tests).
+  const { resetCommerceLimitsForTests } = await import('../../src/commerce/routes.js');
+  const { resetUploadLimitsForTests } = await import('../../src/commerce/uploads.routes.js');
+  fixtureApp.post('/__fixture/reset-client-limits', (req,res) => {
+    if(req.headers['x-fixture-key'] !== 'connected-fixture-only')return res.sendStatus(403);
+    resetCommerceLimitsForTests();resetUploadLimitsForTests();res.sendStatus(204);
+  });
   fixtureApp.get('/__fixture/ready', (req, res) => res.json({ isolated: true, checkoutEnabled: enabledCheckout, providersEnabled: false }));
   fixtureApp.get('/__fixture/state', async (req, res) => {
     if (req.headers['x-fixture-key'] !== 'connected-fixture-only') return res.sendStatus(403);

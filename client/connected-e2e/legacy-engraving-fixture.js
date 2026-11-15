@@ -16,3 +16,25 @@ export async function seedLegacyEngraving(context, { mode = 'text', subtype = 'd
   const added = await post('/commerce/cart/items', { kind: 'engraving_service_v1', operationKey: randomUUID(), quantity: 1, specification, reviewFingerprint: quote.reviewFingerprint });
   return added.cart.items.find(value => value.engraving?.itemKey === itemKey).id;
 }
+
+// Current eligible purchases retain real pre-order proof authorization. This
+// helper runs only against the guarded disposable connected API.
+export async function placeConnectedEngraving(context, checkoutKey, paymentMethod = 'instapay') {
+  const api = `http://127.0.0.1:${process.env.TAP_WRAP_CONTRACT_API_PORT}/api/v1`, origin = `http://127.0.0.1:${process.env.TAP_WRAP_CONTRACT_WEB_PORT}`;
+  async function post(path,data) {
+    const csrf=(await(await context.request.get(api+'/auth/csrf')).json()).data.csrfToken;
+    const response=await context.request.post(api+path,{headers:{Origin:origin,'x-csrf-token':csrf},data});
+    if(!response.ok())throw Error(`Disposable checkout ${path} failed (${response.status()}): ${await response.text()}`);
+    return(await response.json()).data;
+  }
+  const quote=await post('/commerce/checkout/quote',{checkoutKey,paymentMethod,governorate:'cairo'});
+  if(typeof quote.fingerprint!=='string')throw Error('Disposable quote fingerprint missing.');
+  if(paymentMethod==='instapay') {
+    await post('/commerce/checkout/payments',{checkoutKey,paymentMethod,governorate:'cairo'});
+    const signed=await post('/commerce/uploads/sign',{purpose:'payment_proof',checkoutKey,mimeType:'image/png',sizeBytes:bytes.length});
+    const put=await context.request.put(signed.uploadUrl,{headers:signed.headers,data:bytes});if(!put.ok())throw Error('Disposable payment upload failed.');
+    await post(`/commerce/uploads/${signed.upload.id}/complete`,{});
+    await post(`/commerce/checkout/payments/${checkoutKey}/proof`,{uploadId:signed.upload.id,senderName:'Fixture Sender'});
+  }
+  return(await post('/commerce/orders',{checkoutKey,paymentMethod,customer:{name:'Fixture Customer',email:'fixture@example.test',phone:'01012345678',governorate:'cairo',addressVersion:'delivery-address-v3',city:'Fixture Cairo',street:'10 Fixture Return Street',building:'',floor:'',apartment:'',notes:''}})).order;
+}

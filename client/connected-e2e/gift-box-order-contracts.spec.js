@@ -30,7 +30,7 @@ test('real internally-created mixed order is readable by its owner, uses immutab
   const order = (await response.json()).data.order;
   expect(order.lines.map(line => line.kind)).toEqual(['product', 'gift_box_v2']);
   expect(order.totals.totalPiastres).toBe(107000); expect(order.totals.shippingPiastres).toBeNull();
-  expect(order.allowedPaymentMethods).toEqual(['instapay']);
+  expect(order.allowedPaymentMethods).toEqual(['cod', 'instapay']);
   const gift = order.lines[1]; expect(gift.lineTotalPiastres).toBe(99000);
   expect(gift.giftBox.giftCard.message).toBe(secret);
   for (const key of ['configuration', 'configurationId', 'inventoryClaims', 'fulfillment']) expect(gift.giftBox[key]).toBeUndefined();

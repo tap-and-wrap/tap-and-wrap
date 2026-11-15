@@ -70,7 +70,7 @@ test('mobile drawers contain focus, support Escape and apply and clear filters',
   await dialog.getByRole('button', { name: 'View Results' }).click();
   await expect(page).not.toHaveURL(/availability=/);
   await page.getByRole('button', { name: 'Sort', exact: true }).click();
-  await page.getByRole('dialog', { name: 'Sort by' }).getByRole('button', { name: 'Name Z–A' }).click();
+  await chooseOption(page.getByRole('dialog',{name:'Sort by'}).getByRole('combobox',{name:'Sort products'}),'name_desc');
   await expect(page).toHaveURL(/sort=name_desc/);
 });
 
@@ -111,8 +111,11 @@ test('product gallery, required options, stock and sticky controls preserve serv
   await page.getByRole('button', { name: 'View image 2' }).click();
   await expect(page.locator('.product-main-image img')).toHaveAttribute('src', detail.galleryUrls[1]);
   await expect(page.getByLabel('Gift name *')).toHaveAttribute('required', '');
-  // The chooser has multiple native Gallery/Camera/Files inputs, all scoped to the configured requirement.
-  await expect(page.locator('input[type=file]')).toHaveCount(3);
+  // One unrestricted native picker exposes the device's available sources.
+  await expect(page.locator('input[type=file]')).toHaveCount(1);
+  await expect(page.locator('input[type=file]')).not.toHaveAttribute('accept');
+  await expect(page.locator('input[type=file]')).not.toHaveAttribute('capture');
+  await expect(page.getByRole('button',{name:'Gift photo: Upload Image',exact:true})).toBeVisible();
   await expect(page.getByRole('link', { name: 'Customize This' })).toHaveCount(0);
   await chooseOption(page.getByLabel('Choose size / color'), 'small-rose');
   await expect(page.locator('.product-price')).toContainText('12.34');

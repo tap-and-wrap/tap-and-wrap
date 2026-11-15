@@ -37,7 +37,10 @@ function EngravingBuilder() {
   const type=knownTypes.find(value=>value.typeId===draft.typeId), editId=params.get('edit');
   const update=(patch)=>{setAdded(false);setError('');setDraft(previous=>({...previous,...patch}));};
   useEffect(()=>{
-    if(!editId || draft.replaceLineId===editId || !session.ready || pending || uncertain)return;
+    if(!editId || !session.ready || pending || uncertain)return;
+    // Returning to the same historical draft needs no reload, but this newly
+    // mounted editor must still leave its initial loading state.
+    if(draft.replaceLineId===editId){setEditLoading(false);return;}
     setEditLoading(true);setEditFailure('');
     const generation=authGeneration(),controller=new AbortController();
     async function load(){try{

@@ -40,7 +40,8 @@ export default function AdminProductsPage() {
   });
 
   function updateFilter(name, value) {
-    const next = new URLSearchParams(searchParams);
+    // Read the committed URL at interaction time; a fast next choice can precede React's rerender.
+    const next = new URLSearchParams(window.location.search);
     if (value) next.set(name, value);
     else next.delete(name);
     next.delete('page');
@@ -51,7 +52,8 @@ export default function AdminProductsPage() {
     setSearchParams(next);
   }
   function changePage(nextPage) {
-    const next = new URLSearchParams(searchParams);
+    // Read the committed URL at interaction time; a fast next choice can precede React's rerender.
+    const next = new URLSearchParams(window.location.search);
     next.set('page', String(nextPage));
     setSearchParams(next);
   }

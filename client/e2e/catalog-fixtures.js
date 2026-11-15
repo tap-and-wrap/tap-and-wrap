@@ -78,7 +78,7 @@ export async function mockCatalog(page, options = {}) {
     if (path === '/public/products' || path === '/admin/products' && request.method() === 'GET') {
       if (options.beforeList) await options.beforeList();
       if (options.listError?.()) return reply({ message: 'Fixture service failure' }, 503);
-      let rows = options.empty ? [] : [...cards];
+      let rows = options.empty ? [] : cards.map(item=>options.cardImageUrl?{...item,mainImageUrl:options.cardImageUrl}:item);
       const query = url.searchParams;
       if (query.get('q')) rows = rows.filter((item) => item.name.toLowerCase().includes(query.get('q').toLowerCase()));
       if (query.get('availability')) rows = rows.filter((item) => item.orderingAvailable === (query.get('availability') === 'available'));

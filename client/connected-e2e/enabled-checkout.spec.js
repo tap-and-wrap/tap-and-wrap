@@ -1,3 +1,4 @@
+import { saveCartItem } from './cart-assertions.js';
 import { chooseOption } from '../e2e/select-option.js';
 import { chooseImageFiles } from '../e2e/media-helpers.js';
 import { test, expect } from '@playwright/test';
@@ -45,9 +46,8 @@ test('real personalization upload to cart to InstaPay order to proof and explici
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await expect(page.getByAltText('Selected audit photo 1')).toBeVisible();
   await page.getByRole('button', { name: 'Save personalization' }).click();
-  await page.getByRole('button', { name: 'Add to Cart', exact: true }).click();
-  await expect(page.locator('[data-sonner-toast]').filter({ hasText: 'Added to your cart.' })).toBeVisible();
-  await details(page); await expect(page.getByRole('radio', { name: 'Cash on Delivery', exact: true })).toBeVisible(); await page.getByRole('radio', { name: /InstaPay/ }).check();
+  await saveCartItem(page, () => page.getByRole('button', { name: 'Add to Cart', exact: true }).click());
+  await details(page); await expect(page.getByRole('radio', { name: 'Cash on Delivery', exact: true })).toBeVisible(); await page.getByRole('radio', { name: /InstaPay/ }).check();await page.getByRole('button',{name:'View transfer details',exact:true}).click();
   await expect(page.getByRole('button', {name:'Copy transfer amount'})).toBeVisible();
   await page.getByLabel('Transfer sender name').fill('Synthetic sender');
   await chooseImageFiles(page, page, /^InstaPay: Choose screenshot/i, { name: 'synthetic-proof.png', mimeType: 'image/png', buffer: image });

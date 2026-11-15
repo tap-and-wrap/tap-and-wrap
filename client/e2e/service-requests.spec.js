@@ -100,7 +100,7 @@ test('lost submission retries the same request and verified files; reload recove
 test('admin saves quotation, opens a manual message, records sharing/acceptance then creates a linked unpaid order', async ({ page }) => {
   const data = await fixture(page, { role: 'admin', initial: requestRecord() }); await page.setViewportSize({ width: 320, height: 900 }); await page.goto(`/admin/requests/${id}`);
   await page.getByLabel('Confirmed product/custom-work unit amount (EGP)').fill('450'); await page.getByLabel('Confirmed delivery fee (EGP)').fill('90'); await page.getByRole('button', { name: 'Save new quotation version' }).click();
-  expect(data.actions[0].quote.allowedPaymentMethods).toEqual(['cod','instapay']);
+  await expect.poll(() => data.actions.length).toBe(1); expect(data.actions[0].quote.allowedPaymentMethods).toEqual(['cod','instapay']);
   await expect(page.getByRole('checkbox',{name:/explicitly authorize COD/i})).toHaveCount(0);
   await expect(page.getByText('New quotations include Cash on Delivery and InstaPay.',{exact:false})).toBeVisible();
   await expect(page.getByLabel('Saved WhatsApp quotation', { exact: true })).toHaveValue(/540.00/);

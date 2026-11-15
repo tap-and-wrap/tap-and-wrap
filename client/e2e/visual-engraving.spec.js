@@ -120,6 +120,7 @@ test('native mobile touch drag and pinch zoom keep design size independent', asy
   await expect(page.getByLabel('Workspace zoom')).not.toHaveText('100%'); expect(await snapshot(page)).toEqual(before);
   await page.getByRole('button', { name: 'Fit view', exact: true }).click();
   await page.getByRole('button', { name: 'Save view', exact: true }).click();
+  await page.getByRole('group', { name: 'Design layers', exact: true }).getByRole('button', { name: '1. Image artwork', exact: true }).click();
   await page.getByRole('button', { name: 'Larger design', exact: true }).click();
   expect((await snapshot(page)).design.layers[0].width).toBeGreaterThan(before.design.layers[0].width);
   await expect(page.locator('.ve-resize')).toHaveCount(0);
@@ -201,7 +202,7 @@ test('host receives readiness changes when a font approval is withdrawn', async 
   const approvedFont = (await snapshot(page)).design.layers[0].fontId;
   await page.evaluate(() => window.setApprovedEditorFonts([]));
   await page.locator('.ve-layers button').first().click();
-  await expect(page.getByRole('alert')).toContainText('Choose a current lettering style for this text.');
+  await expect(page.locator('.ve-selection').getByRole('alert')).toContainText('Choose a current lettering style for this text.');
   await expect.poll(() => page.evaluate(() => window.visualReadiness.ready)).toBe(false);
   await page.evaluate(id => window.setApprovedEditorFonts([id]), approvedFont);
   await expect.poll(() => page.evaluate(() => window.visualReadiness.ready)).toBe(true);

@@ -38,6 +38,7 @@ export async function mockCommerce(page, options = {}) {
   const calls = [];
   const uploads = [];
   const orders = [];
+  const payments = new Map();
   const state = { cart: structuredClone(options.cart || blankCart()), user: options.role ? { id: '710000000000000000000050', _id: '710000000000000000000050', name: 'Isolated Admin', email: 'isolated@example.test', role: options.role } : null, template, order: structuredClone(options.order || commerceOrder) };
   state.component = structuredClone(options.component || { categoryId: product.category._id, subcategoryId: null, _id: '710000000000000000000030', name: 'Configured Card', revision: 0, pricePiastres: 5000, priceApproved: false, configurationApproved: false, enabledForCustomization: false, inventory: { mode: 'tracked', quantity: 10, approved: false, available: true } });
   state.bundle = options.bundle ? structuredClone(options.bundle) : null;
@@ -109,15 +110,30 @@ export async function mockCommerce(page, options = {}) {
       } catch (error) { return failure(route, error.message); }
     }
     if (path === '/commerce/checkout/config') return success(route, { enabled: options.checkoutEnabled === true, instaPayNumber: '01060673073', governorates: [{ id: 'cairo', name: 'Cairo', shippingPiastres: 9000 }, { id: 'alexandria', name: 'Alexandria', shippingPiastres: 12000 }] });
+    if (/^\/commerce\/checkout\/payments\/[^/]+$/.test(path) && method === 'GET') {
+      const key=path.split('/').at(-1), payment=payments.get(key);
+      return success(route,{state:'open',paymentMethod:payment?'instapay':'cod',payment:payment||null,paymentRecoverable:Boolean(payment),canCancel:Boolean(payment&&!payment.proofReceived)});
+    }
+    if(path==='/commerce/checkout/payments' && method==='POST') {
+      let payment=payments.get(payload.checkoutKey);
+      if(!payment) {payment={reference:crypto.randomUUID(),state:'prepared',amountPiastres:state.quotedTotals?.totalPiastres??state.cart.subtotalPiastres,destination:'01060673073',expiresAt:new Date(Date.now()+600000).toISOString(),proofReceived:false};payments.set(payload.checkoutKey,payment);}
+      return success(route,{payment});
+    }
+    if(/^\/commerce\/checkout\/payments\/[^/]+\/proof$/.test(path)) {
+      const payment=payments.get(path.split('/').at(-2));
+      expect(uploads.some(upload=>upload.id===payload.uploadId)).toBe(true);
+      Object.assign(payment,{state:'proof_received',proofReceived:true});return success(route,{payment});
+    }
     if (path === '/commerce/checkout/quote') {
       expect(payload.checkoutKey).toBeTruthy(); expect(['cod', 'instapay']).toContain(payload.paymentMethod);
       const subtotalPiastres = state.cart.subtotalPiastres; const discountPiastres = payload.discountCode === 'ISOLATED' ? 2500 : 0; const shippingPiastres = null;
-      return success(route, { subtotalPiastres, discountPiastres, shippingPiastres, totalPiastres: subtotalPiastres - discountPiastres });
+      state.quotedTotals={subtotalPiastres,discountPiastres,shippingPiastres,totalPiastres:subtotalPiastres-discountPiastres};
+      return success(route, { fingerprint: `fixture-${subtotalPiastres}-${discountPiastres}`, totals:state.quotedTotals, payment:payload.paymentMethod==='instapay'?payments.get(payload.checkoutKey):null });
     }
     if (path === '/commerce/orders' && method === 'POST') {
       if (options.rejectOrder) return failure(route, 'Order submission could not be completed. Your cart remains saved.', 503);
       const found = orders.find((order) => order.checkoutKey === payload.checkoutKey);
-      if (!found) { state.order = { ...state.order, customer: payload.customer, paymentMethod: payload.paymentMethod, paymentState: payload.paymentMethod === 'instapay' ? 'awaiting_verification' : 'unpaid', checkoutKey: payload.checkoutKey }; orders.push(state.order); state.cart = blankCart(); }
+      if (!found) { state.order = { ...state.order, ...(state.quotedTotals?{totals:state.quotedTotals,shipping:{id:'shipping',state:'pending',amountPiastres:null}}:{}), customer: payload.customer, paymentMethod: payload.paymentMethod, paymentState: payload.paymentMethod === 'instapay' ? 'awaiting_verification' : 'unpaid', checkoutKey: payload.checkoutKey }; orders.push(state.order); state.cart = blankCart(); }
       if (options.loseFirstOrderResponse && !found) return route.abort('failed');
       return success(route, { order: found || state.order });
     }

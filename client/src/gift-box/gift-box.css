@@ -381,3 +381,6 @@
 @media(prefers-reduced-motion:reduce){.gb-shopping *,.gb-lightbox *,.gb-confirm-dialog *,.gb-arrangement-dialog *{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 
 .gb-font-tabs{gap:12px}.gb-font-tabs button{flex:1;text-align:center}
+
+/* Native focus/scroll must leave step targets below the measured sticky header. */
+.gb-progress button{scroll-margin-top:calc(var(--site-header-height,84px) + 24px)}

@@ -56,7 +56,7 @@ test('all fixed pages render without backend content, with unique metadata and n
     await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /Tap & Wrap|delivery|gift|customer|order/i);
     titles.add(await page.title());
     await expect(page.locator('main form')).toHaveCount(0);
-    await expect(page.getByRole('contentinfo').getByRole('link', { name: 'About Us', exact: true })).toHaveAttribute('href', '/about');
+    await expect(page.getByRole('contentinfo').getByRole('link', { name: 'Contact Us', exact: true })).toHaveAttribute('href', '/contact');
   }
   expect(titles.size).toBe(6);
 });
@@ -90,10 +90,10 @@ test('contact and footer use fixed support channels, separate from InstaPay', as
   const fixture = await mockCatalog(page);
   await respond(page, '/public/site-content', content);
   await page.goto('/contact');
-  await expect(page.getByRole('main').getByRole('link', { name: 'tap.wrap22@gmail.com', exact: true })).toHaveAttribute('href', 'mailto:tap.wrap22@gmail.com');
-  await expect(page.getByRole('link', { name: 'Chat on WhatsApp' })).toHaveAttribute('href', 'https://wa.me/201508216472');
+  await expect(page.getByRole('main').getByRole('link', { name: 'Email', exact: true })).toHaveAttribute('href', 'mailto:tap.wrap22@gmail.com');
+  await expect(page.getByRole('main').getByRole('link', { name: 'WhatsApp', exact: true })).toHaveAttribute('href', 'https://wa.me/201508216472');
   await expect(page.getByRole('contentinfo').getByRole('link', { name: 'WhatsApp', exact: true })).toHaveAttribute('href', 'https://wa.me/201508216472');
-  await expect(page.getByRole('link', { name: 'Find us on Instagram' })).toHaveAttribute('href', 'https://www.instagram.com/tapandwrap/');
+  await expect(page.getByRole('main').getByRole('link', { name: 'Instagram', exact: true })).toHaveAttribute('href', 'https://www.instagram.com/tapandwrap/');
   await expect(page.locator('main form')).toHaveCount(0);
   expect(fixture.requests.some(request => request.method === 'POST')).toBe(false);
 });
@@ -167,6 +167,8 @@ test('customer account offers real logout and honest unavailable verification', 
   await expect(page.getByRole('button', { name: 'Send verification link' })).toBeDisabled();
   expect(fixture.calls.some(call => call.path === '/auth/request-verification')).toBe(false);
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  expect(fixture.calls.some(call => call.path === '/auth/logout')).toBe(false);
+  await page.getByRole('dialog', { name: 'Sign out of Tap & Wrap?' }).getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page).toHaveURL(/\/login$/);
   expect(fixture.calls.some(call => call.path === '/auth/logout' && call.method === 'POST')).toBe(true);
 });

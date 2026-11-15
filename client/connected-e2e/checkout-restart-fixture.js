@@ -7,18 +7,20 @@ export async function restartScenario({page,context},signedIn){
  const first=await product('restart-28000');expect((await post(context,'/commerce/cart/items',{productId:first._id,quantity:1})).ok()).toBe(true);
  let oldKey,newKey,oldReference,cancels=0;const keys=[];
  page.on('request',r=>{if(r.url().endsWith('/checkout/quote'))keys.push(r.postDataJSON().checkoutKey);});
- await page.goto('/checkout');await page.getByRole('radio',{name:/InstaPay/}).check();await expect(page.getByRole('button',{name:'Copy transfer destination'})).toBeVisible();oldKey=keys.at(-1);
+ await page.goto('/checkout');await page.getByRole('radio',{name:/InstaPay/}).check();await page.getByRole('button',{name:'View transfer details',exact:true}).click();await expect(page.getByRole('button',{name:'Copy transfer destination'})).toBeVisible();oldKey=keys.at(-1);
  let old=(await(await context.request.get(`${api}/commerce/checkout/payments/${oldKey}`)).json()).data;oldReference=old.payment.reference;expect(old.payment.amountPiastres).toBe(28000);
  await context.request.delete(`${api}/commerce/cart`,{headers:await headers(context)});const second=await product('restart-241000');await post(context,'/commerce/cart/items',{productId:second._id,quantity:1});
  await post(context,'/commerce/checkout/quote',{checkoutKey:oldKey,paymentMethod:'cod'});
  await page.route('**/checkout/quote',async route=>{const input=route.request().postDataJSON();if(input.checkoutKey===oldKey&&input.paymentMethod==='cod'){const response=await route.fetch();await new Promise(resolve=>setTimeout(resolve,3000));return route.fulfill({response});}return route.continue();});
  await page.reload();await expect(page.getByRole('radio',{name:'Cash on Delivery',exact:true})).toBeChecked();
- await page.getByRole('radio',{name:/InstaPay/}).check();await expect(page.getByRole('button',{name:'Start fresh checkout'})).toBeVisible();
+ await page.getByRole('radio',{name:/InstaPay/}).check();await expect(page.getByRole('button',{name:'Update payment details'})).toBeVisible();
+ await expect(page.getByText('Your cart total has changed.',{exact:true})).toBeVisible();await expect(page.getByText('Transfer details unavailable.',{exact:true})).toHaveCount(0);
+ for(const width of [320,390,768,1024,1440]){await page.setViewportSize({width,height:900});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.locator('.checkout-payment-update').screenshot({path:test.info().outputPath(`changed-payment-${width}.png`)});}
  await expect(page.getByLabel('Transfer sender name *')).toHaveCount(0);await page.getByLabel(/^Full name/).fill('Preserved customer');
  await page.waitForTimeout(150);expect(new Set(keys).size).toBe(1);
- await page.getByRole('button',{name:'Start fresh checkout'}).click();const dialog=page.getByRole('dialog');await dialog.getByRole('button',{name:'Cancel',exact:true}).click();expect(new Set(keys).size).toBe(1);
+ await page.getByRole('button',{name:'Update payment details'}).click();const dialog=page.getByRole('dialog');await expect(dialog.getByRole('button',{name:'Cancel',exact:true})).toBeFocused();await page.keyboard.press('Shift+Tab');await expect(dialog.getByRole('button',{name:"No, I haven't transferred",exact:true})).toBeFocused();await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);expect(new Set(keys).size).toBe(1);
  await page.route('**/checkout/payments/*/cancel',async route=>{cancels++;expect(route.request().postDataJSON()).toEqual({noTransferConfirmed:true});if(cancels===1)return route.abort('failed');return route.continue();});
- await page.getByRole('button',{name:'Start fresh checkout'}).click();await dialog.getByRole('button',{name:"No, I haven't transferred",exact:true}).click();await expect(dialog.getByRole('alert')).toBeVisible();expect(new Set(keys).size).toBe(1);
+ await page.getByRole('button',{name:'Update payment details'}).click();await dialog.getByRole('button',{name:"No, I haven't transferred",exact:true}).click();await expect(dialog.getByRole('alert')).toBeVisible();expect(new Set(keys).size).toBe(1);
  await dialog.getByRole('button',{name:"No, I haven't transferred",exact:true}).click();await expect(page.getByRole('button',{name:'Copy transfer destination'})).toBeVisible();newKey=keys.at(-1);expect(newKey).not.toBe(oldKey);
  await expect(page.getByLabel(/^Full name/)).toHaveValue('Preserved customer');await expect(page.getByRole('radio',{name:/InstaPay/})).toBeChecked();
  old=(await(await context.request.get(`${api}/commerce/checkout/payments/${oldKey}`)).json()).data;expect(old.payment.reference).toBe(oldReference);expect(old.canCancel).toBe(true);

@@ -323,31 +323,37 @@ test('COD checkout quotes shipping and discount server-side then confirms one un
   expect(fixture.uploads).toHaveLength(0);
 });
 
-test('InstaPay cannot collect proof or instruct a transfer before order creation', async ({ page }) => {
+test('InstaPay deliberately reveals instructions and retains checkout-bound proof before order creation', async ({ page }) => {
   const fixture = await mockCommerce(page, { checkoutEnabled: true, cart: cartWithProduct() });
   await page.goto('/checkout'); await fillCheckout(page);
-  await page.getByLabel('InstaPay — full payment', { exact: true }).check();
-  await expect(page.getByText(/Payment instructions appear after your order/)).toBeVisible();
+  await page.getByRole('radio', {name:/InstaPay/}).check();
+  await page.getByRole('button',{name:'View transfer details',exact:true}).click();
+  await page.getByLabel(/^Transfer sender name/).fill('Fixture Sender');
+  await page.getByLabel('Transaction screenshot',{exact:true}).setInputFiles(isolatedImageFile());
+  await expect(page.getByLabel(/^Transfer sender name/)).toBeVisible();
   await expect(page.getByRole('button', { name: /InstaPay payment proof/ })).toHaveCount(0);
-  await expect(page.getByText('01060673073', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('01060673073', { exact: true })).toBeVisible();
   expect(fixture.uploads).toHaveLength(0);
   await page.getByRole('button', { name: 'Place Order', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Thank you for your order!' })).toBeVisible();
   expect(fixture.orders).toHaveLength(1);
   expect(fixture.calls.find(call => call.path === '/commerce/orders' && call.method === 'POST').body).not.toHaveProperty('paymentProofId');
-  expect(fixture.uploads).toHaveLength(0);
+  expect(fixture.uploads).toHaveLength(1);
 });
 
-test('failed InstaPay order retries the identical owner-bound request without pre-order proof', async ({ page }) => {
+test('failed InstaPay order retries the identical owner-bound request without reuploading proof', async ({ page }) => {
   const options = { checkoutEnabled: true, cart: cartWithProduct(), rejectOrder: true };
   const fixture = await mockCommerce(page, options);
   await page.goto('/checkout'); await fillCheckout(page);
-  await page.getByLabel('InstaPay — full payment', { exact: true }).check();
+  await page.getByRole('radio', {name:/InstaPay/}).check();
+  await page.getByRole('button',{name:'View transfer details',exact:true}).click();
+  await page.getByLabel(/^Transfer sender name/).fill('Fixture Sender');
+  await page.getByLabel('Transaction screenshot',{exact:true}).setInputFiles(isolatedImageFile());
   await expect(page.getByRole('button', { name: /InstaPay payment proof/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Place Order', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Check your order submission' })).toBeVisible();
   expect(fixture.orders).toHaveLength(0);
-  expect(fixture.uploads).toHaveLength(0);
+  expect(fixture.uploads).toHaveLength(1);
   options.rejectOrder = false;
   await page.getByRole('button', { name: 'Retry same submission', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Thank you for your order!' })).toBeVisible();
@@ -355,7 +361,7 @@ test('failed InstaPay order retries the identical owner-bound request without pr
   expect(requests).toHaveLength(2);
   expect(requests[0].body).toEqual(requests[1].body);
   expect(requests[0].body).not.toHaveProperty('paymentProofId');
-  expect(fixture.uploads).toHaveLength(0);
+  expect(fixture.uploads).toHaveLength(1);
   expect(fixture.orders).toHaveLength(1);
 });
 

@@ -84,8 +84,8 @@ test('photos stay local until Add; distinct licensed sticker styles, price, priv
   expect(fixture.uploads).toHaveLength(1); expect(audit.adds[0].configuration.personalizationIntent.sticker.application).toBe('exterior');
   expect(audit.adds[0].configuration.personalizationIntent.photoPrints[0]).toMatchObject({x:.7,zone:'beside'});
   expect(JSON.stringify(audit.adds)).not.toMatch(/blob:|private-photo.png|pricePiastres/);
-  await page.getByRole('link',{name:'Proceed to Checkout'}).click(); await page.getByRole('radio',{name:'InstaPay',exact:true}).check(); await fillCheckout(page); await page.getByRole('button',{name:'Place Order'}).click();
-  await expect(page.getByRole('heading',{name:'Order #681243'})).toBeVisible(); expect(savedOrder().totals.totalPiastres).toBe(5000);
+  await page.getByRole('link',{name:'Proceed to Checkout'}).click(); await fillCheckout(page); await page.getByRole('radio',{name:'InstaPay',exact:true}).check(); await page.getByRole('button',{name:'View transfer details',exact:true}).click(); await page.getByLabel(/^Transfer sender name/).fill('Fixture Sender'); await page.getByLabel('Transaction screenshot',{exact:true}).setInputFiles(isolatedImageFile()); await page.getByRole('button',{name:'Place Order'}).click();
+  await expect(page.getByRole('heading',{name:'Thank you for your order!'})).toBeVisible(); expect(savedOrder().totals.totalPiastres).toBe(5000);
   fixture.state.user={id:'710000000000000000000050',name:'Fixture admin',role:'admin'};
   await page.goto('/admin/commerce/orders/710000000000000000000040'); const design=page.getByRole('region',{name:"Customer's Gift Design"});
   await expect(design.locator('.gb-free-photo img')).toHaveCount(0); expect(fixture.calls.filter(call=>/\/files\//.test(call.path))).toHaveLength(0);
@@ -130,7 +130,7 @@ test('sticker and gift-card disclosures activate only the intended purchases and
   await page.getByLabel('Write a name, special date, or heartfelt message').fill('Nour');await expect(page.locator('.gb-live-total strong')).toContainText('30.00');
   const proof=await page.locator('.sticker-workspace').boundingBox(),input=await page.getByLabel('Write a name, special date, or heartfelt message').boundingBox();expect(proof.y+proof.height).toBeLessThan(input.y);
   await page.getByRole('radio',{name:'Gold',exact:true}).check();await expect(page.getByLabel('Write a name, special date, or heartfelt message')).toHaveValue('Nour');await expect(page.getByRole('radio',{name:'Gold',exact:true})).toBeChecked();
-  await page.getByRole('button',{name:'Remove sticker',exact:true}).click();await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
+  await page.getByRole('button',{name:'Remove sticker',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Remove sticker',exact:true}).click();await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
   await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();
   await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
   await page.getByLabel('Your message').fill('A special day');await expect(page.locator('.gb-live-total strong')).toContainText('20.00');
@@ -168,7 +168,7 @@ for(const width of [320,390,1440]) test(`natural photo prints, depth and soft to
   await expect.poll(()=>page.locator('.gb-free-photo img').evaluateAll(nodes=>nodes.every(node=>node.complete&&node.naturalWidth>0)) ).toBe(true);
   const sizes=await page.locator('.gb-free-photo').evaluateAll(nodes=>nodes.map(node=>{const rect=node.getBoundingClientRect();return rect.width/rect.height;}));
   [2/3,1.5,1].forEach((ratio,index)=>expect(sizes[index]).toBeCloseTo(ratio,1));
-  await page.getByRole('button',{name:'Add Soft Toys',exact:true}).click();await page.getByRole('button',{name:'Add Fixture plush-1',exact:true}).click();
+  await page.getByLabel('Write a name, special date, or heartfelt message').blur(); await page.getByRole('button',{name:'Add Soft Toys',exact:true}).click();await page.getByRole('button',{name:'Add Fixture plush-1',exact:true}).click();
   await expect(page.locator('.gb-free-rim')).toHaveCount(1);await expect(page.locator('.gb-zone-toggle')).toHaveCount(0);
   for(const box of [2,5,11]) {
     await page.getByRole('button',{name:'Choose Your Box',exact:true}).click();
@@ -215,13 +215,13 @@ for(const width of [320,390,1440]) test(`polished arrangement, review, cart and 
   await expect(page.locator('.cart-v2-photo .gb-placed')).toHaveCount(2);
   await expect(page.getByText('Gift box preview unavailable')).toHaveCount(0);
   await page.getByText('View Design Details',{exact:true}).click();
-  await expect(page.getByText(/Personalized sticker: For Nour.*Apply to exterior front/)).toBeVisible();
+  await expect(page.getByText(/For Nour.*Gold/)).toBeVisible();
   await page.screenshot({path:info.outputPath(`cart-${width}.png`),fullPage:true});
-  await page.getByRole('link',{name:'Proceed to Checkout'}).click(); await page.getByRole('radio',{name:'InstaPay',exact:true}).check(); await fillCheckout(page);
-  await expect(page.getByRole('radio',{name:/Cash on Delivery/})).toHaveCount(0);
+  await page.getByRole('link',{name:'Proceed to Checkout'}).click(); await fillCheckout(page); await page.getByRole('radio',{name:'InstaPay',exact:true}).check();
+  await expect(page.getByRole('radio',{name:/Cash on Delivery/})).toHaveCount(1);
   await expect(page.getByRole('radio',{name:/InstaPay/})).toBeChecked();
   await expect(page.getByText('Have a discount code?',{exact:true})).toBeVisible();
-  await expect(page.getByRole('button',{name:'Place Order',exact:true})).toBeEnabled();
+  await expect(page.getByRole('button',{name:'Place Order',exact:true})).toBeDisabled(); await page.getByRole('button',{name:'View transfer details',exact:true}).click(); await page.getByLabel(/^Transfer sender name/).fill('Fixture Sender'); await page.getByLabel('Transaction screenshot',{exact:true}).setInputFiles(isolatedImageFile()); await expect(page.getByRole('button',{name:'Place Order',exact:true})).toBeEnabled();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.evaluate(()=>{document.activeElement?.blur();window.scrollTo(0,0);});
   await page.screenshot({path:info.outputPath(`checkout-${width}.png`),fullPage:true});

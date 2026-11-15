@@ -15,18 +15,21 @@ test('restricted session storage cannot block checkout or hide an accepted order
 test('lost accepted InstaPay response survives refresh and resolves by owned key without reupload or another order', async ({ page }) => {
   const fixture = await mockCommerce(page, { checkoutEnabled: true, cart: cartWithProduct(), loseFirstOrderResponse: true });
   await page.goto('/checkout'); await fillCheckout(page);
-  await page.getByLabel('InstaPay — full payment', { exact: true }).check();
-  // The order-first contract never solicits proof before an accepted order.
+  await page.getByRole('radio',{name:/InstaPay/}).check();
+  await page.getByRole('button',{name:'View transfer details',exact:true}).click();
+  await page.getByLabel(/^Transfer sender name/).fill('Fixture Sender');
+  await page.getByLabel('Transaction screenshot',{exact:true}).setInputFiles(isolatedImageFile());
+  // Evidence stays in memory until Place Order, then is bound to this checkout.
   await expect(page.getByRole('button', { name: /InstaPay payment proof/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Place Order', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Check your order submission' })).toBeVisible();
-  expect(fixture.orders).toHaveLength(1); expect(fixture.uploads).toHaveLength(0);
+  expect(fixture.orders).toHaveLength(1); expect(fixture.uploads).toHaveLength(1);
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Check your order submission' })).toBeVisible();
   await page.getByRole('button', { name: 'Check submission status', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Thank you for your order!', exact: true })).toBeVisible();
   expect(fixture.calls.filter(call => call.path === '/commerce/orders' && call.method === 'POST')).toHaveLength(1);
-  expect(fixture.uploads).toHaveLength(0);
+  expect(fixture.uploads).toHaveLength(1);
 });
 
 test('unconfirmed submission retains immutable retry payload and a null status never starts a new order automatically', async ({ page }) => {

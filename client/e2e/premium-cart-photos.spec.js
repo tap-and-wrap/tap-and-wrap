@@ -12,7 +12,7 @@ const gift=()=>({id:'gift-fixture',kind:'gift_box_v2',name:'Build Your Gift Box'
   box:{componentId:'box-2',displayName:'Heart gift box'},items:[{componentId:'rose-red',category:'flower',quantity:3,displayName:'Red rose'},{componentId:'plush-1',category:'plush',quantity:1,displayName:'Soft toy'},{componentId:'chocolate-1',category:'chocolate',quantity:1,displayName:'Chocolate'}],ribbon:{componentId:'ribbon-navy',displayName:'Navy ribbon',colorHex:'#203356'},giftCard:{selected:true,message:'With love, always.'},artwork:{assetVersion:ASSET_VERSION},design:{presentationVersion:'gift-box-presentation-v2',placements:[{componentId:'rose-red',x:.3,y:.4,width:.12,height:.12,zone:'inside',layer:0},{componentId:'plush-1',x:.5,y:.3,width:.2,height:.25,zone:'inside',layer:1}]},personalization:{photoCount:2,sticker:{text:'For Nour',styleId:'amiri',colorId:'gold'},unitAdjustmentPiastres:6000}}});
 const engraving=()=>({id:'engraving-fixture',kind:'engraving_service_v1',name:'Watch engraving',quantity:1,valid:true,unitPricePiastres:10000,lineTotalPiastres:10000,engraving:{typeName:'Watch',placementLabel:'Back of watch',content:{mode:'text',text:'Always together',fontId:'engraving-rochester-v1'},requestedAppearance:'grey',specialRequests:'Please align with the clasp.',files:{item:true,surface:true,artwork:false}}});
 async function cartFixture(page){
-  const product={...cartWithProduct().items[0],maxQuantity:3};
+  const product={...cartWithProduct().items[0],maxQuantity:3,personalization:{message:'Synthetic product message'}};
   const items=[product,gift(),engraving()];
   const fixture=await mockCommerce(page,{cart:{items,quantity:3,subtotalPiastres:131000},checkoutEnabled:false,mixedCheckout:true});
   await page.route('**/api/v1/commerce/engraving/cart/engraving-fixture',route=>route.fulfill({json:{ok:true,data:{specification:{itemPhotoUploadId:'a'.repeat(24),surfacePhotoUploadId:'b'.repeat(24),content:{}}}}}));
@@ -55,14 +55,14 @@ for(const width of widths)test(`unified cart collapsed, details and confirmation
   await page.setViewportSize({width,height:900});const fixture=await cartFixture(page);await page.goto('/cart');
   const giftCard=page.getByRole('article',{name:'Gift Box',exact:true}),engravingCard=page.getByRole('article',{name:'Watch Engraving',exact:true}),productCard=page.getByRole('article',{name:'Isolated Commerce Gift',exact:true});
   await expect(page.getByRole('button',{name:'Clear cart'})).toHaveCount(0);await expect(page.getByRole('link',{name:'Build another Gift Box'})).toHaveCount(0);
-  await expect(giftCard.getByText('With love, always.',{exact:true})).toBeHidden();await expect(engravingCard.getByText('Always together',{exact:true})).toBeHidden();
+  await expect(productCard.getByText('Synthetic product message',{exact:true})).toBeHidden();await expect(giftCard.getByText('With love, always.',{exact:true})).toBeHidden();await expect(engravingCard.getByText('Always together',{exact:true})).toBeHidden();
   await expect(engravingCard.getByRole('group',{name:'Quantity for Watch Engraving'})).toHaveText('1 item');await expect(engravingCard.getByRole('button',{name:/quantity/})).toHaveCount(0);
   await decoded(engravingCard.locator('.cart-v2-photo img'));
   // The longest word in the service title must fit without a one-letter line.
   expect(await engravingCard.locator('h2').evaluate(node=>{const canvas=document.createElement('canvas'),c=canvas.getContext('2d');c.font=getComputedStyle(node).font;return c.measureText('Engraving').width<=node.getBoundingClientRect().width;})).toBe(true);
   await shot(page,info,`${width}-cart-collapsed`);
   for(const line of [giftCard,engravingCard,productCard]){await line.getByRole('button',{name:/View.*Details/}).click();}
-  await expect(giftCard.getByText('With love, always.',{exact:true})).toBeVisible();await expect(engravingCard.locator('dl').getByText('Always together',{exact:true})).toBeVisible();await shot(page,info,`${width}-cart-details`);
+  await expect(productCard.getByText('Synthetic product message',{exact:true})).toBeVisible();await expect(giftCard.getByText('With love, always.',{exact:true})).toBeVisible();await expect(engravingCard.locator('dl').getByText('Always together',{exact:true})).toBeVisible();await shot(page,info,`${width}-cart-details`);
   const increase=giftCard.getByRole('button',{name:'Increase quantity for Gift Box'});await increase.click();await expect(giftCard.locator('output')).toHaveText('2');await expect(increase).toBeDisabled();
   await giftCard.getByRole('button',{name:'Decrease quantity for Gift Box'}).click();await expect(giftCard.locator('output')).toHaveText('1');
   await productCard.getByRole('button',{name:/Increase quantity/}).click();await expect(productCard.locator('output')).toHaveText('2');

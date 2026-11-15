@@ -1,3 +1,4 @@
+import { ALL_METHODS_POLICY } from '../../shared/order-payment-policy.mjs';
 import { STICKER_STYLES } from '../../shared/gift-box/sticker-styles.mjs';
 import { expect } from '@playwright/test';
 import { giftBoxFixture } from './gift-box-fixtures.js';
@@ -85,11 +86,11 @@ export async function localCheckoutFixture(page, { initialCart, rejectAdd = fals
     ensureLocal(route);
     if (isOptions(route)) return route.fulfill({ status: 204, headers });
     const body = route.request().postDataJSON(); audit.quotes.push(body);
-    expect(body.paymentMethod).toBe('instapay');
-    expect(body.governorate).toBe('cairo');
+    expect(['cod','instapay']).toContain(body.paymentMethod);
+    if (body.governorate) expect(body.governorate).toBe('cairo');
     const total = fixture.state.cart.subtotalPiastres;
-    return reply(route, { subtotalPiastres: total, discountPiastres: 0,
-      shippingPiastres: null, totalPiastres: total, shippingStatus: 'pending_confirmation' });
+    fixture.state.quotedTotals={subtotalPiastres:total,discountPiastres:0,shippingPiastres:null,totalPiastres:total};
+    return reply(route, { fingerprint:`gift:${total}:${body.paymentMethod}`,totals:fixture.state.quotedTotals,shippingStatus:'pending_confirmation' });
   });
   // The cart DTO and immutable *order* DTO have different shapes. Emulate the
   // server's public order projection instead of copying a cart summary to an order.
@@ -140,14 +141,14 @@ export async function localCheckoutFixture(page, { initialCart, rejectAdd = fals
     ensureLocal(route);
     if (isOptions(route)) return route.fulfill({ status: 204, headers });
     const body = route.request().postDataJSON(); audit.orders.push(body);
-    expect(body.paymentMethod).toBe('instapay');
+    expect(['cod','instapay']).toContain(body.paymentMethod);
     expect(body.customer.governorate).toBe('cairo');
     if (!created) {
       const subtotal = fixture.state.cart.subtotalPiastres;
       created = { ...fixture.state.order, lines: fixture.state.cart.items.map(presentedOrderLine),
-        accountingVersion: 1, personalized: true, orderChannel: 'website',
-        paymentMethod: 'instapay', paymentState: 'awaiting_transfer',
-        allowedPaymentMethods: ['instapay'], checkoutKey: body.checkoutKey,
+        accountingVersion: 2, paymentPolicyVersion:ALL_METHODS_POLICY, personalized: true, orderChannel: 'website',
+        paymentMethod: body.paymentMethod, paymentState: body.paymentMethod==='instapay'?'awaiting_verification':'unpaid',
+        allowedPaymentMethods: ['cod','instapay'], checkoutKey: body.checkoutKey,
         customer: body.customer, shipping: { amountPiastres: null },
         totals: { subtotalPiastres: subtotal, discountPiastres: 0,
           shippingPiastres: null, totalPiastres: subtotal },

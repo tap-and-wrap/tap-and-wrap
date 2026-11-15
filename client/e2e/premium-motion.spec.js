@@ -22,14 +22,16 @@ for (const width of [320, 1440]) {
 }
 
 test('desktop cards and controls move subtly without blocking navigation', async ({ page }) => {
+  await page.emulateMedia({reducedMotion:'no-preference'});
   await page.setViewportSize({ width: 1440, height: 900 });
-  await mockCatalog(page);
+  await mockCatalog(page,{cardImageUrl:'https://fixture.invalid/main.svg'});
   await page.goto('/');
+  await expect(page.getByRole('button',{name:/^Add to Cart:/}).first()).toBeVisible();
   const card = page.locator('.home-product-grid .catalog-card').first();
   await expect(card).toBeVisible();
   await card.hover();
-  await expect.poll(() => card.evaluate(node => getComputedStyle(node).transform)).not.toBe('none');
-  await expect(card.getByRole('link', { name: /View / })).toHaveAttribute('href', /^\/products\//);
+  await expect.poll(() => card.locator('.catalog-card-image img').evaluate(node => getComputedStyle(node).transform)).not.toBe('none');
+  await expect(card.locator('.catalog-card-link')).toHaveAttribute('href', /^\/products\//);
 });
 
 test('reduced-motion users never receive hidden sections or card movement', async ({ page }) => {

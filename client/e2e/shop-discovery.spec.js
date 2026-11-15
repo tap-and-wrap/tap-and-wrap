@@ -2,21 +2,21 @@ import { chooseOption } from './select-option.js';
 import { test, expect } from '@playwright/test';
 import { mockCatalog } from './catalog-fixtures.js';
 
-test('shop opens in Discover, keeps explicit sorting and normal pagination', async ({ page }) => {
+test('shop opens in Featured, keeps explicit sorting and normal pagination', async ({ page }) => {
   const fixture = await mockCatalog(page);
   await page.goto('/shop');
   const sort = page.locator('#catalog-sort');
-  await expect(sort).toHaveAttribute('data-selected-value', 'discovery');
+  await expect(sort).toHaveValue('featured');
   await expect(page.getByRole('heading', { name: 'Shop Our Gifts' })).toBeVisible();
   await expect(page.locator('.catalog-grid .catalog-card')).toHaveCount(20);
-  expect(fixture.requests.some(request => request.path === '/public/products' && request.params.sort === 'discovery')).toBe(true);
+  expect(fixture.requests.some(request => request.path === '/public/products' && request.params.sort === 'featured')).toBe(true);
   await page.getByRole('button', { name: 'Next page' }).click();
   await expect(page).toHaveURL(/page=2/);
-  await expect(page.locator('#catalog-sort')).toHaveAttribute('data-selected-value', 'discovery');
-  await chooseOption(sort, 'featured');
-  await expect(page).toHaveURL(/sort=featured/);
+  await expect(page.locator('#catalog-sort')).toHaveValue('featured');
+  await chooseOption(sort, 'name_desc');
+  await expect(page).toHaveURL(/sort=name_desc/);
   await expect(page.getByText('Page 1 of 3')).toBeVisible();
-  expect(fixture.requests.some(request => request.path === '/public/products' && request.params.sort === 'featured')).toBe(true);
+  expect(fixture.requests.some(request => request.path === '/public/products' && request.params.sort === 'name_desc')).toBe(true);
 });
 
 test('Customize Yours hover has the same legible dark backdrop as Shop Gifts', async ({ page }) => {

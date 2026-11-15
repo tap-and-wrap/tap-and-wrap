@@ -10,7 +10,7 @@ const args = process.argv.slice(2), engraving = args.some(value => /engraving(?:
 if (args.length === 0) {
   // Each spec retains the real rate limits and receives its own fresh database,
   // API and browser fixture. Explicit selections keep the original lifecycle.
-  const specs = (await readdir(new URL('../connected-e2e/', import.meta.url))).filter(name => name.endsWith('contracts.spec.js')).sort();
+  const specs = (await readdir(new URL('../connected-e2e/', import.meta.url))).filter(name => name.endsWith('contracts.spec.js') || name === 'enabled-checkout.spec.js').sort();
   if (!specs.length) throw new Error('No connected contract specs were found.');
   let activeChild, interrupted, failed = 0;
   const handlers = new Map(['SIGINT', 'SIGTERM'].map(signal => [signal, () => { interrupted = signal; activeChild?.kill(signal); }]));
@@ -21,7 +21,13 @@ if (args.length === 0) {
       const escaped = spec.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const selector = `(^|[\\\\/])${escaped}$`;
       console.log(`Connected contract fixture: ${spec}`);
-      const child = spawn(process.execPath, [fileURLToPath(import.meta.url), selector], {
+      // Each file must receive its declared disposable feature fixture. These
+      // flags belong only to this scrubbed child, never the merchant environment.
+      const mode = /^(gift-box-(shopping|handoff)|unified-cart|release3-engraving|final-handover-engraving|payment-policy-engraving)-contracts\.spec\.js$/.test(spec)
+        ? ['--gift-box-shopping']
+        : /^(enabled-checkout\.spec\.js|(?:member-checkout-restart|checkout-restart|product-photos)-contracts\.spec\.js)$/.test(spec)
+          ? ['--enabled-checkout'] : [];
+      const child = spawn(process.execPath, [fileURLToPath(import.meta.url), selector, ...mode], {
         cwd, env: { ...safe, NODE_OPTIONS: '' }, stdio: 'inherit', windowsHide: true,
       });
       activeChild = child;

@@ -95,7 +95,7 @@ describe('Phase 1B catalog API contracts', { concurrency: false }, () => {
       ready('sort-gamma', { name: 'Fixture Gamma', pricePiastres: 3000, createdAt: new Date('2025-01-03'), featured: true, featuredOrder: 1 }),
     ]);
     const expected = {
-      featured: ['sort-gamma', 'sort-alpha', 'sort-beta'],
+      featured: ['sort-beta', 'sort-gamma', 'sort-alpha'],
       best_sellers: ['sort-beta', 'sort-gamma', 'sort-alpha'],
       newest: ['sort-gamma', 'sort-beta', 'sort-alpha'],
       price_asc: ['sort-beta', 'sort-alpha', 'sort-gamma'],
@@ -107,6 +107,8 @@ describe('Phase 1B catalog API contracts', { concurrency: false }, () => {
       const response = await request(`/public/products?sort=${sort}`);
       assert.equal(response.status, 200, sort);
       assert.deepEqual(response.body.products.map((product) => product.slug), slugs, sort);
+      const repeated = await request(`/public/products?sort=${sort}`);
+      assert.deepEqual(repeated.body.products.map(product => product.slug), slugs, `${sort} remains deterministic`);
     }
     const selected = await request('/public/products?featured=true&sort=featured');
     assert.deepEqual(selected.body.products.map((product) => product.slug), ['sort-gamma', 'sort-alpha']);
