@@ -10,7 +10,7 @@
 
 .page-shell.account-page{box-sizing:border-box;width:min(100%,556px);max-width:556px;margin-inline:auto;padding:52px 28px 72px}
 .account-page>.eyebrow,.account-page>h1{text-align:center}
-.account-page>h1{font-size:clamp(2.6rem,5vw,3.7rem);line-height:1.1;margin-bottom:30px}
+.account-page>h1{font-size:clamp(2.6rem,5vw,3.7rem);line-height:1.1;margin-bottom:16px}
 .account-page .auth-form,.website-recovery .account-page .auth-form{width:100%;max-width:500px;margin-inline:auto}
 .account-page .page-back{margin:0 0 32px;text-align:left}
 .account-page a{text-decoration:underline;text-underline-offset:3px}
@@ -65,3 +65,10 @@
 .testimonial-author{display:inline-flex;align-items:center;gap:5px;min-width:0;direction:ltr}.testimonial-author bdi{overflow-wrap:anywhere}.testimonial-author .review-confirmed{display:inline-flex;flex:none}.testimonial-card .customer-words-stars{margin-left:auto;flex:none;white-space:nowrap}
 
 .testimonial-card figcaption{display:grid;justify-content:start;align-items:start;gap:8px}.testimonial-author{display:block}.testimonial-author>span{display:inline}.testimonial-author .review-confirmed{margin-inline:5px 0;vertical-align:middle}.testimonial-card .customer-words-stars{margin:0}
+
+.auth-introduction{text-align:center;font-size:.95rem;line-height:1.6;margin:0 0 28px}
+.password-control{display:flex;align-items:stretch;position:relative;min-width:0}
+.auth-form .password-control input{padding-right:72px;min-width:0;width:100%}
+.password-control button{position:absolute;right:4px;top:4px;bottom:4px;min-width:58px;min-height:40px;border:0;border-radius:7px;background:var(--tw-bg);color:var(--tw-button);cursor:pointer;font:inherit;font-size:.8rem}
+.password-control button:focus-visible{outline:2px solid var(--tw-button);outline-offset:1px}
+.auth-field>small{font-size:.78rem;line-height:1.5;color:var(--tw-rose-dark)}

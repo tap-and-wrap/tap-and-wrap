@@ -29,7 +29,7 @@ for (const width of [390,768,1440]) test(`mixed checkout includes engraving upfr
   await expect(page.getByRole('radio',{name:'Cash on Delivery',exact:true})).toBeVisible();await expect(page.getByRole('radio',{name:'InstaPay',exact:true})).toBeVisible();
   await expect(page.getByText(/Engraving is unpaid until physical inspection/)).toHaveCount(0);
   await page.getByRole('radio',{name:'InstaPay',exact:true}).check();
-  await page.getByRole('button',{name:'View transfer details',exact:true}).click();
+  await expect(page.getByRole('button',{name:'View transfer details',exact:true})).toHaveCount(0);
   await expect(page.locator('.checkout-transfer-amount')).toContainText('350.00');
   await expect(page.getByRole('button',{name:'Place Order',exact:true})).toBeDisabled();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
@@ -59,9 +59,11 @@ test('failed React initialization releases the original static homepage within t
   await page.evaluate(async()=>{const {initializePrerender}=await import('/src/seo/boot.js');initializePrerender(document.getElementById('root'));});
   await expect(page.getByTestId('ribbon-opening')).toHaveCount(0,{timeout:8000});await expect(page.getByRole('heading',{name:'Meaningful crawlable homepage'})).toBeVisible();
 });
-test('reduced motion exposes the prerender immediately without an opening blocker',async({page})=>{
+test('reduced motion reaches the interactive homepage without exposing static SEO scaffolding or a ribbon',async({page})=>{
   await page.emulateMedia({reducedMotion:'reduce'});await prerenderFixture(page);await page.goto('/',{waitUntil:'commit'});
-  await expect(page.getByRole('heading',{name:'Meaningful crawlable homepage'})).toBeVisible();await expect(page.getByTestId('ribbon-opening')).toHaveCount(0);
+  await expect(page.getByRole('heading',{name:'Make their heart flutter.'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Meaningful crawlable homepage'})).toHaveCount(0);
+  await expect(page.locator('.site-boot')).toBeHidden();await expect(page.getByTestId('ribbon-opening')).toHaveCount(0);
 });
 test('JavaScript-disabled visitors keep the complete static homepage',async({browser})=>{
   const context=await browser.newContext({javaScriptEnabled:false});const page=await context.newPage();

@@ -22,7 +22,7 @@ test('owned order and admin review load composites and originals explicitly; v2 
   const line = (await cart(context)).items[0], spec = (await (await context.request.get(`${api}/commerce/engraving/cart/${line.id}`)).json()).data.specification;
   const order=await placeConnectedEngraving(context,crypto.randomUUID());
   let reads = 0; page.on('request', request => { if (/\/uploads\/[^/]+\/content$/.test(request.url())) reads++; });
-  await page.goto(`/orders/${order.id}`); await expect(page.getByRole('heading', { name: `Order #${order.orderNumber}`, exact: true })).toBeVisible(); expect(reads).toBe(0); await expect(page.getByRole('button', { name: /Submit proof/ })).toBeVisible();
+  await page.goto(`/orders/${order.id}`); await expect(page.getByRole('heading', { name: `Order #${order.orderNumber}`, exact: true })).toBeVisible(); expect(reads).toBe(0); await expect(page.getByText('Your screenshot is saved. We are checking the transfer.', { exact: false })).toBeVisible(); await expect(page.getByRole('button', { name: /Submit proof/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'View design', exact: true }).click(); await expect(page.locator('.saved-visual-preview .ve-composite')).toBeVisible(); expect(reads).toBe(2);
   const opener = page.getByRole('button', { name: 'View artwork 1', exact: true }); await opener.click(); await expect(page.getByRole('dialog')).toBeVisible(); await page.keyboard.press('Escape'); await expect(opener).toBeFocused();
   await shot(page, info, 'owned-order', 390);

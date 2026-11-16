@@ -1,3 +1,4 @@
+import { presentTrackingOrder } from './tracking-presentation.js';
 import { CheckoutIntent } from '../models/CheckoutIntent.js';
 import { prepareCheckoutPayment, presentCheckoutPayment, submitCheckoutPaymentProof, cancelCheckoutPayment } from './checkout-payment.js';
 import { checkoutCustomer as customer } from './checkout-customer.js';
@@ -210,9 +211,9 @@ commerceRoutes.post('/orders', checkoutLimit, async (req, res) => {
 commerceRoutes.post('/orders/track', trackingLimit, async (req, res) => {
   const input = z.object({ orderNumber: z.string().regex(/^[1-9][0-9]{5}$/), phone: z.string().min(10).max(25) }).strict().parse(req.body);
   const phone = normalizePhone(input.phone);
-  const order = await Order.findOne({ orderNumber: input.orderNumber, 'customer.phone': phone }).select('orderNumber fulfillmentState paymentState charges accountingVersion createdAt updatedAt').lean().maxTimeMS(3000);
+  const order = await Order.findOne({ orderNumber: input.orderNumber, 'customer.phone': phone }).select('orderNumber fulfillmentState paymentState charges accountingVersion createdAt updatedAt lines.name lines.kind lines.quantity totals.totalPiastres').lean().maxTimeMS(3000);
   if (!order) throw commerceError(404, 'TRACKING_NOT_FOUND', 'No matching order was found. Check both details.');
-  res.json({ ok: true, data: { order: { orderNumber: order.orderNumber, fulfillmentState: order.fulfillmentState, paymentState: order.paymentState, shippingStatus: [1, 2].includes(order.accountingVersion) ? order.charges?.find(charge => charge.kind === 'shipping')?.state : 'legacy', createdAt: order.createdAt, updatedAt: order.updatedAt } } });
+  res.json({ ok: true, data: { order: presentTrackingOrder(order) } });
 });
 commerceRoutes.get('/orders', requireAuth, async (req, res) => { const query = pageSchema.parse(req.query); res.json({ ok: true, data: await listOrders({ ...orderFilter(query), userId: req.user._id }, query, false) }); });
 commerceRoutes.get('/orders/:id', async (req, res) => {

@@ -158,6 +158,11 @@ test('normalized engraving DTO renders one control and uploads each artwork file
   await chooseOption(page.getByRole('combobox', { name: /^Material/ }), 'metal');
   await chooseOption(page.getByRole('combobox', { name: /^Font/ }), 'style');
   await chooseImageFiles(page, page, 'Engraving artwork', [isolatedImageFile('first.png'), isolatedImageFile('second.png')]);
+  // Native input clearing also happens on failed reads; wait for React to accept BOTH files.
+  await expect(page.getByAltText('Selected engraving artwork 1', { exact: true })).toBeVisible();
+  await expect(page.getByAltText('Selected engraving artwork 2', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Remove first.png', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Remove second.png', exact: true })).toBeVisible();
   expect(fixture.uploads).toHaveLength(0);
   await expect(page.getByRole('button', { name: 'Add to Cart', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Add to Cart', exact: true }).click();
@@ -244,9 +249,10 @@ for (const [section, field, record, label] of [
 test('retired global delivery-rate editor cannot silently approve or save charges', async ({ page }) => {
   const fixture = await mockCommerce(page, { role: 'admin' });
   await page.goto('/admin/commerce/shipping');
-  await expect(page.getByRole('heading', { name: 'Payment', exact: true, level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/\/admin\/orders\?view=verification$/);
+  await expect(page.getByRole('heading', { name: 'Orders', exact: true, level: 1 })).toBeVisible();
   await expect(page.getByLabel('Cairo and Giza shipping (EGP)', { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('link', { name: 'Review payments' })).toHaveAttribute('href', '/admin/orders?view=verification');
+  await expect(page.getByRole('button', { name: 'Verify payment', exact: true })).toHaveAttribute('aria-pressed', 'true');
   expect(fixture.calls.filter(call => call.path === '/admin/commerce/shipping' && call.method === 'PATCH')).toHaveLength(0);
 });
 
@@ -327,7 +333,7 @@ test('InstaPay deliberately reveals instructions and retains checkout-bound proo
   const fixture = await mockCommerce(page, { checkoutEnabled: true, cart: cartWithProduct() });
   await page.goto('/checkout'); await fillCheckout(page);
   await page.getByRole('radio', {name:/InstaPay/}).check();
-  await page.getByRole('button',{name:'View transfer details',exact:true}).click();
+  await expect(page.getByRole('button',{name:'View transfer details',exact:true})).toHaveCount(0);
   await page.getByLabel(/^Transfer sender name/).fill('Fixture Sender');
   await page.getByLabel('Transaction screenshot',{exact:true}).setInputFiles(isolatedImageFile());
   await expect(page.getByLabel(/^Transfer sender name/)).toBeVisible();
@@ -346,7 +352,7 @@ test('failed InstaPay order retries the identical owner-bound request without re
   const fixture = await mockCommerce(page, options);
   await page.goto('/checkout'); await fillCheckout(page);
   await page.getByRole('radio', {name:/InstaPay/}).check();
-  await page.getByRole('button',{name:'View transfer details',exact:true}).click();
+  await expect(page.getByRole('button',{name:'View transfer details',exact:true})).toHaveCount(0);
   await page.getByLabel(/^Transfer sender name/).fill('Fixture Sender');
   await page.getByLabel('Transaction screenshot',{exact:true}).setInputFiles(isolatedImageFile());
   await expect(page.getByRole('button', { name: /InstaPay payment proof/ })).toHaveCount(0);
@@ -397,7 +403,7 @@ test('tracking uses number and checkout phone with a privacy-limited result', as
   await page.getByLabel('Order number', { exact: true }).fill(commerceOrder.orderNumber);
   await page.getByLabel('Checkout phone number', { exact: true }).fill('01012345678');
   await page.getByRole('button', { name: 'Track Order', exact: true }).click();
-  await expect(page.getByRole('heading', { name: `Order #${commerceOrder.orderNumber}`, exact: true })).toBeVisible();
+  await expect(page.locator('.tracking-result').getByRole('heading', { name: `#${commerceOrder.orderNumber}`, exact: true })).toBeVisible();
   await expect(page.getByText(commerceOrder.customer.address, { exact: true })).toHaveCount(0);
   expect(fixture.calls.find((call) => call.path === '/commerce/orders/track').body).toEqual({ orderNumber: commerceOrder.orderNumber, phone: '01012345678' });
 });
@@ -453,19 +459,20 @@ test('customer order history shows approved totals, immutable text/options and r
   await expect(page.getByText('Extras: Configured Card × 1', { exact: true })).toBeVisible();
   // The public order never exposes stored private attachment identifiers.
   await expect(page.getByText('710000000000000000000100', { exact: true })).toHaveCount(0);
+  await page.getByText('Order updates', { exact: true }).click();
   await expect(page.getByText('confirmed · unpaid', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Cancel order', exact: true }).click();
   await expect(page.getByRole('status').getByText('Cancellation request recorded. Review the latest order status.', { exact: true })).toBeVisible();
   expect(fixture.calls.find((call) => call.path.endsWith('/cancel')).body).toEqual({ revision: 1 });
   expect(fixture.state.order.fulfillmentState).toBe('cancelled');
-  await expect(page.locator('.commerce-heading .commerce-badge')).toHaveText('cancelled');
+  await expect(page.locator('.order-status-chips').getByText('Cancelled', { exact: true })).toBeVisible();
 });
 
 test('successful customer login explicitly merges eligible guest cart items', async ({ page }) => {
   const fixture = await mockCommerce(page, { cart: cartWithProduct() });
   await page.goto('/login');
   await page.getByRole('textbox', { name: 'Email Address' }).fill('isolated@example.test');
-  await page.getByLabel(/Password/i).fill('LocalFixturePassword!123');
+  await page.getByLabel('Password', { exact: true }).fill('LocalFixturePassword!123');
   await page.getByRole('button', { name: 'Log In', exact: true }).click();
   await expect.poll(() => fixture.calls.some((call) => call.path === '/commerce/cart/merge' && call.method === 'POST')).toBe(true);
   await page.goto('/cart');

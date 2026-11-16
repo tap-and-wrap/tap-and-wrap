@@ -3,6 +3,30 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { handleSeoRequest, sitemapRoutePages } from '../../worker/seo-worker.js';
 
+test('asset MIME rejects HTML fallback for CSS, JS, images and old hashed assets', async () => {
+  for (const path of ['/assets/missing.css', '/assets/old.js', '/tap-wrap-email-logo.png']) {
+    const result = await handleSeoRequest(new Request('https://shop.example' + path), { ASSETS: { fetch: async () => new Response('<html>SPA</html>', { headers: { 'Content-Type': 'text/html' } }) } });
+    assert.equal(result.status, 404); assert.equal(result.headers.get('Cache-Control'), 'no-store');
+    assert.equal(result.headers.get('X-Content-Type-Options'), 'nosniff');
+    assert.doesNotMatch(await result.text(), /<html>/);
+  }
+});
+test('asset MIME preserves correct styles, scripts and conditional cache responses', async () => {
+  for (const [path, type] of [['/assets/app.css', 'text/css'], ['/assets/app.js', 'application/javascript'], ['/tap-wrap-email-logo.png', 'image/png']]) {
+    const result = await handleSeoRequest(new Request('https://shop.example' + path), { ASSETS: { fetch: async () => new Response('asset', { headers: { 'Content-Type': type } }) } });
+    assert.equal(result.status, 200); assert.equal(result.headers.get('Content-Type'), type);
+  }
+  const cached = await handleSeoRequest(new Request('https://shop.example/boot-appearance.js'), { ASSETS: { fetch: async () => new Response(null, { status: 304 }) } });
+  assert.equal(cached.status, 304);
+});
+
+test('asset MIME guards cannot be bypassed by Worker asset-first exclusions', async () => {
+  const config = JSON.parse(await readFile(new URL('../../wrangler.jsonc', import.meta.url), 'utf8'));
+  assert.deepEqual(config.assets.run_worker_first, ['/*']);
+  assert.equal(config.assets.not_found_handling, '404-page');
+  assert.equal(config.assets.html_handling, 'none');
+});
+
 test('category sitemap pages bound distinct live dependencies as well as URL counts',()=>{
   const routes=Array.from({length:20},(_,i)=>'/categories/group-'+i),routeProducts=Object.fromEntries(routes.map((p,i)=>[p,Array.from({length:20},(_,j)=>'/products/item-'+i+'-'+j)]));
   const pages=sitemapRoutePages(routes,{routeProducts});assert.equal(pages.length,20);
@@ -23,7 +47,7 @@ function fixture() {
   const assets = new Map([['/spa.html','<html><h1>React shell</h1></html>'],['/404.html','<h1>Page not found</h1>'],['/assets/app.js','fixture-js']]);
   for (const path of paths) assets.set(routeFiles[path],`<html><h1>Approved ${path}</h1>${path.startsWith('/products/') ? '<script type="application/ld+json">{"@type":"Product"}</script>' : ''}</html>`);
   const seen=[], calls=[];
-  const env = { SEO_INDEXING_ENABLED:'true',SEO_EXPECTED_PUBLICATION_ID:id, ASSETS:{fetch:async request=>{const p=new URL(request.url).pathname;seen.push(p);return new Response(assets.get(p)||'Not found',{status:assets.has(p)?200:404});}},
+  const env = { SEO_INDEXING_ENABLED:'true',SEO_EXPECTED_PUBLICATION_ID:id, ASSETS:{fetch:async request=>{const p=new URL(request.url).pathname;seen.push(p);return new Response(assets.get(p)||'Not found',{status:assets.has(p)?200:404,headers:{'Content-Type':p.endsWith('.js')?'text/javascript':p.endsWith('.html')?'text/html':'text/plain'}});}},
     ADDRESS_SERVICE:{fetch:async (input,options)=>{calls.push({input,options});const slugs=new URL(input).searchParams.get('slugs').split(',');return Response.json({ok:true,data:{version:1,products:slugs.map(slug=>owners.has(slug)?{requestedPath:'/products/'+slug,...owners.get(slug)}:{requestedPath:'/products/'+slug,notFound:true})}});}} };
   const save=()=>assets.set('/seo-manifest.json',JSON.stringify(manifest));save();
   const get=(path,method='GET')=>handleSeoRequest(new Request(origin+path,{method}),env);

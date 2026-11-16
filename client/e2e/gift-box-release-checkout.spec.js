@@ -40,7 +40,7 @@ test('priced flexible gift with roses, chocolate and no ribbon goes from builder
   await fillCheckout(page);
   await expect(page.getByRole('radio', { name: /Cash on Delivery/ })).toBeChecked();
   await page.getByRole('radio', { name: /InstaPay/ }).check();
-  await page.getByRole('button',{name:'View transfer details',exact:true}).click();
+  await expect(page.getByRole('button',{name:'View transfer details',exact:true})).toHaveCount(0);
   await page.getByLabel(/^Transfer sender name/).fill('Fixture Sender');
   await page.getByLabel('Transaction screenshot',{exact:true}).setInputFiles(isolatedImageFile());
   await expect(page.locator('.commerce-summary')).toContainText('40.00');

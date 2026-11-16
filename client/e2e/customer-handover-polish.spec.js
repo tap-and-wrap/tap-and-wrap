@@ -12,8 +12,8 @@ for(const width of [320,390,1440])for(const method of ['cod','instapay'])test(`$
  await page.goto('/checkout');await fillCheckout(page);
  if(method==='instapay'){
   await page.getByRole('radio',{name:/InstaPay/}).check();
-  expect(fixture.calls.filter(call=>call.path==='/commerce/checkout/payments'&&call.method==='POST')).toHaveLength(0);
-  await page.getByRole('button',{name:'View transfer details',exact:true}).click();
+  await expect.poll(()=>fixture.calls.filter(call=>call.path==='/commerce/checkout/payments'&&call.method==='POST').length).toBe(1);
+  await expect(page.getByRole('button',{name:'View transfer details',exact:true})).toHaveCount(0);
   await page.getByLabel(/^Transfer sender name/).fill('Fixture Sender');
   await page.getByLabel('Transaction screenshot',{exact:true}).setInputFiles(isolatedImageFile());
  }
@@ -35,13 +35,15 @@ for(const width of [320,390,1440])for(const method of ['cod','instapay'])test(`$
 
 test('shopping before requesting instructions does not issue or persist a payment reference',async({page})=>{
  const fixture=await mockCommerce(page,{checkoutEnabled:true,cart:cartWithProduct()});
- await page.goto('/checkout');await fillCheckout(page);await page.getByRole('radio',{name:/InstaPay/}).check();
- await expect(page.getByRole('button',{name:'View transfer details',exact:true})).toBeEnabled();
+ await page.goto('/checkout');await fillCheckout(page);
+ await expect(page.getByRole('radio',{name:'Cash on Delivery',exact:true})).toBeChecked();
  await page.getByRole('link',{name:'Shop',exact:true}).first().click();
  fixture.state.cart.items[0].quantity=2;fixture.state.cart.items[0].lineTotalPiastres=50000;fixture.state.cart.subtotalPiastres=50000;fixture.state.cart.quantity=2;
- await page.goto('/checkout');await fillCheckout(page);await page.getByRole('radio',{name:/InstaPay/}).check();
- await expect(page.locator('.commerce-total')).toContainText('500.00');await expect(page.getByRole('button',{name:'Update payment details',exact:true})).toHaveCount(0);
+ await page.goto('/checkout');await fillCheckout(page);
  expect(fixture.calls.filter(call=>call.path==='/commerce/checkout/payments'&&call.method==='POST')).toHaveLength(0);
+ await page.getByRole('radio',{name:/InstaPay/}).check();
+ await expect(page.locator('.commerce-total')).toContainText('500.00');await expect(page.getByRole('button',{name:'Update payment details',exact:true})).toHaveCount(0);
+ await expect.poll(()=>fixture.calls.filter(call=>call.path==='/commerce/checkout/payments'&&call.method==='POST').length).toBe(1);
 });
 
 test('email receipt renders the original transparent PNG at mobile and desktop sizes',async({page},info)=>{
@@ -68,7 +70,7 @@ test('discount conflict refreshes stale recovery eligibility without resetting a
   return route.fulfill({status:409,headers:{'access-control-allow-origin':'http://127.0.0.1:5191','access-control-allow-credentials':'true'},json:{ok:false,error:{code:'CHECKOUT_PAYMENT_CHANGED',message:'Technical fingerprint conflict'}}});
  });
  await page.goto('/checkout');await fillCheckout(page);await page.getByRole('radio',{name:/InstaPay/}).check();
- await page.getByRole('button',{name:'View transfer details',exact:true}).click();await expect(page.getByRole('button',{name:'Copy transfer destination'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'View transfer details',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'Copy transfer destination'})).toBeVisible();
  await page.getByText('Have a discount code?',{exact:true}).click();await page.getByLabel('Discount code',{exact:true}).fill('ISOLATED');await page.getByRole('button',{name:'Apply code',exact:true}).click();
  await expect(page.getByRole('button',{name:'Update payment details',exact:true})).toBeVisible();await expect(page.getByText('Technical fingerprint conflict',{exact:true})).toHaveCount(0);await expect(page.locator('.checkout-transfer-placeholder')).toHaveCount(0);
  await expect(page.getByLabel(/^Transfer sender name/)).toHaveCount(0);expect(fixture.calls.filter(call=>call.path.endsWith('/cancel'))).toHaveLength(0);

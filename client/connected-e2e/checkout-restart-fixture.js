@@ -7,7 +7,7 @@ export async function restartScenario({page,context},signedIn){
  const first=await product('restart-28000');expect((await post(context,'/commerce/cart/items',{productId:first._id,quantity:1})).ok()).toBe(true);
  let oldKey,newKey,oldReference,cancels=0;const keys=[];
  page.on('request',r=>{if(r.url().endsWith('/checkout/quote'))keys.push(r.postDataJSON().checkoutKey);});
- await page.goto('/checkout');await page.getByRole('radio',{name:/InstaPay/}).check();await page.getByRole('button',{name:'View transfer details',exact:true}).click();await expect(page.getByRole('button',{name:'Copy transfer destination'})).toBeVisible();oldKey=keys.at(-1);
+ await page.goto('/checkout');await page.getByRole('radio',{name:/InstaPay/}).check();await expect(page.getByRole('button',{name:'View transfer details',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'Copy transfer destination'})).toBeVisible();oldKey=keys.at(-1);
  let old=(await(await context.request.get(`${api}/commerce/checkout/payments/${oldKey}`)).json()).data;oldReference=old.payment.reference;expect(old.payment.amountPiastres).toBe(28000);
  await context.request.delete(`${api}/commerce/cart`,{headers:await headers(context)});const second=await product('restart-241000');await post(context,'/commerce/cart/items',{productId:second._id,quantity:1});
  await post(context,'/commerce/checkout/quote',{checkoutKey:oldKey,paymentMethod:'cod'});

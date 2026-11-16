@@ -3,6 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>.site-boot{display:none}.tw-booting #root,.tw-booting .seo-boot-fallback{display:none}.tw-booting .site-boot{display:grid;place-content:center;justify-items:center;gap:24px;min-height:85vh;background:#FFFCFB;color:#62483F;font:16px/1.5 Arial,sans-serif;text-align:center;padding:24px;box-sizing:border-box}.site-boot img{width:210px;max-width:80vw;height:auto}.site-boot-line{height:3px;width:160px;border-radius:3px;background:#EADAD5}.site-boot-line:after{content:'';display:block;width:45%;height:100%;background:#915B50;animation:boot-wait 1.2s ease-in-out infinite alternate}@keyframes boot-wait{to{transform:translateX(120%)}}@media(prefers-reduced-motion:reduce){.site-boot-line:after{animation:none}}</style>
+    <script src="/boot-appearance.js"></script>
     <meta name="theme-color" content="#f9e7e4" />
     <meta name="robots" content="noindex,nofollow" />
     <meta name="description" content="Tap & Wrap — beautiful gifts, thoughtful personalization and laser engraving." />
@@ -14,6 +16,7 @@
     <title>Tap & Wrap | Makes someone's heart flap</title>
   </head>
   <body>
+    <div class="site-boot" role="status"><img src="/tap-wrap-logo.webp" alt="Tap &amp; Wrap" width="2000" height="667"><span class="site-boot-line" aria-hidden="true"></span><span>Opening your thoughtful gifts…</span></div>
     <script src="/ribbon-boot.js"></script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>

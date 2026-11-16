@@ -247,3 +247,27 @@
 
 .checkout-payment-update{display:grid;gap:12px;padding:14px;border:1px solid var(--tw-border,#eadad5);border-radius:12px;background:var(--tw-surface,#fff)}
 .checkout-payment-update p{margin:0}.checkout-payment-update a{display:inline-flex;align-items:center;min-height:44px;text-underline-offset:3px}
+
+/* Order summaries share the quiet receipt presentation; private files stay opt-in. */
+.order-detail-header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:24px 0;border-bottom:1px solid var(--tw-border);margin-bottom:24px}
+.order-detail-header h1,.order-detail-header h2{margin:6px 0 12px}
+.order-detail-header time{font-size:.85rem;color:var(--tw-rose-dark)}
+.order-status-chips{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;max-width:45%}
+.order-progress{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;list-style:none;padding:20px 0;margin:0 0 20px}
+.order-progress li{display:flex;align-items:flex-start;gap:10px;min-width:0;font-size:.82rem;color:var(--tw-rose-dark)}
+.order-progress li>span{flex:none;display:grid;place-items:center;border:1px solid var(--tw-border);border-radius:50%;width:28px;height:28px;background:var(--tw-surface)}
+.order-progress li.is-current{color:var(--tw-ink);font-weight:600}
+.order-progress .is-current>span,.order-progress .is-complete>span{background:var(--tw-button);border-color:var(--tw-button);color:white}
+.order-progress small{display:block;font-size:.7rem;font-weight:400;margin-top:4px}
+.order-next-step{padding:18px 20px;border:1px solid var(--tw-border);border-radius:12px;background:var(--tw-surface);margin-bottom:28px}
+.order-next-step a{display:inline-block;text-decoration:underline;text-underline-offset:3px}
+.order-history-details,.order-financial-details{margin:18px 0;border-top:1px solid var(--tw-border)}
+.order-history-details>summary,.order-financial-details>summary{min-height:48px;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer}
+.order-history-details>summary:after,.order-financial-details>summary:after{content:'+'}
+.order-history-details[open]>summary:after,.order-financial-details[open]>summary:after{content:'\2212'}
+.tracking-result{margin-top:32px;border:1px solid var(--tw-border);border-radius:16px;background:var(--tw-surface);padding:clamp(16px,3vw,28px)}
+.tracking-result .order-detail-header{padding-top:0}
+.tracking-items{list-style:none;padding:0;margin:20px 0}
+.tracking-items li,.tracking-result dl>div{display:flex;justify-content:space-between;gap:16px;border-bottom:1px solid var(--tw-border);padding:12px 0;overflow-wrap:anywhere}
+.tracking-result dd{margin:0;text-align:right}
+@media(max-width:760px){.order-progress{grid-template-columns:1fr;gap:0}.order-progress li{position:relative;padding-bottom:18px;align-items:center}.order-progress li:not(:last-child):before{content:'';position:absolute;left:14px;top:29px;height:calc(100% - 29px);width:1px;background:var(--tw-border)}.order-progress small{display:inline;margin-left:10px}.order-detail-header{flex-direction:column}.order-status-chips{max-width:100%;justify-content:flex-start}.tracking-result .order-progress{padding-bottom:0}}

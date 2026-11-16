@@ -111,7 +111,18 @@ async function routeRequest(request, env) {
   if (pathname.startsWith('/assets/') || /\.(?:webp|png|jpe?g|svg|ico|woff2?|mp4|webm|css|js)$/i.test(pathname)
     || /^\/fonts\/gift-sticker\/(?:[a-z]+(?:\.ttf|-LICENSE\.txt)|SOURCE\.txt)$/.test(pathname)
     || /^\/fonts\/ui-v1\/(?:Kalam-OFL\.txt|Amiri-OFL\.txt|SOURCE\.md|manifest\.json)$/.test(pathname)
-    || pathname === '/licenses/react-bits.txt') return env.ASSETS.fetch(request);
+    || pathname === '/licenses/react-bits.txt') {
+    const response = await env.ASSETS.fetch(request);
+    const type = (response.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
+    const validType = /\.css$/i.test(pathname) ? type === 'text/css'
+      : /\.(?:js|mjs)$/i.test(pathname) ? ['text/javascript', 'application/javascript'].includes(type)
+        : type !== 'text/html';
+    // Static Assets may apply SPA fallback to a missing old hashed asset.
+    // Never let a successful HTML document masquerade as CSS, JS or an image.
+    if (response.status === 304 && (!type || validType)) return response;
+    if (!response.ok || !validType) return new Response('Asset unavailable. Reload the page to get the latest version.', { status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'X-Robots-Tag': 'noindex' } });
+    return response;
+  }
   const manifest = await manifestFor(env.ASSETS, request);
   const path = pathname === '/' ? '/' : pathname.replace(/\/+$/, '');
   const withdrawn = withdrawalPaths(env.SEO_WITHDRAWN_PATHS);

@@ -1,4 +1,6 @@
-import LoadingState from '../components/LoadingState.jsx';
+import useImageSelectionReady from '../components/useImageSelectionReady.js';
+import { resolveGiftBoxEstimate } from '../gift-box/estimate-state.mjs';
+import LoadingState, { LoadingSpinner } from '../components/LoadingState.jsx';
 import { toast } from 'sonner';
 import { StickerProof } from '../gift-box/StickerWorkspace.jsx';
 import { defaultStickerPlacement } from '../../../shared/gift-box/sticker-placement.mjs';
@@ -64,6 +66,7 @@ export default function GiftBoxBuilderPage() {
   // Draft placement is safe in the browser; order conversion remains separately server-authorized.
   const study = true;
   const titleRef = useRef(null), shouldFocus = useRef(false), pageRef = useRef(null);
+  const imagesReady = useImageSelectionReady(pageRef);
   const quantities = counts(state.instances);
   const publishedBoxLimits = catalog.data?.boxLimits;
   const activeLimits = resolveBoxCategoryLimits(state.boxId, publishedBoxLimits);
@@ -84,12 +87,14 @@ export default function GiftBoxBuilderPage() {
   const selectedLines = selection ? [{ componentId: selection.boxId, quantity: 1 }, ...selection.items, ...(selection.ribbonId ? [{ componentId: selection.ribbonId, quantity: 1 }] : []), ...(selection.giftCard ? [{ componentId: selection.giftCard.componentId, quantity: 1 }] : [])] : [];
   const unavailableSelection = !draftMode && selectedLines.some(line => !componentCanSupply(components.find(item => item.componentId === line.componentId), line.quantity));
   const estimate = useQuery({ queryKey: ['private', session.ownerKey, 'gift-box-estimate', selection], queryFn: ({ signal }) => getEstimate(selection, signal), enabled: Boolean(selection) && !unavailableSelection, retry: false, staleTime: 0, gcTime: 0 });
-  const currentEstimate = selection && !unavailableSelection && estimate.isSuccess && !estimate.isFetching ? estimate.data : null;
-  const combinedPiastres = currentEstimate && personalPriceEstimate !== null
-    ? currentEstimate.componentSubtotalPiastres + personalPriceEstimate : null;
+  // Query data belongs to this exact selection/owner key. A background refresh
+  // may retain its display amount, but purchase still requires a fresh result.
+  const { display: displayEstimate, authoritative: currentEstimate } = resolveGiftBoxEstimate(estimate, { hasSelection: Boolean(selection), unavailable: unavailableSelection });
+  const combinedPiastres = displayEstimate && personalPriceEstimate !== null
+    ? displayEstimate.componentSubtotalPiastres + personalPriceEstimate : null;
   const priceText = personal.hasContent && personalPriceEstimate === null ? 'Review personal touches' : Number.isSafeInteger(combinedPiastres) ? money(combinedPiastres)
-    : currentEstimate ? money(currentEstimate.componentSubtotalPiastres)
-      : unavailableSelection ? 'Selection unavailable' : selection && estimate.isFetching ? 'Calculating…' : 'Awaiting estimate';
+    : displayEstimate ? money(displayEstimate.componentSubtotalPiastres)
+      : unavailableSelection ? 'Selection unavailable' : estimate.isError ? 'Total unavailable' : selection ? 'Updating total…' : 'Choose your box';
   useEffect(() => {
     if (!shouldFocus.current) return;
     shouldFocus.current = false;
@@ -160,7 +165,7 @@ export default function GiftBoxBuilderPage() {
     if (mounted.current) navigateCart('/cart');
   }
   async function addConfiguredGiftToCart() {
-    if (addingGift || !cartConfigurationReady || !currentEstimate || !catalog.data?.freePlacementCommerceEnabled
+    if (!imagesReady || addingGift || !cartConfigurationReady || !currentEstimate || !catalog.data?.freePlacementCommerceEnabled
       || !catalog.data.orderableBoxIds?.includes(state.boxId) || personal.hasContent && !personalizationOptions.data?.personalizationCheckoutEnabled) return;
     if (cart.preparing) return;
     setAddingGift(true);
@@ -280,10 +285,10 @@ export default function GiftBoxBuilderPage() {
           {estimate.error && <div className="gb-feedback"><p role="alert">{commerceError(estimate.error)}</p><button type="button" onClick={() => estimate.refetch()}>Retry total</button></div>}
           {unavailableSelection && <p role="alert">A selected item is unavailable. Remove it or choose a replacement.</p>}
           {notice && <p className="gb-announcement" role="status">{notice}</p>}
-          <footer className="gb-purchase-bar"><div className="gb-live-total" aria-live="polite"><span>Your total</span><strong>{priceText}</strong></div><div className="gb-navigation">
-            {review ? <button className="button button-primary gb-add-gift" type="button" disabled={addingGift || !canPurchase || !cartConfigurationReady || !currentEstimate} onClick={addConfiguredGiftToCart}>{addingGift ? 'Adding your gift…' : 'Add Your Gift to Cart'}</button> : <>
+          <footer className="gb-purchase-bar"><div className="gb-live-total" aria-live="polite"><span>Your total</span><strong>{priceText === 'Updating total…' ? <LoadingSpinner label="Updating total…"/> : priceText}</strong></div><div className="gb-navigation">
+            {review ? <button className="button button-primary gb-add-gift" type="button" disabled={!imagesReady || addingGift || !canPurchase || !cartConfigurationReady || !currentEstimate} onClick={addConfiguredGiftToCart}>{addingGift ? 'Adding your gift…' : 'Add Your Gift to Cart'}</button> : <>
             {step === 0 ? <Link className="button button-secondary" to="/customize">Back</Link> : <button type="button" className="button button-secondary" onClick={() => navigate(review ? LAST_STEP : step - 1)}>Back</button>}
-            {!review && <button type="button" className="button button-primary" disabled={!state.boxId} onClick={() => navigate(Math.min(LAST_STEP,step+1),step === LAST_STEP)}>{step === LAST_STEP ? 'Next: Review' : 'Next'}</button>}
+            {!review && <button type="button" className="button button-primary" disabled={!state.boxId || !imagesReady} onClick={() => navigate(Math.min(LAST_STEP,step+1),step === LAST_STEP)}>{step === LAST_STEP ? 'Next: Review' : 'Next'}</button>}
             </>}
           </div></footer>
         </section>

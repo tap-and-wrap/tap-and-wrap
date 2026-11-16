@@ -28,11 +28,11 @@ export function expireBootMetadata(documentObject = document) {
   documentObject.head.querySelectorAll('script[data-seo-jsonld]').forEach((script) => script.remove());
 }
 
-// This is a bounded handoff, not hydration. Keep meaningful static HTML visible
-// until the real route has a non-loading heading, then mount the interactive UI.
+// This is a handoff, not hydration. The early branded opening covers static
+// markup until React has a usable page (including its accessible loading state).
 export function initializePrerender(root, documentObject = document) {
   snapshot = readBootSnapshot(documentObject);
-  if (!root?.querySelector('[data-prerender]')) return () => {};
+  if (!root) return () => {};
   const fallback = documentObject.createElement('div');
   fallback.className = 'seo-boot-fallback';
   while (root.firstChild) fallback.append(root.firstChild);
@@ -53,15 +53,31 @@ export function initializePrerender(root, documentObject = document) {
     root.removeAttribute('aria-hidden');
     root.inert = false;
     fallback.remove();
+    window.__twBootFinish?.();
   };
   const ready = () => {
-    if (window.location.pathname !== originalPath || [...root.querySelectorAll('main h1')].some((heading) => !heading.closest('[hidden], [aria-busy="true"], [role="status"]'))) reveal();
+    if (window.location.pathname !== originalPath || root.querySelector('main')) reveal();
   };
   const observer = new MutationObserver(ready);
   observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['aria-busy', 'hidden'] });
   // An elapsed deadline is not proof that React produced usable content.
   // Keep the ordinary, navigable static document if initialization fails;
   // the decorative opening has its own independent bounded release.
-  timer = setTimeout(ready, 6000);
+  timer = setTimeout(() => {
+    ready();
+    if (!done) {
+      // React failed: restore navigable static content, never an endless spinner.
+      observer.disconnect();
+      if (!fallback.childNodes.length) {
+        const message = documentObject.createElement('main');
+        message.className = 'page-shell';
+        const heading = documentObject.createElement('h1'); heading.textContent = 'Your page could not open';
+        const link = documentObject.createElement('a'); link.href = window.location.href; link.textContent = 'Reload this page';
+        message.append(heading, link); fallback.append(message);
+      }
+      window.__twBootFinish?.();
+      done = true;
+    }
+  }, 7500);
   return reveal;
 }

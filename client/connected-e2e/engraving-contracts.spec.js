@@ -45,18 +45,19 @@ test('connected builder: nine types, all modes, memory draft, widths, cart and u
 test('connected real administration publishes type and placement, preserves conflict draft',async({page,context},info)=>{
   await login(page,'admin','/admin/engraving');await expect(page.getByRole('heading',{name:'Standalone engraving',exact:true})).toBeVisible();await expect(page.locator('.studio-admin-grid>article')).toHaveCount(9);
   for(const width of [320,390,768,1440])await screen(page,info,'admin-overview',width);
-  await page.getByRole('button',{name:'Create engraving type',exact:true}).click();
-  await page.getByLabel('Stable type ID',{exact:true}).fill('fixture-flask');await page.getByLabel('Display name',{exact:true}).fill('Fixture Flask');
+  await page.getByRole('button',{name:'Add new engraving type',exact:true}).click();
+  await page.getByLabel('Record reference (set once)',{exact:true}).fill('fixture-flask');await page.getByLabel('Display name',{exact:true}).fill('Fixture Flask');
   const nav=page.getByRole('navigation',{name:'Configuration sections'});
-  await chooseOption(page.getByRole('combobox',{name:/Type status/}), 'active');await nav.getByRole('button',{name:/Approval/}).click();await page.getByRole('button',{name:'Publish configuration version',exact:true}).click();await expect(nav.getByRole('button',{name:/General/})).toHaveAttribute('aria-invalid','true');await expect(nav.getByRole('button',{name:/General/})).toBeFocused();await nav.getByRole('button',{name:/General/}).click();await chooseOption(page.getByRole('combobox',{name:/Type status/}), 'disabled');
-  await nav.getByRole('button',{name:/Placements/}).click();await page.getByLabel('New stable placement ID').fill('base');await page.getByRole('button',{name:'Add placement',exact:true}).click();
-  await nav.getByRole('button',{name:/Approval/}).click();await page.getByRole('button',{name:'Publish configuration version',exact:true}).click();
+  await chooseOption(page.getByRole('combobox',{name:/Type status/}), 'disabled');
+  await nav.getByRole('button',{name:/Placements/}).click();await page.getByLabel('New location reference').fill('base');await page.getByRole('button',{name:'Add placement',exact:true}).click();
+  await nav.getByRole('button',{name:/Approval/}).click();await page.getByRole('button',{name:'Save engraving type',exact:true}).click();
   await expect(page.getByText('Engraving settings saved.',{exact:true})).toBeVisible();
   const saved=(await(await context.request.get(api+'/api/v1/admin/commerce/engraving/types')).json()).data.types.find(value=>value.typeId==='fixture-flask');
+  expect(saved).toMatchObject({typeId:'fixture-flask',status:'disabled',placements:[{id:'base'}]});
   const {revision,version,...configuration}=saved;void version;
   expect((await post(context,'/admin/commerce/engraving/types',{expectedRevision:revision,configuration:{...configuration,name:'Concurrent edit'}})).ok()).toBe(true);
   await nav.getByRole('button',{name:/General/}).click();await page.getByLabel('Display name',{exact:true}).fill('Retained conflict draft');
-  await nav.getByRole('button',{name:/Approval/}).click();await page.getByRole('button',{name:'Publish configuration version'}).click();await expect(page.getByText(/Your draft is retained/)).toBeVisible();
+  await nav.getByRole('button',{name:/Approval/}).click();await page.getByRole('button',{name:'Save engraving type'}).click();await expect(page.getByText(/Your edits are still here/)).toBeVisible();
   await nav.getByRole('button',{name:/General/}).click();await expect(page.getByLabel('Display name',{exact:true})).toHaveValue('Retained conflict draft');
   for(const width of [320,390,768,1440])await screen(page,info,'admin-configuration',width);
 });

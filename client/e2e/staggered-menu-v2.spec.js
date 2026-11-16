@@ -8,8 +8,8 @@ for(const width of widths)test(`responsive navigation, simplified menu, logo and
  expect(await dialog.evaluate(n=>n.scrollWidth<=n.clientWidth)).toBe(true);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.keyboard.press('Shift+Tab');expect(await dialog.evaluate(n=>n.contains(document.activeElement))).toBe(true);await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);await expect(opener).toBeFocused();expect(await page.evaluate(()=>document.body.style.overflow)).not.toBe('hidden');
  await opener.click();await settle(dialog);await dialog.getByRole('link',{name:'About Us',exact:true}).click();await expect(page).toHaveURL('/about');await expect(dialog).toHaveCount(0);
 });
-for(const width of widths.filter(n=>n<1024))test(`admin menu preserves eight primary destinations at ${width}`,async({page},info)=>{
- await ownerFixture(page);await page.setViewportSize({width,height:900});await page.goto('/admin');await page.getByRole('button',{name:'Open menu',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Administration menu'});await settle(dialog);await expect(dialog.locator('.drawer-nav>ul>li')).toHaveCount(8);await dialog.getByText('Customization',{exact:true}).click();await expect(dialog.getByRole('link',{name:'Gift Box',exact:true})).toBeVisible();await expect(dialog.getByRole('link',{name:'Standalone Engraving',exact:true})).toBeVisible();await page.screenshot({path:info.outputPath(`${width}-admin-menu.png`),animations:'disabled'});await dialog.getByRole('link',{name:'Gift Box',exact:true}).click();await expect(page).toHaveURL('/admin/gift-box');
+for(const width of widths.filter(n=>n<1024))test(`admin menu preserves seven primary destinations at ${width}`,async({page},info)=>{
+ await ownerFixture(page);await page.setViewportSize({width,height:900});await page.goto('/admin');await page.getByRole('button',{name:'Open menu',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Administration menu'});await settle(dialog);await expect(dialog.locator('.drawer-nav>ul>li')).toHaveCount(7);await dialog.getByText('Customization',{exact:true}).click();await expect(dialog.getByRole('link',{name:'Gift Box',exact:true})).toBeVisible();await expect(dialog.getByRole('link',{name:'Standalone Engraving',exact:true})).toBeVisible();await page.screenshot({path:info.outputPath(`${width}-admin-menu.png`),animations:'disabled'});await dialog.getByRole('link',{name:'Gift Box',exact:true}).click();await expect(page).toHaveURL('/admin/gift-box');
 });
 test('layered entrance and exit display the reference choreography and tolerate rapid dismissal',async({page},info)=>{
  await mockCatalog(page);await page.setViewportSize({width:390,height:844});await page.goto('/');await page.getByRole('button',{name:'Open menu',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Main menu'});await expect(dialog).toBeVisible();
@@ -26,7 +26,8 @@ for(const width of [1024,1440])for(const workspace of ['storefront','admin'])tes
  await expect(page.getByRole('button',{name:'Open menu',exact:true})).toHaveCount(0);
  await expect(page.getByRole('button',{name:/^Admin notifications/})).toBeVisible();
  if(workspace==='admin'){
-  await expect(page.locator('.desktop-navigation>ul>li')).toHaveCount(8);
+  await expect(page.getByRole('link',{name:'Payment',exact:true})).toHaveCount(0);
+  await expect(page.locator('.desktop-navigation>ul>li')).toHaveCount(7);
   await expect(page.getByRole('link',{name:/Home — storefront/})).toHaveAttribute('href','/');
  }else{
   await expect(page.getByRole('link',{name:'Account',exact:true})).toHaveAttribute('href','/admin');

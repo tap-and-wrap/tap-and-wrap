@@ -9,7 +9,7 @@ test('only the clicked product card shows loading during a delayed add', async (
   const second = { ...commerceProduct, _id: '710000000000000000000002', slug: 'another-isolated-gift', name: 'Another isolated gift' };
   await page.route('**/public/products?*', route => route.fulfill({ json: { ok: true, data: { products: [commerceProduct, second], pagination: {page:1,pages:1,total:2}, priceBounds: null } } }));
   let release;
-  await page.route('**/commerce/cart/items', async route => { await new Promise(resolve => { release = resolve; }); await route.fallback(); });
+  await page.route('**/commerce/cart/items', async route => { if (route.request().method() !== 'POST') return route.fallback(); await new Promise(resolve => { release = resolve; }); await route.fallback(); });
   await page.goto('/shop');
   const first = page.getByRole('button', { name: `Add to Cart: ${commerceProduct.name}`, exact: true });
   const other = page.getByRole('button', { name: `Add to Cart: ${second.name}`, exact: true });
@@ -17,6 +17,7 @@ test('only the clicked product card shows loading during a delayed add', async (
   await expect(first).toHaveText('Adding');
   await expect(other).toHaveText('Add to Cart');
   await expect(other).toBeDisabled();
+  await expect.poll(() => typeof release).toBe('function');
   release();
   await expect(first).toHaveText('Add to Cart');
   await expect(other).toBeEnabled();
@@ -84,8 +85,9 @@ test('rapid rejected card clicks produce one operation and restore both ordinary
 
 test('a pending guest add cannot leave loading labels in the signed-in storefront',async({page})=>{
   await mockCommerce(page);let release;
-  await page.route('**/commerce/cart/items',async route=>{await new Promise(resolve=>{release=resolve;});await route.fallback().catch(()=>{});});
+  await page.route('**/commerce/cart/items',async route=>{if(route.request().method()!=='POST')return route.fallback();await new Promise(resolve=>{release=resolve;});await route.fallback().catch(()=>{});});
   await page.goto('/shop');await page.getByRole('button',{name:`Add to Cart: ${commerceProduct.name}`,exact:true}).click();await expect(page.getByRole('button',{name:`Add to Cart: ${commerceProduct.name}`,exact:true})).toHaveText('Adding');
+  await expect.poll(() => typeof release).toBe('function');
   await page.goto('/login');await page.getByLabel('Email Address').fill('isolated@example.test');await page.getByLabel('Password',{exact:true}).fill('isolated-test-password');await page.getByRole('button',{name:'Log In',exact:true}).click();await expect(page).not.toHaveURL(/\/login/);await page.goto('/shop');
   const button=page.getByRole('button',{name:`Add to Cart: ${commerceProduct.name}`,exact:true});await expect(button).toHaveText('Add to Cart');await expect(button).toBeEnabled();release();await expect(button).toHaveText('Add to Cart');
 });

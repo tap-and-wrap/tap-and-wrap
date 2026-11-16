@@ -19,6 +19,7 @@ export function CartProvider({ children }) {
   const [feedbackState, setFeedback] = useState(null);
   const job = useRef(null), cartOwner = useRef(null);
   const [preparation, setPreparation] = useState(null);
+  const lastCartToastId = useRef(null);
   const preparing = preparation?.generation === session.generation;
   useEffect(() => () => job.current?.controller.abort(), []);
   const runPersonalizedAdd = useCallback(async (task, label) => {
@@ -50,7 +51,10 @@ export function CartProvider({ children }) {
     const key = privateQueryKey(sessionOwner(), 'cart');
     setPending(generation);
     setFeedback(null);
-    toast.dismiss('cart-update');
+    // Sonner 2.0.8 can merge a newly created toast into a leaving toast when
+    // both have the same ID. Dismiss the old ID, then use a fresh ID on success.
+    if (lastCartToastId.current !== null) toast.dismiss(lastCartToastId.current);
+    lastCartToastId.current = null;
     try {
       const phase = sessionSnapshot().phase;
       if (!phase || phase !== 'ready') throw new Error(phase === 'error' ? 'Your session could not be verified. Open the cart and choose Try again, then retry this action.' : 'Please wait while your session is verified.');
@@ -59,10 +63,14 @@ export function CartProvider({ children }) {
       if (generation !== authGeneration()) throw new Error('Your account changed. Please review the current cart.');
       if (result.cart) queryClient.setQueryData(key, (previous) => ({ ...previous, ...result }));
       else await queryClient.invalidateQueries({ queryKey: key });
-      toast.success(typeof success === 'function' ? success(result) : success, { id: 'cart-update', onDismiss: () => {
+      let notificationId;
+      notificationId = toast.success(typeof success === 'function' ? success(result) : success, { onDismiss: () => {
+        if (lastCartToastId.current !== notificationId) return;
+        lastCartToastId.current = null;
         const focused = document.activeElement;
         if (generation === authGeneration() && (focused === document.body || focused?.closest('[data-sonner-toast]')) && opener instanceof HTMLElement && opener.isConnected && !opener.matches(':disabled')) opener.focus({ preventScroll: true });
       } });
+      lastCartToastId.current = notificationId;
       // Optional feedback must not turn a successfully saved cart into a failed
       // mutation or encourage a customer to add the same item a second time.
       try { emitTracking(result.tracking); } catch { /* The saved cart remains authoritative. */ }

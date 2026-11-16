@@ -1,4 +1,6 @@
 import { useId, useState } from 'react';
+import PasswordInput from '../components/PasswordInput.jsx';
+import { accountDestination, authenticationError } from '../auth/feedback.mjs';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import PageShell from '../components/PageShell.jsx';
 import { useCart } from '../commerce/CartContext.jsx';
@@ -29,23 +31,26 @@ export default function AuthPage({ signup = false }) {
    if (signup && newPasswordError(password)) throw new Error(newPasswordError(password));
    const response = await session.authenticate(signup ? '/auth/signup' : '/auth/login', signup ? { name, email, password } : { email, password });
    emitTracking(response.data?.data?.tracking);
+   let cartNotice = false;
    try {
     const merged = await commercePost('/cart/merge', {});
     await cart.refresh();
-    if (Number.isSafeInteger(merged.skipped) && merged.skipped > 0) toast(`You are signed in. ${merged.skipped} unavailable guest ${merged.skipped === 1 ? 'item could' : 'items could'} not be transferred. Review your cart.`, { id: 'auth-cart-merge' });
+    if (Number.isSafeInteger(merged.skipped) && merged.skipped > 0) { cartNotice = true; toast(`You are signed in. ${merged.skipped} unavailable guest ${merged.skipped === 1 ? 'item could' : 'items could'} not be transferred. Review your cart.`, { id: 'auth-cart-merge' }); }
    }
-   catch { await cart.refresh(); toast.error('You are signed in. Your guest cart could not be merged; please review your cart.', { id: 'auth-cart-merge' }); }
+   catch { cartNotice = true; await cart.refresh(); toast.error('You are signed in. Your guest cart could not be merged; please review your cart.', { id: 'auth-cart-merge' }); }
    const returnTo = params.get('returnTo');
    const administrator = response.data?.data?.user?.role === 'admin';
-   navigate(administrator && returnTo && /^\/admin(?:\/|$)/.test(returnTo) && !returnTo.includes('\\') ? returnTo : administrator ? '/admin' : '/my-orders');
-  } catch (err) { setFieldErrors(validationFieldErrors(err)); setError(err.response?.data?.error?.message || err.message || 'Unable to sign in. Please try again in a moment.'); }
+   if (!cartNotice) toast.success(signup ? 'Your account is ready. Welcome to Tap & Wrap.' : 'You are signed in.', { id: 'auth-result' });
+   navigate(accountDestination(administrator, returnTo), { replace: true });
+  } catch (err) { const message = authenticationError(err); setFieldErrors(validationFieldErrors(err)); setError(message); toast.error(message, { id: 'auth-result' }); }
   finally { setBusy(false); }
  }
  return <PageShell account eyebrow="CUSTOMER ACCOUNT" title={signup ? 'Create an account' : 'Welcome back'}>
-  <form className="auth-form" onSubmit={submit} noValidate aria-busy={busy} aria-describedby={error ? `${prefix}-form-error` : undefined}>
+  <p className="auth-introduction">{signup ? 'Keep your thoughtful gifts and order updates together.' : 'Sign in to follow your orders and continue shopping.'}</p>
+  <form className="auth-form" onChange={event=>{setError('');setFieldErrors(previous=>({...previous,[event.target.name]:undefined}));}} onBlur={event=>{const field=event.target;if(!field.matches('input'))return;const message=signup && field.name==='password' ? newPasswordError(field.value) : field.validity.valid ? '' : field.validationMessage;setFieldErrors(previous=>({...previous,[field.name]:message}));}} onSubmit={submit} noValidate aria-busy={busy} aria-describedby={error ? `${prefix}-form-error` : undefined}>
    {signup && <div className="auth-field"><label htmlFor={`${prefix}-name`}>Your Name</label><input id={`${prefix}-name`} name="name" value={name} onChange={e=>setName(e.target.value)} autoComplete="name" required minLength={2} maxLength={100} disabled={busy} {...fieldErrorProps(`${prefix}-name`, fieldErrors.name)}/><FieldError id={`${prefix}-name`}>{fieldErrors.name}</FieldError></div>}
    <div className="auth-field"><label htmlFor={`${prefix}-email`}>Email Address</label><input id={`${prefix}-email`} name="email" type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email" required maxLength={254} disabled={busy} {...fieldErrorProps(`${prefix}-email`, fieldErrors.email)}/><FieldError id={`${prefix}-email`}>{fieldErrors.email}</FieldError></div>
-   <div className="auth-field"><label htmlFor={`${prefix}-password`}>Password</label><input id={`${prefix}-password`} name="password" type="password" minLength={12} value={password} onChange={e=>setPassword(e.target.value)} autoComplete={signup?'new-password':'current-password'} required disabled={busy} {...fieldErrorProps(`${prefix}-password`, fieldErrors.password)}/><FieldError id={`${prefix}-password`}>{fieldErrors.password}</FieldError></div>
+   <div className="auth-field"><label htmlFor={`${prefix}-password`}>Password</label><PasswordInput requirements={signup} id={`${prefix}-password`} name="password" minLength={signup ? 12 : undefined} value={password} onChange={e=>setPassword(e.target.value)} autoComplete={signup?'new-password':'current-password'} required disabled={busy} {...fieldErrorProps(`${prefix}-password`, fieldErrors.password, signup ? `${prefix}-password-requirements` : '')}/><FieldError id={`${prefix}-password`}>{fieldErrors.password}</FieldError></div>
    <button className="button button-dark" type="submit" disabled={busy}>{busy?'Please wait…':signup?'Create Account':'Log In'}</button>{error && <p id={`${prefix}-form-error`} role="alert" className="error-text">{error}</p>}
   </form>
   <div className="auth-links"><p>{signup ? 'Already have an account?' : 'New to Tap & Wrap?'} <Link to={signup?'/login':'/signup'}>{signup?'Log In':'Sign Up'}</Link></p>

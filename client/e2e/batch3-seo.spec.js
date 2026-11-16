@@ -5,7 +5,7 @@ import { publicationFor } from '../scripts/seo/publication.js';
 import { browserSecurityHeaders } from '../worker/browser-policy.js';
 import { blockExternalRequests } from './network-fixture.js';
 
-test('real React boot keeps semantic static content through a delayed API response, then reveals one interactive route', async ({ page }) => {
+test('real React boot preserves semantic response HTML and hands off to branded loading before the API responds', async ({ page }) => {
   await mockCatalog(page);
   const now = new Date();
   const catalog = { version: 1, source: 'approved-public-catalog', generatedAt: now.toISOString(), checkoutEnabled: false, mediaOrigins: [], categories: [category], products: [{ ...detail, mainImageUrl: null, subcategory: null, seoEligibility: { status: 'ready', published: true, inventoryApproved: true, reviewRequired: false, categoriesActive: true } }] };
@@ -19,13 +19,17 @@ test('real React boot keeps semantic static content through a delayed API respon
   });
   await page.route(`http://127.0.0.1:5191/products/${detail.slug}`, async (route) => {
     const template = await (await route.fetch()).text();
-    await route.fulfill({ contentType: 'text/html', body: renderRouteHtml(template, plan.routes.get(`/products/${detail.slug}`), plan.origin, publication) });
+    const html = renderRouteHtml(template, plan.routes.get(`/products/${detail.slug}`), plan.origin, publication);
+    expect(html).toContain('data-prerender="true"');
+    expect(html).toContain(`<h1>${detail.name}</h1>`);
+    await route.fulfill({ contentType: 'text/html', body: html });
   });
   try {
     await page.goto(`/products/${detail.slug}`, { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('.seo-boot-fallback')).toBeVisible();
-    await expect(page.locator('.seo-boot-fallback h1')).toHaveText(detail.name);
-    await expect(page.locator('#root')).toHaveAttribute('aria-hidden', 'true');
+    await expect(page.getByRole('status').filter({ hasText: 'Loading product' })).toBeVisible();
+    await expect(page.locator('.seo-boot-fallback')).toHaveCount(0);
+    await expect(page.locator('#root')).toBeVisible();
+    await expect(page.getByRole('form', { name: 'Product options' })).toHaveCount(0);
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
     release();
     await expect(page.locator('.seo-boot-fallback')).toHaveCount(0);

@@ -47,7 +47,7 @@ test('real personalization upload to cart to InstaPay order to proof and explici
   await expect(page.getByAltText('Selected audit photo 1')).toBeVisible();
   await page.getByRole('button', { name: 'Save personalization' }).click();
   await saveCartItem(page, () => page.getByRole('button', { name: 'Add to Cart', exact: true }).click());
-  await details(page); await expect(page.getByRole('radio', { name: 'Cash on Delivery', exact: true })).toBeVisible(); await page.getByRole('radio', { name: /InstaPay/ }).check();await page.getByRole('button',{name:'View transfer details',exact:true}).click();
+  await details(page); await expect(page.getByRole('radio', { name: 'Cash on Delivery', exact: true })).toBeVisible(); await page.getByRole('radio', { name: /InstaPay/ }).check();await expect(page.getByRole('button',{name:'View transfer details',exact:true})).toHaveCount(0);
   await expect(page.getByRole('button', {name:'Copy transfer amount'})).toBeVisible();
   await page.getByLabel('Transfer sender name').fill('Synthetic sender');
   await chooseImageFiles(page, page, /^InstaPay: Choose screenshot/i, { name: 'synthetic-proof.png', mimeType: 'image/png', buffer: image });
@@ -58,7 +58,7 @@ test('real personalization upload to cart to InstaPay order to proof and explici
   await expect(page.getByRole('heading', { name: /Thank you/ })).toBeVisible();
   const admin = await browser.newContext({ baseURL: 'http://127.0.0.1:' + (process.env.TAP_WRAP_CONTRACT_WEB_PORT || 5192) }); await restrict(admin); const adminPage = await admin.newPage();
   await adminPage.goto('/login?returnTo=' + encodeURIComponent('/admin/commerce/orders/' + order.id)); await adminPage.getByLabel('Email Address').fill('admin@connected.example.test'); await adminPage.getByLabel('Password', { exact: true }).fill('isolated-fixture-password'); await adminPage.getByRole('button', { name: 'Log In', exact: true }).click();
-  await expect(adminPage).toHaveURL(`/admin/orders/${order.id}`); await expect(adminPage.getByRole('heading', { name: 'Private Files', exact: true })).toBeVisible(); await adminPage.getByRole('button', { name: 'View Personalization 1', exact: true }).click();
+  await expect(adminPage).toHaveURL(`/admin/orders/${order.id}`); await expect(adminPage.getByRole('heading', { name: 'Customer files & payment screenshots', exact: true })).toBeVisible(); await adminPage.getByRole('button', { name: 'View Personalization 1', exact: true }).click();
   await expect(adminPage.getByRole('dialog').locator('img')).toBeVisible(); await expect.poll(() => adminPage.getByRole('dialog').locator('img').evaluate(img => img.naturalWidth)).toBe(1);
   await adminPage.getByRole('dialog').getByRole('button', { name: /Close/ }).click(); await adminPage.getByRole('button', { name: 'View Proof', exact: true }).click(); await expect(adminPage.getByRole('dialog').locator('img')).toBeVisible();
   expect(errors).toEqual([]); await admin.close();

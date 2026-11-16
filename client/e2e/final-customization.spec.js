@@ -72,7 +72,7 @@ for(const lost of ['none','proof','order','changed-quote','upload','double-click
     return reply({payment});
   });
   await page.goto('/checkout');await page.getByRole('radio',{name:/InstaPay/}).check();
-  await page.getByRole('button',{name:'View transfer details',exact:true}).click();
+  await expect(page.getByRole('button',{name:'View transfer details',exact:true})).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Copy transfer destination'})).toBeVisible();
   await page.getByRole('button',{name:'Copy transfer destination'}).click();expect(await page.evaluate(()=>window.copiedTransferValue)).toBe('01060673073');
   await page.getByRole('button',{name:'Copy transfer amount'}).click();expect(await page.evaluate(()=>window.copiedTransferValue)).toBe('250.00');
@@ -91,7 +91,7 @@ for(const lost of ['none','proof','order','changed-quote','upload','double-click
       const discount=await page.locator('.commerce-discount').boundingBox(),apply=await page.getByRole('button',{name:'Apply code',exact:true}).boundingBox();
       expect(apply.x).toBeGreaterThanOrEqual(discount.x);expect(apply.x+apply.width).toBeLessThanOrEqual(discount.x+discount.width);
       expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-      await expect(page.locator('.checkout-proof-drop>.image-upload-area')).toHaveCSS('min-height','210px');
+      await expect(page.locator('.checkout-proof-drop>.image-source-chooser>.image-upload-area')).toHaveCSS('min-height','110px');
       await page.locator('.checkout-instapay').screenshot({path:info.outputPath(`reference-instapay-${width}.png`)});
     }
     await page.setViewportSize({width:390,height:900});

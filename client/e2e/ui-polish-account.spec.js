@@ -40,7 +40,7 @@ test('failed logout keeps the verified account and confirmation; pending request
 
 test('admin destructive draft replacement uses the same centered confirmation',async({page},info)=>{
   await ownerFixture(page);await page.setViewportSize({width:390,height:844});await page.goto('/admin/engraving');
-  const edits=page.getByRole('button',{name:/^Edit /});await edits.first().click();const create=page.getByRole('button',{name:'Create engraving type',exact:true});await create.click();
+  const edits=page.getByRole('button',{name:/^Edit /});await edits.first().click();const create=page.getByRole('button',{name:'Add new engraving type',exact:true});await create.click();
   const dialog=page.getByRole('dialog',{name:'Discard the open editor draft?'});await expect(dialog).toBeVisible();
   const box=await dialog.boundingBox();expect(Math.abs(box.x+box.width/2-195)).toBeLessThan(2);expect(Math.abs(box.y+box.height/2-422)).toBeLessThan(2);
   await page.screenshot({path:info.outputPath('admin-draft-confirmation.png')});

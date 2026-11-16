@@ -54,7 +54,7 @@ function SettingEditor({ component, onSaved }) {
     mutation.mutate(body);
   }
   return <details className="gb-component-card" data-component-id={component.componentId}><summary><span>{componentLabel(loaded)}<small>{loaded.inventoryMode === 'tracked' ? `${loaded.inventoryQuantity ?? 'Unconfirmed'} in stock` : loaded.inventoryMode === 'made_to_order' ? 'Made by Request' : available ? 'Available' : 'Unavailable'}</small></span><span>{loaded.pricePiastres == null ? 'Add a price' : `EGP ${(loaded.pricePiastres / 100).toFixed(2)}`}<small>Edit settings</small></span></summary><AdminForm className="gb-setting-editor" error={validationError || mutation.error} onSubmit={submit}>
-    <h3>{componentLabel(loaded)}</h3><p className="gb-help">{loaded.componentId} · {loaded.category} · revision {loaded.revision}</p>
+    <h3>{componentLabel(loaded)}</h3><details className="gb-help"><summary>Record details</summary>{loaded.componentId} · {loaded.category} · revision {loaded.revision}</details>
     {loaded.category === 'chocolate' && <p className="gb-help">One unit is the complete pictured retail product. Confirm its identity and unit before approving its name, price, and availability.</p>}
     <fieldset disabled={mutation.isPending}>
       <label>Display name<input name="displayName" maxLength={120} value={name} onChange={event => setName(event.target.value)}/></label>

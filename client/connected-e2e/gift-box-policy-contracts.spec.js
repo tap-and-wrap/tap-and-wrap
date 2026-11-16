@@ -15,12 +15,18 @@ async function restrictNetwork(context) {
 }
 test.beforeEach(async ({ context }) => restrictNetwork(context));
 async function login(page, name = 'admin', destination = path) {
-  destination = destination.replace('/admin/gift-box/fulfillment-policies', '/admin/gift-box?tab=packing');
+  destination = destination.replace('/admin/gift-box/fulfillment-policies', '/admin/gift-box?tab=components');
   await page.goto(`/login?returnTo=${encodeURIComponent(destination)}`);
   await page.getByLabel('Email Address').fill(`${name}@connected.example.test`);
   await page.getByLabel('Password', { exact: true }).fill('isolated-fixture-password');
   await page.getByRole('button', { name: 'Log In', exact: true }).click();
-  if (name === 'admin') await expect(page).toHaveURL(destination);
+  if (name === 'admin') {
+    await expect(page).toHaveURL(destination);
+    await page.getByText('Safe packing & box availability', { exact: true }).click();
+    const policyPanel = page.locator('.gb-policies-page');
+    await expect(policyPanel).toBeVisible();
+    await expect(policyPanel.getByRole('combobox', { name: 'Box', exact: true })).toBeVisible();
+  }
 }
 async function csrf(context) {
   const response = await context.request.get(`${api}/api/v1/auth/csrf`);
@@ -51,10 +57,16 @@ async function fillDraft(page, context, boxId) {
   const rose = catalog.find(component => component.componentId === 'rose-red').displayName;
   await page.getByRole('button', { name: 'Add placement region', exact: true }).click();
   await page.getByLabel('Region ID 1', { exact: true }).fill('connected-inside');
+  const policyEditor = page.locator('article.gb-policy-editor');
+  await expect(policyEditor).toBeVisible();
   for (const [category, componentId] of [['flower', 'rose-red'], ['ribbon', 'ribbon-navy']]) {
-    await chooseOption(page.getByRole('combobox', { name: 'Component category', exact: true }), category);
-    await chooseOption(page.getByRole('combobox', { name: 'Compatible component', exact: true }), componentId);
-    await page.getByRole('button', { name: 'Add compatible component', exact: true }).click();
+    const categoryTrigger = policyEditor.getByRole('combobox', { name: 'Component category', exact: true });
+    await chooseOption(categoryTrigger, category);
+    await expect(categoryTrigger).toHaveAttribute('data-selected-value', category);
+    const componentTrigger = policyEditor.getByRole('combobox', { name: 'Compatible component', exact: true });
+    await chooseOption(componentTrigger, componentId);
+    await expect(componentTrigger).toHaveAttribute('data-selected-value', componentId);
+    await policyEditor.getByRole('button', { name: 'Add compatible component', exact: true }).click();
     if (category === 'flower') {
       await page.getByLabel(`Maximum quantity: ${rose}`, { exact: true }).fill('1');
       await page.getByLabel(`Allow connected-inside (inside) for ${rose}`, { exact: true }).check();

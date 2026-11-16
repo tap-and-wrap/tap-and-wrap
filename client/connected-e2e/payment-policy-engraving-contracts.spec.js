@@ -68,7 +68,7 @@ for(const family of ['normal','photos','text','required','gift','standalone','mi
       expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
       await page.screenshot({path:info.outputPath(`checkout-${width}.png`),fullPage:true});
     }
-    if(method==='instapay'){await expect(page.getByRole('button',{name:'Place Order',exact:true})).toBeDisabled();await page.getByRole('button',{name:'View transfer details',exact:true}).click();await page.getByLabel(/^Transfer sender name/).fill('Synthetic Policy Sender');await choose(page,/InstaPay: Choose screenshot/,photo);}
+    if(method==='instapay'){await expect(page.getByRole('button',{name:'Place Order',exact:true})).toBeDisabled();await expect(page.getByRole('button',{name:'View transfer details',exact:true})).toHaveCount(0);await page.getByLabel(/^Transfer sender name/).fill('Synthetic Policy Sender');await choose(page,/InstaPay: Choose screenshot/,photo);}
     await expect(page.getByRole('button',{name:'Place Order',exact:true})).toBeEnabled();
     const response=page.waitForResponse(r=>r.url().endsWith('/commerce/orders')&&r.request().method()==='POST');
     await page.getByRole('button',{name:'Place Order',exact:true}).click();

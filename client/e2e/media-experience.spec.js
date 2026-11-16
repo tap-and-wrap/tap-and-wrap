@@ -63,7 +63,7 @@ test('unsupported HEIC, empty and oversized selections preserve a valid draft an
 test('a broken local preview can be replaced with a valid image using the same filename', async ({ page }) => {
   const fixture = await personalize(page);
   await chooseImageFiles(page, page, 'Your photo', { name: 'same.png', mimeType: 'image/png', buffer: Buffer.from('not a valid image') });
-  await expect(page.getByRole('alert')).toContainText('unsupported format');
+  await expect(page.getByRole('alert')).toContainText('The file contents are not a supported image');
   await chooseImageFiles(page, page, 'Your photo', isolatedImageFile('same.png'));
   const preview = page.getByAltText('Selected your photo 1');
   await expect(preview).toBeVisible(); await expect.poll(() => preview.evaluate(img => img.naturalWidth)).toBeGreaterThan(0);

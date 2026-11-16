@@ -1,5 +1,6 @@
 import test, { before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { once } from 'node:events';
 import bcrypt from 'bcryptjs';
 import { app } from '../src/app.js';
@@ -183,7 +184,17 @@ test('durable recovery messages render through mocked Gmail and erase queued enc
   assert.equal((await runNotificationBatch()).sent, 1);
   assert.equal(messages.length, 1);
   assert.ok(messages[0].text.includes(`#token=${token}`));
-  assert.equal(Object.hasOwn(messages[0], 'attachments'), false);
+  assert.equal(messages[0].attachments.length, 1);
+  const logo = messages[0].attachments[0];
+  assert.equal(logo.filename, 'tap-wrap-email-logo.png');
+  assert.equal(logo.contentType, 'image/png');
+  assert.equal(logo.contentDisposition, 'inline');
+  assert.equal(logo.cid, 'tapwrap-brand-logo');
+  assert.equal(messages[0].disableFileAccess, true);
+  assert.equal(messages[0].disableUrlAccess, true);
+  assert.equal(Object.hasOwn(logo, 'path'), false);
+  assert.deepEqual(logo.content, readFileSync(new URL('../src/email/assets/tap-wrap-email-logo.png', import.meta.url)));
+  assert.match(messages[0].html, /src="cid:tapwrap-brand-logo"/);
   assert.equal((await NotificationEvent.findOne().select('+sealedActionToken')).sealedActionToken, undefined);
   assert.equal((await runNotificationBatch()).claimed, 0);
   provider.close();

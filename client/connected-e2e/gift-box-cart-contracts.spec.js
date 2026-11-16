@@ -30,8 +30,7 @@ async function login(page, account) {
   await page.getByLabel('Email Address').fill(`${account}@connected.example.test`);
   await page.getByLabel('Password', { exact: true }).fill('isolated-fixture-password');
   await page.getByRole('button', { name: 'Log In', exact: true }).click();
-  await expect(page).toHaveURL('/my-orders');
-  await page.goto('/cart');
+  await expect(page).toHaveURL('/cart');
 }
 
 test('real mixed cart persists one configured gift, updates quantities and keeps checkout closed at mobile and desktop', async ({ page, context, request }, info) => {

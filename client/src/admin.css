@@ -188,3 +188,12 @@
 
 /* Code-managed owner handoff */
 .owner-guide{max-width:72ch;padding-left:24px;line-height:1.8}.owner-guide li{padding:8px 0}
+
+.admin-order-overview{display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,.8fr);gap:24px;background:var(--tw-surface);border:1px solid var(--tw-border);border-radius:14px;padding:24px;margin-bottom:24px}
+.admin-order-overview h2{margin:6px 0 12px}.admin-order-overview p{line-height:1.6}.admin-order-overview nav{display:flex;flex-wrap:wrap;gap:10px;align-content:center}.admin-order-overview nav a{white-space:normal}
+#order-payments,#order-progress,#order-customer,#order-files{scroll-margin-top:calc(var(--site-header-height,84px) + 20px)}
+.admin-content details.commerce-editor>summary{cursor:pointer;min-height:44px;font-weight:600}
+.studio-admin-editor:focus{outline:2px solid var(--tw-border);outline-offset:5px}
+@media(max-width:760px){.admin-order-overview{grid-template-columns:1fr;padding:18px}.admin-order-overview nav a{width:100%}}
+
+.owner-box-operations>details{margin-top:20px;border:1px solid var(--tw-border);border-radius:12px;padding:0 18px;background:var(--tw-surface)}.owner-box-operations>details>summary{cursor:pointer;min-height:56px;display:flex;align-items:center;font-weight:600}

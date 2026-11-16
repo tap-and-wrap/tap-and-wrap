@@ -33,6 +33,8 @@ test('every order and account event has branded HTML and plain text without priv
     const message = renderEmailTemplate({ ...event, event: kind }, { actionUrl });
     assert.ok(message.text.includes('Tap & Wrap'));
     assert.ok(message.html.includes('#795045'));
+    assert.match(message.html, /tap-wrap-email-logo\.png/);
+    assert.match(message.html, /width="180" height="60"/);
     assert.ok(message.subject.length > 5);
     for (const secret of ['PRIVATE_PROOF', 'PRIVATE_ARTWORK', 'PRIVATE_PASSWORD']) assert.equal(`${message.text}${message.html}`.includes(secret), false);
     assert.equal(message.html.includes('<script'), false);
@@ -73,7 +75,14 @@ test('mocked SMTP uses the authenticated sender, strict TLS, compact private-fre
   assert.equal(options.logger, false);
   assert.deepEqual(messages[0].from, { name: 'Tap & Wrap', address: settings.EMAIL_USER });
   assert.deepEqual(messages[0].envelope, { from: settings.EMAIL_USER, to: ['safe@example.test'] });
-  assert.equal(Object.hasOwn(messages[0], 'attachments'), false);
+  assert.equal(messages[0].attachments.length, 1);
+  assert.equal(messages[0].attachments[0].cid, 'tapwrap-brand-logo');
+  assert.equal(messages[0].attachments[0].contentType, 'image/png');
+  assert.equal(messages[0].attachments[0].contentDisposition, 'inline');
+  assert.equal(messages[0].attachments[0].content.subarray(0,8).toString('hex'), '89504e470d0a1a0a');
+  assert.ok(messages[0].attachments[0].content.length < 300000);
+  assert.match(messages[0].html, /src="cid:tapwrap-brand-logo"/);
+  for (const attachment of messages[0].attachments) assert.equal('path' in attachment, false);
   assert.equal(JSON.stringify(messages[0]).includes('abcdefghijklmnop'), false);
   provider.close(); assert.equal(closed, true);
 });

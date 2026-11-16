@@ -1,3 +1,4 @@
+import useImageSelectionReady from '../components/useImageSelectionReady.js';
 import LoadingState from '../components/LoadingState.jsx';
 import { toast } from 'sonner';
 import { useEffect, useRef, useState } from 'react';
@@ -16,6 +17,8 @@ import { ChevronDown, X } from 'lucide-react';
 
 const steps = ['Your Item', 'Design Your Engraving', 'Review Your Engraving'];
 export default function StandaloneVisualBuilder({ saved, editId }) {
+  const pageRef = useRef(null);
+  const imagesReady = useImageSelectionReady(pageRef);
   const state = useStandaloneVisualBuilder(saved, editId);
   const { draft, setDraft, ownerKey, pending, options, types, type, hydrating, error, setError, progress, quote, uncertain, recovering, update, selectPhotos, validate, review, add, check, editorChange, attempt } = state;
   const [, setEditorError] = useState('');
@@ -34,7 +37,7 @@ export default function StandaloneVisualBuilder({ saved, editId }) {
   if (options.isPending || hydrating) return <main className="commerce-page"><LoadingState label="Opening your engraving studio" kind="workspace"/></main>;
   if (options.error) return <main className="commerce-page"><h1>Laser Engraving</h1><p role="alert">{commerceError(options.error)}</p><button onClick={() => options.refetch()}>Try again</button></main>;
   if (!options.data.enabled) return <ServiceRequestPage service="laser_engraving"/>;
-  return <main className="standalone-visual-page">
+  return <main ref={pageRef} className="standalone-visual-page">
     <PageMetadata title="Design Your Engraving | Tap & Wrap" description="Create an engraving on your own item." pathname="/customize/laser-engraving" indexable={false}/>
     <header className="sv-heading"><p className="eyebrow">Made personal, by you</p><h1>Your piece. Your story.</h1><p>Create something meaningful on an item you already own.</p></header>
     <div ref={stepStart} className="sv-step-start" tabIndex={-1} aria-label={steps[draft.step]}><EngravingStepper steps={steps} step={draft.step} disabled={pending || uncertain} onNavigate={index => { setError(''); setDraft(previous => ({ ...previous, step: index })); }}/></div>
@@ -52,7 +55,7 @@ export default function StandaloneVisualBuilder({ saved, editId }) {
       {draft.step === 2 && <div className="sv-review-layout"><div><h2>Review Your Engraving</h2><VisualDesignPreview design={draft.visual.design} assets={draft.visual.assets} ownerScope={ownerKey} label="Your complete engraving design"/></div><section className="sv-review-details"><h3>{type?.name}, made yours</h3><dl>{draft.visual.design.layers.map(layer => <div key={layer.id}><dt>{layer.type === 'text' ? 'Text' : 'Image artwork'}</dt><dd>{layer.type === 'text' ? <><bdi>{layer.text}</bdi><br/>{FONT_REGISTRY.find(font => font.id === layer.fontId)?.language === 'ar' ? 'Arabic lettering' : 'English lettering'} · {layer.color}</> : 'Your original uploaded artwork'}</dd></div>)}</dl>{draft.description && <p>{draft.description}</p>}
         {draft.visual.itemPhotos.length > 0 && <div className="sv-photo-strip">{draft.visual.itemPhotos.map((id, index) => draft.visual.assets[id]?.blob && <LocalPhoto key={id} file={draft.visual.assets[id].blob} alt={`Overall item photo ${index + 1}`}/>)}</div>}
         <button type="button" onClick={() => setDraft(previous => ({ ...previous, step: 1 }))}>Edit Design</button></section></div>}
-      <div className="sv-footer"><div className="sv-total"><span>Your total</span><strong>{type ? money(quote?.unitPricePiastres ?? type.pricePiastres) : 'Choose your item'}</strong></div><div className="sv-navigation">{draft.step > 0 && <button type="button" className="button button-secondary" onClick={() => setDraft(previous => ({ ...previous, step: previous.step - 1 }))}>Back</button>}{draft.step === 0 ? <button type="button" className="button button-primary" onClick={() => { const invalid = validate(); if (invalid) setError(invalid); else update({ step: 1 }); }}>Design Your Engraving</button> : draft.step === 1 ? <button type="button" className="button button-primary" onClick={review}>Review Your Engraving</button> : <button type="button" className="button button-primary" disabled={!quote} onClick={add}>{pending ? 'Adding securely...' : 'Add to Cart'}</button>}</div></div>
+      <div className="sv-footer"><div className="sv-total"><span>Your total</span><strong>{type ? money(quote?.unitPricePiastres ?? type.pricePiastres) : 'Choose your item'}</strong></div><div className="sv-navigation">{draft.step > 0 && <button type="button" className="button button-secondary" onClick={() => setDraft(previous => ({ ...previous, step: previous.step - 1 }))}>Back</button>}{draft.step === 0 ? <button type="button" className="button button-primary" onClick={() => { const invalid = validate(); if (invalid) setError(invalid); else update({ step: 1 }); }}>Design Your Engraving</button> : draft.step === 1 ? <button type="button" className="button button-primary" onClick={review}>Review Your Engraving</button> : <button type="button" className="button button-primary" disabled={!quote || !imagesReady} onClick={()=>{if(imagesReady) add();}}>{pending ? 'Adding securely...' : 'Add to Cart'}</button>}</div></div>
     </fieldset>
     {progress && <p role="status">{progress}</p>}
   </main>;
