@@ -50,7 +50,7 @@ test('invalid files and failed upload cannot save or replace the original primar
   await page.goto(`/admin/products/${adminProduct._id}/edit`);
   const gallery = page.getByRole('region', { name: 'Product images', exact: true });
   await chooseImageFiles(page, gallery, 'Add images', { name: 'bad.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg/>') });
-  await expect(gallery.getByRole('alert')).toContainText('JPEG, PNG or WebP');
+  await expect(gallery.getByRole('alert')).toContainText('JPEG/JPG, PNG or WebP');
   storage.fail(true);
   await chooseImageFiles(page, gallery, 'Replace image 1', file('replacement.png'));
   await gallery.getByRole('button', { name: 'Upload selected images' }).click();

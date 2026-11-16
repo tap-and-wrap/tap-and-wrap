@@ -2,11 +2,25 @@ import { test, expect } from '@playwright/test';
 import { mockCommerce,commerceProduct } from './commerce-fixtures.js';
 import { mockCatalog } from './catalog-fixtures.js';
 
+async function holdToast(page, toast) {
+  await expect(toast).toBeVisible();
+  const box=await toast.boundingBox();
+  expect(box).not.toBeNull();
+  const x=box.x+box.width/2,y=box.y+box.height/2;
+  await page.mouse.move(x,y);
+  const hit=await page.evaluate(({x,y})=>{
+    const target=document.elementFromPoint(x,y);
+    return {sonner:Boolean(target?.closest('[data-sonner-toast]')),tag:target?.tagName,className:target?.className,removed:document.querySelector('[data-sonner-toast]')?.getAttribute('data-removed')};
+  },{x,y});
+  expect(hit.sonner,JSON.stringify(hit)).toBe(true);
+  await expect(toast).toHaveCSS('opacity','1');
+}
+
 for(const width of [320,390,768,1024,1440]) test(`toast stays centered below the measured storefront header at ${width}px`,async({page},info)=>{
+  await page.emulateMedia({reducedMotion:'reduce'});
   await mockCommerce(page);await page.setViewportSize({width,height:900});await page.goto('/products/'+commerceProduct.slug);
   await page.getByRole('button',{name:'Add to Cart',exact:true}).first().click();
-  const toast=page.locator('[data-sonner-toast]').first();await expect(toast).toContainText('Added to your cart.');
-  await toast.hover();await expect.poll(()=>toast.evaluate(n=>Number(getComputedStyle(n).opacity))).toBe(1);
+  const toast=page.locator('[data-sonner-toast]').filter({hasText:'Added to your cart.'});await holdToast(page,toast);
   const box=await toast.boundingBox(),header=await page.locator('.site-header-stack').boundingBox();
   expect(box.y).toBeGreaterThanOrEqual(header.y+header.height+10);expect(Math.abs(box.x+box.width/2-width/2)).toBeLessThan(2);
   expect(await toast.evaluate(n=>getComputedStyle(n).backgroundColor)).toBe('rgb(255, 252, 251)');
@@ -17,9 +31,9 @@ for(const width of [320,390,768,1024,1440]) test(`toast stays centered below the
 });
 
 test('toast types, announcements, safe offsets and reduced motion remain consistent',async({page},info)=>{
-  await mockCatalog(page);await page.goto('/e2e/controls.html');await page.emulateMedia({reducedMotion:'reduce'});
+  await page.emulateMedia({reducedMotion:'reduce'});await mockCatalog(page);await page.goto('/e2e/controls.html');
   for(const [name,type] of [['Show error toast','error'],['Show info toast','info'],['Show warning toast','warning']]){
-    await page.getByRole('button',{name,exact:true}).click();const toast=page.locator(`[data-sonner-toast][data-type=${type}]`);await expect(toast).toBeVisible();await toast.hover();
+    await page.getByRole('button',{name,exact:true}).click();const toast=page.locator(`[data-sonner-toast][data-type=${type}]`);await holdToast(page,toast);
     await expect(toast.locator('[data-icon] svg')).toBeVisible();
     expect(await toast.evaluate(n=>getComputedStyle(n).backgroundColor)).toBe('rgb(255, 252, 251)');
     expect(await toast.evaluate(n=>getComputedStyle(n).transitionDuration)).toBe('0s');
@@ -29,5 +43,5 @@ test('toast types, announcements, safe offsets and reduced motion remain consist
   }
   await page.evaluate(()=>document.documentElement.style.setProperty('--site-header-height','180px'));
   await page.getByRole('button',{name:'Show info toast',exact:true}).click();
-  const toast=page.locator('[data-sonner-toast][data-type=info]');await toast.hover();await expect.poll(()=>toast.evaluate(n=>Math.round(n.getBoundingClientRect().y))).toBe(192);
+  const toast=page.locator('[data-sonner-toast][data-type=info]');await holdToast(page,toast);await expect.poll(()=>toast.evaluate(n=>Math.round(n.getBoundingClientRect().y))).toBe(192);
 });

@@ -55,16 +55,16 @@ for (const role of [null, 'customer', 'admin']) for (const width of [320, 360, 3
         await expect(drawer.getByRole('link', { name: 'Standalone Engraving', exact: true })).toHaveAttribute('href', '/admin/engraving');
         await drawer.screenshot({ path: info.outputPath('admin-drawer.png'), animations: 'disabled' });
         await page.keyboard.press('Escape'); await expect(drawer).toHaveCount(0);
-      } else await expect(page.locator('.desktop-navigation > ul > li')).toHaveCount(8);
+      } else await expect(page.locator('.desktop-navigation > ul > li')).toHaveCount(7);
     }
     expect(errors).toEqual([]);
   });
 }
 
-test('mobile menu account scrolling keeps all eight admin sections accessible with reduced motion',async({page})=>{
+test('mobile menu account scrolling keeps all seven admin sections accessible with reduced motion',async({page})=>{
   await mockCatalog(page,{role:'admin'});await page.emulateMedia({reducedMotion:'reduce'});await page.setViewportSize({width:390,height:390});await page.goto('/admin/categories');
   await page.getByRole('button',{name:'Open menu',exact:true}).click();const drawer=page.getByRole('dialog',{name:'Administration menu'});
-  await expect(drawer.locator('.drawer-nav > ul > li')).toHaveCount(8);const account=drawer.getByRole('link',{name:'Dashboard',exact:true});await account.scrollIntoViewIfNeeded();await expect(account).toBeInViewport();
+  await expect(drawer.locator('.drawer-nav > ul > li')).toHaveCount(7);await expect(drawer.getByRole('link',{name:'Payment',exact:true})).toHaveCount(0);const account=drawer.getByRole('link',{name:'Dashboard',exact:true});await account.scrollIntoViewIfNeeded();await expect(account).toBeInViewport();
   expect(await drawer.locator('.drawer-nav').evaluate(n=>n.scrollTop)).toBeGreaterThan(0);
   expect(await drawer.evaluate(n=>n.getAnimations({subtree:true}).length)).toBe(0);
   await page.keyboard.press('Escape');await expect(drawer).toHaveCount(0);await expect(page.getByRole('button',{name:'Open menu',exact:true})).toBeFocused();

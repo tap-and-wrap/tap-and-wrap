@@ -51,6 +51,7 @@ test('real customer/order pages never render admin notes and reject another cust
   await login(page, 'alice');
   await page.getByRole('link', { name: /234567/ }).click();
   await expect(page.getByRole('heading', { name: 'Order #234567' })).toBeVisible();
+  await page.getByText('Order updates', { exact: true }).click();
   await expect(page.getByText('Approved customer explanation')).toBeVisible();
   await expect(page.getByText(/PRIVATE_.*OPERATIONAL_NOTE/)).toHaveCount(0);
   const alicePath = new URL(page.url()).pathname;
@@ -64,6 +65,6 @@ test('real customer/order pages never render admin notes and reject another cust
   const orderId = alicePath.split('/').at(-1);
   expect((await context.request.get(`${api}/api/v1/admin/commerce/orders/${orderId}`)).status()).toBe(403);
   await login(page, 'admin', `/admin/commerce/orders/${orderId}`);
-  await expect(page.getByRole('heading', { name: 'Private operational history' })).toBeVisible();
+  await page.getByText('Private notes & audit history', { exact: true }).click();
   await expect(page.getByText('PRIVATE_OPERATIONAL_NOTE', { exact: true })).toBeVisible();
 });

@@ -360,7 +360,10 @@
  .gb-shopping .gb-preview{position:static}.gb-shopping .gb-free-preview{max-width:380px;width:100%}
  .gb-progress{margin-bottom:20px}.gb-step-name{font-size:.76rem;max-width:92px}.gb-progress li:after{margin:0 6px}
  .gb-shopping .gb-options{grid-template-columns:repeat(3,minmax(0,1fr))}
- .gb-shopping:not(.gb-final-review) .gb-purchase-bar{position:sticky;bottom:0;z-index:90;background:var(--tw-bg);padding:0 0 max(12px,env(safe-area-inset-bottom));border-top:1px solid var(--tw-border);margin-top:16px}
+ .gb-shopping:not(.gb-final-review) .gb-purchase-bar{position:sticky;bottom:0;z-index:90;isolation:isolate;background:var(--tw-bg);padding:0 0 max(12px,env(safe-area-inset-bottom));margin-top:16px}
+ /* Selected box shadows extend 1px beyond the grid. Paint past those edges
+    without changing CTA geometry, clipping focus rings or hiding selection. */
+ .gb-shopping:not(.gb-final-review) .gb-purchase-bar:before{content:'';position:absolute;inset:-1px -3px 0;background:var(--tw-bg);border-top:1px solid var(--tw-border);z-index:-1;pointer-events:none}
  /* Editing controls stay clear of the keyboard and the purchase overlay. */
  .gb-shopping .gb-choices:has(.gb-personal-section :focus) .gb-purchase-bar{position:static}
  .gb-shopping .gb-live-total{padding:12px 0}

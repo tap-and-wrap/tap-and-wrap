@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { ownerFixture, ownerOrders } from './owner-dashboard-fixtures.js';
 import { mockCommerce } from './commerce-fixtures.js';
 
-const destinations = [['/admin', 'Dashboard'], ['/admin/products', 'Products'], ['/admin/categories', 'Categories'], ['/admin/orders', 'Orders'], ['/admin/customization', 'Customization'], ['/admin/gift-box', 'Gift Box'], ['/admin/engraving', 'Standalone engraving'], ['/admin/discounts', 'Discounts'], ['/admin/payment', 'Payment'], ['/admin/customers', 'Customers'], ['/admin/analytics', 'Analytics']];
+const destinations = [['/admin', 'Dashboard'], ['/admin/products', 'Products'], ['/admin/categories', 'Categories'], ['/admin/orders', 'Orders'], ['/admin/customization', 'Customization'], ['/admin/gift-box', 'Gift Box'], ['/admin/engraving', 'Standalone engraving'], ['/admin/discounts', 'Discounts'], ['/admin/payment', 'Orders'], ['/admin/customers', 'Customers'], ['/admin/analytics', 'Analytics']];
 for (const width of [320, 390, 768, 1024, 1440]) test(`owner workspaces render without overflow at ${width}px`, async ({ page }, info) => {
   test.setTimeout(180000);
   const errors = []; page.on('pageerror', error => errors.push(error.message));
@@ -24,15 +24,16 @@ for (const width of [320, 390, 768, 1024, 1440]) test(`owner workspaces render w
   expect(errors).toEqual([]);
 });
 
-test('eight primary destinations, drawer containment, customization and storefront return', async ({ page }, info) => {
+test('seven primary destinations, drawer containment, customization and storefront return', async ({ page }, info) => {
   await ownerFixture(page); await page.goto('/admin');
   const desktop = page.getByRole('navigation', { name: 'Administration', exact: true });
-  await expect(desktop.locator(':scope > ul > li')).toHaveCount(8);
+  await expect(desktop.locator(':scope > ul > li')).toHaveCount(7);
+  await expect(desktop.getByRole('link',{name:'Payment',exact:true})).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Home — storefront' })).toHaveAttribute('href', '/');
   await page.setViewportSize({ width: 390, height: 900 });
   const opener = page.getByRole('button', { name: 'Open menu', exact: true }); await opener.click();
   const dialog = page.getByRole('dialog', { name: 'Administration menu' });
-  await expect(dialog.locator('nav > ul > li')).toHaveCount(8);
+  await expect(dialog.locator('nav > ul > li')).toHaveCount(7);
   await dialog.getByText('Customization', { exact: true }).click();
   await expect(dialog.getByRole('link', { name: 'Gift Box', exact: true })).toBeVisible();
   await expect(dialog.getByRole('link', { name: 'Standalone Engraving', exact: true })).toBeVisible();
@@ -75,7 +76,7 @@ test('shared select supports keyboard, URL filters and escape restoration', asyn
 
 test('legacy bookmarks redirect safely and customers never receive the admin workspace', async ({ page }) => {
   await ownerFixture(page);
-  for (const [old, expected] of [['/admin/website/overview', '/admin'], ['/admin/website/categories', '/admin/categories'], ['/admin/commerce/bundles', '/admin/discounts'], ['/admin/website/reviews', '/admin'], ['/admin/notifications', '/admin'], ['/admin/commerce/templates', '/admin/customization'], ['/admin/gift-box/fulfillment-policies', '/admin/gift-box?tab=packing'], [`/admin/commerce/orders/${ownerOrders[0].id}`, `/admin/orders/${ownerOrders[0].id}`]]) { await page.goto(old); await expect(page).toHaveURL(`http://127.0.0.1:5191${expected}`); }
+  for (const [old, expected] of [['/admin/website/overview', '/admin'], ['/admin/website/categories', '/admin/categories'], ['/admin/commerce/bundles', '/admin/discounts'], ['/admin/website/reviews', '/admin'], ['/admin/notifications', '/admin'], ['/admin/commerce/templates', '/admin/customization'], ['/admin/gift-box/fulfillment-policies', '/admin/gift-box?tab=components'], [`/admin/commerce/orders/${ownerOrders[0].id}`, `/admin/orders/${ownerOrders[0].id}`]]) { await page.goto(old); await expect(page).toHaveURL(`http://127.0.0.1:5191${expected}`); }
   await page.unrouteAll({ behavior: 'wait' }); await mockCommerce(page, { role: 'customer' });
   await page.goto('/admin'); await expect(page.getByRole('heading', { name: 'Access denied' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Administration', exact: true })).toHaveCount(0);

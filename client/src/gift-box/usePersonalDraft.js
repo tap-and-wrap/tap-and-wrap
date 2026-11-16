@@ -37,8 +37,8 @@ export function usePersonalDraft({ freePlacement = false, photoAspectRatios = fa
   function replacePhoto(id, file) {
     const old = photosRef.current.find(photo=>photo.id===id);if (!old || !file) return;
     const others = photosRef.current.filter(photo=>photo.id!==id), problem = validateLocalPhotoBatch(others.map(p=>p.file),[file]);
-    if (problem) {setNotice(problem);return;}
-    if (others.some(photo=>photo.fileKey===`${file.name}\u0000${file.size}\u0000${file.lastModified}`)) {setNotice('Each photo can only be added once.');return;}
+    if (problem) {setNotice(problem);return {error:problem};}
+    if (others.some(photo=>photo.fileKey===`${file.name}\u0000${file.size}\u0000${file.lastModified}`)) {setNotice('Each photo can only be added once.');return {error:'Each photo can only be added once.'};}
     const replacement=createPhoto(file,id);objectUrls.current.delete(old.url);URL.revokeObjectURL(old.url);
     photosRef.current=photosRef.current.map(photo=>photo.id===id?replacement:photo);setPhotos(photosRef.current);setNotice('');
   }
@@ -54,12 +54,12 @@ export function usePersonalDraft({ freePlacement = false, photoAspectRatios = fa
     });
     if (!candidates.length) return;
     const problem = validateLocalPhotoBatch(photosRef.current.map(photo => photo.file), candidates);
-    if (problem) { setNotice(problem); return; }
+    if (problem) { setNotice(problem); return {error:problem}; }
     const existing = new Set(photosRef.current.map(photo => photo.fileKey));
     const seen = new Set();
     for (const file of candidates) {
       const key = `${file.name}\u0000${file.size}\u0000${file.lastModified}`;
-      if (existing.has(key) || seen.has(key)) { setNotice('Each photo can only be added once.'); return; }
+      if (existing.has(key) || seen.has(key)) { setNotice('Each photo can only be added once.'); return {error:'Each photo can only be added once.'}; }
       seen.add(key);
     }
     const additions = candidates.map(file => createPhoto(file));

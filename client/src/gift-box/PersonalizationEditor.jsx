@@ -1,3 +1,4 @@
+import { GIFT_BOX_PRIVATE_UPLOAD_BATCH_LIMIT } from './private-photo-upload.mjs';
 import { toast } from 'sonner';
 import ConfirmationDialog from '../components/ConfirmationDialog.jsx';
 import StickerWorkspace from './StickerWorkspace.jsx';
@@ -6,7 +7,7 @@ import Select from '../components/form/Select.jsx';
 import { useState, useId, useEffect } from 'react';
 import { Trash2, X } from 'lucide-react';
 import ImageSourceChooser from '../components/ImageSourceChooser.jsx';
-import { MAX_GIFT_PHOTOS, MAX_GIFT_PHOTO_BYTES, MAX_GIFT_PHOTO_TOTAL_BYTES } from '../../../shared/gift-box/lettering-styles.mjs';
+import { MAX_GIFT_PHOTO_BYTES, MAX_GIFT_PHOTO_TOTAL_BYTES } from '../../../shared/gift-box/lettering-styles.mjs';
 import { STICKER_STYLES, stickerStyle } from '../../../shared/gift-box/sticker-styles.mjs';
 import { ENGRAVING_COLORS, getEngravingColor } from '../../../shared/gift-box/lettering-styles.mjs';
 import { eligibleGiftBoxOptions } from './personalization-submission.mjs';
@@ -24,7 +25,7 @@ export default function PersonalizationEditor({ personal, boxId, options, printS
   const availableStyles = selectedOption ? STICKER_STYLES.filter(style => selectedOption.approvedStyleIds?.includes(style.id)) : STICKER_STYLES;
   return <div className="gb-personal-editor">
     <section className="gb-personal-section" aria-labelledby="gb-photos-heading"><header><div><p className="eyebrow">Optional</p><h3 id="gb-photos-heading">Add your photos</h3></div><small>{prints[0] ? `${money(prints[0].pricePiastres)} each` : 'Currently unavailable'}</small></header>
-      <div className="gb-personal-body"><ImageSourceChooser onError={setPhotoError} label="Choose your photos" inputLabel="Choose your photos" multiple maxBytes={MAX_GIFT_PHOTO_BYTES} maxFiles={MAX_GIFT_PHOTOS-personal.photos.length} maxTotalBytes={MAX_GIFT_PHOTO_TOTAL_BYTES-personal.photos.reduce((n,p)=>n+p.file.size,0)} disabled={personal.photos.length>=MAX_GIFT_PHOTOS} onSelect={personal.addPhotos}/>
+      <div className="gb-personal-body"><ImageSourceChooser onError={setPhotoError} label="Choose your photos" inputLabel="Choose your photos" multiple maxBytes={MAX_GIFT_PHOTO_BYTES} maxFiles={Math.max(1,GIFT_BOX_PRIVATE_UPLOAD_BATCH_LIMIT-personal.photos.length)} maxTotalBytes={MAX_GIFT_PHOTO_TOTAL_BYTES-personal.photos.reduce((n,p)=>n+p.file.size,0)} disabled={personal.photos.length>=GIFT_BOX_PRIVATE_UPLOAD_BATCH_LIMIT} onSelect={personal.addPhotos}/>
       {personal.photos.length > 0 && <p role="status">{personal.photos.length} {personal.photos.length === 1 ? 'photo selected' : 'photos selected'}</p>}<div className="gb-photo-thumbnails">{personal.photos.map((photo,index) => <div key={photo.id}><img src={photo.url} alt={`Photo ${index + 1}`}/><button className="gb-photo-remove" type="button" aria-label={`Remove photo ${index + 1}`} onClick={() => onRemovePhoto(photo.id, `Photo ${index + 1}`)}><X size={16}/></button>
         <ImageSourceChooser onError={setPhotoError} label="Replace photo" context={`Photo ${index+1}`} maxBytes={MAX_GIFT_PHOTO_BYTES} onSelect={files=>personal.replacePhoto(photo.id,files[0])}/>
         {prints.length > 1 && <label>Print type<Select value={printSelections[photo.id] || ''} onChange={event => onPrintSelection(photo.id,event.target.value)}><option value="">Choose print</option>{prints.map(option => <option key={option.optionId} value={option.optionId}>{option.displayName} - {money(option.pricePiastres)}</option>)}</Select></label>}

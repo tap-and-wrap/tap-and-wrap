@@ -16,10 +16,9 @@ async function login(page, account, destination) {
   await page.getByLabel('Email Address').fill(`${account}@connected.example.test`);
   await page.getByLabel('Password', { exact: true }).fill('isolated-fixture-password');
   await page.getByRole('button', { name: 'Log In', exact: true }).click();
-  // Customer login intentionally uses the account home; admin may restore an
-  // authorized private destination. Read the owned order only after verification.
-  await expect(page).toHaveURL(account === 'admin' ? destination : '/my-orders');
-  if (account !== 'admin') await page.goto(destination);
+  // The account-specific returnTo route is restored only after verified login.
+  // Subsequent response and privacy assertions still verify real ownership.
+  await expect(page).toHaveURL(destination);
 }
 
 test('real internally-created mixed order is readable by its owner, uses immutable gift amounts and keeps arrangement details private', async ({ page, context, request }, info) => {

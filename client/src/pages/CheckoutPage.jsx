@@ -31,7 +31,6 @@ export default function CheckoutPage() {
   const session = useSession();
   const queryClient = useQueryClient();
   const [restarting, setRestarting] = useState(false);
-  const [restartTransfer, setRestartTransfer] = useState(false);
   const restartScope = useRef(null);
   const checkoutOwner = checkoutOwnerKey ? `checkout:${checkoutOwnerKey}` : session.ownerKey;
   const [customer, setCustomer] = useState({ name: '', email: '', phone: '', governorate: '', addressVersion: 'delivery-address-v3', city: '', street: '', building: '', floor: '', apartment: '', notes: '' });
@@ -58,7 +57,7 @@ export default function CheckoutPage() {
   useEffect(() => {
     submissionKey.current = null; requestSnapshot.current = null;
     setCustomer({ name: session.user?.name || '', email: session.user?.email || '', phone: session.user?.phone || '', governorate: '', addressVersion: 'delivery-address-v3', city: '', street: '', building: '', floor: '', apartment: '', notes: '' });
-    setRestartTransfer(false); setCheckoutPayment(null); setPaymentMethod('cod'); methodChosen.current = false;
+    setCheckoutPayment(null); setPaymentMethod('cod'); methodChosen.current = false;
     setFieldErrors({}); setFieldError(''); setRecoveryMessage('');
     setUncertainOwner(null);
   }, [session.ownerKey, checkoutOwner, session.user?.name, session.user?.email, session.user?.phone]);
@@ -133,7 +132,7 @@ export default function CheckoutPage() {
       // Persist the new opaque key immediately so refresh resumes this attempt.
       persistCheckoutSession(checkoutOwner);
       submissionKey.current = null; requestSnapshot.current = null;
-      setCheckoutPayment(null); setRestartTransfer(true); setKeyRevision(value => value + 1);
+      setCheckoutPayment(null); setKeyRevision(value => value + 1);
       methodChosen.current = true;
     } finally { if (generation === authGeneration()) setRestarting(false); }
   }
@@ -191,13 +190,13 @@ export default function CheckoutPage() {
         <div className="commerce-field"><label htmlFor={`${prefix}-apartment`}>Apartment</label><input {...control('apartment')} maxLength={50}/><FieldError id={`${prefix}-apartment`}>{fieldErrors.apartment}</FieldError></div>
         <details className="commerce-order-notes" open={fieldErrors.notes ? true : undefined}><summary>Add delivery notes<ChevronDown size={18} aria-hidden="true"/></summary><div className="commerce-field"><label htmlFor={`${prefix}-notes`}>Order notes</label><textarea {...control('notes')} maxLength={1000} rows={2}/><FieldError id={`${prefix}-notes`}>{fieldErrors.notes}</FieldError></div></details>
       </div><p className="commerce-delivery-policy">{engravingOnly ? 'Item handoff and return arrangements are confirmed separately with the store.' : <>Delivery is calculated separately. We&apos;ll contact you on WhatsApp to confirm the fee.<small>Initial contact within 12 hours.</small></>}</p><fieldset className="commerce-payment"><legend>Payment</legend><label><input type="radio" name="payment" value="cod" disabled={submit.isPending} checked={paymentMethod === 'cod'} onChange={() => { methodChosen.current = true; setPaymentMethod('cod'); }} />{engravingOnly ? 'COD on agreed return / handoff' : 'Cash on Delivery'}</label><label><input type="radio" name="payment" value="instapay" checked={paymentMethod === 'instapay'} onChange={() => { methodChosen.current = true; setPaymentMethod('instapay'); }} />{engravingOnly ? 'InstaPay' : hasEngraving || cart.items.some(item => item.kind === 'gift_box_v2') ? 'InstaPay' : 'InstaPay \u2014 full payment'}</label>
-        <div hidden={paymentMethod !== 'instapay'}><CheckoutInstaPay requestedInitially={restartTransfer} onCheckStatus={checkPaymentStatus} recovery={paymentRecovery.data} onRestart={restartCheckout} active={paymentMethod === 'instapay'} key={`${session.ownerKey}:${checkoutSession(checkoutOwner).key}`} owner={session.ownerKey} checkoutOwner={checkoutOwner} checkoutKey={checkoutSession(checkoutOwner).key} governorate={customer.governorate} discountCode={appliedCode} quote={quote} onChange={setCheckoutPayment} disabled={submit.isPending || uncertain || restarting}/></div>
+        <div hidden={paymentMethod !== 'instapay'}><CheckoutInstaPay onCheckStatus={checkPaymentStatus} recovery={paymentRecovery.data} onRestart={restartCheckout} active={paymentMethod === 'instapay'} key={`${session.ownerKey}:${checkoutSession(checkoutOwner).key}`} owner={session.ownerKey} checkoutOwner={checkoutOwner} checkoutKey={checkoutSession(checkoutOwner).key} governorate={customer.governorate} discountCode={appliedCode} quote={quote} onChange={setCheckoutPayment} disabled={submit.isPending || uncertain || restarting}/></div>
       </fieldset></fieldset></section>
       <aside className="commerce-summary"><h2>Your Order</h2>{cart.items.map(item => <CheckoutLine key={`${session.ownerKey}:${item.id}`} item={item} owner={session.ownerKey}/>)}
         {!engravingOnly && <details className="commerce-discount"><summary>Have a discount code?<ChevronDown size={18} aria-hidden="true"/></summary><label className="commerce-field">Discount code<input value={discountCode} maxLength={40} disabled={submit.isPending || uncertain || restarting} onChange={(event) => setDiscountCode(event.target.value)} /></label><button className="button button-secondary" type="button" disabled={uncertain || quote.isFetching || submit.isPending} onClick={() => setAppliedCode(discountCode.trim())}>Apply code</button>{appliedCode && <button type="button" className="button button-secondary" disabled={uncertain || submit.isPending} onClick={() => { setAppliedCode(''); setDiscountCode(''); }}>Remove code</button>}</details>}
         {paymentRecovery.error && <><p role="alert">{commerceError(paymentRecovery.error)}</p><button type="button" className="button button-secondary" onClick={()=>paymentRecovery.refetch()}>Check checkout again</button></>}{quote.isFetching && <LoadingState label="Updating your total" count={1}/>}{quote.error && paymentMethod !== 'instapay' && <p className="form-error" role="alert">{commerceError(quote.error)}</p>}
         {quote.data?.summaryRows && <dl>{quote.data.summaryRows.map(row => <div key={row.id}><dt>{row.label}</dt><dd>{money(row.amountPiastres)}</dd></div>)}</dl>}
-        {totals && <dl>{(totals.discountPiastres || 0) > 0 && <div><dt>Discounts</dt><dd>-{money(totals.discountPiastres)}</dd></div>}<div><dt>Subtotal</dt><dd>{money(totals.subtotalPiastres - (totals.discountPiastres || 0))}</dd></div><div><dt>Delivery</dt><dd>Confirmed separately</dd></div><div className="commerce-total"><dt>Order total</dt><dd>{money(totals.totalPiastres)}</dd></div></dl>}
+        {totals && <dl>{(totals.discountPiastres || 0) > 0 && <div><dt>Discounts</dt><dd>-{money(totals.discountPiastres)}</dd></div>}<div><dt>Delivery</dt><dd>Confirmed separately</dd></div><div className="commerce-total"><dt>Order total</dt><dd>{money(totals.totalPiastres)}</dd></div></dl>}
         {(fieldError || submit.error) && <p className="form-error" role="alert">{fieldError || commerceError(submit.error)}</p>}
         {submit.isPending && <div className="upload-progress"><LoadingSpinner label={uploadStatus || 'Placing your order...'}/></div>}
         <button className="button button-primary" type="submit" disabled={preparing || uncertain || submit.isPending || paymentMethod === 'instapay' && !checkoutPayment?.ready || !totals || quote.isFetching || Boolean(quote.error) || cart.items.some((item) => !item.valid)}>{submit.isPending ? 'Placing your order…' : 'Place Order'}</button>

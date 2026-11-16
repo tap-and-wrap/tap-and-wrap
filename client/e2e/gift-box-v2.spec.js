@@ -12,6 +12,7 @@ test('saved option order is retained and media loads only the current category a
   const f = await fixture(page);
   const lastPlush = f.components.splice(f.components.findIndex(item => item.componentId === 'plush-17'), 1)[0]; f.components.unshift(lastPlush);
   await begin(page);
+  await expect.poll(() => f.media.some(path => path.endsWith('/1200/boxes/box-2-open-top.webp'))).toBe(true);
   expect(f.media.every(path => path.includes('/boxes/'))).toBe(true);
   expect(f.media.filter(path => path.includes('/1200/')).every(path => /\/1200\/boxes\/box-(?:[1-9]|1[0-2])-open-top\.webp$/.test(path))).toBe(true);
   expect(f.media.some(path => path.endsWith('/1200/boxes/box-2-open-top.webp'))).toBe(true);

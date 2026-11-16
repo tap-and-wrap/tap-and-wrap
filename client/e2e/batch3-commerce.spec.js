@@ -16,7 +16,7 @@ test('lost accepted InstaPay response survives refresh and resolves by owned key
   const fixture = await mockCommerce(page, { checkoutEnabled: true, cart: cartWithProduct(), loseFirstOrderResponse: true });
   await page.goto('/checkout'); await fillCheckout(page);
   await page.getByRole('radio',{name:/InstaPay/}).check();
-  await page.getByRole('button',{name:'View transfer details',exact:true}).click();
+  await expect(page.getByRole('button',{name:'View transfer details',exact:true})).toHaveCount(0);
   await page.getByLabel(/^Transfer sender name/).fill('Fixture Sender');
   await page.getByLabel('Transaction screenshot',{exact:true}).setInputFiles(isolatedImageFile());
   // Evidence stays in memory until Place Order, then is bound to this checkout.

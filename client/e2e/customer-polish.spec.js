@@ -37,10 +37,10 @@ for(const width of [320,390,768,1024,1440])test(`checkout and clean receipt at $
   await page.getByRole('radio',{name:/InstaPay/}).check();
   await expect(page.getByRole('region',{name:'InstaPay transfer details'})).toBeVisible();
   await expect(page.getByLabel('Transfer sender name *')).toHaveCount(0);
-  await expect(page.getByRole('button',{name:'View transfer details',exact:true})).toBeDisabled();
+  await expect(page.getByRole('button',{name:'View transfer details',exact:true})).toHaveCount(0);
   expect(fixture.counts().preparations).toBe(0);
   await expect(page.getByText('01060673073',{exact:true})).toHaveCount(0);
-  fixture.release();await page.getByRole('button',{name:'View transfer details',exact:true}).click();await expect(page.getByText('01060673073',{exact:true})).toBeVisible();
+  fixture.release();await expect(page.getByRole('button',{name:'View transfer details',exact:true})).toHaveCount(0);await expect(page.getByText('01060673073',{exact:true})).toBeVisible();
   await page.getByRole('radio',{name:'Cash on Delivery',exact:true}).check();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator('.checkout-instapay')).toBeHidden();
@@ -68,7 +68,7 @@ test('discount totals update automatically and valid transfer re-entry reuses in
   await page.getByText('Have a discount code?').click();await page.getByLabel('Discount code',{exact:true}).fill('ISOLATED');await page.getByRole('button',{name:'Apply code'}).click();
   await expect(page.locator('.commerce-total')).toContainText('225.00');
   await page.getByRole('button',{name:'Remove code'}).click();await expect(page.locator('.commerce-total')).toContainText('250.00');
-  await page.getByRole('radio',{name:/InstaPay/}).check();await page.getByRole('button',{name:'View transfer details',exact:true}).click();await expect(page.getByText('01060673073',{exact:true})).toBeVisible();
+  await page.getByRole('radio',{name:/InstaPay/}).check();await expect(page.getByRole('button',{name:'View transfer details',exact:true})).toHaveCount(0);await expect(page.getByText('01060673073',{exact:true})).toBeVisible();
   const count=fixture.counts().preparations;await page.reload();
   await expect(page.getByRole('radio',{name:/InstaPay/})).toBeChecked();await expect(page.getByText('01060673073',{exact:true})).toBeVisible();
   expect(fixture.counts().preparations).toBe(count);
@@ -76,7 +76,7 @@ test('discount totals update automatically and valid transfer re-entry reuses in
 
 test('lost order acknowledgement retries the same immutable request and saved proof',async({page})=>{
   const fixture=await checkout(page,{loseFirstOrderResponse:true});await page.goto('/checkout');await fillCheckout(page);
-  await page.getByRole('radio',{name:/InstaPay/}).check();await page.getByRole('button',{name:'View transfer details',exact:true}).click();await expect(page.getByText('01060673073',{exact:true})).toBeVisible();
+  await page.getByRole('radio',{name:/InstaPay/}).check();await expect(page.getByRole('button',{name:'View transfer details',exact:true})).toHaveCount(0);await expect(page.getByText('01060673073',{exact:true})).toBeVisible();
   await page.getByLabel('Transfer sender name *').fill('Isolated Sender');await chooseImageFiles(page,page,/^InstaPay: Choose screenshot/i,isolatedImageFile());
   await page.getByRole('button',{name:'Place Order',exact:true}).click();await page.getByRole('button',{name:'Retry same submission',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Thank you for your order!'})).toBeVisible();

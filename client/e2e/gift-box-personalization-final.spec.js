@@ -59,7 +59,7 @@ test('admin can create a pending photo-print option without silently publishing 
   await page.goto('/admin/gift-box/personalization-options');
   await expect(page.getByRole('heading', { name: 'Gift Box', exact: true })).toBeVisible();
   await page.getByLabel('Option ID').fill('synthetic-small-print');
-  await page.getByRole('button', { name: 'Prepare new option' }).click();
+  await page.getByRole('button', { name: 'Add personal touch' }).click();
   const editor = page.locator('form.gb-opt-editor');
   await editor.getByLabel('Customer-facing display name').fill('Synthetic small print');
   await editor.getByLabel('Box 2', { exact: true }).check();
@@ -71,7 +71,11 @@ test('admin can create a pending photo-print option without silently publishing 
   expect(fixture.writes[0].payload).not.toHaveProperty('pricePiastres');
   expect(fixture.writes[0].payload).not.toHaveProperty('fontLicensesConfirmed');
   expect(fixture.records[0]).toMatchObject({ enabled: false, available: false, configuredPricePiastres: null });
-  await expect(page.getByText('synthetic-small-print').first()).toBeVisible();
+  const savedEditor = page.locator('form.gb-opt-editor').filter({ has: page.getByRole('heading', { name: 'Synthetic small print', exact: true }) });
+  await expect(savedEditor.getByRole('heading', { name: 'Synthetic small print', exact: true })).toBeVisible();
+  await expect(savedEditor.getByLabel('Customer-facing display name')).toHaveValue('Synthetic small print');
+  await expect(savedEditor.getByLabel('Price (EGP)')).toHaveValue('');
+  await expect(savedEditor.getByLabel('Box 2', { exact: true })).toBeChecked();
 });
 
 test('admin conflict retains the engraving draft until explicit reload', async ({ page }) => {

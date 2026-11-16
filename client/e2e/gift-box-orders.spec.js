@@ -42,7 +42,7 @@ for (const width of [320, 390, 768, 1440]) test(`customer purchased mixed order 
   const gift = page.getByRole('article', { name: 'Build Your Gift Box', exact: true });
   await expect(gift.getByRole('heading', { name: 'Build Your Gift Box' })).toBeVisible();
   await expect(page.getByRole('heading', { name: commerceProduct.name })).toBeVisible();
-  for (const text of ['Completed gift boxes: 2', 'Purchased Red Rose × 3', 'Purchased Plush One × 1', 'Purchased Chocolate One × 1', 'Gift box preview unavailable']) await expect(gift.getByText(text, { exact: true })).toBeVisible();
+  for (const text of ['Completed gift boxes: 2', 'Purchased Red Rose × 3', 'Purchased Plush One × 1', 'Purchased Chocolate One × 1', 'Your custom gift box']) await expect(gift.getByText(text, { exact: true })).toBeVisible();
   await expect(gift.getByRole('definition').filter({ hasText: 'Purchased Box Two' })).toBeVisible();
   await expect(gift.getByRole('definition').filter({ hasText: 'Purchased Navy Ribbon' })).toBeVisible();
   await expect(gift.getByText(message, { exact: true })).toBeHidden();

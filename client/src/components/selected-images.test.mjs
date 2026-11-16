@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { prepareSelectedImages } from './selected-images.mjs';
-const png = Uint8Array.from([137,80,78,71,13,10,26,10,1,2,3,4]);
+const png = Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aK1sAAAAASUVORK5CYII=', 'base64'));
 const make = (name='photo.png',type='image/png',bytes=png) => new File([Array.isArray(bytes)?Uint8Array.from(bytes):bytes],name,{type,lastModified:123});
 const inspect = async()=>{};
 test('native bytes are retained until copied, and owned File survives handle invalidation',async()=>{
@@ -31,11 +31,11 @@ test('valid multi-image batches preserve order and distinct owned file identitie
 for(const [name,file,options,pattern] of [
  ['empty file',make('empty.png','image/png',[]),{},/empty/],
  ['HEIC',make('photo.heic','image/heic'),{},/HEIC/],
- ['MIME mismatch',make('photo.jpg','image/jpeg'),{},/unsupported/],
- ['bad signature',make('bad.png','image/png',[1,2,3]),{},/unsupported/],
+ ['MIME mismatch',make('photo.jpg','image/jpeg'),{},/format|supported|accept/],
+ ['bad signature',make('bad.png','image/png',[1,2,3]),{},/format|supported|accept/],
  ['per-file budget',make(),{maxBytes:5},/smaller/],
  ['total budget',make(),{maxTotalBytes:5},/smaller/],
- ['field MIME policy',make(),{acceptedTypes:['image/jpeg']},/unsupported/]
+ ['field MIME policy',make(),{acceptedTypes:['image/jpeg']},/format|supported|accept/]
 ])test(name+' is rejected before delivery',async()=>{await assert.rejects(prepareSelectedImages([file],{inspect,...options}),pattern);});
 test('count limit rejects the complete batch',async()=>{await assert.rejects(prepareSelectedImages([make(),make()],{inspect}),/no more than 1/);});
 test('short native reads never become uploadable images',async()=>{const file=make();file.arrayBuffer=async()=>png.slice(0,8).buffer;await assert.rejects(prepareSelectedImages([file],{inspect}),/fully read/);});
@@ -50,4 +50,15 @@ test('cancel interrupts a provider that never resolves its byte read',async()=>{
   const file=make(),controller=new AbortController();file.arrayBuffer=()=>new Promise(()=>{});
   const result=assert.rejects(prepareSelectedImages([file],{inspect,signal:controller.signal}),{name:'AbortError'});controller.abort();await result;
 });
-for(const [type,bytes] of [['image/jpeg',[255,216,255,224]],['image/webp',[82,73,70,70,1,0,0,0,87,69,66,80]]])test(type+' bytes preserve their original format',async()=>{const [owned]=await prepareSelectedImages([make('photo',type,bytes)],{inspect});assert.equal(owned.type,type);assert.equal(owned.size,bytes.length);});
+for(const [type,bytes] of [['image/jpeg',[255,216,255,224,255,217]],['image/webp',[82,73,70,70,12,0,0,0,87,69,66,80,86,80,56,32,0,0,0,0]]])test(type+' bytes preserve their original format',async()=>{const [owned]=await prepareSelectedImages([make('photo',type,bytes)],{inspect});assert.equal(owned.type,type);assert.equal(owned.size,bytes.length);});
+
+for (const type of ['image/jpeg', 'image/jpg', 'image/pjpeg', '', 'application/octet-stream']) test('JPG canonical MIME: '+type, async()=>{
+ const [owned]=await prepareSelectedImages([make('camera.jpg',type,[255,216,255,224,255,217])],{inspect});assert.equal(owned.type,'image/jpeg');
+});
+test('a browser-decodable truncated JPEG is rejected before preview',async()=>{
+ let decoded=false;await assert.rejects(prepareSelectedImages([make('camera.jpg','image/jpeg',[255,216,255,224])],{inspect:async()=>{decoded=true;}}),/incomplete/);assert.equal(decoded,false);
+});
+test('same file can be selected again after rejection and after acceptance',async()=>{
+ const file=make();await assert.rejects(prepareSelectedImages([file],{inspect:async()=>{throw Error('temporary read');}}));
+ const [first]=await prepareSelectedImages([file],{inspect});const [second]=await prepareSelectedImages([file],{inspect});assert.notEqual(first,second);assert.deepEqual(await first.arrayBuffer(),await second.arrayBuffer());
+});

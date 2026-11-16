@@ -3,6 +3,12 @@ import { expect, test } from '@playwright/test';
 import { mockCommerce } from './commerce-fixtures.js';
 
 const path = '/admin/gift-box/fulfillment-policies';
+async function openPolicies(page) {
+  await page.goto(path);
+  const packing=page.locator('summary').filter({hasText:'Safe packing & box availability'});
+  await expect(packing.or(page.getByRole('heading',{name:/^(Access denied|Administrator sign in)$/}))).toBeVisible();
+  if (await packing.count()) await packing.click();
+}
 const categories = [['flower', 'plush'], ['flower', 'chocolate'], ['plush', 'chocolate'], ['flower', 'plush', 'chocolate']];
 const components = [
   ...Array.from({ length: 12 }, (_, index) => ({ componentId: `box-${index + 1}`, displayName: `Fixture Box ${index + 1}`, category: 'box' })),
@@ -25,6 +31,7 @@ function publication(version = 1) {
 }
 async function mockPolicies(page, options = {}) {
   await mockCommerce(page, { role: options.role === undefined ? 'admin' : options.role });
+  await page.route('**/api/v1/admin/gift-box/components?**', route=>route.fulfill({json:{ok:true,data:{components:[]}},headers:{'access-control-allow-origin':'http://127.0.0.1:5191','access-control-allow-credentials':'true'}}));
   const state = new Map(Array.from({ length: 12 }, (_, index) => { const entry = pending(`box-${index + 1}`); return [entry.boxId, entry]; }));
   if (options.initial) state.set(options.initial.boxId, structuredClone(options.initial));
   const calls = [];
@@ -56,8 +63,8 @@ async function mockPolicies(page, options = {}) {
   return { state, calls };
 }
 async function addComponent(page, category, id) {
-  await chooseOption(page.getByRole('combobox', { name: 'Component category', exact: true }), category);
-  await chooseOption(page.getByRole('combobox', { name: 'Compatible component', exact: true }), id);
+  await chooseOption(page.locator('.gb-policies-page').getByRole('combobox', { name: 'Component category', exact: true }), category);
+  await chooseOption(page.locator('.gb-policies-page').getByRole('combobox', { name: 'Compatible component', exact: true }), id);
   await page.getByRole('button', { name: 'Add compatible component', exact: true }).click();
 }
 async function fillRules(page) {
@@ -82,8 +89,8 @@ test.beforeEach(({ page }) => { const errors = []; pageErrors.set(page, errors);
 test.afterEach(({ page }) => expect(pageErrors.get(page)).toEqual([]));
 
 test('twelve pending policies have blank capacities and never gain approval from loading or saving a blank draft', async ({ page }) => {
-  const fixture = await mockPolicies(page); await page.goto(path);
-  await expect(page.getByRole('heading', { name: 'Gift Box', exact: true, level: 1 })).toBeVisible(); await expect(page.locator('.owner-workspace-tabs a[aria-current=page]')).toHaveText('Packing policies');
+  const fixture = await mockPolicies(page); await openPolicies(page);
+  await expect(page.getByRole('heading', { name: 'Gift Box', exact: true, level: 1 })).toBeVisible(); await expect(page.locator('.owner-workspace-tabs a[aria-current=page]')).toHaveText('Components & stock');
   await page.getByRole('combobox', { name: 'Box', exact: true }).click(); await expect(page.getByRole('option')).toHaveCount(12); await page.keyboard.press('Escape');
   await expect(page.getByRole('spinbutton', { name: 'Overall maximum units', exact: true })).toHaveValue('');
   await expect(page.getByRole('combobox', { name: 'Lid requirement', exact: true })).toHaveAttribute('data-selected-value', '');
@@ -97,7 +104,7 @@ test('twelve pending policies have blank capacities and never gain approval from
 });
 
 test('structured draft publishes explicit owner evidence, records version history and withdraws without opening commerce', async ({ page }) => {
-  const fixture = await mockPolicies(page); await page.goto(path); await fillRules(page);
+  const fixture = await mockPolicies(page); await openPolicies(page); await fillRules(page);
   await page.getByRole('button', { name: 'Save policy draft', exact: true }).click();
   await expect(page.getByText('Policy draft saved. It has not been approved.', { exact: true })).toBeVisible();
   const saved = fixture.calls.find(call => call.method === 'PUT').body;
@@ -127,7 +134,7 @@ test('structured draft publishes explicit owner evidence, records version histor
 
 test('stale policy save preserves owner edits until deliberate conflict reload and then uses the new revision', async ({ page }) => {
   const fixture = await mockPolicies(page, { initial: { ...pending(), status: 'draft', revision: 1, draft: { rules: syntheticRules(), packing: syntheticPacking() } }, conflictOnce: true });
-  await page.goto(path); await page.getByRole('spinbutton', { name: 'Overall maximum units', exact: true }).fill('8');
+  await openPolicies(page); await page.getByRole('spinbutton', { name: 'Overall maximum units', exact: true }).fill('8');
   await page.getByRole('button', { name: 'Save policy draft', exact: true }).click();
   await expect(page.getByText('Another editor changed this record. Your unsaved changes are still here.', { exact: false })).toBeVisible();
   await expect(page.getByRole('spinbutton', { name: 'Overall maximum units', exact: true })).toHaveValue('8');
@@ -144,7 +151,7 @@ test('stale policy save preserves owner edits until deliberate conflict reload a
 
 test('approval requires explicit evidence and attestations and remains disabled while draft edits are unsaved', async ({ page }) => {
   const fixture = await mockPolicies(page, { initial: { ...pending(), status: 'draft', revision: 1, draft: { rules: syntheticRules(), packing: syntheticPacking() } } });
-  await page.goto(path); await page.getByRole('button', { name: 'Approve saved policy', exact: true }).click();
+  await openPolicies(page); await page.getByRole('button', { name: 'Approve saved policy', exact: true }).click();
   await expect(page.locator('[name=evidence]')).toHaveAttribute('aria-invalid', 'true');
   expect(fixture.calls.some(call => call.suffix.endsWith('/approve'))).toBe(false);
   await attest(page); await page.getByRole('spinbutton', { name: 'Overall maximum units', exact: true }).fill('3');
@@ -153,7 +160,7 @@ test('approval requires explicit evidence and attestations and remains disabled 
 });
 
 test('Box 11 records separate compartments and oversized plush beside permission through ordinary form controls', async ({ page }) => {
-  const fixture = await mockPolicies(page); await page.goto(path); await chooseOption(page.getByRole('combobox', { name: 'Box', exact: true }), 'box-11');
+  const fixture = await mockPolicies(page); await openPolicies(page); await chooseOption(page.getByRole('combobox', { name: 'Box', exact: true }), 'box-11');
   await expect(page.getByText(/BOX-11 requires two separately reviewed compartments/)).toBeVisible();
   for (const index of [1, 2]) {
     await page.getByRole('button', { name: 'Add compartment', exact: true }).click();
@@ -189,7 +196,7 @@ test('older approved policy references require renewed review while explicit wit
   const pub = { ...publication(1), compatibleWithCurrentContract: false };
   pub.policy.catalogVersion = 'old-fixture-catalog';
   const fixture = await mockPolicies(page, { initial: { ...pending(), revision: 2, status: 'approved', activePublication: pub, history: [pub] } });
-  await page.goto(path);
+  await openPolicies(page);
   await expect(page.getByRole('alert').filter({ hasText: 'Review required: this approved version uses older catalog, media or geometry references.' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Approve saved policy', exact: true })).toBeDisabled();
   await page.getByRole('textbox', { name: 'Withdrawal reason', exact: true }).fill('Synthetic earlier reference needs owner re-review.');
@@ -204,7 +211,7 @@ for (const width of [320, 390, 768, 1440]) test(`packing policy administration s
   await page.setViewportSize({ width, height: 1000 });
   const pub = publication(2), earlier = { ...publication(1), status: 'superseded' };
   await mockPolicies(page, { initial: { ...pending(), revision: 2, status: 'approved', activePublication: pub, history: [pub], historyHasMore: true, historyTotal: 2 }, earlier });
-  await page.goto(path); await page.getByText('Version 2 · Approved', { exact: true }).focus(); await page.keyboard.press('Enter');
+  await openPolicies(page); await page.getByText('Version 2 · Approved', { exact: true }).focus(); await page.keyboard.press('Enter');
   await expect(page.getByText(pub.evidence, { exact: true })).toBeVisible();
   await expect(page.locator('.gb-policy-history img')).toHaveCount(0);
   await page.getByRole('button', { name: 'Load earlier policy versions', exact: true }).click();
@@ -216,7 +223,7 @@ for (const width of [320, 390, 768, 1440]) test(`packing policy administration s
 });
 
 for (const role of [null, 'customer']) test(`${role || 'guest'} cannot enter admin policy management or query private evidence`, async ({ page }) => {
-  const fixture = await mockPolicies(page, { role }); await page.goto(path);
+  const fixture = await mockPolicies(page, { role }); await openPolicies(page);
   await expect(page.getByRole('heading', { name: 'Gift Box Packing Policies', exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: role ? 'Access denied' : 'Administrator sign in', exact: true })).toBeVisible();
   expect(fixture.calls).toHaveLength(0);
@@ -224,7 +231,7 @@ for (const role of [null, 'customer']) test(`${role || 'guest'} cannot enter adm
 
 
 test('draft region names align with the current builder, without inventing capacity or granting approval', async ({ page }) => {
-  const fixture = await mockPolicies(page); await page.goto(path);
+  const fixture = await mockPolicies(page); await openPolicies(page);
   await expect(page.getByText('heart-floor', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Use builder preview region names (draft only)' }).click();
   await expect(page.getByRole('textbox', { name: 'Region ID 1', exact: true })).toHaveValue('heart-floor');
@@ -236,7 +243,7 @@ test('draft region names align with the current builder, without inventing capac
 });
 
 test('Box 11 preview names keep separate unknown-capacity wells, with no server mutation', async ({ page }) => {
-  const fixture = await mockPolicies(page); await page.goto(path);
+  const fixture = await mockPolicies(page); await openPolicies(page);
   await chooseOption(page.getByRole('combobox', { name: 'Box', exact: true }), 'box-11');
   await page.getByRole('button', { name: 'Use builder preview region names (draft only)' }).click();
   await expect(page.getByRole('textbox', { name: 'Region ID 1', exact: true })).toHaveValue('lower-circular-floor');
@@ -249,7 +256,7 @@ test('Box 11 preview names keep separate unknown-capacity wells, with no server 
 });
 
 test('beside chocolate can be selected in a saved draft, without authorizing a physical policy', async ({ page }) => {
-  const fixture = await mockPolicies(page); await page.goto(path);
+  const fixture = await mockPolicies(page); await openPolicies(page);
   await page.getByRole('button', { name: 'Use builder preview region names (draft only)' }).click();
   await addComponent(page, 'chocolate', 'chocolate-1');
   await page.getByRole('spinbutton', { name: 'Maximum quantity: Fixture Chocolate One', exact: true }).fill('1');

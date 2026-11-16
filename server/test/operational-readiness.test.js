@@ -191,8 +191,29 @@ test('admin attention/contact/diagnostics require verified admin, CSRF and trust
 test('every customer/account/owner template is branded, escaped, mobile sized and free of private snapshots or tracking pixels', async () => {
   for (const event of [...ORDER_NOTIFICATION_EVENTS, ...REQUEST_NOTIFICATION_EVENTS, ...OWNER_NOTIFICATION_EVENTS]) {
     const rendered = renderEmailTemplate({ event, audience: event.startsWith('owner_') ? 'owner' : 'customer', snapshot: { requestReference: 'TW-ABCDEF123456', reference: '123456', phone: '+201012345678', charges: [{ label: '<script>unsafe & text</script>', amountPiastres: null, unitPricePiastres: 100, quantity: 1 }], quotationTotalPiastres: 100, baseUnitPiastres: 100, quantity: 1, discountPiastres: 0, shippingPiastres: 0, accountingVersion: 1, privateNote: 'PRIVATE_SECRET' } }, { clientOrigin: 'https://shop.example.test' });
-    assert.match(rendered.html, /Unlock the Magic of Giving/); assert.match(rendered.text, /Thoughtful gifts, made personal/); assert.match(rendered.html, /max-width:600px/); assert.doesNotMatch(rendered.html, /<script>|PRIVATE_SECRET|<img|tracking|objectKey/);
+    const images = rendered.html.match(/<img\b[^>]*>/g) || [];
+    assert.equal(images.length, 1);
+    assert.match(images[0], /src="https:\/\/shop\.example\.test\/tap-wrap-email-logo\.png"/);
+    assert.match(images[0], /alt="Tap &amp; Wrap"/);
+    assert.match(images[0], /width="180" height="60"/);
+    assert.match(rendered.text, /Thoughtful gifts, made personal/); assert.match(rendered.html, /max-width:560px/); assert.doesNotMatch(rendered.html, /<script>|PRIVATE_SECRET|tracking|objectKey/);
+    assert.match(rendered.html, /&lt;script&gt;unsafe &amp; text&lt;\/script&gt;/);
+    assert.doesNotMatch(`${rendered.text}${rendered.html}`, /Quotation vundefined|Available payment methods: \./);
     if (event.startsWith('owner_')) assert.match(rendered.html, /href="https:\/\/wa.me\/201012345678/);
   }
   const record = await order(); const messages = await operationMessages('order', record); assert.equal(messages.length, 6); assert.match(messages.find(row => row.key === 'payment').text, /01060673073/); assert.match(messages.find(row => row.key === 'shipping').text, /Pending confirmation/);
+});
+
+test('quotation emails preserve supplied payment methods and never invent missing historical metadata', () => {
+  const snapshot = { requestReference:'TW-ABCDEF123456', quotationTotalPiastres:100, baseUnitPiastres:100, quantity:1, discountPiastres:0, shippingPiastres:0 };
+  const historical = renderEmailTemplate({ event:'request_received', snapshot }, { clientOrigin:'https://shop.example.test' });
+  assert.match(historical.text, /Quotation: EGP 1\.00/);
+  assert.doesNotMatch(`${historical.text}${historical.html}`, /undefined|NaN|Available payment methods:/);
+  for (const methods of [['cod'], ['instapay'], ['cod','instapay']]) {
+    const message = renderEmailTemplate({ event:'request_received', snapshot:{...snapshot,quotationVersion:2,allowedPaymentMethods:methods} }, { clientOrigin:'https://shop.example.test' });
+    assert.match(message.text, /Quotation v2: EGP 1\.00/);
+    assert.equal(message.text.includes('Cash on Delivery'), methods.includes('cod'));
+    assert.equal(message.text.includes('InstaPay'), methods.includes('instapay'));
+    assert.match(message.text, /Available payment methods:/);
+  }
 });

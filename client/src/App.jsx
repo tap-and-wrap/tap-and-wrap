@@ -29,7 +29,6 @@ const AccountRecoveryPage = lazy(() => import('./pages/AccountRecoveryPage.jsx')
 const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage.jsx'));
 const AdminOrdersPage = lazy(() => import('./pages/AdminOrdersPage.jsx'));
 const AdminAnalyticsPage = lazy(() => import('./pages/AdminAnalyticsPage.jsx'));
-const AdminPaymentPage = lazy(() => import('./pages/AdminPaymentPage.jsx'));
 const AdminCustomizationPage = lazy(() => import('./pages/AdminCustomizationPage.jsx'));
 const AdminGiftBoxWorkspace = lazy(() => import('./pages/AdminCustomizationPage.jsx').then(module => ({ default: module.AdminGiftBoxWorkspace })));
 const AdminWebsitePage = lazy(() => import('./pages/AdminWebsitePage.jsx'));
@@ -96,7 +95,7 @@ export default function App() {
   <Route path="/admin/categories" element={<RequireAdmin><AdminWebsitePage section="categories"/></RequireAdmin>}/>
   <Route path="/admin/customers" element={<RequireAdmin><AdminWebsitePage section="customers"/></RequireAdmin>}/>
   <Route path="/admin/analytics" element={<RequireAdmin><AdminAnalyticsPage/></RequireAdmin>}/>
-  <Route path="/admin/payment" element={<RequireAdmin><AdminPaymentPage/></RequireAdmin>}/>
+  <Route path="/admin/payment" element={<RequireAdmin><Navigate to="/admin/orders?view=verification" replace/></RequireAdmin>}/>
   <Route path="/admin/discounts" element={<RequireAdmin><AdminCommercePage section="discounts"/></RequireAdmin>}/>
   <Route path="/admin/customization" element={<RequireAdmin><AdminCustomizationPage/></RequireAdmin>}/>
   <Route path="/admin/orders" element={<RequireAdmin><AdminOrdersPage/></RequireAdmin>}/>

@@ -63,7 +63,7 @@ test('InstaPay saves checkout-bound proof before accepting one unpaid order', as
   await page.goto('/checkout');await fillCheckout(page);
   await page.getByRole('radio',{name:/InstaPay/}).check();
   await expect(page.getByText('01060673073',{exact:true})).toHaveCount(0);
-  await page.getByRole('button',{name:'View transfer details',exact:true}).click();
+  await expect(page.getByRole('button',{name:'View transfer details',exact:true})).toHaveCount(0);
   await expect(page.getByText('01060673073',{exact:true})).toBeVisible();
   expect(fixture.submissions).toHaveLength(0);expect(fixture.uploads).toHaveLength(0);
   await page.getByLabel(/^Transfer sender name/).fill('Fixture Sender');
@@ -82,7 +82,7 @@ test('uncertain order response retries the identical request without a duplicate
   const fixture=await foundation(page,{loseFirst:true});
   await page.goto('/checkout');await fillCheckout(page);
   await page.getByRole('radio',{name:/InstaPay/}).check();
-  await page.getByRole('button',{name:'View transfer details',exact:true}).click();
+  await expect(page.getByRole('button',{name:'View transfer details',exact:true})).toHaveCount(0);
   await page.getByLabel(/^Transfer sender name/).fill('Fixture Sender');
   await page.getByLabel('Transaction screenshot',{exact:true}).setInputFiles(isolatedImageFile());
   await page.getByRole('button',{name:'Place Order',exact:true}).click();

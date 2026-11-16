@@ -1,6 +1,9 @@
 .image-upload-button { min-height: 44px; max-width: 100%; white-space: normal; }
 .image-upload-button:focus-visible { outline: 3px solid #795045; outline-offset: 3px; }
 .image-source-error { color:var(--tw-error); font-size:.9rem; line-height:1.6; }
+.image-source-chooser{min-width:0;max-width:100%}
+.image-source-status{font-size:.8rem;color:var(--tw-rose-dark);overflow-wrap:anywhere;margin:8px 0}
+.image-source-status:empty{display:none}
 .commerce-file-previews img { width: 80px; height: 80px; object-fit: contain; }
 .commerce-file-previews li { min-width: 0; overflow-wrap: anywhere; }
 

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import nodemailer from 'nodemailer';
 import { emailSettings, assertSafeEmailRecipient, emailError } from './settings.js';
@@ -42,12 +43,19 @@ export function createGmailProvider(settings = process.env, { createTransport, r
       assertSafeEmailRecipient(event.recipient, config);
       if (typeof event.eventKey !== 'string' || event.eventKey.length > 180) throw emailError('INVALID_EMAIL_EVENT', { terminal: true });
       const message = render(event, { clientOrigin: settings.CLIENT_ORIGIN || 'http://localhost:5173', ...options });
+      // Only this repository-owned logo is embedded. No customer file, remote
+      // URL, storage key or filesystem path can become an attachment.
+      const hasLogo = /src="[^"<>]*\/tap-wrap-email-logo\.png"/.test(message.html);
+      const logo = hasLogo ? readFileSync(new URL('./assets/tap-wrap-email-logo.png', import.meta.url)) : null;
+      if (logo && (logo.length > 300000 || logo.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a')) throw emailError('INVALID_EMAIL_LOGO', { terminal: true });
+      const html = hasLogo ? message.html.replace(/src="[^"<>]*\/tap-wrap-email-logo\.png"/g, 'src="cid:tapwrap-brand-logo"') : message.html;
       const messageId = `<${createHash('sha256').update(event.eventKey).digest('hex')}@${config.from.split('@')[1]}>`;
       try {
         const result = await transport.sendMail({
           from: { name: config.fromName, address: config.from }, to: event.recipient,
           envelope: { from: config.from, to: [event.recipient] },
-          subject: message.subject, text: message.text, html: message.html, messageId,
+          subject: message.subject, text: message.text, html, messageId,
+          ...(logo ? { attachments: [{ filename: 'tap-wrap-email-logo.png', content: logo, contentType: 'image/png', contentDisposition: 'inline', cid: 'tapwrap-brand-logo' }] } : {}),
           disableFileAccess: true, disableUrlAccess: true,
         });
         if (!result || (Array.isArray(result.rejected) && result.rejected.length) || !Array.isArray(result.accepted)
