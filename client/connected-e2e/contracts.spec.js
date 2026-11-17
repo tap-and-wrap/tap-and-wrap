@@ -17,11 +17,33 @@ async function fixtureState(request) {
 }
 async function login(page, name, destination = '/my-orders') {
   destination = destination.replace('/admin/commerce/orders', '/admin/orders');
+  // Session/cart bootstrap can remount the login form and discard typed input.
+  // Synchronize before filling, but keep the real login and owner-privacy checks.
+  const pendingSession = page.waitForResponse(response => response.request().method() === 'GET'
+    && new URL(response.url()).pathname === '/api/v1/auth/me', { timeout: 20_000 });
+  const pendingCart = page.waitForResponse(response => response.request().method() === 'GET'
+    && new URL(response.url()).pathname === '/api/v1/commerce/cart', { timeout: 20_000 });
   await page.goto(`/login?returnTo=${encodeURIComponent(destination)}`);
-  await page.getByLabel('Email Address').fill(`${name}@connected.example.test`);
+  const [sessionResponse, cartResponse] = await Promise.all([pendingSession, pendingCart]);
+  expect(sessionResponse.status(), 'Session bootstrap must succeed before filling the form.').toBe(200);
+  expect(cartResponse.status(), 'Owner-scoped cart bootstrap must succeed before filling the form.').toBe(200);
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const email = `${name}@connected.example.test`;
+  await page.getByLabel('Email Address').fill(email);
   await page.getByLabel('Password', { exact: true }).fill('isolated-fixture-password');
+  await expect(page.getByLabel('Email Address')).toHaveValue(email);
+  await expect(page.getByLabel('Password', { exact: true })).not.toBeEmpty();
+  const pendingLogin = page.waitForResponse(response => response.request().method() === 'POST'
+    && new URL(response.url()).pathname === '/api/v1/auth/login', { timeout: 20_000 });
   await page.getByRole('button', { name: 'Log In', exact: true }).click();
-  await expect(page).toHaveURL(destination);
+  const loginResponse = await pendingLogin;
+  expect(loginResponse.status(), `Login rejected: ${await loginResponse.text()}`).toBe(200);
+  try {
+    await expect(page).toHaveURL(destination, { timeout: 12_000 });
+  } catch (error) {
+    const errors = await page.locator('[role="alert"]').allTextContents();
+    throw new Error(`Login HTTP 200 but navigation did not complete; URL=${page.url()}; visibleErrors=${JSON.stringify(errors)}; ${error.message}`);
+  }
 }
 async function csrfHeaders(context) {
   const response = await context.request.get(`${api}/api/v1/auth/csrf`);

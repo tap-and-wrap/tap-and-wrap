@@ -15,3 +15,9 @@
 [data-sonner-toast].tw-toast[data-styled=true] .tw-toast-action { background:var(--tw-button); color:#fff; border-radius:5px; min-height:44px; }
 [data-sonner-toast].tw-toast :focus-visible { outline:2px solid var(--tw-focus); outline-offset:2px; }
 @media(prefers-reduced-motion:reduce){[data-sonner-toast]{animation:none!important;transition:none!important}}
+
+/* A notice must not cover the sticky gift-builder navigation on small screens.
+   Only explicit controls remain clickable; the toast itself never captures taps. */
+[data-sonner-toast].tw-toast { pointer-events: none; }
+[data-sonner-toast].tw-toast .tw-toast-close,
+[data-sonner-toast].tw-toast .tw-toast-action { pointer-events: auto; }

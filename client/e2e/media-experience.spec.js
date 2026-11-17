@@ -112,7 +112,7 @@ test('service films load on visibility, decode both MP4s, keep manual pause and 
   await expect(films.first()).not.toHaveAttribute('src');
   for (const title of ['Build Your Gift Box', 'Laser Engraving']) {
     const video = page.getByLabel(`${title} film`, { exact: true }); await video.scrollIntoViewIfNeeded();
-    await expect.poll(() => video.evaluate(v => v.videoWidth)).toBe(480);
+    await expect.poll(() => video.evaluate(v => v.videoWidth)).toBe(title === 'Laser Engraving' ? 360 : 480);
     await page.getByRole('button', { name: `Pause ${title} video` }).click();
     await page.emulateMedia({ reducedMotion: 'reduce' }); await expect.poll(() => video.evaluate(v => v.paused)).toBe(true);
     await page.getByRole('button', { name: `Play ${title} video` }).click(); await expect.poll(() => video.evaluate(v => v.paused)).toBe(false);
@@ -158,7 +158,7 @@ test('trace HTML never reloads a playing storefront and repeated service scroll/
   for (let repetition = 0; repetition < 3; repetition++) {
     for (const title of ['Build Your Gift Box', 'Laser Engraving']) {
       const video = page.getByLabel(`${title} film`, { exact: true }); await video.scrollIntoViewIfNeeded();
-      await expect.poll(() => video.evaluate(node => node.videoWidth)).toBe(480);
+      await expect.poll(() => video.evaluate(node => node.videoWidth)).toBe(title === 'Laser Engraving' ? 360 : 480);
       await expect(page.getByRole('button', { name: `Pause ${title} video` })).toBeVisible();
       await page.getByRole('button', { name: `Pause ${title} video` }).click();
       await page.evaluate(() => scrollTo(0, 0)); await video.scrollIntoViewIfNeeded();

@@ -3,9 +3,10 @@ import { resolveGiftBoxEstimate } from '../gift-box/estimate-state.mjs';
 import LoadingState, { LoadingSpinner } from '../components/LoadingState.jsx';
 import { toast } from 'sonner';
 import { StickerProof } from '../gift-box/StickerWorkspace.jsx';
+import GiftCardPreview from '../gift-box/GiftCardPreview.jsx';
 import { defaultStickerPlacement } from '../../../shared/gift-box/sticker-placement.mjs';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Pencil, ArrowRight, X } from 'lucide-react';
@@ -14,8 +15,8 @@ import { FREE_PRESENTATION,LEGACY_FREE_PRESENTATION } from '../gift-box/free-pre
 import { BUILDER_STEPS, getFixedComponent } from '../../../shared/gift-box/definitions.mjs';
 import { countBuilderCategories, exceedingBuilderCategories, resolveBoxCategoryLimits } from '../../../shared/gift-box/selection-limits.mjs';
 import { canAdd, codePointCount, componentCanSupply, componentLabel, counts, estimateSelection, validMessage } from '../gift-box/state.mjs';
-import { getCatalog, getEstimate, getGiftBoxPersonalizationOptions, getGiftBoxPersonalizationQuote } from '../gift-box/api.js';
-import { commerceError, money, uploadPrivateFile } from '../commerce/api.js';
+import { getCatalog, getEstimate, getGiftBoxPersonalizationOptions } from '../gift-box/api.js';
+import { commerceError, money } from '../commerce/api.js';
 import BuilderStepper from '../gift-box/BuilderStepper.jsx';
 import ConfirmRemoval from '../gift-box/ConfirmRemoval.jsx';
 import { hasGiftCardMessage } from '../../../shared/gift-box/card-message.mjs';
@@ -24,7 +25,7 @@ import Options from '../gift-box/Options.jsx';
 import { useSession } from '../auth/SessionProvider.jsx';
 import { useCart } from '../commerce/CartContext.jsx';
 import { prepareGiftBoxCommerceConfiguration } from '../gift-box/commerce-payload.mjs';
-import { giftBoxPersonalDraftSignature, giftBoxConfigurationWithPersonalization, estimateGiftBoxPersonalizationChoices, assertGiftBoxPersonalizationPriceUnchanged, verifyGiftBoxPersonalDraft } from '../gift-box/personalization-submission.mjs';
+import { estimateGiftBoxPersonalizationChoices } from '../gift-box/personalization-submission.mjs';
 
 import { useGiftBoxDraft } from '../gift-box/GiftBoxDraftProvider.jsx';
 import PersonalizationEditor from '../gift-box/PersonalizationEditor.jsx';
@@ -42,13 +43,12 @@ function ExpandedArrangement({ onClose, children }) {
 export default function GiftBoxBuilderPage() {
   const session = useSession();
   const cart = useCart();
-  const navigateCart = useNavigate();
   const draft=useGiftBoxDraft();
   const {history,dispatch,personal,step,setStep,review,setReview,revealed,setRevealed,reached,setReached,selectedId,setSelectedId,
-    printOptionsByPhoto,setPrintOptionsByPhoto,surfaceOptionsByEngraving,addingGift,setAddingGift,uploadCache,uploadIds,pendingGiftOperation,latest,setPhotoAspectRatios}=draft;
+    printOptionsByPhoto,setPrintOptionsByPhoto,surfaceOptionsByEngraving,addingGift,setAddingGift,setPhotoAspectRatios}=draft;
   const catalog = useQuery({ queryKey: ['gift-box', 'catalog'], queryFn: ({ signal }) => getCatalog(signal), retry: false, staleTime: 0 });
   const [notice,setNotice]=useState(''),[expanded,setExpanded]=useState(false),[removal,setRemoval]=useState(null);
-  const mounted=useRef(false);
+  const mounted=useRef(false), addLock=useRef(false);
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
   useEffect(()=>{setPhotoAspectRatios(catalog.data?.photoAspectRatios === true);},[catalog.data?.photoAspectRatios,setPhotoAspectRatios]);
   const personalizationOptions = useQuery({
@@ -62,7 +62,6 @@ export default function GiftBoxBuilderPage() {
   // Only the server can authorize Gift Box commerce. Without its approval, selections are browser-local visual drafts.
   const draftMode = false;
 
-  const draftSignature = giftBoxPersonalDraftSignature(state.boxId, personal, printOptionsByPhoto, surfaceOptionsByEngraving);
   // Draft placement is safe in the browser; order conversion remains separately server-authorized.
   const study = true;
   const titleRef = useRef(null), shouldFocus = useRef(false), pageRef = useRef(null);
@@ -86,7 +85,7 @@ export default function GiftBoxBuilderPage() {
   const selection = useMemo(() => JSON.parse(selectionKey), [selectionKey]);
   const selectedLines = selection ? [{ componentId: selection.boxId, quantity: 1 }, ...selection.items, ...(selection.ribbonId ? [{ componentId: selection.ribbonId, quantity: 1 }] : []), ...(selection.giftCard ? [{ componentId: selection.giftCard.componentId, quantity: 1 }] : [])] : [];
   const unavailableSelection = !draftMode && selectedLines.some(line => !componentCanSupply(components.find(item => item.componentId === line.componentId), line.quantity));
-  const estimate = useQuery({ queryKey: ['private', session.ownerKey, 'gift-box-estimate', selection], queryFn: ({ signal }) => getEstimate(selection, signal), enabled: Boolean(selection) && !unavailableSelection, retry: false, staleTime: 0, gcTime: 0 });
+  const estimate = useQuery({ queryKey: ['private', session.ownerKey, 'gift-box-estimate', selection], queryFn: ({ signal }) => getEstimate(selection, signal), enabled: Boolean(selection) && !unavailableSelection, retry: (count, error) => count < 2 && (!error?.response || error.response.status >= 500), retryDelay: count => 500 * (count + 1), staleTime: 0, gcTime: 0 });
   // Query data belongs to this exact selection/owner key. A background refresh
   // may retain its display amount, but purchase still requires a fresh result.
   const { display: displayEstimate, authoritative: currentEstimate } = resolveGiftBoxEstimate(estimate, { hasSelection: Boolean(selection), unavailable: unavailableSelection });
@@ -158,62 +157,31 @@ export default function GiftBoxBuilderPage() {
     } else dispatch({ type: 'remove', id: removal.id });
     setRemoval(null);
   }
-  function finishAdded(signature) {
-    if (!draft.isCurrent()) return;
-    if (latest.current.sourceSignature === signature) draft.resetDraft();
-    else { uploadCache.current.clear();pendingGiftOperation.current=null; }
-    if (mounted.current) navigateCart('/cart');
-  }
   async function addConfiguredGiftToCart() {
-    if (!imagesReady || addingGift || !cartConfigurationReady || !currentEstimate || !catalog.data?.freePlacementCommerceEnabled
-      || !catalog.data.orderableBoxIds?.includes(state.boxId) || personal.hasContent && !personalizationOptions.data?.personalizationCheckoutEnabled) return;
-    if (cart.preparing) return;
-    setAddingGift(true);
-    setNotice('Verifying your gift box and current prices…');
-    try { await cart.runPersonalizedAdd(async ({signal, isCurrent, onProgress}) => {
-      const sourceSignature = `${session.ownerKey}:${JSON.stringify(state)}:${draftSignature}`;
-      if (pendingGiftOperation.current?.sourceSignature === sourceSignature) {
-        // The previous response may have been lost after the server attached
-        // the photos. Replay the immutable add, not its pre-attachment quote.
-        await cart.addGiftBox(pendingGiftOperation.current.payload);
-        finishAdded(sourceSignature);
-        return;
+    if (addLock.current || !imagesReady || addingGift || !cartConfigurationReady || !currentEstimate
+      || !catalog.data?.freePlacementCommerceEnabled || !catalog.data.orderableBoxIds?.includes(state.boxId)
+      || personal.hasContent && !personalizationOptions.data?.personalizationCheckoutEnabled) return;
+    addLock.current = true; setAddingGift(true);
+    setNotice('Preparing your gift securely. You can continue browsing while it is added.');
+    try {
+      // The global cart queue takes an immutable Blob-bearing snapshot before
+      // this editor is reset. No private file or amount is sent to analytics.
+      await cart.enqueueCustomization('gift_box_v2', {
+        arrangement: state, personal: personal.exportSnapshot(),
+        printOptionsByPhoto, surfaceOptionsByEngraving, photoAspectRatios: personal.photoAspectRatios,
+        expectedPersonalPiastres: personalPriceEstimate, cardId: card?.componentId,
+      });
+      if (mounted.current && draft.isCurrent()) {
+        draft.resetDraft();
+        setNotice('Your gift is preparing in the background. The cart will confirm when it is saved.');
+        toast.message('Preparing your gift. You can continue shopping.', { id: 'gift-box-queued' });
       }
-      if (pendingGiftOperation.current) {
-        // A changed design is a new operation. Its photos need fresh receipts;
-        // the previous uncertain operation may already own the old attachments.
-        uploadCache.current.clear();
-        pendingGiftOperation.current = null;
+    } catch (error) {
+      if (mounted.current && draft.isCurrent()) {
+        setNotice(commerceError(error));
+        toast.error(commerceError(error), { id: 'gift-box-queue-error' });
       }
-      let intent = null;
-      if (personal.hasContent) {
-        const signatureBefore = draftSignature, arrangementBefore = JSON.stringify(state), ownerKey = session.ownerKey;
-        const result = await verifyGiftBoxPersonalDraft({ boxId: state.boxId, personal, ownerKey,
-          options: personalizationOptions.data?.options, printOptionsByPhoto, surfaceOptionsByEngraving,
-          uploadFile: (file, options, ids) => uploadPrivateFile(file, {...options, signal}, ids), signal, quote: getGiftBoxPersonalizationQuote,
-          cache: uploadCache.current, uploadedIds: uploadIds.current,
-          ownerIsCurrent: () => isCurrent() && draft.isCurrent() && latest.current.ownerKey === ownerKey,
-          draftIsCurrent: () => latest.current.draftSignature === signatureBefore
-            && latest.current.arrangementSignature === arrangementBefore,
-          onProgress,
-        });
-        try { assertGiftBoxPersonalizationPriceUnchanged(result.quote, personalPriceEstimate); }
-        catch (error) { void personalizationOptions.refetch(); throw error; }
-        intent = result.intent;
-      }
-      const configuration = giftBoxConfigurationWithPersonalization(state, { cardId: card?.componentId, intent });
-      const signature = `${session.ownerKey}:${JSON.stringify(configuration)}`;
-      if (!pendingGiftOperation.current || pendingGiftOperation.current.signature !== signature) {
-        pendingGiftOperation.current = { signature, sourceSignature,
-          payload: { kind: 'gift_box_v2', operationKey: crypto.randomUUID(), quantity: 1, configuration } };
-      }
-      if (!isCurrent() || latest.current.sourceSignature !== sourceSignature) throw Error('Your session or design changed. Review your gift before adding.');
-      await cart.addGiftBox(pendingGiftOperation.current.payload);
-      finishAdded(sourceSignature);
-    }, 'Preparing your gift'); } catch (error) {
-      if (mounted.current && draft.isCurrent()) toast.error(commerceError(error), { id: 'personalized-add' });
-    }
-    finally { setAddingGift(false); }
+    } finally { addLock.current = false; if (mounted.current) setAddingGift(false); }
   }
   function choose(id) {
     const item = components.find(component => component.componentId === id);
@@ -250,7 +218,7 @@ export default function GiftBoxBuilderPage() {
   return <main className={`gb-page gb-shopping ${review ? 'gb-final-review' : ''}`} ref={pageRef} aria-busy={catalog.isPending}>
     <h1 className="sr-only">Build your gift box</h1>
     {removal && <ConfirmRemoval target={removal} onCancel={() => setRemoval(null)} onConfirm={confirmRemoval}/>}
-    {catalog.isPending ? <LoadingState label="Loading gift choices" kind="cards"/> : catalog.error ? <div className="gb-empty"><p role="alert">{commerceError(catalog.error)}</p><button className="button button-secondary" onClick={() => catalog.refetch()}>Retry choices</button></div> : <>
+    {(catalog.isPending || draft.restoring) ? <LoadingState label="Restoring your gift choices" kind="cards"/> : catalog.error ? <div className="gb-empty"><p role="alert">{commerceError(catalog.error)}</p><button className="button button-secondary" onClick={() => catalog.refetch()}>Retry choices</button></div> : <>
       <BuilderStepper step={step} reached={reached} review={review} boxSelected={Boolean(state.boxId)} onNavigate={navigate}/>
       <div className="gb-workspace">
         <section className="gb-preview" aria-label="Your gift box">
@@ -262,6 +230,7 @@ export default function GiftBoxBuilderPage() {
           {review ? <div className="gb-review">
             <p className="gb-review-dedication">A thoughtful gift, made your way.</p>
             <ul className="gb-review-highlights"><li>{label(state.boxId)}</li>{Object.entries(quantities).map(([id,quantity])=><li key={id}>{quantity} × {label(id)}</li>)}{state.ribbonId && <li>{label(state.ribbonId)}</li>}{personal.photos.length > 0 && <li>{personal.photos.length} photo prints</li>}{personal.sticker.enabled && <li>Personalized sticker: <bdi>{personal.sticker.text}</bdi></li>}</ul>
+            {hasGiftCardMessage(state.message) && <GiftCardPreview message={state.message}/>}
             {personal.sticker.enabled && defaultStickerPlacement(state.boxId) && <StickerProof sticker={personal.sticker} placement={personal.sticker.placements?.[state.boxId] || defaultStickerPlacement(state.boxId)}/>}
             {personal.hasContent && personalPriceEstimate === null && <p role="alert">Personalization is unavailable or incomplete. Review your photos and sticker before adding to cart.</p>}
             {!canPurchase && <p className="gb-purchase-unavailable">Online ordering for this gift is currently unavailable.</p>}
@@ -284,9 +253,10 @@ export default function GiftBoxBuilderPage() {
           {categoryOverLimit.length > 0 && <p role="alert">Reduce the selected {categoryOverLimit.join(' / ')} quantity to continue.</p>}
           {estimate.error && <div className="gb-feedback"><p role="alert">{commerceError(estimate.error)}</p><button type="button" onClick={() => estimate.refetch()}>Retry total</button></div>}
           {unavailableSelection && <p role="alert">A selected item is unavailable. Remove it or choose a replacement.</p>}
+          {draft.storageError && <p className="gb-feedback" role="status">{draft.storageError}</p>}
           {notice && <p className="gb-announcement" role="status">{notice}</p>}
           <footer className="gb-purchase-bar"><div className="gb-live-total" aria-live="polite"><span>Your total</span><strong>{priceText === 'Updating total…' ? <LoadingSpinner label="Updating total…"/> : priceText}</strong></div><div className="gb-navigation">
-            {review ? <button className="button button-primary gb-add-gift" type="button" disabled={!imagesReady || addingGift || !canPurchase || !cartConfigurationReady || !currentEstimate} onClick={addConfiguredGiftToCart}>{addingGift ? 'Adding your gift…' : 'Add Your Gift to Cart'}</button> : <>
+            {review ? <button className="button button-primary gb-add-gift" type="button" disabled={!imagesReady || addingGift || !canPurchase || !cartConfigurationReady || !currentEstimate} onClick={addConfiguredGiftToCart}>{addingGift ? 'Preparing your gift…' : 'Add Your Gift to Cart'}</button> : <>
             {step === 0 ? <Link className="button button-secondary" to="/customize">Back</Link> : <button type="button" className="button button-secondary" onClick={() => navigate(review ? LAST_STEP : step - 1)}>Back</button>}
             {!review && <button type="button" className="button button-primary" disabled={!state.boxId || !imagesReady} onClick={() => navigate(Math.min(LAST_STEP,step+1),step === LAST_STEP)}>{step === LAST_STEP ? 'Next: Review' : 'Next'}</button>}
             </>}

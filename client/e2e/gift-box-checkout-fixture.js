@@ -35,6 +35,15 @@ export async function localCheckoutFixture(page, { initialCart, rejectAdd = fals
   });
   const audit = { adds: [], quotes: [], orders: [] };
   const savedConfigurations = new Map();
+  const appliedOperations = new Set();
+  // Stage 2 checks the immutable operation before uploads and POST. The old
+  // fixture omitted this route, so every addition failed before reaching cart.
+  await page.route('**/api/v1/commerce/cart/operations/*', route => {
+    ensureLocal(route);
+    if (isOptions(route)) return route.fulfill({ status: 204, headers });
+    const key = new URL(route.request().url()).pathname.split('/').at(-1);
+    return reply(route, { applied: appliedOperations.has(key), alreadyOrdered: false });
+  });
   const lookup = id => fixture.components.find(component => component.componentId === id);
   let created = null;
   await page.route('**/api/v1/commerce/cart/items', async route => {
@@ -46,6 +55,7 @@ export async function localCheckoutFixture(page, { initialCart, rejectAdd = fals
     expect(body.quantity).toBe(1);
     expect(JSON.stringify(body)).not.toMatch(/pricePiastres|approvedBy|inventoryQuantity|physicalFitApproved/);
     if (rejectAdd) return failed(route, 'GIFT_BOX_COMPONENT_UNAVAILABLE', 'An approved gift component is no longer available.');
+    if (appliedOperations.has(body.operationKey)) return reply(route, { cart: fixture.state.cart });
     const { selection } = body.configuration;
     expect(selection.boxId).toBe('box-2');
     const selected = [{ componentId: selection.boxId, quantity: 1 },
@@ -77,6 +87,7 @@ export async function localCheckoutFixture(page, { initialCart, rejectAdd = fals
       name: 'Build Your Gift Box', quantity: 1, valid: true, checkoutAllowed: true,
       unitPricePiastres: amount, lineTotalPiastres: amount, giftBox: summary };
     savedConfigurations.set(line.id, structuredClone(body.configuration));
+    appliedOperations.add(body.operationKey);
     fixture.state.cart.items.push(line);
     fixture.state.cart.quantity = fixture.state.cart.items.reduce((n, item) => n + item.quantity, 0);
     fixture.state.cart.subtotalPiastres = fixture.state.cart.items.reduce((n, item) => n + item.lineTotalPiastres, 0);
@@ -160,4 +171,19 @@ export async function localCheckoutFixture(page, { initialCart, rejectAdd = fals
     return reply(route, { order: created });
   });
   return { fixture, audit, savedOrder: () => created };
+}
+
+/** The new flow deliberately does not redirect on Add. Wait for the server's
+ * idempotent write, then use the SPA cart link and verify one confirmed line.
+ * Full document navigation before confirmation could abort the owner queue. */
+export async function expectGiftAddedAndOpenCart(page, audit) {
+  await expect(page).toHaveURL(/\/customize\/gift-box$/);
+  await expect.poll(() => audit.adds.length, { timeout: 20_000 }).toBe(1);
+  // The HTTP response and shared React Query reconciliation are asynchronous.
+  // Following the Link preserves the owner-scoped CartProvider while they finish.
+  await page.locator('[data-cart-anchor]').click();
+  await expect(page).toHaveURL(/\/cart$/);
+  await expect(page.getByRole('article', { name: 'Gift Box' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('.cart-preparation')).toHaveCount(0, { timeout: 20_000 });
+  expect(audit.adds).toHaveLength(1);
 }

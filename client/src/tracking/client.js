@@ -15,6 +15,7 @@ const acknowledgements = new Map();
 let seen = new Set();
 let purchases = new Set();
 let memoryChoice;
+let forcedPrivacyRevocation;
 try { seen = new Set(JSON.parse(sessionStorage.getItem(SEEN_KEY) || '[]').filter(value => typeof value === 'string').slice(-200)); } catch { /* Storage can be unavailable. */ }
 try { purchases = new Set(JSON.parse(localStorage.getItem(PURCHASE_KEY) || '[]').filter(value => typeof value === 'string').slice(-500)); } catch { /* Server acknowledgements provide durable deduplication. */ }
 
@@ -120,8 +121,20 @@ export async function saveTrackingConsent(granted) {
     configureTracking({ ...configuration, consent: false });
   }
   const response = await safePost('/tracking/consent', { granted });
-  if (granted && response.data.data.consent === true) rememberChoice('granted', configuration?.policyVersion);
+  if (granted && response.data.data.consent === true) {
+    forcedPrivacyRevocation = undefined; // A later browser GPC change must be able to revoke fresh consent.
+    rememberChoice('granted', configuration?.policyVersion);
+  }
   return configureTracking({ ...configuration, consent: response.data.data.consent === true });
+}
+
+// One in-flight GPC revocation per page lifecycle, even when multiple
+// StrictMode effects or routes concurrently discover previous consent.
+// A blocked server request never re-enables optional tracking locally.
+export function revokeGpcConsentOnce() {
+  if (!ENABLED || !globalPrivacyControl()) return Promise.resolve(null);
+  if (!forcedPrivacyRevocation) forcedPrivacyRevocation = saveTrackingConsent(false);
+  return forcedPrivacyRevocation;
 }
 
 export async function pageTracking(path, eventId) {

@@ -40,3 +40,10 @@
 @media (prefers-reduced-motion: reduce) { .home-category-image img { transition: none; } .home-category:hover img { transform: none; } }
 
 @media (max-width: 599px) { .home-category-navigation { flex-wrap: nowrap; gap: 8px; padding-inline: 0; } }
+
+/* The 12 square owner-approved designs include typography and the CTA. */
+.home-category--approved{background:#fce6df;border-radius:18px;align-self:flex-start}
+.home-category--approved .home-category-image,.home-category--approved .home-category-image img{aspect-ratio:1}
+.home-category--approved .home-category-image img{object-fit:contain}
+.home-category--approved:hover .home-category-image img{transform:none}
+.home-category--approved:focus-visible{outline:3px solid var(--tw-rose-dark);outline-offset:3px}

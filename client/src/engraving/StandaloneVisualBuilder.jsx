@@ -20,7 +20,7 @@ export default function StandaloneVisualBuilder({ saved, editId }) {
   const pageRef = useRef(null);
   const imagesReady = useImageSelectionReady(pageRef);
   const state = useStandaloneVisualBuilder(saved, editId);
-  const { draft, setDraft, ownerKey, pending, options, types, type, hydrating, error, setError, progress, quote, uncertain, recovering, update, selectPhotos, validate, review, add, check, editorChange, attempt } = state;
+  const { draft, setDraft, ownerKey, pending, options, types, type, hydrating, error, setError, progress, quote, uncertain, recovering, update, selectPhotos, validate, review, add, check, editorChange, attempt, retryLegacyAdd, retryQuoteAfterRestore } = state;
   const [, setEditorError] = useState('');
   const stepStart = useRef(null), lastStep = useRef(draft.step);
   useEffect(() => {
@@ -32,9 +32,9 @@ export default function StandaloneVisualBuilder({ saved, editId }) {
     });
     return () => cancelAnimationFrame(frame);
   }, [draft.step]);
-  const shownError = error;
+  const shownError = error || state.storageError;
   useEffect(() => { if (shownError) toast.error(shownError, { id: 'personalized-add' }); }, [shownError]);
-  if (options.isPending || hydrating) return <main className="commerce-page"><LoadingState label="Opening your engraving studio" kind="workspace"/></main>;
+  if (options.isPending || hydrating || state.restoring) return <main className="commerce-page"><LoadingState label="Opening your engraving studio" kind="workspace"/></main>;
   if (options.error) return <main className="commerce-page"><h1>Laser Engraving</h1><p role="alert">{commerceError(options.error)}</p><button onClick={() => options.refetch()}>Try again</button></main>;
   if (!options.data.enabled) return <ServiceRequestPage service="laser_engraving"/>;
   return <main ref={pageRef} className="standalone-visual-page">
@@ -42,7 +42,8 @@ export default function StandaloneVisualBuilder({ saved, editId }) {
     <header className="sv-heading"><p className="eyebrow">Made personal, by you</p><h1>Your piece. Your story.</h1><p>Create something meaningful on an item you already own.</p></header>
     <div ref={stepStart} className="sv-step-start" tabIndex={-1} aria-label={steps[draft.step]}><EngravingStepper steps={steps} step={draft.step} disabled={pending || uncertain} onNavigate={index => { setError(''); setDraft(previous => ({ ...previous, step: index })); }}/></div>
     {shownError && <p id="standalone-engraving-error" className="sr-only">{shownError}</p>}
-    {uncertain && <section className="commerce-notice"><h2>Check your cart addition</h2><p>Your last add is unconfirmed. Check before starting another item.</p><button disabled={recovering || pending} onClick={check}>Check add status</button>{attempt.current && <button disabled={pending} onClick={add}>Retry same add</button>}</section>}
+    {draft.step === 2 && !quote && error && !uncertain && <div className="commerce-notice"><p role="alert">{error}</p><button type="button" className="button button-secondary" onClick={retryQuoteAfterRestore}>Retry current engraving price</button></div>}
+    {uncertain && <section className="commerce-notice"><h2>Check your cart addition</h2><p>Your last add is unconfirmed. Check before starting another item.</p><button disabled={recovering || pending} onClick={check}>Check add status</button>{attempt.current && <button disabled={pending} onClick={retryLegacyAdd}>Retry same add</button>}</section>}
     <fieldset className="sv-builder" disabled={pending || uncertain} aria-busy={pending} aria-describedby={error ? 'standalone-engraving-error' : undefined}>
       <legend className="sr-only">{steps[draft.step]}</legend>
       {draft.step === 0 && <div className="sv-item-layout"><section className="sv-item-controls"><h2>Your Item</h2><label>Engraving type<select aria-label="Engraving type" value={draft.typeId} onChange={event => update({ typeId: event.target.value, placement: { kind: 'help' } })}><option value="">Choose your item</option>{types.map(value => <option key={value.typeId} value={value.typeId}>{value.name}</option>)}</select></label>

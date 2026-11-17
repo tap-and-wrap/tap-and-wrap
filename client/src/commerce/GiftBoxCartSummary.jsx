@@ -1,4 +1,5 @@
 import { StickerProof } from '../gift-box/StickerWorkspace.jsx';
+import GiftCardPreview from '../gift-box/GiftCardPreview.jsx';
 import { customerGiftComponentName } from '../../../shared/gift-box/customer-label.mjs';
 import { ENGRAVING_COLORS } from '../../../shared/gift-box/lettering-styles.mjs';
 const groups = [['flower', 'Flowers'], ['plush', 'Soft Toys'], ['chocolate', 'Chocolates']];
@@ -22,7 +23,7 @@ export default function GiftBoxCartSummary({ giftBox }) {
       <div><dt>Photo prints</dt><dd>{giftBox.personalization?.photoCount || 0}</dd></div>
     {giftBox.personalization?.sticker && <div><dt>Personalized sticker</dt><dd dir="auto"> <bdi>{giftBox.personalization.sticker.text}</bdi> · {ENGRAVING_COLORS.find(color=>color.id===giftBox.personalization.sticker.colorId)?.label || 'Saved color'} · {giftBox.personalization.sticker.placement ? giftBox.personalization.sticker.placement.view === 'exterior' ? 'Exterior sticker' : `${giftBox.personalization.sticker.placement.view} side` : 'Apply to exterior front'}</dd></div>}
     </dl>
-    {cardSelected && <p className="commerce-gift-message" dir="auto">{message || 'Gift card without a message.'}</p>}
+    {cardSelected && <GiftCardPreview message={message}/>}
     {giftBox.personalization?.sticker?.placement && <StickerProof sticker={giftBox.personalization.sticker} placement={giftBox.personalization.sticker.placement}/>}
 
     {giftBox.personalization?.engravings?.map((entry,index)=><p key={index}>Engraving: <bdi>{entry.text}</bdi> · {ENGRAVING_COLORS.find(color=>color.id===entry.colorId)?.label || 'Saved color'}</p>)}

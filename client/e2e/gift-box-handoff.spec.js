@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { giftBoxFixture, beginGiftBox } from './gift-box-fixtures.js';
-import { localCheckoutFixture } from './gift-box-checkout-fixture.js';
+import { localCheckoutFixture, expectGiftAddedAndOpenCart } from './gift-box-checkout-fixture.js';
 import { isolatedImageFile } from './commerce-fixtures.js';
 
 const steps = ['Choose Your Box','Fill With Flowers','Add Soft Toys','Add Chocolates','Make It Personal','Finishing Touches'];
@@ -148,7 +148,7 @@ test('stepper retains reached state, reduced motion, document-top navigation and
     await page.getByRole('button',{name:'Return to review'}).click();
   }
   await page.getByRole('button',{name:'Add Your Gift to Cart'}).click();
-  await expect(page).toHaveURL(/\/cart$/);
+  await expectGiftAddedAndOpenCart(page,audit);
   expect(audit.adds[0].configuration.selection.giftCard).toBeNull();
 });
 

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { confirmedCartAddAndOpen } from './background-cart-assertions.js';
 const api = `http://127.0.0.1:${process.env.TAP_WRAP_CONTRACT_API_PORT}/api/v1`;
 test.skip(process.env.TAP_WRAP_CONTRACT_GIFT_SHOPPING !== 'true', 'Requires the explicit disposable shopping fixture.');
 test.beforeEach(async ({ context, page }) => {
@@ -8,7 +9,7 @@ test.beforeEach(async ({ context, page }) => {
   });
   const errors=[]; page.on('pageerror',error=>errors.push(error.message)); page.on('close',()=>expect(errors).toEqual([]));
 });
-async function add(page) { await page.getByRole('button',{name:'Add Your Gift to Cart',exact:true}).click(); await expect(page).toHaveURL(/\/cart$/); }
+async function add(page) { await confirmedCartAddAndOpen(page, () => page.getByRole('button',{name:'Add Your Gift to Cart',exact:true}).click()); }
 async function cart(context) { const response=await context.request.get(`${api}/commerce/cart`); expect(response.status()).toBe(200); return (await response.json()).data.cart; }
 
 test('meaningful gift-card text is charged once; clearing it removes the component through the real API', async ({page,context}) => {

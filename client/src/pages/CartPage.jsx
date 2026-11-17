@@ -12,16 +12,17 @@ import PersonalizationSummary from '../commerce/PersonalizationSummary.jsx';
 import GiftBoxCartSummary from '../commerce/GiftBoxCartSummary.jsx';
 import GiftBoxPreview from '../commerce/GiftBoxPreview.jsx';
 import CartLine from '../commerce/CartLine.jsx';
+import CartPreparationLine from '../commerce/CartPreparationLine.jsx';
 
 export default function CartPage() {
-  const { cart,checkoutEnabled,mixedCheckout,loading,error,pending,preparing,setQuantity,remove,refresh }=useCart();
+  const { cart,checkoutEnabled,mixedCheckout,loading,error,pending,preparing,backgroundJobs,backgroundStorageMessage,retryCustomization,checkCustomization,cancelCustomization,setQuantity,remove,refresh }=useCart();
   const session=useSession();
   const invalid=cart.items.some(item=>!item.valid);
   if(loading) return <main className="commerce-page"><LoadingState label="Loading your cart" kind="rows"/></main>;
   if(error) return <main className="commerce-page"><h1>Your Cart</h1><p role="alert">{commerceError(error)}</p><div className="button-group"><button type="button" className="button button-dark" onClick={()=>refresh()}>Try again</button><Link className="button button-secondary" to="/shop">Return to shop</Link></div></main>;
   return <main className="commerce-page"><div className="commerce-heading"><div><p className="eyebrow">Thoughtful gifts, ready for you</p><h1 tabIndex={-1}>Your Cart</h1></div></div>
-    {!cart.items.length ? <div className="commerce-empty"><p>Your cart is empty.</p><Link className="button button-primary" to="/shop">Explore the shop</Link></div> : <div className="commerce-cart-layout">
-      <section aria-label="Cart items" className="commerce-cart-items">{cart.items.map(item=>{
+    {!cart.items.length && !backgroundJobs.length ? <div className="commerce-empty"><p>Your cart is empty.</p><Link className="button button-primary" to="/shop">Explore the shop</Link></div> : <div className="commerce-cart-layout">
+      <section aria-label="Cart items" className="commerce-cart-items">{backgroundStorageMessage && <p role="alert" className="form-error">{backgroundStorageMessage}</p>}{backgroundJobs.map(job=><CartPreparationLine key={job.operationKey} job={job} retry={retryCustomization} check={checkCustomization} cancel={cancelCustomization}/>)}{cart.items.map(item=>{
         const key=`${session.ownerKey}:${session.generation}:${item.id}`;
         if(isEngravingKind(item.kind)) return <EngravingCartCard key={key} item={item} pending={pending} remove={remove}/>;
         const gift=item.kind==='gift_box_v2', name=gift?'Gift Box':item.name||'Unavailable product';
@@ -42,7 +43,7 @@ export default function CartPage() {
       })}</section>
       <aside className="commerce-summary"><h2>Order Summary</h2><dl><div><dt>Subtotal</dt><dd>{money(cart.subtotalPiastres)}</dd></div><div><dt>Delivery</dt><dd>Confirmed separately</dd></div></dl>
         {invalid&&<p className="form-error" role="alert">Review unavailable items before checkout.</p>}
-        {preparing ? <button className="button button-primary" disabled>Finishing your personalized item</button> : checkoutEnabled&&!invalid?<Link className="button button-primary" to="/checkout">Proceed to Checkout</Link>:<><button className="button button-primary" disabled>Checkout unavailable</button>{!mixedCheckout&&!invalid&&<p className="commerce-muted">Online ordering is currently unavailable for this cart. Your items remain saved.</p>}</>}
+        {preparing ? <><button className="button button-primary" disabled>Resolve pending custom items before checkout</button><p className="commerce-muted">Only confirmed items are included in the subtotal. Retry or cancel unfinished preparations above.</p></> : checkoutEnabled&&!invalid?<Link className="button button-primary" to="/checkout">Proceed to Checkout</Link>:<><button className="button button-primary" disabled>Checkout unavailable</button>{!mixedCheckout&&!invalid&&<p className="commerce-muted">Online ordering is currently unavailable for this cart. Your items remain saved.</p>}</>}
         <Link to="/shop" className="commerce-continue">Continue shopping</Link>
       </aside>
     </div>}

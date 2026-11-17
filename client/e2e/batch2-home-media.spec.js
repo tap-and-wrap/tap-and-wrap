@@ -19,11 +19,16 @@ test('twelve active main categories get their editorial thumbnails and real navi
     const card = page.getByRole('link', { name: `Shop ${category.name}`, exact: true });
     await expect(card).toHaveAttribute('href', `/categories/${category.slug}`);
     await expect(card.locator('img')).toHaveAttribute('src', `/media/tap-wrap-category-${category.slug}.webp`);
-    await expect(card.getByText('Shop Now')).toBeVisible();
+    await expect(card.getByText('Shop Now')).toHaveCount(0);
+    await expect(card).toHaveClass(/home-category--approved/);
+    await expect(card.locator('img')).toHaveCSS('object-fit', 'contain');
   }
   await expect(page.getByRole('button', { name: 'Previous categories' })).toBeDisabled();
   await expect(page.getByRole('link', { name: 'Shop All' }).first()).toHaveAttribute('href', '/shop');
   await expect(page.locator('.home-slide-dot').first()).toHaveClass(/is-active/);
+  await page.getByRole('link', {name:'Shop Accessories',exact:true}).locator('img').click();
+  await expect(page).toHaveURL(/\/categories\/accessories$/);
+  await page.goBack();
   await page.getByRole('button', { name: 'Next categories' }).click();
   await expect.poll(() => page.locator('.home-category-grid').evaluate(node => node.scrollLeft)).toBeGreaterThan(50);
 });

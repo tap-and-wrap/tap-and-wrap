@@ -4,8 +4,9 @@ export default defineConfig({
   testDir: './e2e',
   // Enabled-builder studies use playwright.gift-box-phase4.config.js. The
   // production chunk-loading check uses playwright.gift-box-loading.config.js.
-  // Default public intake stays disabled; do not run contradictory fixtures here.
-  testIgnore: ['**/gift-box-picker-v2.spec.js','**/premium-cart-photos.spec.js','**/gift-box-handoff.spec.js','**/gift-box-v2.spec.js','**/gift-box-phase35.spec.js','**/gift-box-phase4.spec.js','**/gift-box-cart.spec.js',
+  // Default public intake stays disabled; Stage 4 builder checks run separately
+  // in playwright.v10-stage4.config.js with its fixture feature enabled.
+  testIgnore: ['**/v10-stage4.spec.js','**/gift-box-picker-v2.spec.js','**/premium-cart-photos.spec.js','**/gift-box-handoff.spec.js','**/gift-box-v2.spec.js','**/gift-box-phase35.spec.js','**/gift-box-phase4.spec.js','**/gift-box-cart.spec.js',
     '**/gift-box-calibration.spec.js','**/gift-box-redesign.spec.js','**/gift-box-release-checkout.spec.js',
     '**/gift-box-phase6b4-audit.spec.js','**/gift-box-personalization-final.spec.js','**/gift-box-loading.spec.js'],
   timeout: 30_000,

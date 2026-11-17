@@ -1,5 +1,5 @@
 import { test,expect } from '@playwright/test';
-import { localCheckoutFixture } from './gift-box-checkout-fixture.js';
+import { localCheckoutFixture, expectGiftAddedAndOpenCart } from './gift-box-checkout-fixture.js';
 import { beginGiftBox } from './gift-box-fixtures.js';
 import { isolatedImageFile } from './commerce-fixtures.js';
 
@@ -146,7 +146,7 @@ test('outside pointer clears selection while arrows, Undo, fullscreen and delete
   await item.click();await page.getByRole('button',{name:'Delete selected item'}).click(); await page.getByRole('button',{name:'Remove item',exact:true}).click();await expect(page.locator('.gb-placed')).toHaveCount(0);
 });
 test('sticker input is readable and charges once; generic legacy toy names are normalized in options and cart',async({page})=>{
-  const {fixture}=await localCheckoutFixture(page,{personalized:true});fixture.components.find(item=>item.componentId==='plush-1').displayName='Plush 1';
+  const {fixture,audit}=await localCheckoutFixture(page,{personalized:true});fixture.components.find(item=>item.componentId==='plush-1').displayName='Plush 1';
   await beginGiftBox(page);await page.getByRole('button',{name:'Add Soft Toys',exact:true}).click();
   await page.getByRole('button',{name:'Add Soft Toy 1',exact:true}).click();await expect(page.getByRole('button',{name:'Move Soft Toy 1',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Make It Personal',exact:true}).click();const input=page.getByLabel('Write a name, special date, or heartfelt message');
@@ -155,7 +155,7 @@ test('sticker input is readable and charges once; generic legacy toy names are n
   await expect(page.locator('.gb-live-total strong')).toContainText('20.00');await input.fill('Nour');await expect(page.locator('.gb-live-total strong')).toContainText('40.00');
   await input.fill('Nour and family');await expect(page.locator('.gb-live-total strong')).toContainText('40.00');
   await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();await page.getByRole('button',{name:'Next: Review'}).click();
-  await page.getByRole('button',{name:'Add Your Gift to Cart'}).click();await expect(page).toHaveURL(/\/cart$/);await expect(page.locator('main')).toContainText('Soft Toy 1');
+  await page.getByRole('button',{name:'Add Your Gift to Cart'}).click();await expectGiftAddedAndOpenCart(page,audit);await expect(page.locator('main')).toContainText('Soft Toy 1');
 });
 
 // Render the real shared canvas with synthetic data, without changing catalog

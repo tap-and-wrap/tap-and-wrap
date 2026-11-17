@@ -20,7 +20,7 @@ export function usePersonalDraft({ freePlacement = false, photoAspectRatios = fa
     for (const url of objectUrls.current) URL.revokeObjectURL(url);
     objectUrls.current.clear();
   }, []);
-  function createPhoto(file, id = crypto.randomUUID()) {
+  function createPhoto(file, id = crypto.randomUUID(), silent = false) {
     const url = URL.createObjectURL(file);objectUrls.current.add(url);
     const photo = { id, file, fileKey: `${file.name}\u0000${file.size}\u0000${file.lastModified}`, name:file.name,url,dimensionsPending:true };
     const image = new Image();
@@ -29,7 +29,7 @@ export function usePersonalDraft({ freePlacement = false, photoAspectRatios = fa
       const aspectRatio=image.naturalWidth/image.naturalHeight;
       if (!Number.isFinite(aspectRatio) || image.naturalWidth > 12000 || image.naturalHeight > 12000 || image.naturalWidth*image.naturalHeight > 40000000) { setNotice('Choose a smaller supported photograph.'); return; }
       setPhotos(current=>current.map(item=>item.id === id && item.url === url ? {...item,aspectRatio,dimensionsPending:false} : item));
-      toast.success('Photo selected in your gift draft.', { id: `gift-photo-${id}` });
+      if (!silent) toast.success('Photo selected in your gift draft.', { id: `gift-photo-${id}` });
     };
     image.onerror = () => { if (objectUrls.current.has(url)) setNotice('This photo could not be opened. Remove it and choose another image.'); };
     image.src=url;return photo;
@@ -125,11 +125,53 @@ export function usePersonalDraft({ freePlacement = false, photoAspectRatios = fa
   }
   const visiblePhotos = photos.filter(photo => !hiddenPhotoIds.includes(photo.id));
   const hasContent = visiblePhotos.length > 0 || (freePlacement ? sticker.enabled : engravings.some(line => line.text.trim().length > 0));
+  // Persist only the owner's selected browser Files and serializable configuration.
+  // Object URLs are transient and reconstructed after a full page reload.
+  function exportSnapshot() {
+    return {
+      photos: photosRef.current.map(photo => ({ id: photo.id, name: photo.name, file: photo.file, lastModified: photo.file?.lastModified,
+        aspectRatio: Number.isFinite(photo.aspectRatio) ? photo.aspectRatio : null })),
+      sticker, engravings, photoPositions,
+    };
+  }
+  function restoreSnapshot(saved) {
+    if (!saved || typeof saved !== 'object') return;
+    for (const url of objectUrls.current) URL.revokeObjectURL(url);
+    objectUrls.current.clear();
+    const restored = [];
+    let total = 0;
+    for (const entry of Array.isArray(saved.photos) ? saved.photos.slice(0, 20) : []) {
+      if (!entry || typeof entry.id !== 'string' || !/^[a-f0-9-]{36}$/i.test(entry.id)
+          || !(entry.file instanceof Blob) || !['image/jpeg','image/png','image/webp'].includes(entry.file.type)
+          || entry.file.size < 1 || entry.file.size > 8 * 1024 * 1024) continue;
+      total += entry.file.size;
+      if (total > 64 * 1024 * 1024 || restored.some(photo => photo.id === entry.id)) break;
+      const file = entry.file instanceof File ? entry.file : new File([entry.file], entry.name || 'restored-image', { type: entry.file.type, lastModified: Number.isFinite(entry.lastModified) ? entry.lastModified : Date.now() });
+      const photo = createPhoto(file, entry.id, true);
+      if (Number.isFinite(entry.aspectRatio) && entry.aspectRatio > 0) {
+        photo.aspectRatio = entry.aspectRatio;
+        photo.dimensionsPending = false;
+      }
+      restored.push(photo);
+    }
+    photosRef.current = restored;
+    setPhotos(restored);
+    const nextSticker = saved.sticker;
+    if (nextSticker && typeof nextSticker.text === 'string' && nextSticker.text.length <= 160
+      && stickerStyle(nextSticker.styleId) && ENGRAVING_COLORS.some(color => color.id === nextSticker.colorId)) {
+      setStickerHistory({ past: [], future: [], present: nextSticker });
+    }
+    if (Array.isArray(saved.engravings)) {
+      setEngravings(saved.engravings.slice(0, MAX_ENGRAVING_LINES).filter(line =>
+        line && typeof line.id === 'string' && typeof line.text === 'string' && validateDraftEngraving(line.text)));
+    }
+    if (saved.photoPositions && typeof saved.photoPositions === 'object') setPhotoPositions(saved.photoPositions);
+  }
   function reset() {
     for (const url of objectUrls.current) URL.revokeObjectURL(url);
     objectUrls.current.clear();photosRef.current=[];setPhotos([]);setPhotoPositions({});setNotice('');
     setStickerHistory({past:[],future:[],present:{enabled:false,text:'',styleId:'sticker-rochester-v1',colorId:'black',optionId:null,placements:{}}});
     setEngravings([{id:'line-1',text:'',styleId:null,colorId:DEFAULT_ENGRAVING_COLOR}]);
   }
-  return { freePlacement, photoAspectRatios, presentationVersion, sticker, updateSticker, canUndoSticker: stickerHistory.past.length > 0, canRedoSticker: stickerHistory.future.length > 0, undoSticker: () => setStickerHistory(h => h.past.length ? { past: h.past.slice(0,-1), present: h.past.at(-1), future: [h.present,...h.future] } : h), redoSticker: () => setStickerHistory(h => h.future.length ? { past: [...h.past,h.present], present: h.future[0], future: h.future.slice(1) } : h), photos: visiblePhotos, engravings, notice, hasContent, photoPositions: arrangementPositions || photoPositions, placePhoto, resetPhotoPositions, addPhotos, replacePhoto, removePhoto, movePhoto, updateEngraving, addEngraving, removeEngraving,reset };
+  return { freePlacement, photoAspectRatios, presentationVersion, sticker, updateSticker, canUndoSticker: stickerHistory.past.length > 0, canRedoSticker: stickerHistory.future.length > 0, undoSticker: () => setStickerHistory(h => h.past.length ? { past: h.past.slice(0,-1), present: h.past.at(-1), future: [h.present,...h.future] } : h), redoSticker: () => setStickerHistory(h => h.future.length ? { past: [...h.past,h.present], present: h.future[0], future: h.future.slice(1) } : h), photos: visiblePhotos, engravings, notice, hasContent, photoPositions: arrangementPositions || photoPositions, placePhoto, resetPhotoPositions, addPhotos, replacePhoto, removePhoto, movePhoto, updateEngraving, addEngraving, removeEngraving,exportSnapshot,restoreSnapshot,reset };
 }

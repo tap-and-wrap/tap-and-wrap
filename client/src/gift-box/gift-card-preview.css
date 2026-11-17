@@ -1,0 +1,10 @@
+/* Same customer-facing gift-card proof in builder, cart and checkout. */
+.tw-gift-card{box-sizing:border-box;display:block;min-width:0;width:min(100%,420px);margin:16px 0;padding:11px;border:1px solid #e9c8be;border-radius:18px;background:linear-gradient(135deg,#fff8f3 0%,#fbe4df 100%);box-shadow:0 6px 18px rgba(100,67,57,.06);color:#684239}
+.tw-gift-card__frame{display:grid;justify-items:center;gap:10px;min-width:0;border:1px solid rgba(107,67,55,.3);border-radius:12px;padding:clamp(16px,4vw,25px) clamp(12px,4vw,25px);text-align:center;background:rgba(255,255,255,.25)}
+.tw-gift-card__eyebrow,.tw-gift-card__footer{font-size:.68rem;letter-spacing:.15em;text-transform:uppercase;font-weight:600}
+.tw-gift-card__ornament{font-size:1.2rem;line-height:1;color:#a87a72}
+.tw-gift-card__message{width:100%;min-width:0;margin:6px 0;font-family:var(--tw-font-display),serif;font-size:clamp(1.05rem,2vw,1.4rem);line-height:1.55;font-weight:500;white-space:pre-wrap;overflow-wrap:anywhere;unicode-bidi:plaintext;text-align:start}
+.tw-gift-card--compact{width:100%;margin:8px 0;padding:7px;border-radius:12px}
+.tw-gift-card--compact .tw-gift-card__frame{padding:12px 10px;gap:6px;border-radius:8px}
+.tw-gift-card--compact .tw-gift-card__message{font-size:1rem;line-height:1.45}
+.tw-gift-card--compact .tw-gift-card__eyebrow,.tw-gift-card--compact .tw-gift-card__footer{font-size:.59rem}
