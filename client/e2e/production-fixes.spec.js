@@ -71,7 +71,7 @@ test('every exterior and Box 12 fallback keep square saved sticker coordinates',
   for(let box=1;box<=11;box++){
     await page.getByLabel('Fixture selected box').selectOption(`box-${box}`);
     await expect(page.locator('.sticker-viewport')).toBeVisible();
-    const bounds=await page.locator('.sticker-viewport').boundingBox();expect(bounds.width).toBeCloseTo(bounds.height,0);expect(bounds.width).toBeLessThanOrEqual(280);
+    const bounds=await page.locator('.sticker-viewport').boundingBox();expect(bounds.width).toBeCloseTo(bounds.height,0);expect(bounds.width).toBeLessThanOrEqual(320); // Stage 4 approved wider square canvas; saved coordinates remain normalized.
     await page.getByRole('button',{name:'Move sticker left',exact:true}).click();
     expect((await page.evaluate(()=>window.snapshotSticker())).placements[`box-${box}`].version).toBe('box-sticker-workspace-v2');
   }

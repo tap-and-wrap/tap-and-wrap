@@ -1,6 +1,7 @@
 import { chooseImageFiles } from '../e2e/media-helpers.js';
 import { chooseOption } from '../e2e/select-option.js';
 import { test, expect } from '@playwright/test';
+import { confirmedCartAddAndOpen, reconcileUncertainAddition } from './background-cart-assertions.js';
 
 const api = `http://127.0.0.1:${process.env.TAP_WRAP_CONTRACT_API_PORT}/api/v1`;
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWO4NbsXAARVAgOYIL6CAAAAAElFTkSuQmCC','base64');
@@ -28,8 +29,7 @@ async function build(page, box, photo = null) {
   await expect(page.getByRole('button',{name:/^Add (?:Your Gift to Cart|to Cart)$/})).toBeEnabled();
 }
 async function add(page) {
-  await page.getByRole('button',{name:/^Add (?:Your Gift to Cart|to Cart)$/}).click();
-  await expect(page).toHaveURL(/\/cart$/);
+  return confirmedCartAddAndOpen(page, () => page.getByRole('button',{name:/^Add (?:Your Gift to Cart|to Cart)$/}).click());
 }
 async function cart(context) { return (await (await context.request.get(`${api}/commerce/cart`)).json()).data.cart; }
 
@@ -68,8 +68,16 @@ for (const [navigation, firstPhoto, secondPhoto] of [
       return route.fulfill({status:409,headers:{'access-control-allow-origin':`http://127.0.0.1:${process.env.TAP_WRAP_CONTRACT_WEB_PORT}`,'access-control-allow-credentials':'true'},json:{ok:false,error:{code:'GIFT_BOX_COMPONENT_UNAVAILABLE',message:'This component is unavailable. Choose another item or try again.'}}});
     });
     await page.getByRole('button',{name:'Add Your Gift to Cart'}).click();
-    await expect(page.getByRole('region',{name:'Notifications alt+T'})).toContainText('Choose another item');
+    await page.locator('[data-cart-anchor]').first().click();
+    const rejected = page.getByRole('article', { name: 'Gift Box preparation' });
+    await expect(rejected).toContainText('Choose another item');
     expect((await cart(context)).items).toHaveLength(1);
+    await rejected.getByRole('button',{name:'Cancel preparation'}).click();
+    await expect(rejected).toHaveCount(0);
+    // The new queue snapshots and clears the submitted draft: an explicitly
+    // rejected configuration must be rebuilt, not blindly submitted again.
+    await page.goto('/customize/gift-box');
+    await build(page,'box-3',secondPhoto);
   }
   await add(page);
   const result = await cart(context);
@@ -115,12 +123,11 @@ test('a lost add response retries the same personalized operation without anothe
     lost = true; await route.abort('failed');
   });
   await page.getByRole('button',{name:/^Add (?:Your Gift to Cart|to Cart)$/}).click();
-  await expect(page.locator('.gb-announcement')).not.toBeEmpty();
+  await expect.poll(() => lost).toBe(true);
   await expect.poll(async()=> (await cart(context)).items.length).toBe(1);
-  await page.getByRole('banner').getByRole('link',{name:'Tap and Wrap home',exact:true}).click();
-  await page.goBack();
-  await add(page);
+  await reconcileUncertainAddition(page, 'Gift Box');
   const result = await cart(context); expect(result.items).toHaveLength(1); expect(result.items[0].quantity).toBe(1);
+  await page.reload(); expect((await cart(context)).items).toHaveLength(1);
 });
 
 test('identical plain gifts intentionally added from fresh visits increase quantity',async ({page,context}) => {
@@ -141,6 +148,11 @@ test('editing after a lost add response uses fresh photo receipts and preserves 
   });
   await page.getByRole('button',{name:'Add Your Gift to Cart'}).click();
   await expect.poll(async()=> (await cart(context)).items.length).toBe(1);
+  await reconcileUncertainAddition(page, 'Gift Box');
+  // The queued snapshot has been submitted and cleared. An additional,
+  // different gift is an explicit fresh design and operation key.
+  await page.goto('/customize/gift-box');
+  await build(page,'box-2','changed.png');
   await page.getByRole('button',{name:'Fill With Flowers',exact:true}).click();
   await page.getByRole('button',{name:'Add Synthetic rose-red',exact:true}).click();
   await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();

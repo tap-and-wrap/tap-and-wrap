@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import { confirmedCartAddAndOpen } from './background-cart-assertions.js';
 const api=`http://127.0.0.1:${process.env.TAP_WRAP_CONTRACT_API_PORT}`;
 const web=`http://127.0.0.1:${process.env.TAP_WRAP_CONTRACT_WEB_PORT}`;
 test.skip(process.env.TAP_WRAP_CONTRACT_GIFT_SHOPPING!=='true','Requires disposable Gift Box shopping fixture.');
@@ -7,7 +8,7 @@ test('real Product + Gift Box cart is eligible, reprices quantities, confirms re
   const state=await(await request.get(`${api}/__fixture/state`,{headers:{'x-fixture-key':'connected-fixture-only'}})).json();
   const csrf=async()=>({Origin:web,'x-csrf-token':(await(await context.request.get(`${api}/api/v1/auth/csrf`)).json()).data.csrfToken});
   const added=await context.request.post(`${api}/api/v1/commerce/cart/items`,{headers:await csrf(),data:{productId:state.giftBoxV2.ordinaryProductId,quantity:1}});expect(added.status()).toBe(201);
-  await page.goto('/customize/gift-box');await page.getByRole('button',{name:'Choose Synthetic box-2',exact:true}).click();await page.getByRole('button',{name:'Fill With Flowers',exact:true}).click();await page.getByRole('button',{name:'Add Synthetic rose-red',exact:true}).click();await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();await page.getByRole('button',{name:'Next: Review'}).click();await page.getByRole('button',{name:'Add Your Gift to Cart',exact:true}).click();await expect(page).toHaveURL('/cart');
+  await page.goto('/customize/gift-box');await page.getByRole('button',{name:'Choose Synthetic box-2',exact:true}).click();await page.getByRole('button',{name:'Fill With Flowers',exact:true}).click();await page.getByRole('button',{name:'Add Synthetic rose-red',exact:true}).click();await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();await page.getByRole('button',{name:'Next: Review'}).click();await confirmedCartAddAndOpen(page, () => page.getByRole('button',{name:'Add Your Gift to Cart',exact:true}).click());
   const gift=page.getByRole('article',{name:'Gift Box',exact:true});
   await expect(page.getByRole('link',{name:'Proceed to Checkout'})).toBeVisible();
   await gift.getByRole('button',{name:'Increase quantity for Gift Box'}).click();await expect(gift.locator('output')).toHaveText('2');

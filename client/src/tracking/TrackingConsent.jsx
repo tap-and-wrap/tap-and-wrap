@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { getTrackingConfiguration, globalPrivacyControl, pageTracking, saveTrackingConsent, trackingChoice, publicTrackingPath } from './client.js';
+import { getTrackingConfiguration, globalPrivacyControl, pageTracking, saveTrackingConsent, revokeGpcConsentOnce, trackingChoice, publicTrackingPath } from './client.js';
 
 export default function TrackingConsent() {
   const { pathname } = useLocation();
@@ -17,7 +17,7 @@ export default function TrackingConsent() {
     getTrackingConfiguration().then(async settings => {
       if (cancelled) return;
       if (globalPrivacyControl() && settings.enabled) {
-        try { await saveTrackingConsent(false); } catch { /* Local GPC gate already disables all emission. */ }
+        try { await revokeGpcConsentOnce(); } catch { /* Local GPC gate already disables all emission. */ }
         settings = { ...settings, consent: false };
       }
       setConfig(settings);

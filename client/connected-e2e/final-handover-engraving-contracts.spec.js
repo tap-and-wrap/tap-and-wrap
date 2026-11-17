@@ -1,4 +1,5 @@
 import { saveCartItem } from './cart-assertions.js';
+import { confirmedCartAdd, confirmedCartAddAndOpen } from './background-cart-assertions.js';
 import { mkdir } from 'node:fs/promises';
 import { test, expect, api, post, image, choose, open, words, review, cart } from './visual-engraving-fixture.js';
 const screenshotDir = '../local-data/production-fixes/connected-screenshots';
@@ -55,8 +56,7 @@ test('standalone compact steps and original-color artwork remain usable at all h
   }
   await review(page);
   for(const width of [320,390,768,1024,1440]) await screenshot(page,'engraving-review',width);
-  await page.getByRole('button',{name:'Add to Cart',exact:true}).click();
-  await expect(page.getByText('Engraving added to cart.',{exact:true})).toBeVisible();
+  await confirmedCartAdd(page, () => page.getByRole('button',{name:'Add to Cart',exact:true}).click());
   const items=(await cart(context)).items;expect(items).toHaveLength(1);
   const spec=(await(await context.request.get(`${api}/commerce/engraving/cart/${items[0].id}`)).json()).data.specification;
   expect(spec.design.layers.map(layer=>layer.type)).toEqual(['text','image']);
@@ -102,7 +102,8 @@ test('all five line families share safe InstaPay checkout; sticker details and m
   const sticker=page.getByLabel('Write a name, special date, or heartfelt message');await sticker.fill('A special day');
   for(const width of [320,390,768,1024,1440])await screenshot(page,'gift-sticker',width);
   await page.setViewportSize({width:390,height:900});await sticker.focus();await expect.poll(()=>sticker.evaluate(node=>{const rect=node.getBoundingClientRect();return rect.top>=document.querySelector('.site-header-stack').getBoundingClientRect().bottom&&rect.bottom<=innerHeight;})).toBe(true);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));const position=await page.evaluate(()=>{window.scrollBy(0,-80);return scrollY;});await page.evaluate(()=>window.visualViewport?.dispatchEvent(new Event('resize')));await page.waitForTimeout(100);expect(await page.evaluate(()=>scrollY)).toBe(position);
-  await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();await page.getByRole('button',{name:'Next: Review',exact:true}).click();await page.getByRole('button',{name:'Add Your Gift to Cart',exact:true}).click();await expect(page).toHaveURL('/cart');
+  await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();await page.getByRole('button',{name:'Next: Review',exact:true}).click();
+  await confirmedCartAddAndOpen(page, () => page.getByRole('button',{name:'Add Your Gift to Cart',exact:true}).click());
   const gift=page.getByRole('article',{name:'Gift Box',exact:true});await gift.getByRole('button',{name:'View Design Details',exact:true}).click();await expect(gift.locator('dl').getByText('Photo prints',{exact:true})).toBeVisible();await expect(gift.locator('dl').getByText('A special day',{exact:true})).toBeVisible();await expect(gift.getByText(/Personal touches per box/)).toHaveCount(0);await expect(gift.locator('.sticker-proof-image')).toBeVisible();await expect(gift.locator('.cart-v2-photo').getByRole('img',{name:'Photo 1',exact:true})).toBeVisible();await expect(gift.locator('.private-photo-thumbnail')).toHaveCount(0);
   const mixed=await cart(context);expect(mixed.items).toHaveLength(5);expect(mixed.items.filter(item=>item.kind==='product')).toHaveLength(3);
   await page.goto('/checkout');await details(page);await expect(page.getByRole('radio',{name:/Cash on Delivery/})).toBeChecked();await expect(page.getByRole('radio',{name:/InstaPay/})).toBeVisible();await page.getByRole('radio',{name:/InstaPay/}).check();await expect(page.getByRole('button',{name:'View transfer details',exact:true})).toHaveCount(0);await page.getByLabel('Transfer sender name *').fill('Synthetic Mixed Sender');await choose(page,/InstaPay: Choose screenshot/,await image(page,300,200));await expect(page.getByRole('button',{name:'Place Order',exact:true})).toBeEnabled();await page.getByRole('button',{name:'Place Order',exact:true}).click();await expect(page.getByRole('heading',{name:/Thank you for your order!/})).toBeVisible();

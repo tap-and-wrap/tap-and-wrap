@@ -78,6 +78,11 @@ test('legacy bookmarks redirect safely and customers never receive the admin wor
   await ownerFixture(page);
   for (const [old, expected] of [['/admin/website/overview', '/admin'], ['/admin/website/categories', '/admin/categories'], ['/admin/commerce/bundles', '/admin/discounts'], ['/admin/website/reviews', '/admin'], ['/admin/notifications', '/admin'], ['/admin/commerce/templates', '/admin/customization'], ['/admin/gift-box/fulfillment-policies', '/admin/gift-box?tab=components'], [`/admin/commerce/orders/${ownerOrders[0].id}`, `/admin/orders/${ownerOrders[0].id}`]]) { await page.goto(old); await expect(page).toHaveURL(`http://127.0.0.1:5191${expected}`); }
   await page.unrouteAll({ behavior: 'wait' }); await mockCommerce(page, { role: 'customer' });
-  await page.goto('/admin'); await expect(page.getByRole('heading', { name: 'Access denied' })).toBeVisible();
+  // An in-flight legacy redirect may cancel this navigation; never allow
+  // that race to bypass the actual server-denied access assertion.
+  await page.goto('/admin', {waitUntil:'domcontentloaded'}).catch(error => {
+    if (!/ERR_ABORTED/.test(String(error))) throw error;
+  });
+  await expect(page.getByRole('heading', { name: 'Access denied' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Administration', exact: true })).toHaveCount(0);
 });

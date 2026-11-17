@@ -1,5 +1,6 @@
 import LoadingState from './LoadingState.jsx';
 import { categoryHref } from '../../../shared/category-paths.mjs';
+import { approvedCategoryImage } from './category-artwork.mjs';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueries } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -7,27 +8,13 @@ import { listCategories, listProducts } from '../services/catalog.js';
 import ProductCard from './ProductCard.jsx';
 import './HomeCatalog.css';
 
-// These files are editorial fallback thumbnails until the owner configures
-// category image keys in the existing admin dashboard. API imageUrl wins.
-const categoryThumbnails = Object.freeze({
-  accessories: '/media/tap-wrap-category-accessories.webp',
-  'food-treats': '/media/tap-wrap-category-food-treats.webp',
-  'gifts-occasions': '/media/tap-wrap-category-gifts-occasions.webp',
-  'home-kitchen': '/media/tap-wrap-category-home-kitchen.webp',
-  'beauty-selfcare': '/media/tap-wrap-category-beauty-selfcare.webp',
-  'baby-kids': '/media/tap-wrap-category-baby-kids.webp',
-  'home-decor': '/media/tap-wrap-category-home-decor.webp',
-  'flowers-plants': '/media/tap-wrap-category-flowers-plants.webp',
-  'outdoor-travel': '/media/tap-wrap-category-outdoor-travel.webp',
-  'electronics-gaming': '/media/tap-wrap-category-electronics-gaming.webp',
-  'office-stationery': '/media/tap-wrap-category-office-stationery.webp',
-  pets: '/media/tap-wrap-category-pets.webp',
-});
-function thumbnailFor(category) {
-  if (category.imageUrl) return category.imageUrl;
-  const normalized = (category.name || category.slug || '').toLowerCase().replace(/&/g, ' ').replace(/\band\b/g, ' ').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  return categoryThumbnails[normalized] || categoryThumbnails[category.slug] || null;
+// Approved category files already have their title and Shop Now artwork.
+// Unrecognized categories retain the admin-supplied image and text controls.
+function categoryArtwork(category) {
+  const image = approvedCategoryImage(category);
+  return { image: image || category.imageUrl || null, approved: Boolean(image) };
 }
+
 export function FeaturedCategories() {
   const scroller = useRef(null);
   const [slide, setSlide] = useState({ index: 0, pages: 1, hasPrevious: false, hasNext: false });
@@ -65,10 +52,13 @@ export function FeaturedCategories() {
   if (!query.data.categories.length) return <p className="catalog-state">Explore our gifts in the <Link to="/shop">shop</Link>.</p>;
   return <div className="home-categories-wrap">
     <div className="home-category-grid" ref={scroller} aria-label="Shop gift categories">
-      {query.data.categories.map(category => <Link className="home-category" key={category._id} to={categoryHref(category)} aria-label={`Shop ${category.name}`}>
-        <div className="home-category-image">{thumbnailFor(category) ? <img src={thumbnailFor(category)} alt="" loading="lazy" width="1200" height="900" /> : <span aria-hidden="true">Tap & Wrap</span>}</div>
-        <div className="home-category-caption"><h3>{category.name}</h3><span className="home-category-cta">Shop Now</span></div>
-      </Link>)}
+      {query.data.categories.map(category => {
+        const artwork = categoryArtwork(category);
+        return <Link className={`home-category${artwork.approved ? ' home-category--approved' : ''}`} key={category._id} to={categoryHref(category)} aria-label={`Shop ${category.name}`}>
+          <div className="home-category-image">{artwork.image ? <img src={artwork.image} alt="" loading="lazy" width="1200" height={artwork.approved ? '1200' : '900'} /> : <span aria-hidden="true">Tap & Wrap</span>}</div>
+          {!artwork.approved && <div className="home-category-caption"><h3>{category.name}</h3><span className="home-category-cta">Shop Now</span></div>}
+        </Link>;
+      })}
     </div>
     <nav className="home-category-navigation" aria-label="Category carousel navigation">
       <button type="button" className="home-slide-arrow" aria-label="Previous categories" disabled={!slide.hasPrevious} onClick={() => navigate(slide.index - 1)}>←</button>

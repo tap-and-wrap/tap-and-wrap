@@ -8,4 +8,4 @@
 .sticker-workspace{container-type:inline-size}.sticker-toolbar{flex-wrap:nowrap}@container(max-width:300px){.sticker-toolbar button{width:32px;height:44px}.sticker-toolbar output{min-width:36px}}
 
 /* Scale the square canvas; its normalized coordinate system stays intact. */
-.sticker-viewport{width:min(100%,280px,42svh);justify-self:center}
+.sticker-viewport{width:min(100%,320px,42svh);justify-self:center}

@@ -3,11 +3,18 @@ import { seedLegacyEngraving, placeConnectedEngraving } from './legacy-engraving
 test('saved missing artwork is explicit and can be replaced without changing the surface', async ({ page, context }) => {
   await start(page); const artwork = await image(page, 400, 200); await choose(page, /Engraving artwork: Add image artwork/, artwork); await add(page);
   const line = (await cart(context)).items[0], before = (await (await context.request.get(`${api}/commerce/engraving/cart/${line.id}`)).json()).data.specification;
+  const originalSurface = await context.request.get(`${api}/commerce/uploads/${before.surfacePhotoUploadId}/content`);
+  expect(originalSurface.ok()).toBe(true);
+  const originalSurfaceBytes = await originalSurface.body();
   await page.route(`**/commerce/uploads/${before.design.layers[0].assetId}/content`, route => route.fulfill({ status: 404, json: { error: { message: 'Synthetic expired image' } } }));
   await page.goto(`/customize/laser-engraving?edit=${line.id}`); await expect(page.getByRole('region',{name:'Notifications alt+T'}).getByText(/expired or are unavailable/)).toBeVisible(); await page.getByRole('button', { name: 'Design Your Engraving', exact: true }).click();
   await page.getByRole('button', { name: '1. Image artwork', exact: true }).click(); await page.getByRole('button', { name: 'Delete image layer 1', exact: true }).click(); await page.getByRole('dialog').getByRole('button',{name:'Remove',exact:true}).click(); await expect(page.getByRole('button',{name:'1. Image artwork',exact:true})).toHaveCount(0); await choose(page, /Engraving artwork: Add image artwork/, artwork); await add(page);
   const after = (await (await context.request.get(`${api}/commerce/engraving/cart/${line.id}`)).json()).data.specification;
-  expect(after.surfacePhotoUploadId).toBe(before.surfacePhotoUploadId); expect(after.design.layers[0].assetId).not.toBe(before.design.layers[0].assetId); expect((await cart(context)).items).toHaveLength(1);
+  const savedSurface = await context.request.get(`${api}/commerce/uploads/${after.surfacePhotoUploadId}/content`);
+  expect(savedSurface.ok()).toBe(true);
+  expect(await savedSurface.body()).toEqual(originalSurfaceBytes);
+  expect(after.design.surface.aspectRatio).toBe(before.design.surface.aspectRatio);
+  expect(after.design.layers[0].assetId).not.toBe(before.design.layers[0].assetId); expect((await cart(context)).items).toHaveLength(1);
 });
 
 test('historical Drawing remains on the v1 edit path and is never silently converted', async ({ page, context }) => {

@@ -11,7 +11,7 @@ test('photo upload is scoped to a real gift box and never sends local files or p
   assert.deepEqual(result,[{photoId:id1,uploadId:'000000000000000000000001'}, {photoId:id2,uploadId:'000000000000000000000002'}]);
   assert.equal(JSON.stringify(result).includes('private family'),false);
   assert.equal(JSON.stringify(result).includes('blob:'),false);
-  assert.deepEqual(calls.map(x=>x.options),[{purpose:'gift_box_photo',giftBoxId:'box-2',onProgress:undefined},{purpose:'gift_box_photo',giftBoxId:'box-2',onProgress:undefined}]);
+  assert.deepEqual(calls.map(x=>x.options),[{purpose:'gift_box_photo',giftBoxId:'box-2',signal:undefined},{purpose:'gift_box_photo',giftBoxId:'box-2',signal:undefined}]);
   const retry=await uploadGiftBoxPrivatePhotos({photos,boxId:'box-2',ownerKey:'guest-scope-1',uploadFile,uploadedIds,cache});
   assert.deepEqual(retry,result); assert.equal(calls.length,2);
 });

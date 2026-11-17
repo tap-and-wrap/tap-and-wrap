@@ -29,8 +29,16 @@ async function login(page, account) {
   await page.goto('/login?returnTo=%2Fcart');
   await page.getByLabel('Email Address').fill(`${account}@connected.example.test`);
   await page.getByLabel('Password', { exact: true }).fill('isolated-fixture-password');
+  const pendingLogin = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/auth/login', { timeout: 20_000 });
   await page.getByRole('button', { name: 'Log In', exact: true }).click();
-  await expect(page).toHaveURL('/cart');
+  const loginResponse = await pendingLogin;
+  expect(loginResponse.status(), `Login rejected: ${await loginResponse.text()}`).toBe(200);
+  try {
+    await expect(page).toHaveURL('/cart', { timeout: 12_000 });
+  } catch (error) {
+    const errors = await page.locator('[role="alert"]').allTextContents();
+    throw new Error(`Login HTTP 200 but navigation did not complete; URL=${page.url()}; visibleErrors=${JSON.stringify(errors)}; ${error.message}`);
+  }
 }
 
 test('real mixed cart persists one configured gift, updates quantities and keeps checkout closed at mobile and desktop', async ({ page, context, request }, info) => {

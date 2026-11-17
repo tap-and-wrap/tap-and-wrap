@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { giftBoxFixture,beginGiftBox } from './gift-box-fixtures.js';
-import { localCheckoutFixture } from './gift-box-checkout-fixture.js';
+import { localCheckoutFixture, expectGiftAddedAndOpenCart } from './gift-box-checkout-fixture.js';
 import { fillCheckout,isolatedImageFile } from './commerce-fixtures.js';
 import { freePresentation,freeForegroundMasks,freePlacementZone,sourcePointInWorkspace,FREE_PRESENTATION } from '../src/gift-box/free-presentation.mjs';
 import { getDraftGeometry } from '../../shared/gift-box/geometry-drafts.mjs';
@@ -80,7 +80,7 @@ test('ribbon pose persists in cart proposal and does not change workspace framin
   await page.getByRole('button',{name:'Finishing Touches',exact:true}).click(); while (!await page.getByRole('button',{name:'Choose Fixture ribbon-navy',exact:true}).count()) await page.getByRole('button',{name:'Show 6 more'}).click(); await page.getByRole('button',{name:'Choose Fixture ribbon-navy',exact:true}).click();
   const ribbon=page.getByRole('button',{name:'Move Fixture ribbon-navy',exact:true}); await ribbon.focus(); await ribbon.press('ArrowRight'); await ribbon.press('ArrowDown');
   await page.getByRole('button',{name:'Next: Review'}).click(); await page.getByRole('button',{name:'Add Your Gift to Cart'}).click();
-  await expect(page).toHaveURL(/\/cart$/); expect(['inside','beside']).toContain(audit.adds[0].configuration.ribbonPlacement.zone); expect(audit.adds[0].configuration.ribbonPlacement.x).toBeCloseTo(.405); expect(audit.adds[0].configuration.ribbonPlacement.y).toBeCloseTo(sceneY(.67,FREE_PRESENTATION)+.02);
+  await expectGiftAddedAndOpenCart(page,audit); expect(['inside','beside']).toContain(audit.adds[0].configuration.ribbonPlacement.zone); expect(audit.adds[0].configuration.ribbonPlacement.x).toBeCloseTo(.405); expect(audit.adds[0].configuration.ribbonPlacement.y).toBeCloseTo(sceneY(.67,FREE_PRESENTATION)+.02);
   expect(before.width).toBeGreaterThan(0);
 });
 
@@ -105,7 +105,7 @@ test('photos stay local until Add; distinct licensed sticker styles, price, priv
   await page.evaluate(()=>document.fonts.ready); expect(await page.evaluate(()=>document.fonts.check('20px "Gift-amiri"'))).toBe(true);
   await expect(page.locator('.gb-live-total strong')).toContainText('50.00');
   await page.screenshot({path:info.outputPath('personalization.png'),fullPage:true});
-  await review(page); await page.getByRole('button',{name:'Add Your Gift to Cart'}).click(); await expect(page).toHaveURL(/\/cart$/);
+  await review(page); await page.getByRole('button',{name:'Add Your Gift to Cart'}).click(); await expectGiftAddedAndOpenCart(page,audit);
   expect(fixture.uploads).toHaveLength(1); expect(audit.adds[0].configuration.personalizationIntent.sticker.application).toBe('exterior');
   expect(audit.adds[0].configuration.personalizationIntent.photoPrints[0]).toMatchObject({x:.7,zone:'beside'});
   expect(JSON.stringify(audit.adds)).not.toMatch(/blob:|private-photo.png|pricePiastres/);
@@ -177,7 +177,7 @@ test('automatic zones follow free movement and rim depth; ribbons remove through
   await page.getByRole('button',{name:'Move Fixture ribbon-white',exact:true}).focus();await page.getByRole('button',{name:'Delete selected item'}).click(); await page.getByRole('button',{name:'Remove item',exact:true}).click();
   await expect(option).toHaveAttribute('aria-pressed','false');await option.click();await option.click();await page.getByRole('button',{name:'Remove item',exact:true}).click();await expect(option).toHaveAttribute('aria-pressed','false');
   await expect(page.getByRole('button',{name:'No ribbon',exact:true})).toHaveCount(0);
-  await page.getByRole('button',{name:'Next: Review'}).click();await page.getByRole('button',{name:'Add Your Gift to Cart'}).click();await expect(page).toHaveURL(/\/cart$/);
+  await page.getByRole('button',{name:'Next: Review'}).click();await page.getByRole('button',{name:'Add Your Gift to Cart'}).click();await expectGiftAddedAndOpenCart(page,audit);
   const saved=audit.adds[0].configuration.placements[0];
   expect(saved.zone).toBe('beside');expect(saved.x).toBeCloseTo(pose.x,5);expect(saved.y).toBeCloseTo(pose.y,5);
   expect(audit.adds[0].configuration.ribbonPlacement).toBeNull();
@@ -208,7 +208,7 @@ for(const width of [320,390,1440]) test(`natural photo prints, depth and soft to
 });
 
 for(const width of [320,390,1440]) test(`polished arrangement, review, cart and checkout at ${width}px`,async({page},info)=>{
-  await page.setViewportSize({width,height:960}); await localCheckoutFixture(page,{personalized:true}); await beginGiftBox(page);
+  await page.setViewportSize({width,height:960}); const { audit } = await localCheckoutFixture(page,{personalized:true}); await beginGiftBox(page);
   await page.getByRole('button',{name:'Fill With Flowers',exact:true}).click();
   await page.getByRole('button',{name:'Add Fixture rose-red',exact:true}).click();
   await page.getByRole('button',{name:'Add Fixture rose-red',exact:true}).click();
@@ -237,7 +237,7 @@ for(const width of [320,390,1440]) test(`polished arrangement, review, cart and 
   await expect(page.getByRole('heading',{name:'Edit your gift'})).toBeVisible();
   await page.evaluate(()=>{document.activeElement?.blur();window.scrollTo(0,0);});
   await page.screenshot({path:info.outputPath(`review-${width}.png`),fullPage:true});
-  await page.getByRole('button',{name:'Add Your Gift to Cart'}).click(); await expect(page).toHaveURL(/\/cart$/);
+  await page.getByRole('button',{name:'Add Your Gift to Cart'}).click(); await expectGiftAddedAndOpenCart(page,audit);
   await expect(page.locator('.cart-v2-photo .gb-placed')).toHaveCount(2);
   await expect(page.getByText('Gift box preview unavailable')).toHaveCount(0);
   await page.getByText('View Design Details',{exact:true}).click();

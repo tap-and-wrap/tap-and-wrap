@@ -1,5 +1,6 @@
+import { canNormalizeImage, normalizeConsumerImage } from './image-normalization.mjs';
 export const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-export const IMAGE_FORMAT_HELP = 'Use JPEG/JPG, PNG or WebP. For HEIC/HEIF, open the photo in Photos or Gallery and export/save a JPEG copy (renaming the extension will not convert it). On iPhone, Camera → Formats → Most Compatible saves future photos as JPEG.';
+export const IMAGE_FORMAT_HELP = 'JPG/JPEG, PNG and WebP upload directly. HEIC/HEIF, AVIF, GIF and BMP are converted to JPEG on supported devices (animated images use one still frame).';
 export class ImageSelectionError extends Error {}
 const fail = message => { throw new ImageSelectionError(message); };
 const checkAbort = signal => { if (signal?.aborted) throw new DOMException('Selection cancelled', 'AbortError'); };
@@ -87,18 +88,30 @@ export async function prepareSelectedImages(selected, { maxBytes = 10 * 1024 * 1
   if (files.length > maxFiles) fail(`Select no more than ${maxFiles} images.`);
   if (files.some(f => !Number.isSafeInteger(f.size) || !f.size)) fail(`This file is empty. ${IMAGE_FORMAT_HELP}`);
   if (files.some(f => f.size > maxBytes) || files.reduce((n,f) => n+f.size,0) > maxTotalBytes) fail(`Each image must be ${Math.round(maxBytes / 1048576)} MB or smaller and within this selection's total limit.`);
-  if (files.some(f => /heic|heif/i.test(f.type) || /\.(heic|heif)$/i.test(f.name))) fail(IMAGE_FORMAT_HELP);
   const prepared = [];
   for (const file of files) {
     checkAbort(signal);const bytes = await boundedBytes(file, signal);checkAbort(signal);
     if (!(bytes instanceof ArrayBuffer) || bytes.byteLength !== file.size) fail('The selected image could not be fully read. Choose it again from Gallery or Browse Files.');
     const type = signature(bytes), declared = file.type?.toLowerCase();
-    if (!type) fail(`The file contents are not a supported image, even if its name ends in .jpg. ${IMAGE_FORMAT_HELP}`);
     const normalized = ['image/jpg', 'image/pjpeg'].includes(declared) ? 'image/jpeg' : declared;
-    if (!acceptedTypes.includes(type)) fail(`This field does not accept ${type.replace('image/', '').toUpperCase()}. Choose ${acceptedTypes.map(value => value.replace('image/', '').toUpperCase()).join(', ')}.`);
-    if (normalized && normalized !== 'application/octet-stream' && normalized !== type) fail('The image format does not match its file information. Export a new JPEG, PNG or WebP copy; changing the filename alone will not fix it.');
-    validateImageContainer(bytes, type);
-    const owned = new File([bytes], file.name || 'selected-image', { type, lastModified: Number.isFinite(file.lastModified) ? file.lastModified : Date.now() });
+    let owned;
+    if (type && !(canNormalizeImage(file) && /heic|heif/i.test(declared || ''))) {
+      if (normalized && normalized !== 'application/octet-stream' && normalized !== type) fail('The image format does not match its file information. Changing the filename alone will not convert it.');
+      validateImageContainer(bytes, type);
+      owned = new File([bytes], file.name || 'selected-image', { type, lastModified: Number.isFinite(file.lastModified) ? file.lastModified : Date.now() });
+    } else if (type === 'image/jpeg' && /heic|heif/i.test(declared || '')) {
+      // Some iOS pickers transparently return JPEG bytes with a HEIC MIME label.
+      validateImageContainer(bytes, type);
+      owned = new File([bytes], (file.name || 'camera').replace(/\.[^.]+$/, '') + '.jpg', {type, lastModified:file.lastModified});
+    } else if (canNormalizeImage(file)) {
+      try { owned = await normalizeConsumerImage(file, {signal,maxBytes}); }
+      catch (error) { fail(error.message || 'This image could not be converted.'); }
+      checkAbort(signal);
+      const convertedBytes = await boundedBytes(owned, signal);
+      if (signature(convertedBytes) !== 'image/jpeg') fail('The converted file is not a valid JPEG image.');
+      validateImageContainer(convertedBytes, 'image/jpeg');
+    } else fail(`The file contents are not a supported image. Choose JPEG/JPG, PNG or WebP. ${IMAGE_FORMAT_HELP}`);
+    if (!acceptedTypes.includes(owned.type)) fail(`This field does not accept this image format. Use ${acceptedTypes.map(value => value.replace('image/', '').toUpperCase()).join(', ')}.`);
     await inspect(owned);checkAbort(signal);prepared.push(owned);
   }
   return prepared;

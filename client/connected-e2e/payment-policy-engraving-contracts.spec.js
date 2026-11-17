@@ -1,4 +1,5 @@
 import { saveCartItem } from './cart-assertions.js';
+import { confirmedCartAddAndOpen } from './background-cart-assertions.js';
 import { test, expect, api, image, choose, start, words, add, cart } from './visual-engraving-fixture.js';
 
 async function item(page, family) {
@@ -38,8 +39,7 @@ async function item(page, family) {
     await page.getByLabel('Write a name, special date, or heartfelt message').fill('Synthetic gift');
     await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();
     await page.getByRole('button',{name:'Next: Review',exact:true}).click();
-    await page.getByRole('button',{name:'Add Your Gift to Cart',exact:true}).click();
-    await expect(page).toHaveURL('/cart');
+    await confirmedCartAddAndOpen(page, () => page.getByRole('button',{name:'Add Your Gift to Cart',exact:true}).click());
   } else if (family === 'standalone') {
     await start(page); await words(page,'Synthetic service'); await add(page);
   }

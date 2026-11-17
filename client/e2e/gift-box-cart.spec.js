@@ -163,6 +163,12 @@ test('builder serializer rejects unfinished arrangements, malformed ribbons, mal
 test('ready gift-box review adds a complete configuration with one operation key', async ({ page }) => {
   const fixture = await giftBoxFixture(page, { directCommerceEnabled: true });
   let sent = null;
+  await page.route('**/api/v1/commerce/cart/operations/*', route => route.fulfill({
+    headers: { 'access-control-allow-origin': 'http://127.0.0.1:5191',
+      'access-control-allow-credentials': 'true', 'access-control-allow-headers': 'content-type,x-csrf-token',
+      'access-control-allow-methods': 'GET,POST,OPTIONS' },
+    json: { ok: true, data: { applied: false } },
+  }));
   await page.route('**/api/v1/commerce/cart/items', route => {
     const headers = { 'access-control-allow-origin': 'http://127.0.0.1:5191',
       'access-control-allow-credentials': 'true', 'access-control-allow-headers': 'content-type,x-csrf-token',
@@ -183,6 +189,9 @@ test('ready gift-box review adds a complete configuration with one operation key
   expect(sent.configuration.selection).toMatchObject({ boxId: 'box-2', ribbonId: 'ribbon-cream-ivory' });
   expect(sent.configuration.placements).toEqual([]);
   expect(JSON.stringify(sent)).not.toMatch(/pricePiastres|approvedBy|photoFile|blob:/);
-  await expect(page).toHaveURL(/\/cart$/);
+  // The queued add stays on the review page and resolves the immutable key
+  // without a forced redirect. The server write must still happen exactly once.
+  await expect(page).toHaveURL(/\/customize\/gift-box$/);
+  await expect(page.getByText('Gift Box was added to your cart.',{exact:true})).toBeVisible();
   expect(fixture.calls.filter(call => call.path.endsWith('/requests'))).toHaveLength(0);
 });

@@ -1,4 +1,5 @@
 import { seedLegacyEngraving } from './legacy-engraving-fixture.js';
+import { confirmedCartAdd, reconcileUncertainAddition } from './background-cart-assertions.js';
 import { test, expect, api, origin, post, image, choose, open, start, words, review, add, cart, shot } from './visual-engraving-fixture.js';
 test('three-step surface builder, original color layers and exact cart reconstruction at all target widths', async ({ page, context }, info) => {
   test.setTimeout(120000); const errors = [], signs = []; page.on('pageerror', error => errors.push(error.message)); page.on('request', request => { if (request.url().endsWith('/uploads/sign')) signs.push(request.postDataJSON()); });
@@ -18,7 +19,7 @@ test('three-step surface builder, original color layers and exact cart reconstru
   for (const width of [320, 390, 768, 1024, 1440]) await shot(page, info, 'design', width);
   expect(signs).toHaveLength(0); await review(page); await expect(page.getByRole('img', { name: 'Your complete engraving design' })).toBeVisible();
   for (const width of [320, 390, 768, 1024, 1440]) await shot(page, info, 'review', width);
-  await page.getByRole('button', { name: 'Add to Cart', exact: true }).click(); await expect(page.getByText('Engraving added to cart.',{exact:true})).toBeVisible();
+  await confirmedCartAdd(page, () => page.getByRole('button', { name: 'Add to Cart', exact: true }).click());
   expect(signs.map(value => value.fieldKey).sort()).toEqual(['item_photo', 'item_photo', 'item_photo', 'personal_artwork', 'surface_photo']);
   const stored = (await cart(context)).items[0]; expect(stored.kind).toBe('engraving_service_v2');
   const before = (await (await context.request.get(`${api}/commerce/engraving/cart/${stored.id}`)).json()).data.specification;
@@ -36,8 +37,11 @@ test('three-step surface builder, original color layers and exact cart reconstru
 test('text-only add with zero overall photos recovers a lost response exactly once', async ({ page, context }) => {
   await start(page); await words(page, 'For Nour'); await review(page);
   let lost = false; await page.route('**/commerce/cart/items', async route => { if (route.request().method() === 'POST' && !lost) { lost = true; const response = await route.fetch(); expect(response.ok()).toBe(true); return route.abort('connectionreset'); } return route.continue(); });
-  await page.getByRole('button', { name: 'Add to Cart', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Check your cart addition' })).toBeVisible();
-  await page.getByRole('button', { name: 'Check add status', exact: true }).click(); await expect(page.getByText('Engraving added to cart.',{exact:true})).toBeVisible(); expect((await cart(context)).items).toHaveLength(1);
+  await page.getByRole('button', { name: 'Add to Cart', exact: true }).click();
+  await expect.poll(() => lost).toBe(true);
+  await expect.poll(async () => (await cart(context)).items.length).toBe(1);
+  await reconcileUncertainAddition(page, 'Laser Engraving');
+  expect((await cart(context)).items).toHaveLength(1);
   const line = (await cart(context)).items[0], spec = (await (await context.request.get(`${api}/commerce/engraving/cart/${line.id}`)).json()).data.specification;
   expect(spec.itemPhotoUploadIds).toEqual([]); expect(spec.design.layers).toHaveLength(1);
 });
@@ -68,10 +72,20 @@ test('an expired add reference requires explicit replacement and never silently 
     if (id !== expiredId) return route.continue();
     return route.fulfill({ status: 409, json: { ok: false, error: { code: 'INVALID_UPLOAD_REFERENCES', message: 'This private surface photo has expired. Replace it.' } }, headers: { 'access-control-allow-origin': origin, 'access-control-allow-credentials': 'true' } });
   });
-  await page.getByRole('button', { name: 'Add to Cart', exact: true }).click(); await expect(page.locator('[data-sonner-toast]').filter({hasText:'expired'}).first()).toBeVisible();
-  await page.getByRole('button', { name: 'Edit Design', exact: true }).click(); await review(page); await page.getByRole('button', { name: 'Add to Cart', exact: true }).click();
-  await expect(page.locator('[data-sonner-toast]').filter({hasText:'expired'}).first()).toBeVisible(); expect(signs).toHaveLength(1);
-  await page.locator('.tw-builder-progress button').first().click(); await choose(page, /Engraving surface: Replace Photo/, surface); await page.getByRole('button', { name: 'Design Your Engraving', exact: true }).click(); await add(page);
+  await page.getByRole('button', { name: 'Add to Cart', exact: true }).click();
+  await page.locator('[data-cart-anchor]').first().click();
+  const rejected = page.getByRole('article', { name: 'Laser Engraving preparation' });
+  await expect(rejected).toContainText('This private surface photo has expired. Replace it.');
+  expect(signs).toHaveLength(1);
+  await rejected.getByRole('button', { name: 'Retry same item' }).click();
+  await expect(rejected).toContainText('This private surface photo has expired. Replace it.');
+  expect(signs).toHaveLength(1); // retry never silently renews the same rejected file
+  await rejected.getByRole('button', { name: 'Cancel preparation' }).click();
+  await expect(rejected).toHaveCount(0);
+  await open(page);
+  await choose(page, /Engraving surface: Choose surface photo/, surface); // explicit new selection
+  await page.getByRole('button', { name: 'Design Your Engraving', exact: true }).click();
+  await words(page, 'For Nour'); await add(page);
   expect(signs).toHaveLength(2); expect((await cart(context)).items).toHaveLength(1);
 });
 

@@ -33,7 +33,7 @@ for (const width of [390, 1440]) {
       for (const title of titles) {
         const video = page.getByLabel(`${title} film`, { exact: true });
         await video.scrollIntoViewIfNeeded();
-        await expect.poll(() => video.evaluate(v => v.videoWidth)).toBe(480);
+        await expect.poll(() => video.evaluate(v => v.videoWidth)).toBe(title === 'Laser Engraving' ? 360 : 480);
         const control = page.locator('.home-service-media').filter({ has: video }).getByRole('button');
         // Real trusted clicks; no force, source replacement or synthetic play events.
         for (let click = 0; click < 6; click++) await control.click();
@@ -81,7 +81,7 @@ test('delayed service responses retain posters, then decode; failed responses re
   release();
   for (const title of titles) {
     const video = page.getByLabel(`${title} film`, { exact: true }); await video.scrollIntoViewIfNeeded();
-    await expect.poll(() => video.evaluate(v => v.videoWidth)).toBe(480);
+    await expect.poll(() => video.evaluate(v => v.videoWidth)).toBe(title === 'Laser Engraving' ? 360 : 480);
   }
   await page.unroute('**/media/*.mp4');
   await page.route('**/media/*.mp4', route => route.abort('failed'));

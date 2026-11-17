@@ -1,4 +1,3 @@
-import { mapUploads } from '../commerce/upload-batch.mjs';
 import { toast } from 'sonner';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -6,22 +5,22 @@ import { useSession } from '../auth/SessionProvider.jsx';
 import { privateQueryKey } from '../auth/session.js';
 import { authGeneration } from '../services/api.js';
 import { useCart } from '../commerce/CartContext.jsx';
-import { commerceGet, commercePost, commerceError, uploadPrivateFile } from '../commerce/api.js';
+import { commerceGet, commercePost, commerceError } from '../commerce/api.js';
 import { useEngravingDraft } from './EngravingDraftProvider.jsx';
 import { imageRatio } from './visual/VisualEngravingEditor.jsx';
 import { loadPrivateVisualAsset } from './visual/private-assets.js';
 import { designReadiness, fitLayer } from './visual/design.mjs';
-import { visualResources, visualSpecification } from './visual/specification.mjs';
+import { visualSpecification } from './visual/specification.mjs';
 import { engravingFileEntries } from '../../../shared/engraving/definitions.mjs';
 
 export default function useStandaloneVisualBuilder(saved, editId) {
   const session = useSession(), cart = useCart(), state = useEngravingDraft();
   const { draft, setDraft, attempt, cache, ownerKey, pending, setPending } = state;
-  const [page, setPage] = useState(1), [types, setTypes] = useState([]), [hydrating, setHydrating] = useState(Boolean(saved)), [error, setError] = useState(''), [progress, setProgress] = useState('');
-  const [quote, setQuote] = useState(null), [ready, setReady] = useState(false), [added, setAdded] = useState(false), [acceptedOrder, setAcceptedOrder] = useState(null), [recovering, setRecovering] = useState(false);
+  const [page, setPage] = useState(1), [types, setTypes] = useState([]), [hydrating, setHydrating] = useState(Boolean(saved)), [error, setError] = useState(''), [progress] = useState('');
+  const [quote, setQuote] = useState(null), [ready, setReady] = useState(false), [quoteRetry, setQuoteRetry] = useState(0), [added, setAdded] = useState(false), [acceptedOrder, setAcceptedOrder] = useState(null), [recovering, setRecovering] = useState(false);
   const scope = `tw-engraving-add:${cart.checkoutOwnerKey || ownerKey}`;
   const [uncertain, setUncertain] = useState(() => { try { return JSON.parse(sessionStorage.getItem(scope))?.pending === true; } catch { return false; } });
-  const alive = useRef(true), requests = useRef(new AbortController()), selection = useRef(0);
+  const alive = useRef(true), requests = useRef(new AbortController()), selection = useRef(0), addLock = useRef(false);
   useEffect(() => { const controller = new AbortController(); requests.current = controller; alive.current = true; return () => { alive.current = false; controller.abort(); }; }, []);
   const options = useQuery({ queryKey: privateQueryKey(session.ownerKey, 'visual-engraving-types', page), queryFn: ({ signal }) => commerceGet('/engraving/types', { page }, signal), enabled: session.ready, retry: false, staleTime: 0 });
   useEffect(() => { if (options.data?.enabled) { setTypes(previous => [...new Map([...(page === 1 ? [] : previous), ...options.data.types].map(type => [type.typeId, type])).values()]); if (options.data.hasNext) setPage(value => value + 1); } }, [options.data, page]);
@@ -85,6 +84,23 @@ export default function useStandaloneVisualBuilder(saved, editId) {
     } catch (caught) { if (alive.current && generation === authGeneration()) { setError(commerceError(caught)); void options.refetch(); } }
     finally { if (generation === authGeneration()) setPending(false); }
   }
+  // Recover the server-reviewed price after restoring step 3. We never
+  // persist a quote or its fingerprint as authoritative payment information.
+  const restoredQuoteKey = useRef(null);
+  useEffect(() => {
+    if (state.restoring || hydrating || draft.step !== 2 || quote || !ready || !type || pending) return;
+    const key = JSON.stringify([draft.itemKey, draft.typeId, draft.visual.design]);
+    if (restoredQuoteKey.current === key) return;
+    restoredQuoteKey.current = key;
+    const controller = new AbortController(), generation = authGeneration();
+    void commercePost('/engraving/quote', { specification: visualSpecification(draft, type) }, {signal: controller.signal})
+      .then(result => { if (!controller.signal.aborted && alive.current && generation === authGeneration()) setQuote(result); })
+      .catch(error => { if (!controller.signal.aborted && alive.current && generation === authGeneration()) setError(commerceError(error)); });
+    return () => controller.abort();
+    // Dependencies identify the saved selection and the readiness of its editor.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.restoring, hydrating, draft.itemKey, draft.typeId, draft.step, type?.typeId, ready, quote, pending, quoteRetry]);
+
   function remember(value) { try { sessionStorage.setItem(scope, JSON.stringify(value)); } catch { /* Only opaque recovery keys, never design content. */ } }
   async function check() {
     const generation = authGeneration(); setRecovering(true);
@@ -98,42 +114,36 @@ export default function useStandaloneVisualBuilder(saved, editId) {
     } catch (caught) { if (alive.current && generation === authGeneration()) setError(commerceError(caught)); }
     finally { if (alive.current && generation === authGeneration()) setRecovering(false); }
   }
-  async function add() {
-    if (pending || cart.preparing) return;
-    if (!attempt.current) { const invalid = validate(true); if (invalid || !quote) { setError(invalid || 'Review the current engraving price first.'); return; } }
+  async function retryLegacyAdd() {
+    // Historical pre-Stage-2 uncertain requests retain their original key.
+    if (!attempt.current || pending) return;
     const generation = authGeneration(); setPending(true); setError('');
-    try { await cart.runPersonalizedAdd(async ({ signal, isCurrent, onProgress }) => {
-      if (!attempt.current) {
-        // The final cart mutation revalidates the reviewed price/configuration.
-        // No duplicate quote request before these same immutable resources.
-        const uploaded = {};
-        await mapUploads(visualResources(draft.visual), async ({ assetId, role }) => {
-          if (!isCurrent()) throw Error('Your private session changed.');
-          const file = draft.visual.assets[assetId]?.blob; if (!file) throw Error('A private photo is unavailable. Replace it before adding.');
-          const cached = cache.current.get(file); let id = cached?.ownerKey === ownerKey && cached.itemKey === draft.itemKey && cached.role === role ? cached.id : null;
-          if (!id) {
-            id = await uploadPrivateFile(file, { purpose: 'engraving_service', ownerContext: cart.checkoutOwnerKey, engravingItemKey: draft.itemKey, fieldKey: role, generation, signal });
-            if (!isCurrent()) throw Error('Your private session changed.');
-            cache.current.set(file, { id, itemKey: draft.itemKey, role, ownerKey });
-          }
-          uploaded[assetId] = id;
-        }, { signal, onProgress });
-        if (!isCurrent()) return;
-        attempt.current = { kind: 'engraving_service_v2', operationKey: crypto.randomUUID(), quantity: 1, specification: visualSpecification(draft, type, uploaded), reviewFingerprint: quote.reviewFingerprint,
-          ...(draft.replaceLineId ? { replaceLineId: draft.replaceLineId, replaceFingerprint: draft.replaceFingerprint } : {}) };
-      }
-      if (!isCurrent()) return;
-      const operationKey = attempt.current.operationKey; remember({ key: operationKey, pending: true });
-      if (alive.current) setUncertain(true);
-      const result = await cart.add(attempt.current);
-      if (!isCurrent()) return;
-      remember({ key: operationKey, pending: false }); state.reset();
-      if (alive.current) { setAcceptedOrder(result.alreadyOrdered || null); setUncertain(false); setAdded(false); setQuote(null); }
-    }, 'Preparing your engraving');
-    } catch (caught) { if (generation === authGeneration()) { if (alive.current) setError(commerceError(caught));
-      if (caught.response && caught.response.status < 500 && !['IDEMPOTENCY_CONFLICT','OPERATION_IN_PROGRESS'].includes(caught.response.data?.error?.code)) {
-        remember({ pending: false }); attempt.current = null; if (alive.current) { setUncertain(false); setQuote(null); void options.refetch(); } }
-    } } finally { if (generation === authGeneration()) { setPending(false); if (alive.current) setProgress(''); } }
+    try {
+      const result = await commerceGet(`/cart/operations/${attempt.current.operationKey}`);
+      if (generation !== authGeneration()) return;
+      const response = result.applied ? result : await cart.add(attempt.current);
+      remember({key:attempt.current.operationKey,pending:false}); state.reset();
+      setUncertain(false); setAcceptedOrder(response.alreadyOrdered || null);
+      await cart.refresh();
+    } catch (caught) { if (generation === authGeneration()) setError(commerceError(caught)); }
+    finally { if (generation === authGeneration()) setPending(false); }
   }
-  return { ...state, options, types, type, hydrating, error, setError, progress, quote, setQuote, added, setAdded, acceptedOrder, uncertain, recovering, update, selectPhotos, validate, review, add, check, editorChange, pending };
+  async function add() {
+    if (pending || uncertain || addLock.current) return;
+    const invalid = validate(true);
+    if (invalid || !quote) { setError(invalid || 'Review the current engraving price first.'); return; }
+    addLock.current = true;
+    const generation = authGeneration(); setPending(true); setError('');
+    try {
+      await cart.enqueueCustomization('engraving_service_v2', {
+        draft, type, reviewFingerprint: quote.reviewFingerprint, reviewedPiastres: quote.unitPricePiastres,
+      });
+      if (generation !== authGeneration()) return;
+      state.reset(); setQuote(null); setAdded(false);
+      toast.message('Preparing your engraving. You can continue shopping.', {id:'engraving-queued'});
+    } catch (caught) { if (alive.current && generation === authGeneration()) setError(commerceError(caught)); }
+    finally { addLock.current = false; if (generation === authGeneration()) setPending(false); }
+  }
+  const retryQuoteAfterRestore = () => { restoredQuoteKey.current = null; setError(''); setQuoteRetry(value => value + 1); };
+  return { ...state, options, types, type, hydrating: hydrating || state.restoring, error, setError, progress, quote, setQuote, added, setAdded, acceptedOrder, uncertain, recovering, update, selectPhotos, validate, review, add, check, editorChange, pending, retryLegacyAdd, retryQuoteAfterRestore };
 }

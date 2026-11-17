@@ -1,4 +1,4 @@
-import { localCheckoutFixture } from './gift-box-checkout-fixture.js';
+import { localCheckoutFixture, expectGiftAddedAndOpenCart } from './gift-box-checkout-fixture.js';
 import { expect, test } from '@playwright/test';
 import { beginGiftBox } from './gift-box-fixtures.js';
 import { cartWithProduct, fillCheckout, isolatedImageFile } from './commerce-fixtures.js';
@@ -26,7 +26,7 @@ test('priced flexible gift with roses, chocolate and no ribbon goes from builder
   await review(page);
   await expect(page.locator('.gb-live-total strong')).toContainText('40.00');
   await page.getByRole('button', { name: 'Add Your Gift to Cart' }).click();
-  await expect(page).toHaveURL(/\/cart$/);
+  await expectGiftAddedAndOpenCart(page, audit);
   const gift = page.getByRole('article', { name: 'Gift Box' });
   await gift.getByText('View Design Details', {exact:true}).click();
   await expect(gift).toContainText('Fixture rose-red × 2');
@@ -66,7 +66,7 @@ test('box-only no-ribbon gift can check out alongside an ordinary priced product
   await beginGiftBox(page);
   await review(page);
   await page.getByRole('button', { name: 'Add Your Gift to Cart' }).click();
-  await expect(page).toHaveURL(/\/cart$/);
+  await expectGiftAddedAndOpenCart(page, audit);
   await expect(page.getByRole('article', { name: 'Gift Box' })).toContainText('10.00');
   await expect(page.getByRole('heading', { name: 'Isolated Commerce Gift' })).toBeVisible();
   await page.getByRole('link', { name: 'Proceed to Checkout' }).click();
@@ -86,7 +86,11 @@ test('rejected server cart pricing leaves the customer on review without creatin
   await review(page);
   await page.getByRole('button', { name: 'Add Your Gift to Cart' }).click();
   await expect(page).toHaveURL(/\/customize\/gift-box$/);
-  await expect(page.getByRole('region',{name:'Notifications alt+T'}).getByText('An approved gift component is no longer available.',{exact:true})).toBeVisible();
+  await expect.poll(() => audit.adds.length, {timeout:20_000}).toBe(1);
+  await page.locator('[data-cart-anchor]').click();
+  await expect(page.getByRole('article',{name:'Gift Box preparation'})).toContainText('An approved gift component is no longer available.');
+  await expect(page.getByRole('button',{name:'Retry same item'})).toBeVisible();
+  await expect(page.getByRole('link',{name:'Proceed to Checkout'})).toHaveCount(0);
   expect(audit.adds).toHaveLength(1);
   expect(audit.orders).toHaveLength(0);
   expect(fixture.state.cart.items).toHaveLength(0);
@@ -97,7 +101,7 @@ const field=page=>page.getByLabel('Write a name, special date, or heartfelt mess
 function position(page){return page.locator('.sticker-position').evaluate(node=>({x:parseFloat(node.style.left),y:parseFloat(node.style.top)}));}
 test('cart submission contains actual normalized placement and the same single sticker price',async({page})=>{
  const {audit}=await localCheckoutFixture(page,{personalized:true});await page.goto('/customize/gift-box');await page.getByRole('button',{name:'Choose Fixture box-2',exact:true}).click();await page.getByRole('button',{name:'Make It Personal',exact:true}).click();await field(page).fill('Nour');await page.getByRole('button',{name:'Move sticker right',exact:true}).click();const expected=await position(page);
- await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();await page.getByRole('button',{name:'Next: Review',exact:true}).click();await expect(page.locator('.gb-review .sticker-proof-image')).toBeVisible();await expect(page.locator('.gb-live-total strong')).toContainText('30.00');await page.getByRole('button',{name:'Add Your Gift to Cart',exact:true}).click();await expect(page).toHaveURL(/\/cart$/);const intent=audit.adds[0].configuration.personalizationIntent;expect(intent.version).toBe('gift-box-personalization-intent-v3');expect(intent.sticker.placement.x).toBeCloseTo(expected.x/100);expect(intent.sticker.placement.boxId).toBe('box-2');expect(intent.sticker.placement.view).toBe('exterior');expect(audit.adds).toHaveLength(1);
+ await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();await page.getByRole('button',{name:'Next: Review',exact:true}).click();await expect(page.locator('.gb-review .sticker-proof-image')).toBeVisible();await expect(page.locator('.gb-live-total strong')).toContainText('30.00');await page.getByRole('button',{name:'Add Your Gift to Cart',exact:true}).click();await expectGiftAddedAndOpenCart(page,audit);const intent=audit.adds[0].configuration.personalizationIntent;expect(intent.version).toBe('gift-box-personalization-intent-v3');expect(intent.sticker.placement.x).toBeCloseTo(expected.x/100);expect(intent.sticker.placement.boxId).toBe('box-2');expect(intent.sticker.placement.view).toBe('exterior');expect(audit.adds).toHaveLength(1);
 });
 
 for (const [width,height] of [[320,740],[390,844],[768,900],[1024,900],[1440,900],[844,390]]) test(`Gift Box confirmation centers and preserves removal at ${width}x${height}`, async ({ page }, info) => {

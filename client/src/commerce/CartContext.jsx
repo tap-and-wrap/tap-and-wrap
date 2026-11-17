@@ -9,6 +9,7 @@ import { authGeneration } from '../services/api.js';
 import { Link } from 'react-router-dom';
 import { LoadingSpinner } from '../components/LoadingState.jsx';
 import { toast } from 'sonner';
+import useBackgroundCartJobs from './useBackgroundCartJobs.js';
 
 const CartContext = createContext(null);
 
@@ -20,7 +21,7 @@ export function CartProvider({ children }) {
   const job = useRef(null), cartOwner = useRef(null);
   const [preparation, setPreparation] = useState(null);
   const lastCartToastId = useRef(null);
-  const preparing = preparation?.generation === session.generation;
+
   useEffect(() => () => job.current?.controller.abort(), []);
   const runPersonalizedAdd = useCallback(async (task, label) => {
     const generation = authGeneration(), owner = sessionOwner(), ownerContext = cartOwner.current;
@@ -41,6 +42,9 @@ export function CartProvider({ children }) {
   const feedback = feedbackState?.generation === session.generation ? feedbackState.text : '';
   const pending = pendingGeneration === session.generation;
   const query = useQuery({ queryKey: cartKey, queryFn: ({ signal }) => commerceGet('/cart', undefined, signal), enabled: session.ready, retry: false, staleTime: 30_000, refetchOnWindowFocus: false });
+  const verifiedOwner = session.ready && /^[a-f0-9]{64}$/.test(query.data?.checkoutOwnerKey || '') ? query.data.checkoutOwnerKey : null;
+  const queue = useBackgroundCartJobs(verifiedOwner);
+  const preparing = preparation?.generation === session.generation || queue.preparing || Boolean(verifiedOwner && !queue.ready);
   cartOwner.current = session.ready ? query.data?.checkoutOwnerKey : null;
   useEffect(() => { if (job.current && job.current.ownerContext !== cartOwner.current) job.current.controller.abort(); }, [query.data?.checkoutOwnerKey, session.ready]);
   const update = useCallback(async (operation, success, source) => {
@@ -86,7 +90,8 @@ export function CartProvider({ children }) {
     mixedCheckout: session.ready && query.data?.mixedCheckout === true,
     checkoutEnabled: session.ready && query.data?.checkoutEnabled === true,
     checkoutOwnerKey: session.ready && /^[a-f0-9]{64}$/.test(query.data?.checkoutOwnerKey || '') ? query.data.checkoutOwnerKey : null,
-    preparing, runPersonalizedAdd,
+    preparing, runPersonalizedAdd, backgroundJobs: queue.jobs, backgroundStorageMessage: queue.storageMessage, backgroundQueueReady: queue.ready,
+    enqueueCustomization: queue.enqueue, retryCustomization: queue.retry, checkCustomization: queue.check, cancelCustomization: queue.cancel,
     loading: session.phase === 'checking' || session.phase === 'transition' || session.ready && query.isPending, error: session.error || query.error, pending, feedback,
     add: (item, source) => update(() => commercePost('/cart/items', item), item.kind?.startsWith('engraving_service') ? 'Engraving added to cart.' : 'Added to your cart.', source),
     // Prepared for future approved builder integration; public builder controls
@@ -102,14 +107,14 @@ export function CartProvider({ children }) {
       if (sessionSnapshot().phase === 'error') await refreshSession();
       return queryClient.invalidateQueries({ queryKey: privateQueryKey(sessionOwner(), 'cart') });
     },
-  }), [query.data, query.isPending, query.error, session.ready, session.phase, session.error, pending, preparing, runPersonalizedAdd, feedback, update, queryClient]);
+  }), [query.data, query.isPending, query.error, session.ready, session.phase, session.error, pending, preparing, runPersonalizedAdd, feedback, update, queryClient, queue.jobs, queue.storageMessage, queue.ready, queue.enqueue, queue.retry, queue.check, queue.cancel]);
   function dismissFeedback() {
     const opener = feedbackState?.generation === session.generation ? feedbackState.opener : null;
     setFeedback(null);
     if (opener instanceof HTMLElement && opener.isConnected && !opener.matches(':disabled')) opener.focus({ preventScroll: true });
     else document.querySelector('[data-cart-anchor]')?.focus({ preventScroll: true });
   }
-  return <CartContext.Provider value={value}>{children}{preparing && <aside className="personalized-add-progress" aria-live="polite"><LoadingSpinner label={preparation.text}/><Link to="/cart">View cart</Link></aside>}<div className="commerce-announcement" role="status" aria-live="polite">{feedback && <><span>{feedback}</span><button type="button" className="commerce-feedback-dismiss" aria-label="Dismiss cart feedback" onClick={dismissFeedback}>×</button></>}</div></CartContext.Provider>;
+  return <CartContext.Provider value={value}>{children}{(preparation?.generation === session.generation || queue.activeCount > 0) && <aside className="personalized-add-progress" aria-live="polite"><LoadingSpinner label={preparation?.generation === session.generation ? preparation.text : `Preparing ${queue.activeCount} custom ${queue.activeCount === 1 ? 'item' : 'items'}…`}/><Link to="/cart">View cart</Link></aside>}<div className="commerce-announcement" role="status" aria-live="polite">{feedback && <><span>{feedback}</span><button type="button" className="commerce-feedback-dismiss" aria-label="Dismiss cart feedback" onClick={dismissFeedback}>×</button></>}</div></CartContext.Provider>;
 }
 
 export function useCart() {
