@@ -176,7 +176,7 @@ test('history-restricted browsers still open the native picker without damaging 
   await expect(page.getByLabel(/^Gift name/)).toHaveValue('Keep this name');
 });
 
-test('video surfaces hide labels normally, reveal keyboard focus, and preserve hero links at desktop and mobile sizes', async ({ page }) => {
+test('hero video surface hides its cue while service films use explicit pause controls and preserve links', async ({ page }) => {
   await mockCatalog(page); await page.emulateMedia({ reducedMotion: 'reduce' });
   for (const width of [1440, 768, 320]) {
     await page.setViewportSize({ width, height: 900 }); await page.goto('/');
@@ -194,11 +194,11 @@ test('video surfaces hide labels normally, reveal keyboard focus, and preserve h
     for (const title of ['Build Your Gift Box', 'Laser Engraving']) {
       const surface = page.locator('.home-service-media').filter({ has: page.getByLabel(title + ' film', { exact: true }) });
       await surface.scrollIntoViewIfNeeded(); const toggle = surface.getByRole('button');
-      await expect(toggle.locator('span')).toHaveCSS('opacity', '0');
+      await expect(toggle.locator('span')).toHaveCSS('opacity', '1');
       await toggle.focus(); await page.keyboard.press('Shift+Tab'); await page.keyboard.press('Tab'); await expect(toggle).toBeFocused(); await expect(toggle.locator('span')).toHaveCSS('opacity', '1');
       await page.keyboard.press('Enter'); await expect.poll(() => surface.locator('video').evaluate(v => v.paused)).toBe(false);
       await page.keyboard.press('Space'); await expect.poll(() => surface.locator('video').evaluate(v => v.paused)).toBe(true);
-      await toggle.click(); await expect(toggle.locator('span')).toHaveCSS('opacity', '0');
+      await toggle.click(); await expect(toggle.locator('span')).toHaveCSS('opacity', '1');
       await expect.poll(() => surface.locator('video').evaluate(v => v.paused)).toBe(false);
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

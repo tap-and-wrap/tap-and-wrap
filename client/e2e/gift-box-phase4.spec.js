@@ -50,6 +50,12 @@ test('gift card checkbox adds a paid blank card or an optional literal message',
   const fixture = await giftBoxFixture(page, { componentOverrides: { 'gift-card-1': { displayName: 'Fixture keepsake card', pricePiastres: 1875 } } });
   await beginGiftBox(page); await page.locator('.gb-progress button').nth(5).click();
   const selected = page.getByRole('checkbox', {name:'Add a Gift Card'});
+  const cardSection=page.locator('.gb-finishing');
+  await expect(cardSection.getByText('Add a gift card',{exact:true})).toHaveCount(1);
+  const cardHeading=await cardSection.locator('h3').boundingBox();
+  const toggleBox=await cardSection.locator('.gb-gift-card-toggle').boundingBox();
+  expect(toggleBox.x).toBeGreaterThan(cardHeading.x);
+  expect(toggleBox.width).toBeGreaterThanOrEqual(44);
   await expect(selected).not.toBeChecked();
   await expect(page.getByLabel('Message (optional)')).toHaveCount(0);
   await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
