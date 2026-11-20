@@ -58,9 +58,9 @@ test('real personalization upload to cart to InstaPay order to proof and explici
   await expect(page.getByRole('heading', { name: /Thank you/ })).toBeVisible();
   const admin = await browser.newContext({ baseURL: 'http://127.0.0.1:' + (process.env.TAP_WRAP_CONTRACT_WEB_PORT || 5192) }); await restrict(admin); const adminPage = await admin.newPage();
   await adminPage.goto('/login?returnTo=' + encodeURIComponent('/admin/commerce/orders/' + order.id)); await adminPage.getByLabel('Email Address').fill('admin@connected.example.test'); await adminPage.getByLabel('Password', { exact: true }).fill('isolated-fixture-password'); await adminPage.getByRole('button', { name: 'Log In', exact: true }).click();
-  await expect(adminPage).toHaveURL(`/admin/orders/${order.id}`); await expect(adminPage.getByRole('heading', { name: 'Customer files & payment screenshots', exact: true })).toBeVisible(); await adminPage.getByRole('button', { name: 'View Personalization 1', exact: true }).click();
+  await expect(adminPage).toHaveURL(`/admin/orders/${order.id}`); await expect(adminPage.getByRole('heading', { name: 'Payment', exact: true })).toBeVisible(); await adminPage.getByText('Customer artwork and other private files', { exact: true }).click(); await adminPage.getByRole('button', { name: 'View private file 1', exact: true }).click();
   await expect(adminPage.getByRole('dialog').locator('img')).toBeVisible(); await expect.poll(() => adminPage.getByRole('dialog').locator('img').evaluate(img => img.naturalWidth)).toBe(1);
-  await adminPage.getByRole('dialog').getByRole('button', { name: /Close/ }).click(); await adminPage.getByRole('button', { name: 'View Proof', exact: true }).click(); await expect(adminPage.getByRole('dialog').locator('img')).toBeVisible();
+  await adminPage.getByRole('dialog').getByRole('button', { name: /Close/ }).click(); await adminPage.getByRole('button', { name: 'View screenshot 1', exact: true }).click(); await expect(adminPage.getByRole('dialog').locator('img')).toBeVisible();
   expect(errors).toEqual([]); await admin.close();
   console.log(JSON.stringify({ audit: 'connected-enabled-personalization', realAPI: true, disposableDB: true, R2: 'memory adapter', filesCorrectlyBound: true, paymentNotAutomaticallyVerified: true }));
 });

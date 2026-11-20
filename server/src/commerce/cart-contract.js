@@ -1,6 +1,6 @@
 import { photoSelectionInput } from './product-photos.js';
 import { productEngravingCartInput } from '../product-engraving/contracts.js';
-import { hasGiftCardMessage } from '../../../shared/gift-box/card-message.mjs';
+import { validGiftCardMessage } from '../../../shared/gift-box/card-message.mjs';
 import { engravingCartInput, visualEngravingCartInput } from '../engraving/contracts.js';
 import { z } from 'zod';
 import { giftBoxV2CommerceInput } from '../gift-box/commerce-contract.js';
@@ -26,8 +26,8 @@ export const giftCartConfigurationInput = giftBoxV2CommerceInput.superRefine((va
 });
 // Enforce only when creating a new line, after immutable operation receipts
 // have had a chance to recover a legacy add. Stored readers keep their schema.
-export const shoppingGiftCartConfigurationInput = giftCartConfigurationInput.refine(value => !value.selection.giftCard || hasGiftCardMessage(value.selection.giftCard.message), {
-  message: 'Enter a message to add a gift card.', path: ['selection', 'giftCard', 'message'],
+export const shoppingGiftCartConfigurationInput = giftCartConfigurationInput.refine(value => !value.selection.giftCard || validGiftCardMessage(value.selection.giftCard.message), {
+  message: 'A selected gift card can be blank, but its message must be valid.', path: ['selection', 'giftCard', 'message'],
 });
 const productCartItem = z.object({ kind: z.literal('product'), operationKey: uuid.optional(), productId: id,
   variantKey: z.string().max(80).nullable().optional(), quantity: cartQuantity,

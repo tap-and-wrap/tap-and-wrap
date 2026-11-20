@@ -103,6 +103,7 @@ for (const [navigation, firstPhoto, secondPhoto] of [
     await page.getByRole('button',{name:'Log In',exact:true}).click();
     await expect(page).not.toHaveURL(/\/login/);
     await page.goto(`/admin/commerce/orders/${orderId}`);
+    await page.getByText('Gift Box arrangement previews', { exact: true }).click();
     const designs=page.getByRole('region',{name:"Customer's Gift Design"});
     await expect(designs).toHaveCount(2);
     for (const design of await designs.all()) {
@@ -193,10 +194,23 @@ test('three photo orientations reconstruct unchanged after real isolated checkou
   await page.getByLabel('Phone number').fill('01012345678');await chooseOption(page.getByLabel(/^Governorate/), 'cairo');await page.getByLabel(/^City \/ Area/).fill('Synthetic City');await page.getByLabel(/^Street address/).fill('10 Synthetic Photo Street');
   await expect(page.getByRole('button',{name:'Place Order',exact:true})).toBeEnabled();await page.getByRole('button',{name:'Place Order',exact:true}).click();await page.getByRole('main').getByRole('link',{name:'Track Order',exact:true}).click();await expect(page).toHaveURL(/\/orders\/[a-f0-9]{24}$/);
   const id=page.url().split('/').pop();await page.goto('/login');await page.getByLabel('Email Address').fill('admin@connected.example.test');await page.getByLabel('Password',{exact:true}).fill('isolated-fixture-password');await page.getByRole('button',{name:'Log In',exact:true}).click();await expect(page).not.toHaveURL(/\/login/);
-  await page.goto(`/admin/commerce/orders/${id}`);const design=page.getByRole('region',{name:"Customer's Gift Design"});
+  await page.goto(`/admin/commerce/orders/${id}`);await page.getByText('Gift Box arrangement previews', {exact:true}).click();const design=page.getByRole('region',{name:"Customer's Gift Design"});
   await expect(design.locator('.gb-free-photo')).toHaveCount(3);
   expect(await design.locator('.gb-free-photo').evaluateAll(nodes=>nodes.map(node=>({width:node.style.width,height:node.style.height,left:node.style.left,top:node.style.top})))).toEqual(before);
   await expect(design.locator('.gb-free-photo img')).toHaveCount(0);await design.getByRole('button',{name:'View private photos in design'}).click();await expect(design.locator('.gb-free-photo img')).toHaveCount(3);
   await expect.poll(()=>design.locator('.gb-free-photo img').evaluateAll(nodes=>nodes.every(node=>node.complete&&node.naturalWidth>0))).toBe(true);
   expect(await design.locator('.gb-free-photo img').evaluateAll(nodes=>nodes.map(node=>node.naturalWidth/node.naturalHeight))).toEqual([2/3,1.5,1]);
+});
+
+test('mobile rapid double tap saves only one Gift Box operation and survives cart reload', async ({page,context}) => {
+  await page.setViewportSize({width:390,height:820});
+  await page.goto('/customize/gift-box');await build(page,'box-2',null);
+  await confirmedCartAddAndOpen(page, () => page.evaluate(() => {
+    const button=[...document.querySelectorAll('button')].find(value=>value.textContent.trim()==='Add Your Gift to Cart');
+    if (!button || button.disabled) throw Error('Cart submission was not ready on mobile.');
+    button.click();button.click();
+  }));
+  const lines=(await cart(context)).items;
+  expect(lines).toHaveLength(1);expect(lines[0].quantity).toBe(1);
+  await page.reload();expect((await cart(context)).items).toHaveLength(1);
 });

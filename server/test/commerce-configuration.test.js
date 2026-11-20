@@ -90,7 +90,10 @@ test('all 27 governorates retain null pending delivery amounts and reject intern
   assert.equal(GOVERNORATES.length, 27);
   assert.equal(new Set(GOVERNORATES.map((value) => value.id)).size, 27);
   for (const governorate of GOVERNORATES) assert.equal(shippingForGovernorate(governorate.id).shippingPiastres, null);
-  assert.equal(shippingForGovernorate('cairo', { approved: true, cairoGizaPiastres: 10000, otherGovernoratesPiastres: 15000 }).shippingPiastres, null);
+  assert.equal(shippingForGovernorate('cairo', { approved: true, cairoGizaPiastres: 10000, otherGovernoratesPiastres: 15000 }).shippingPiastres, 10000);
+  assert.equal(shippingForGovernorate('giza', { approved: true, cairoGizaPiastres: 10000, otherGovernoratesPiastres: 15000 }).shippingPiastres, 10000);
+  assert.equal(shippingForGovernorate('alexandria', { approved: true, cairoGizaPiastres: 10000, otherGovernoratesPiastres: 15000 }).shippingPiastres, 15000);
+  assert.equal(shippingForGovernorate('cairo', { approved: true, cairoGizaPiastres: -1, otherGovernoratesPiastres: 15000 }).shippingPiastres, null);
   assert.throws(() => shippingForGovernorate('international'));
   assert.equal(shippingForGovernorate('cairo', { approved: false }).shippingPiastres, null);
 });

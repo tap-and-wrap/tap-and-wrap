@@ -114,7 +114,7 @@ export function CartProvider({ children }) {
     if (opener instanceof HTMLElement && opener.isConnected && !opener.matches(':disabled')) opener.focus({ preventScroll: true });
     else document.querySelector('[data-cart-anchor]')?.focus({ preventScroll: true });
   }
-  return <CartContext.Provider value={value}>{children}{(preparation?.generation === session.generation || queue.activeCount > 0) && <aside className="personalized-add-progress" aria-live="polite"><LoadingSpinner label={preparation?.generation === session.generation ? preparation.text : `Preparing ${queue.activeCount} custom ${queue.activeCount === 1 ? 'item' : 'items'}…`}/><Link to="/cart">View cart</Link></aside>}<div className="commerce-announcement" role="status" aria-live="polite">{feedback && <><span>{feedback}</span><button type="button" className="commerce-feedback-dismiss" aria-label="Dismiss cart feedback" onClick={dismissFeedback}>×</button></>}</div></CartContext.Provider>;
+  return <CartContext.Provider value={value}>{children}{preparation?.generation === session.generation && <aside className="personalized-add-progress" aria-live="polite"><LoadingSpinner label={preparation.text}/><Link to="/cart">View cart</Link></aside>}<div className="commerce-announcement" role="status" aria-live="polite">{feedback && <><span>{feedback}</span><button type="button" className="commerce-feedback-dismiss" aria-label="Dismiss cart feedback" onClick={dismissFeedback}>×</button></>}</div></CartContext.Provider>;
 }
 
 export function useCart() {

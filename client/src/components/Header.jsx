@@ -5,7 +5,6 @@ import { adminLinks } from '../admin/navigation.js';
 import { useCart } from '../commerce/CartContext.jsx';
 import { useSession } from '../auth/SessionProvider.jsx';
 import useModalDialog from './useModalDialog.js';
-import AdminNotificationBell from './AdminNotificationBell.jsx';
 import useStaggeredMenuMotion from './useStaggeredMenuMotion.js';
 
 const primaryLinks = [
@@ -100,7 +99,6 @@ export default function Header() {
       <Link className="site-logo" to={adminWorkspace ? '/admin' : '/'} aria-label={adminWorkspace ? 'Tap and Wrap dashboard' : 'Tap and Wrap home'}><img src="/tap-wrap-logo.webp" alt="Tap & Wrap" width="2000" height="667" /></Link>
       <nav className="desktop-navigation" aria-label={adminWorkspace ? 'Administration' : 'Main navigation'}><NavigationLinks links={links} admin={adminWorkspace}/></nav>
       <div className="header-actions">
-        {admin && <AdminNotificationBell />}
         {session.ready ? <Link className="icon-button header-account" to={adminWorkspace ? '/' : accountDestination} aria-label={adminWorkspace ? 'Home — storefront' : 'Account'} title={adminWorkspace ? 'View storefront' : admin ? 'Admin dashboard' : session.user ? 'My account and orders' : 'Sign in'}>{adminWorkspace ? <Home size={20} aria-hidden="true"/> : <UserRound size={20} aria-hidden="true"/>}</Link> : <button className="icon-button header-account" type="button" disabled aria-label={session.phase === 'error' ? 'Account unavailable' : 'Checking account'}><UserRound size={20} aria-hidden="true"/></button>}
         {!adminWorkspace && <Link className="icon-button" data-cart-anchor to="/cart" aria-label={`Cart${cart.quantity ? `, ${cart.quantity} items` : ''}`} title="Cart"><ShoppingBag size={20} aria-hidden="true"/>{cart.quantity > 0 && <span className="commerce-cart-count" aria-hidden="true">{cart.quantity > 99 ? '99+' : cart.quantity}</span>}</Link>}
       </div>

@@ -69,10 +69,53 @@ test('COD creates merchandise-only immutable snapshot with null pending shipping
   const { order, quote, body } = await create('cod');
   assert.equal(quote.totals.shippingPiastres, null); assert.equal(order.totals.totalPiastres, 12000);
   const saved = await Order.findById(order.id); assert.equal(saved.charges[0].amountPiastres, null); assert.equal(saved.charges[0].state, 'pending');
-  assert.equal(saved.paymentState, 'unpaid'); assert.ok(saved.followUpDueAt > saved.createdAt);
+  assert.equal(saved.paymentState, 'unpaid'); assert.equal(saved.followUpDueAt, undefined);
   assert.equal(await ShippingConfig.countDocuments(), 0);
   assert.equal((await placeOrder(owner, body)).id, order.id); assert.equal((await Product.findById(product._id)).inventory.quantity, 9);
 });
+test('explicitly approved delivery is included once in COD order total and no post-order shipping charge exists', async () => {
+  await ShippingConfig.create({ key:'egypt-v1', cairoGizaPiastres:9500, otherGovernoratesPiastres:12000, approved:true });
+  const { order, quote, body } = await create('cod');
+  assert.equal(quote.totals.subtotalPiastres,12000);
+  assert.equal(quote.totals.shippingPiastres,9500);
+  assert.equal(quote.totals.totalPiastres,21500);
+  assert.equal(order.totals.totalPiastres,21500);
+  const saved=await Order.findById(order.id);
+  assert.equal(saved.charges.some(charge=>charge.id==='shipping'), false);
+  assert.equal(saved.responseState,'clear');
+  assert.equal(saved.followUpDueAt,undefined);
+  const financial=await orderAccounting(saved);
+  assert.equal(financial.agreedTotalPiastres,21500);
+  assert.equal(financial.unresolvedCharges,0);
+  const presented=await presentOrder(saved,{admin:true});
+  assert.equal(presented.shipping.amountPiastres,9500);
+  assert.equal(presented.shipping.state,'included_in_checkout');
+  assert.equal((await placeOrder(owner,body)).id,order.id);
+});
+
+test('merchant delivery changes between quote and submission reject a stale immutable quote without creating an order', async () => {
+  const config=await ShippingConfig.create({key:'egypt-v1',cairoGizaPiastres:9000,otherGovernoratesPiastres:12000,approved:true});
+  await addCartItem(owner,{productId:String(product._id),quantity:1});
+  const checkoutKey=randomUUID();
+  const intent=await prepareCheckout(owner,{checkoutKey,paymentMethod:'cod',governorate:'cairo'});
+  assert.equal(intent.totals.totalPiastres,21000);
+  await ShippingConfig.updateOne({_id:config._id},{$set:{cairoGizaPiastres:11000},$inc:{__v:1}});
+  await assert.rejects(placeOrder(owner,{checkoutKey,paymentMethod:'cod',customer}),{code:'CHECKOUT_CHANGED'});
+  assert.equal(await Order.countDocuments(),0);
+  assert.equal((await Product.findById(product._id)).inventory.quantity,10);
+});
+
+test('approved shipping is present in the same InstaPay transfer amount and cannot be added as an extra later charge', async () => {
+  await ShippingConfig.create({key:'egypt-v1',cairoGizaPiastres:9000,otherGovernoratesPiastres:12000,approved:true});
+  const {quote,order}=await create('instapay');
+  assert.equal(quote.totals.totalPiastres,21000);
+  assert.equal(order.totals.shippingPiastres,9000);
+  const saved=await Order.findById(order.id);
+  assert.equal(saved.charges.some(charge=>charge.id==='shipping'),false);
+  assert.equal((await orderAccounting(saved)).agreedTotalPiastres,21000);
+  await assert.rejects(operation(order.id,{action:'quote_charge',chargeId:'shipping',pricing:'quoted',amountPiastres:9000,collectionMethod:'cod'}));
+});
+
 test('InstaPay order-first proof ownership, rejection, replacement and retry preserve retained files without marking Paid', async () => {
   await assert.rejects(signUpload(owner, { purpose: 'payment_proof', checkoutKey: randomUUID(), mimeType: 'image/png', sizeBytes: PNG.length }));
   const { order } = await create(); assert.equal(order.paymentState, 'awaiting_transfer');

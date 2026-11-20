@@ -89,8 +89,8 @@ for(const width of [390,768,1440]) test(`unified customer and owner order obliga
   await expect(page.getByText('Currently authorized:')).toContainText('250');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:info.outputPath(`mixed-order-customer-${width}.png`),fullPage:true});
-  await page.goto('/admin/orders/'+order.id);await expect(page.getByRole('heading',{name:'Customer item custody & engraving'})).toBeVisible();
-  await expect(page.getByRole('combobox',{name:'Merchandise fulfillment'})).toBeVisible();
+  await page.goto('/admin/orders/'+order.id);await expect(page.getByRole('heading',{name:'Purchased items'})).toBeVisible();await expect(page.getByText('Engraving item handling for existing orders')).toBeVisible();
+  await expect(page.getByRole('combobox',{name:'Order status'})).toBeVisible();
   expect(fixture.calls.filter(call=>/\/files\/|\/proof$/.test(call.path))).toHaveLength(0);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:info.outputPath(`mixed-order-owner-${width}.png`),fullPage:true});expect(errors).toEqual([]);

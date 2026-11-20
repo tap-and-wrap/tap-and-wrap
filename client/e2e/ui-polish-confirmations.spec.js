@@ -14,9 +14,10 @@ test('cart removal centers, cancels without mutation and confirms one owned item
 test('order operation review is centered without changing its approval or mutation gates',async({page},info)=>{
   const order={...commerceOrder,accountingVersion:1,accounting:{charges:[],settlements:[],merchandisePiastres:25000,agreedTotalPiastres:25000,collectedPiastres:0,refundedPiastres:0,outstandingPiastres:25000,overpaymentPiastres:0,unresolvedCharges:0}};
   const fixture=await mockCommerce(page,{role:'admin',order});await page.setViewportSize({width:390,height:844});await page.goto('/admin/orders/'+order.id);
+  await page.getByText('Payment verification and financial records', { exact:true }).click();
   await chooseOption(page.getByRole('combobox',{name:'Operation',exact:true}),'cancel');
-  await page.getByLabel('Private reconciliation / WhatsApp acceptance evidence').fill('Isolated confirmation UI check');
-  await page.getByLabel('I confirmed the actual account transaction, customer WhatsApp acceptance or returned-stock inspection applicable to this operation').check();
+  await page.getByLabel('Private financial note').fill('Isolated confirmation UI check');
+  await page.getByLabel('I verified the applicable transaction, customer agreement or returned-stock inspection').check();
   await page.getByRole('button',{name:'Record operation',exact:true}).click();
   const dialog=page.getByRole('dialog',{name:'Review order operation'});await expect(dialog).toBeVisible();const rect=await dialog.boundingBox();expect(Math.abs(rect.x+rect.width/2-195)).toBeLessThan(2);expect(Math.abs(rect.y+rect.height/2-422)).toBeLessThan(2);
   await page.screenshot({path:info.outputPath('order-confirmation.png')});await dialog.getByRole('button',{name:'Keep editing'}).click();await expect(dialog).toHaveCount(0);

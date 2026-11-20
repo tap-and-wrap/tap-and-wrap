@@ -16,7 +16,7 @@ for(const width of [320,390,768,1440]) test(`six shopping stages keep prices vis
  await expect(page.locator('.gb-personal-section[open]')).toHaveCount(0);
  await page.getByLabel('Choose your photos').setInputFiles(isolatedImageFile('local.png'));
  await expect(page.locator('.gb-photo-thumbnails img')).toHaveCount(1);expect(fixture.uploads).toHaveLength(0);
- await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();await page.getByLabel('Your message').fill('Literal customer message');
+ await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();await page.getByRole('checkbox',{name:'Add a Gift Card'}).check();await page.getByLabel('Message (optional)').fill('Literal customer message');
  await page.getByRole('button',{name:'Next: Review'}).click();await expect(page.getByRole('button',{name:'Add Your Gift to Cart',exact:true})).toBeDisabled();
  expect(fixture.calls.filter(call=>/cart\/items|orders|uploads/.test(call.path))).toHaveLength(0);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);

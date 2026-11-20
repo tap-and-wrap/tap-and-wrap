@@ -22,7 +22,14 @@ export default function RequireAdmin({ children }) {
   const returnTo = encodeURIComponent(`${location.pathname}${location.search}`);
 
   if (session.phase === 'checking' || session.phase === 'transition' || (user?.role === 'admin' && (authorization.isPending || authorization.isFetching))) {
-    return <AdminLayout title="Checking administrator access" navigation={false} busy><p role="status">Checking administrator access…</p></AdminLayout>;
+    return <main className="v11-admin-auth-loading" role="status" aria-busy="true" aria-live="polite">
+      <div className="v11-admin-auth-card"><span className="v11-admin-auth-mark" aria-hidden="true">T&amp;W</span>
+        <div className="v11-auth-skeleton v11-auth-skeleton--title" aria-hidden="true"/>
+        <h1>Opening your dashboard</h1><p>Verifying your administrator session securely.</p>
+        <div className="v11-auth-skeleton v11-auth-skeleton--line" aria-hidden="true"/>
+        <div className="v11-auth-skeleton v11-auth-skeleton--line-short" aria-hidden="true"/>
+      </div>
+    </main>;
   }
   if (status === 401 || (!error && !user)) {
     return (

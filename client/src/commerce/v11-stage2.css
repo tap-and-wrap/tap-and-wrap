@@ -1,0 +1,8 @@
+.gb-gift-card-toggle{display:flex;align-items:center;gap:10px;font-weight:650;cursor:pointer;color:#62483f}
+.gb-gift-card-toggle input{width:19px;height:19px;accent-color:#62483f;flex:0 0 auto}
+.track-another-order{display:block;width:100%;margin-top:22px}
+.commerce-order-card-heading,.commerce-order-card-meta,.commerce-order-card-total{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.commerce-order-card-heading h2{margin:0}.commerce-order-card-meta{margin:10px 0;color:#776e6a;font-size:.88rem}
+.commerce-order-card-total{border-top:1px solid #e8dcd5;padding-top:12px;margin-top:10px}
+.commerce-order-card-total strong{font-size:1.1rem}.commerce-order-view{display:inline-block;margin-top:8px;text-decoration:underline;text-underline-offset:3px}
+@media(max-width:420px){.commerce-order-card-heading{align-items:start}.commerce-order-card-total{align-items:baseline}}

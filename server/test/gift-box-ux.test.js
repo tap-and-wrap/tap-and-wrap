@@ -8,12 +8,13 @@ import { cartItemInput, giftCartConfigurationInput, shoppingGiftCartConfiguratio
 import { identifyGiftBoxConfiguration } from '../src/gift-box/commerce-contract.js';
 import { giftCartConfiguration, giftCartInput } from './helpers/gift-box-cart-fixtures.js';
 
-test('empty, invisible and combining-only messages never select or charge a new card', () => {
-  for (const message of ['', ' \n\t', '\u200b\u200c\u200d\u2066\u2069\ufeff', '\u061c\u064e\u0651', '\u2800\u3164\uffa0', '\ud800']) {
+test('blank selected gift cards are valid while malformed Unicode is rejected', () => {
+  for (const message of ['', ' \n\t', '\u200b\u200c\u200d\u2066\u2069\ufeff', '\u061c\u064e\u0651']) {
     assert.equal(hasGiftCardMessage(message), false);
-    assert.equal(shoppingEstimateInput.safeParse({ boxId: 'box-2', giftCard: { componentId: 'gift-card-1', message } }).success, false);
-    assert.equal(shoppingGiftCartConfigurationInput.safeParse(giftCartConfiguration({ message })).success, false);
+    assert.equal(shoppingEstimateInput.safeParse({ boxId: 'box-2', giftCard: { componentId: 'gift-card-1', message } }).success, true);
+    assert.equal(shoppingGiftCartConfigurationInput.safeParse(giftCartConfiguration({ message })).success, true);
   }
+  assert.equal(shoppingEstimateInput.safeParse({ boxId: 'box-2', giftCard: { componentId: 'gift-card-1', message: '\ud800' } }).success, false);
 });
 
 test('real Arabic, diacritics, punctuation, English and emoji retain exact text at ingress', () => {
@@ -24,19 +25,20 @@ test('real Arabic, diacritics, punctuation, English and emoji retain exact text 
   }
 });
 
-test('message entry, clearing, undo and reconstructed selections share the paid-card rule', () => {
+test('checkbox governs the paid Gift Card independently of message content and undo', () => {
   let history = { present: { ...initialArrangement(), freePlacement: true, boxId: 'box-2' }, past: [] };
   history = arrangementReducer(history, { type: 'message', message: 'For you' });
-  assert.equal(history.present.cardEnabled, true);
-  assert.equal(estimateSelection(history.present, 'gift-card-1').giftCard.message, 'For you');
-  assert.equal(prepareGiftBoxCommerceConfiguration(history.present, { cardId: 'gift-card-1' }).selection.giftCard.message, 'For you');
-  history = arrangementReducer(history, { type: 'message', message: '\u200b ' });
   assert.equal(history.present.cardEnabled, false);
-  assert.equal(prepareGiftBoxCommerceConfiguration(history.present, { cardId: 'gift-card-1' }).selection.giftCard, null);
+  assert.equal(estimateSelection(history.present, 'gift-card-1').giftCard, null);
+  history = arrangementReducer(history, { type: 'card', enabled: true });
+  assert.equal(estimateSelection(history.present, 'gift-card-1').giftCard.message, 'For you');
+  history = arrangementReducer(history, { type: 'message', message: '' });
+  assert.equal(prepareGiftBoxCommerceConfiguration(history.present, { cardId: 'gift-card-1' }).selection.giftCard.message, '');
   history = arrangementReducer(history, { type: 'undo' });
   assert.equal(history.present.message, 'For you');
-  assert.equal(estimateSelection({ ...history.present, cardEnabled: false }, 'gift-card-1').giftCard.message, 'For you');
-  assert.equal(estimateSelection({ ...history.present, cardEnabled: true, message: '' }, 'gift-card-1').giftCard, null);
+  history = arrangementReducer(history, { type: 'card', enabled: false });
+  assert.equal(estimateSelection(history.present, 'gift-card-1').giftCard, null);
+  assert.equal(estimateSelection({ ...history.present, cardEnabled: true, message: '' }, 'gift-card-1').giftCard.message, '');
 });
 
 test('legacy saved blank-card configurations remain readable with identical identity', () => {
@@ -45,6 +47,6 @@ test('legacy saved blank-card configurations remain readable with identical iden
   const restored = giftCartConfigurationInput.parse(legacy);
   assert.equal(restored.selection.giftCard.message, '');
   assert.equal(identifyGiftBoxConfiguration(restored).configurationId, before);
-  assert.equal(shoppingGiftCartConfigurationInput.safeParse(restored).success, false);
+  assert.equal(shoppingGiftCartConfigurationInput.safeParse(restored).success, true);
   assert.equal(cartItemInput.safeParse(giftCartInput(giftCartConfiguration({ card: false }))).success, true);
 });

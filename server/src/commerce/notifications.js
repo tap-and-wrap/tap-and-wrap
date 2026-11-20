@@ -72,7 +72,7 @@ export async function enqueueOrderEvent(order, event, { session, eventVersion } 
   writeGuard();
   await NotificationEvent.updateOne({ eventKey }, { $setOnInsert: {
     eventKey, orderId, event, recipient: recipient.toLowerCase(),
-    snapshot: { ...(order.accountingVersion === 2 ? {groupedPayments:true,mixedEngraving:order.lines.some(line => isEngravingKind(line.kind)) && order.lines.some(line => !isEngravingKind(line.kind))} : {}), items: (order.lines || []).slice(0, 20).map(orderItemSnapshot), orderNumber, orderChannel: order.orderChannel || 'website', accountingVersion: order.accountingVersion || 0, shippingState: order.charges?.find(charge => charge.kind === 'shipping')?.state || null,
+    snapshot: { ...(order.accountingVersion === 2 ? {groupedPayments:true,mixedEngraving:order.lines.some(line => isEngravingKind(line.kind)) && order.lines.some(line => !isEngravingKind(line.kind))} : {}), items: (order.lines || []).slice(0, 20).map(orderItemSnapshot), orderNumber, orderChannel: order.orderChannel || 'website', accountingVersion: order.accountingVersion || 0, shippingState: Number.isSafeInteger(order.totals?.shippingPiastres) ? 'included_in_checkout' : order.charges?.find(charge => charge.kind === 'shipping')?.state || null,
       ...(upfrontEngravingPayment(order) ? { engravingPaymentPolicy: order.engravingPaymentPolicy } : {}),
       engravingService: order.lines?.some(line => isEngravingKind(line.kind)) === true,
       engravingReviewPending: !upfrontEngravingPayment(order) && order.lines?.some(line => isEngravingKind(line.kind)) && order.engraving?.collectionAuthorized !== true,

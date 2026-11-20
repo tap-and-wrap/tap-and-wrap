@@ -1,5 +1,6 @@
 import { isEngravingKind } from '../../../shared/engraving/definitions.mjs';
 import mongoose from 'mongoose';
+import ShippingConfig from '../models/ShippingConfig.js';
 import DiscountCode from '../models/DiscountCode.js';
 import { DiscountRedemption } from '../models/DiscountRedemption.js';
 import { configurationError } from './customization.js';
@@ -24,11 +25,19 @@ export const GOVERNORATES = Object.freeze([
   { id: 'suez', name: 'Suez' }
 ].map((value) => Object.freeze(value)));
 
-export function shippingForGovernorate(governorate) {
+export function shippingForGovernorate(governorate, configuration = null) {
   if (!GOVERNORATES.some(area => area.id === governorate)) throw configurationError('Choose a supported Egyptian governorate.', 'GOVERNORATE_INVALID');
-  return { governorate, status: 'pending_confirmation', shippingPiastres: null };
+  const field = ['cairo', 'giza'].includes(governorate) ? 'cairoGizaPiastres' : 'otherGovernoratesPiastres';
+  const amount = configuration?.approved === true ? configuration[field] : null;
+  // Fail closed on malformed/legacy settings. Never use unapproved defaults.
+  return Number.isSafeInteger(amount) && amount >= 0 && amount <= 100000000
+    ? { governorate, status: 'included_in_checkout', shippingPiastres: amount, revision: configuration.__v ?? 0 }
+    : { governorate, status: 'pending_confirmation', shippingPiastres: null };
 }
-export async function getShippingQuote(governorate) { return shippingForGovernorate(governorate); }
+export async function getShippingQuote(governorate, { session } = {}) {
+  const configuration = await ShippingConfig.findOne({ key: 'egypt-v1' }).session(session || null).lean().maxTimeMS(3000);
+  return shippingForGovernorate(governorate, configuration);
+}
 export async function lockShippingQuote() { throw configurationError('Delivery fees require order-specific customer acceptance.', 'SHIPPING_POLICY_CHANGED', 409); }
 
 function validDates(rule, now) {

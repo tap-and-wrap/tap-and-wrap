@@ -24,7 +24,7 @@ for(const width of [1024,1440])for(const workspace of ['storefront','admin'])tes
  if(workspace==='admin')await ownerFixture(page);else await mockCatalog(page,{role:'admin'});
  await page.setViewportSize({width,height:900});await page.goto(workspace==='admin'?'/admin':'/shop');
  await expect(page.getByRole('button',{name:'Open menu',exact:true})).toHaveCount(0);
- await expect(page.getByRole('button',{name:/^Admin notifications/})).toBeVisible();
+ await expect(page.getByRole('button',{name:/^Admin notifications/})).toHaveCount(0);
  if(workspace==='admin'){
   await expect(page.getByRole('link',{name:'Payment',exact:true})).toHaveCount(0);
   await expect(page.locator('.desktop-navigation>ul>li')).toHaveCount(7);

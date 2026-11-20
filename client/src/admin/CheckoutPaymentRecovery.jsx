@@ -6,9 +6,9 @@ import { authGeneration } from '../services/api.js';
 import { adminCommerceGet, commerceError, money, getPrivateAdminFile } from '../commerce/api.js';
 import { PrivateFileDialog } from '../pages/AdminOrderPage.jsx';
 
-export default function CheckoutPaymentRecovery() {
+export default function CheckoutPaymentRecovery({ initiallyOpen = false }) {
   const session = useSession(), mounted = useRef(true);
-  const [open, setOpen] = useState(false), [reference, setReference] = useState(''), [search, setSearch] = useState(''), [file, setFile] = useState(null), [error, setError] = useState(''), [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(initiallyOpen), [reference, setReference] = useState(''), [search, setSearch] = useState(''), [file, setFile] = useState(null), [error, setError] = useState(''), [loading, setLoading] = useState(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const query = useQuery({ queryKey: privateQueryKey(session.ownerKey,'checkout-recovery',search), queryFn:({signal})=>adminCommerceGet('/checkout-payments', search ? {reference:search} : undefined,signal), enabled:open,retry:false,gcTime:0 });
   async function view(payment, returnFocus) {

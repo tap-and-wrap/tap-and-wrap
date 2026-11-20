@@ -19,8 +19,8 @@ for (const width of [320, 390, 768, 1024, 1440]) test(`owner workspaces render w
     expect(overflow, path).toBe(false);
   }
   await page.goto('/admin/orders');
-  await expect(page.getByText('Inspect customer item', { exact: true })).toBeVisible();
-  for (const type of ['Product', 'Gift Box', 'Engraving', 'Mixed']) await expect(page.locator('.owner-order-table').getByText(type, { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Requires action' })).toHaveCount(0);
+  for (const type of ['Product', 'Gift Box', 'Engraving', 'Mixed order']) await expect(page.locator('.owner-order-table').getByText(type, { exact: true })).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -48,18 +48,15 @@ test('seven primary destinations, drawer containment, customization and storefro
   await expect(page.locator('.announcement')).toBeVisible();
 });
 
-test('notification history loads five at a time, marks read and restores focus', async ({ page }, info) => {
+test('admin dashboard has no notification bell, action queue or reference search', async ({ page }) => {
   const fixture = await ownerFixture(page); await page.goto('/admin');
-  const bell = page.getByRole('button', { name: /Admin notifications/ }); await bell.click();
-  const panel = page.getByRole('dialog', { name: 'Notifications', exact: true });
-  await expect(panel.locator('li')).toHaveCount(5);
-  await panel.getByRole('button', { name: 'Show More', exact: true }).click(); await expect(panel.locator('li')).toHaveCount(10);
-  await panel.getByRole('button', { name: 'Show More', exact: true }).click(); await expect(panel.locator('li')).toHaveCount(13);
-  await expect(panel.getByRole('button', { name: 'Show More' })).toHaveCount(0);
-  await panel.getByRole('button', { name: 'Mark all as read' }).click(); await expect(panel.getByText('0 unread', { exact: true })).toBeVisible();
-  expect(fixture.ownerCalls.filter(url => url.pathname.endsWith('/notifications')).every(url => url.searchParams.get('limit') === '5')).toBe(true);
-  await page.screenshot({ path: info.outputPath('notifications-show-more.png') });
-  await page.keyboard.press('Escape'); await expect(panel).toHaveCount(0); await expect(bell).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Recent orders' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Admin notifications/ })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Action center' })).toHaveCount(0);
+  await page.goto('/admin/orders');
+  await expect(page.getByText('Checkout payment recovery')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Requires action' })).toHaveCount(0);
+  expect(fixture.ownerCalls.filter(url => /\/notifications|\/attention/.test(url.pathname))).toHaveLength(0);
 });
 
 test('shared select supports keyboard, URL filters and escape restoration', async ({ page }, info) => {
@@ -77,12 +74,18 @@ test('shared select supports keyboard, URL filters and escape restoration', asyn
 test('legacy bookmarks redirect safely and customers never receive the admin workspace', async ({ page }) => {
   await ownerFixture(page);
   for (const [old, expected] of [['/admin/website/overview', '/admin'], ['/admin/website/categories', '/admin/categories'], ['/admin/commerce/bundles', '/admin/discounts'], ['/admin/website/reviews', '/admin'], ['/admin/notifications', '/admin'], ['/admin/commerce/templates', '/admin/customization'], ['/admin/gift-box/fulfillment-policies', '/admin/gift-box?tab=components'], [`/admin/commerce/orders/${ownerOrders[0].id}`, `/admin/orders/${ownerOrders[0].id}`]]) { await page.goto(old); await expect(page).toHaveURL(`http://127.0.0.1:5191${expected}`); }
-  await page.unrouteAll({ behavior: 'wait' }); await mockCommerce(page, { role: 'customer' });
-  // An in-flight legacy redirect may cancel this navigation; never allow
-  // that race to bypass the actual server-denied access assertion.
-  await page.goto('/admin', {waitUntil:'domcontentloaded'}).catch(error => {
-    if (!/ERR_ABORTED/.test(String(error))) throw error;
-  });
-  await expect(page.getByRole('heading', { name: 'Access denied' })).toBeVisible();
-  await expect(page.getByRole('navigation', { name: 'Administration', exact: true })).toHaveCount(0);
+  // The legacy admin redirect has its own auth/page state. Validate the denied
+  // customer session in a fresh tab with independently installed customer routes,
+  // rather than racing two incompatible fixture auth owners in one page.
+  const customerPage = await page.context().newPage();
+  try {
+    const customerFixture = await mockCommerce(customerPage, { role: 'customer' });
+    await customerPage.goto('/admin', { waitUntil: 'domcontentloaded' });
+    await expect(customerPage.getByRole('heading', { name: 'Access denied' })).toBeVisible();
+    await expect(customerPage.getByRole('navigation', { name: 'Administration', exact: true })).toHaveCount(0);
+    expect(customerFixture.state.user.role).toBe('customer');
+    expect(customerFixture.calls.filter(call => call.method === 'PATCH' && /\/admin\//.test(call.path))).toHaveLength(0);
+  } finally {
+    await customerPage.close();
+  }
 });

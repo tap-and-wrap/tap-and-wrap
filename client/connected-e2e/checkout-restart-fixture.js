@@ -14,7 +14,7 @@ export async function restartScenario({page,context},signedIn){
  await page.route('**/checkout/quote',async route=>{const input=route.request().postDataJSON();if(input.checkoutKey===oldKey&&input.paymentMethod==='cod'){const response=await route.fetch();await new Promise(resolve=>setTimeout(resolve,3000));return route.fulfill({response});}return route.continue();});
  await page.reload();await expect(page.getByRole('radio',{name:'Cash on Delivery',exact:true})).toBeChecked();
  await page.getByRole('radio',{name:/InstaPay/}).check();await expect(page.getByRole('button',{name:'Update payment details'})).toBeVisible();
- await expect(page.getByText('Your cart total has changed.',{exact:true})).toBeVisible();await expect(page.getByText('Transfer details unavailable.',{exact:true})).toHaveCount(0);
+ await expect(page.locator('.checkout-payment-update')).toContainText('Your cart total has changed. Update the amount before making a transfer.');await expect(page.getByText('Transfer details unavailable.',{exact:true})).toHaveCount(0);
  for(const width of [320,390,768,1024,1440]){await page.setViewportSize({width,height:900});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.locator('.checkout-payment-update').screenshot({path:test.info().outputPath(`changed-payment-${width}.png`)});}
  await expect(page.getByLabel('Transfer sender name *')).toHaveCount(0);await page.getByLabel(/^Full name/).fill('Preserved customer');
  await page.waitForTimeout(150);expect(new Set(keys).size).toBe(1);

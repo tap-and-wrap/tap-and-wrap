@@ -12,11 +12,10 @@ test('Gift Box photo uploads continue across navigation and render inside one co
   await page.getByRole('button',{name:'Fill With Flowers',exact:true}).click();await page.getByRole('button',{name:'Add Synthetic rose-red',exact:true}).click();
   await page.getByRole('button',{name:'Make It Personal',exact:true}).click();const photo=await image(page,200,150);await choose(page,'Choose your photos',[1,2,3].map(index=>({...photo,name:`synthetic-${index}.png`})));await expect(page.locator('.gb-free-photo')).toHaveCount(3);
   await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();await page.getByRole('button',{name:'Next: Review',exact:true}).click();
-  await page.getByRole('button',{name:'Add Your Gift to Cart',exact:true}).click();await expect(page.locator('.personalized-add-progress')).toBeVisible();
-  await page.locator('[data-cart-anchor]').first().click();await expect(page).toHaveURL('/cart');
+  await confirmedCartAddAndOpen(page, () => page.getByRole('button',{name:'Add Your Gift to Cart',exact:true}).click());
   const gift=page.getByRole('article',{name:'Gift Box',exact:true});await expect(gift).toBeVisible();
   await expect(gift.locator('.cart-v2-photo .gb-free-photo img')).toHaveCount(3);expect((await cart(context)).items).toHaveLength(1);expect(signs).toBe(3);expect(adds).toBe(1);
-  await expect(page.locator('.personalized-add-progress')).toHaveCount(0);
+  await expect(page.locator('.cart-preparation')).toHaveCount(0);
 });
 async function screenshot(page, name, width) {
   await mkdir(screenshotDir,{recursive:true}); await page.setViewportSize({width,height:1000});

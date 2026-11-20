@@ -43,7 +43,7 @@ export async function mockCommerce(page, options = {}) {
   state.component = structuredClone(options.component || { categoryId: product.category._id, subcategoryId: null, _id: '710000000000000000000030', name: 'Configured Card', revision: 0, pricePiastres: 5000, priceApproved: false, configurationApproved: false, enabledForCustomization: false, inventory: { mode: 'tracked', quantity: 10, approved: false, available: true } });
   state.bundle = options.bundle ? structuredClone(options.bundle) : null;
   state.discount = options.discount ? structuredClone(options.discount) : null;
-  state.shipping = { _id: '710000000000000000000070', key: 'shipping', revision: 1, updatedAt: '2026-10-08T12:00:00.000Z', cairoGizaPiastres: 9000, otherGovernoratesPiastres: 12000, approved: false };
+  state.shipping = { _id: '710000000000000000000070', key: 'shipping', revision: 1, updatedAt: '2026-10-08T12:00:00.000Z', cairoGizaPiastres: 9000, otherGovernoratesPiastres: 12000, approved: false, ...(options.shipping || {}) };
   product.revision ??= 0;
   const headers = { 'access-control-allow-origin': 'http://127.0.0.1:5191', 'access-control-allow-credentials': 'true', 'access-control-allow-headers': 'content-type,x-csrf-token,x-tracking-consent,x-search-event-id', 'access-control-allow-methods': 'GET,POST,PATCH,PUT,DELETE,OPTIONS', vary: 'Origin' };
   const success = (route, data, status = 200) => route.fulfill({ status, headers, contentType: 'application/json', body: JSON.stringify({ ok: true, data }) });
@@ -109,7 +109,7 @@ export async function mockCommerce(page, options = {}) {
         return success(route, { basePricePiastres: product.pricePiastres, adjustmentPiastres: quote.adjustmentPiastres, unitPricePiastres: product.pricePiastres + quote.adjustmentPiastres });
       } catch (error) { return failure(route, error.message); }
     }
-    if (path === '/commerce/checkout/config') return success(route, { enabled: options.checkoutEnabled === true, instaPayNumber: '01060673073', governorates: [{ id: 'cairo', name: 'Cairo', shippingPiastres: 9000 }, { id: 'alexandria', name: 'Alexandria', shippingPiastres: 12000 }] });
+    if (path === '/commerce/checkout/config') return success(route, { enabled: options.checkoutEnabled === true, shippingStatus: state.shipping.approved ? 'included_in_checkout' : 'pending_confirmation', instaPayNumber: '01060673073', governorates: [{ id: 'cairo', name: 'Cairo', shippingPiastres: 9000 }, { id: 'alexandria', name: 'Alexandria', shippingPiastres: 12000 }] });
     if (/^\/commerce\/checkout\/payments\/[^/]+$/.test(path) && method === 'GET') {
       const key=path.split('/').at(-1), payment=payments.get(key);
       return success(route,{state:'open',paymentMethod:payment?'instapay':'cod',payment:payment||null,paymentRecoverable:Boolean(payment),canCancel:Boolean(payment&&!payment.proofReceived)});
@@ -126,9 +126,10 @@ export async function mockCommerce(page, options = {}) {
     }
     if (path === '/commerce/checkout/quote') {
       expect(payload.checkoutKey).toBeTruthy(); expect(['cod', 'instapay']).toContain(payload.paymentMethod);
-      const subtotalPiastres = state.cart.subtotalPiastres; const discountPiastres = payload.discountCode === 'ISOLATED' ? 2500 : 0; const shippingPiastres = null;
-      state.quotedTotals={subtotalPiastres,discountPiastres,shippingPiastres,totalPiastres:subtotalPiastres-discountPiastres};
-      return success(route, { fingerprint: `fixture-${subtotalPiastres}-${discountPiastres}`, totals:state.quotedTotals, payment:payload.paymentMethod==='instapay'?payments.get(payload.checkoutKey):null });
+      const subtotalPiastres = state.cart.subtotalPiastres; const discountPiastres = payload.discountCode === 'ISOLATED' ? 2500 : 0;
+      const shippingPiastres = state.shipping.approved && payload.governorate ? (['cairo','giza'].includes(payload.governorate) ? state.shipping.cairoGizaPiastres : state.shipping.otherGovernoratesPiastres) : null;
+      state.quotedTotals={subtotalPiastres,discountPiastres,shippingPiastres,totalPiastres:subtotalPiastres-discountPiastres+(shippingPiastres??0)};
+      return success(route, { fingerprint: `fixture-${subtotalPiastres}-${discountPiastres}-${payload.governorate||'unset'}-${shippingPiastres}`, totals:state.quotedTotals, payment:payload.paymentMethod==='instapay'?payments.get(payload.checkoutKey):null });
     }
     if (path === '/commerce/orders' && method === 'POST') {
       if (options.rejectOrder) return failure(route, 'Order submission could not be completed. Your cart remains saved.', 503);
@@ -149,7 +150,8 @@ export async function mockCommerce(page, options = {}) {
     if (path === '/admin/commerce/orders') return success(route, { orders: [state.order], pagination: pagination(1) });
     if (path === '/admin/commerce/shipping') {
       if (method === 'PATCH') {
-        expect(Object.keys(payload).sort()).toEqual(['approved', 'cairoGizaPiastres', 'expectedRevision', 'otherGovernoratesPiastres']);
+        expect(Object.keys(payload).sort()).toEqual(['approved', 'cairoGizaPiastres', 'confirmActivate', 'expectedRevision', 'otherGovernoratesPiastres']);
+        if (payload.approved && payload.confirmActivate !== true) return failure(route, 'Activation requires merchant confirmation.');
         if (payload.expectedRevision !== state.shipping.revision) return conflict(route);
         const { expectedRevision: _expected, ...patch } = payload;
         Object.assign(state.shipping, patch, { revision: state.shipping.revision + 1 });

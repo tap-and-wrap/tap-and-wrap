@@ -82,9 +82,10 @@ function ProductEditor({ product }) {
   }
 
   return <AdminLayout title={id ? 'Edit product' : 'Add product'} description="Set the price, real availability and product options. Purchase eligibility is calculated automatically; imported notes remain available." actions={id && <Link className="admin-button admin-button-secondary" to={`/admin/products/${id}/preview`}>Preview saved product</Link>}>
+    <nav className="v11-editor-shortcuts" aria-label="Product editor sections"><a href="#v11-product-info">Information</a><a href="#v11-product-price">Pricing</a><a href="#v11-product-stock">Stock</a><a href="#v11-product-images">Images</a><a href="#v11-product-variants">Variants</a></nav>
     <AdminForm error={error} onSubmit={save} className="admin-product-form">
       <fieldset disabled={saving} className="admin-form-fields">
-        <section className="admin-panel"><h2>Product information</h2><div className="admin-form-grid">
+        <section id="v11-product-info" className="admin-panel"><h2>Product information</h2><div className="admin-form-grid">
           <label className="admin-span-all">Product name<input name="name" required maxLength={240} value={draft.name} onChange={(event) => changeName(event.target.value)} /></label>
           <label>Product slug<input name="slug" required maxLength={300} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" value={draft.slug} onChange={(event) => { setSlugEdited(true); change('slug', event.target.value); }} /><span className="admin-help">Use lowercase letters, numbers and hyphens. Changing a slug changes the product URL.</span></label>
           <label>SKU<input name="sku" maxLength={100} value={draft.sku} onChange={(event) => change('sku', event.target.value)} /></label>
@@ -96,21 +97,21 @@ function ProductEditor({ product }) {
         {mainCategory && (children.data?.pagination?.total || 0) > 20 && <div className="admin-inline admin-subcategory-pages"><span>Subcategory choices, page {categoryPage}</span><button type="button" className="admin-button admin-button-secondary" disabled={categoryPage <= 1} onClick={() => setCategoryPage((current) => current - 1)}>Previous subcategories</button><button type="button" className="admin-button admin-button-secondary" disabled={categoryPage * 20 >= children.data.pagination.total} onClick={() => setCategoryPage((current) => current + 1)}>Next subcategories</button></div>}
         </section>
 
-        <section className="admin-panel"><h2>Price and display</h2><div className="admin-form-grid">
+        <section id="v11-product-price" className="admin-panel"><h2>Price and display</h2><div className="admin-form-grid">
           <label>Price (EGP)<input name="pricePiastres" type="text" inputMode="decimal" value={draft.price} onChange={(event) => change('price', event.target.value)} placeholder="Price on Request" /><span className="admin-help">Leave blank for Price on Request and WhatsApp enquiries. A positive price enables online purchase as soon as real stock is confirmed.</span></label>
           <label>Compare-at price (EGP)<input name="compareAtPiastres" type="text" inputMode="decimal" value={draft.compareAt} onChange={(event) => change('compareAt', event.target.value)} placeholder="Optional" /></label>
           <label>How is this product sold?<Select name="optionStructure" value={draft.optionStructure} onChange={event => change('optionStructure', event.target.value)}><option value="single">One item - no variants</option><option value="variants">With the variants configured below</option><option value="unresolved">Options still need clarification - enquiries only</option></Select></label>
         </div><label>Public display<Select name="visibility" value={draft.visibility} onChange={event => change('visibility', event.target.value)}><option value="hidden">Hidden</option><option value="public">Published</option><option value="withdrawn">Withdrawn</option></Select></label><p className="admin-help">Published products are visible with or without a price. Save a price and real stock once to enable Add to Cart. Removing the price restores WhatsApp enquiries.</p>
         </section>
 
-        <section className="admin-panel"><h2>Inventory and availability</h2><InventoryFields variantParent={draft.optionStructure === 'variants'} value={draft.inventory} onChange={(inventory) => change('inventory', inventory)} /><p className="admin-help">Imported quantities are not confirmed stock and are not prefilled here. Enter the actual count, select Made by Request only when you can fulfil orders, or choose Unavailable for enquiries. Saving other fields never approves placeholder stock.</p></section>
+        <section id="v11-product-stock" className="admin-panel"><h2>Inventory and availability</h2><InventoryFields variantParent={draft.optionStructure === 'variants'} value={draft.inventory} onChange={(inventory) => change('inventory', inventory)} /><p className="admin-help">Imported quantities are not confirmed stock and are not prefilled here. Enter the actual count, select Made by Request only when you can fulfil orders, or choose Unavailable for enquiries. Saving other fields never approves placeholder stock.</p></section>
 
-        <section className="admin-panel"><AdminImageGallery key={revision} keys={draft.galleryKeys} onChange={galleryKeys => change('galleryKeys', galleryKeys)} onBusyChange={setMediaPending} label="Product images" /></section>
+        <section id="v11-product-images" className="admin-panel v11-product-media"><h2>Product images</h2><p className="admin-help">Manage the storefront photos and their order.</p><AdminImageGallery key={revision} keys={draft.galleryKeys} onChange={galleryKeys => change('galleryKeys', galleryKeys)} onBusyChange={setMediaPending} label="Product images" /></section>
         <ProductEngravingSettings keys={draft.galleryKeys} value={draft.productEngraving} onChange={productEngraving => setDraft(current => ({ ...current, productEngraving, productEngravingEdited: true }))}/>
         <EngravingRequestEditor value={draft.engravingRequest} onChange={engravingRequest => setDraft(current => ({ ...current, engravingRequest, engravingEdited: true }))} />
         <ProductPersonalizationEditor value={draft.personalization} onChange={personalization => setDraft(current => ({ ...current, personalization, personalizationEdited: true }))} />
 
-        <section className="admin-panel"><h2>Configured variants</h2><p className="admin-help">Use explicit variant attributes such as Size or Color. No variants are inferred from the original catalog notes.</p>
+        <section id="v11-product-variants" className="admin-panel"><h2>Configured variants</h2><p className="admin-help">Use explicit variant attributes such as Size or Color. No variants are inferred from the original catalog notes.</p>
           {draft.variants.length === 0 && <p>No variants configured.</p>}
           {draft.variants.map((variant, index) => <fieldset className="admin-variant" key={index}><legend>Variant {index + 1}</legend><div className="admin-form-grid">
             <label>Variant {index + 1} key<input name={`variants.${index}.key`} required maxLength={80} pattern="[a-z0-9][a-z0-9_-]*" value={variant.key} onChange={(event) => changeVariant(index, { key: event.target.value })} /></label>

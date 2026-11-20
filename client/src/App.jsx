@@ -28,6 +28,8 @@ const CategoryPage = lazy(() => import('./pages/CategoryPage.jsx'));
 const AccountRecoveryPage = lazy(() => import('./pages/AccountRecoveryPage.jsx'));
 const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage.jsx'));
 const AdminOrdersPage = lazy(() => import('./pages/AdminOrdersPage.jsx'));
+const AdminUnacceptedTransfersPage = lazy(() => import('./pages/AdminUnacceptedTransfersPage.jsx'));
+const AdminShippingPage = lazy(() => import('./pages/AdminShippingPage.jsx'));
 const AdminAnalyticsPage = lazy(() => import('./pages/AdminAnalyticsPage.jsx'));
 const AdminCustomizationPage = lazy(() => import('./pages/AdminCustomizationPage.jsx'));
 const AdminGiftBoxWorkspace = lazy(() => import('./pages/AdminCustomizationPage.jsx').then(module => ({ default: module.AdminGiftBoxWorkspace })));
@@ -43,7 +45,6 @@ const ServiceRequestPage = lazy(() => import('./pages/ServiceRequestPage.jsx'));
 const GiftBoxBuilderPage = lazy(() => import('./pages/GiftBoxBuilderPage.jsx'));
 const GiftBoxGeometryReviewPage = import.meta.env.DEV ? lazy(() => import('./pages/GiftBoxGeometryReviewPage.jsx')) : null;
 const giftBoxV2Enabled = import.meta.env.VITE_GIFT_BOX_BUILDER_ENABLED === 'true' || (import.meta.env.DEV && import.meta.env.VITE_GIFT_BOX_BUILDER_ENABLED !== 'false');
-const AdminAttentionPage = lazy(() => import('./pages/AdminAttentionPage.jsx'));
 const AdminRequestsPage = lazy(() => import('./pages/AdminRequestsPage.jsx'));
 const AdminProductConfigurationPage = lazy(() => import('./pages/AdminProductConfigurationPage.jsx'));
 const ProductPage = lazy(() => import('./pages/ProductPage.jsx'));
@@ -99,7 +100,9 @@ export default function App() {
   <Route path="/admin/discounts" element={<RequireAdmin><AdminCommercePage section="discounts"/></RequireAdmin>}/>
   <Route path="/admin/customization" element={<RequireAdmin><AdminCustomizationPage/></RequireAdmin>}/>
   <Route path="/admin/orders" element={<RequireAdmin><AdminOrdersPage/></RequireAdmin>}/>
-  <Route path="/admin/orders/attention" element={<RequireAdmin><AdminAttentionPage/></RequireAdmin>}/>
+  <Route path="/admin/instapay-recovery" element={<RequireAdmin><AdminUnacceptedTransfersPage/></RequireAdmin>}/>
+  <Route path="/admin/shipping" element={<RequireAdmin><AdminShippingPage/></RequireAdmin>}/>
+  <Route path="/admin/orders/attention" element={<RequireAdmin><Navigate to="/admin/orders" replace/></RequireAdmin>}/>
   <Route path="/admin/orders/requests" element={<RequireAdmin><AdminRequestsPage/></RequireAdmin>}/>
   <Route path="/admin/orders/requests/:id" element={<RequireAdmin><AdminRequestsPage/></RequireAdmin>}/>
   <Route path="/admin/orders/:id" element={<RequireAdmin><AdminOrderPage/></RequireAdmin>}/>

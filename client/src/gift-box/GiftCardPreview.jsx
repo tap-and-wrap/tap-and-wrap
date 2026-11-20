@@ -1,15 +1,9 @@
 import './gift-card-preview.css';
 
-// A presentational proof only. Selection, price and message validation stay
-// with the established Gift Box builder and server snapshot.
-export default function GiftCardPreview({ message, compact = false }) {
-  if (typeof message !== 'string' || !message.trim()) return null;
-  return <section className={`tw-gift-card${compact ? ' tw-gift-card--compact' : ''}`} aria-label="Gift card preview">
-    <div className="tw-gift-card__frame">
-      <span className="tw-gift-card__eyebrow" aria-hidden="true">A little note</span>
-      <span className="tw-gift-card__ornament" aria-hidden="true">✦</span>
-      <p className="tw-gift-card__message" dir="auto">{message}</p>
-      <span className="tw-gift-card__footer" aria-hidden="true">Tap &amp; Wrap</span>
-    </div>
-  </section>;
+/** Compact, consistent purchased-card summary. Selection is independent of text. */
+export default function GiftCardPreview({ message = '', compact = false }) {
+  return <div className={`tw-gift-card-details${compact ? ' tw-gift-card-details--compact' : ''}`} aria-label="Gift card details">
+    <span className="tw-gift-card-details__label">Gift Card</span>
+    <span className="tw-gift-card-details__value" dir="auto">{typeof message === 'string' && message.trim() ? <bdi>{message}</bdi> : 'Blank card'}</span>
+  </div>;
 }

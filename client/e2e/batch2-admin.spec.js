@@ -9,7 +9,7 @@ const adminFixture = ownerFixture;
 test('secondary anchor and button variants retain readable computed contrast, including hover and disabled states', async ({ page }) => {
   await adminFixture(page);
   await page.goto('/admin/orders');
-  const anchor = page.getByRole('link', { name: 'Quotation history', exact: true });
+  const anchor = page.locator('.v11-order-table').getByRole('link', { name: /View order #/ }).first();
   const info = async locator => locator.evaluate(element => {
     const style = getComputedStyle(element);
     const rgb = color => color.match(/[\d.]+/g).slice(0, 3).map(Number).map(value => { value /= 255; return value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4; });
@@ -44,6 +44,7 @@ for (const field of ['categoryIds', 'categoryIds.0']) {
     });
     await page.goto('/admin/commerce/discounts');
     await page.getByRole('button', { name: `Edit ${discount.name}`, exact: true }).click();
+    await page.getByText('Category restrictions (optional)', { exact: true }).click();
     const indexed = page.getByRole('group', { name: 'Category restriction 1', exact: true });
     const main = indexed.getByRole('combobox', { name: 'Eligible main category', exact: true });
     await chooseOption(main, commerceProduct.category._id);
@@ -83,6 +84,7 @@ test('removing an earlier category restriction preserves the next parent and cle
   });
   await page.goto('/admin/commerce/discounts');
   await page.getByRole('button', { name: `Edit ${discount.name}`, exact: true }).click();
+  await page.getByText('Category restrictions (optional)', { exact: true }).click();
   const firstRow = page.getByRole('group', { name: 'Category restriction 1', exact: true });
   const secondRow = page.getByRole('group', { name: 'Category restriction 2', exact: true });
   await firstRow.getByRole('combobox', { name: 'Eligible main category', exact: true }).click();
@@ -140,15 +142,15 @@ test('category edits refresh cached homepage category selections through the act
 test('order management exposes authorized contact details and excludes invalid COD/payment choices', async ({ page }) => {
   const fixture = await adminFixture(page, { order: { ...commerceOrder, customer: { ...commerceOrder.customer, notes: 'Isolated delivery note' } } });
   await page.goto(`/admin/commerce/orders/${commerceOrder.id}`);
-  const contact = page.getByRole('region', { name: 'Customer and delivery details' });
+  const contact = page.getByRole('region', { name: 'Customer & delivery' });
   await expect(contact.getByRole('link', { name: commerceOrder.customer.email })).toHaveAttribute('href', `mailto:${commerceOrder.customer.email}`);
   await expect(contact.getByRole('link', { name: commerceOrder.customer.phone })).toHaveAttribute('href', `tel:${commerceOrder.customer.phone}`);
   await expect(contact).toContainText('Isolated delivery note');
-  await expect(page.getByRole('combobox', { name: 'Payment update', exact: true })).toBeDisabled();
-  await expectOptions(page.getByRole('combobox', { name: 'Fulfillment update', exact: true }), ['Keep received', 'confirmed', 'cancelled']);
-  await chooseOption(page.getByLabel('Fulfillment update'), 'confirmed');
-  await page.getByRole('button', { name: 'Save order update' }).click();
-  await expectOptions(page.getByRole('combobox', { name: 'Fulfillment update', exact: true }), ['Keep confirmed', 'preparing', 'cancelled']);
+  await expect(page.getByRole('combobox', { name: 'Payment status', exact: true })).toHaveCount(0);
+  await expectOptions(page.getByRole('combobox', { name: 'Order status', exact: true }), ['Keep New', 'Confirmed', 'Cancelled']);
+  await chooseOption(page.getByLabel('Order status'), 'confirmed');
+  await page.getByRole('button', { name: 'Save status' }).click();
+  await expectOptions(page.getByRole('combobox', { name: 'Order status', exact: true }), ['Keep Confirmed', 'Processing', 'Cancelled']);
   expect(fixture.calls.filter(call => call.method === 'PATCH').at(-1).body).toMatchObject({ revision: 1, fulfillmentState: 'confirmed' });
   expect(fixture.calls.filter(call => call.path.endsWith('/proof'))).toHaveLength(0);
 });
@@ -156,9 +158,9 @@ test('order management exposes authorized contact details and excludes invalid C
 test('InstaPay status choices and private proof modal follow payment prerequisites and explicit-view lifecycle', async ({ page }) => {
   const fixture = await adminFixture(page, { order: { ...commerceOrder, paymentMethod: 'instapay', paymentState: 'awaiting_verification', proofAvailable: true } });
   await page.goto(`/admin/commerce/orders/${commerceOrder.id}`);
-  await expectOptions(page.getByRole('combobox', { name: 'Fulfillment update', exact: true }), ['Keep received', 'cancelled']);
+  await expectOptions(page.getByRole('combobox', { name: 'Order status', exact: true }), ['Keep New', 'Cancelled']);
   expect(fixture.calls.filter(call => call.path.endsWith('/proof'))).toHaveLength(0);
-  const proof = page.getByRole('button', { name: 'View Proof', exact: true });
+  const proof = page.getByRole('button', { name: 'View screenshot 1', exact: true });
   await proof.click();
   await expect(page.getByRole('dialog')).toBeVisible();
   expect(fixture.calls.filter(call => call.path.endsWith('/proof'))).toHaveLength(1);
@@ -166,11 +168,11 @@ test('InstaPay status choices and private proof modal follow payment prerequisit
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(proof).toBeFocused();
-  await chooseOption(page.getByRole('combobox', { name: 'Payment update', exact: true }), 'paid');
-  await expectOptions(page.getByRole('combobox', { name: 'Fulfillment update', exact: true }), ['Keep received', 'confirmed']);
-  await chooseOption(page.getByLabel('Fulfillment update'), 'confirmed');
-  await page.getByRole('button', { name: 'Save order update' }).click();
-  await expect(page.getByRole('combobox', { name: 'Payment update', exact: true })).toBeDisabled();
+  await chooseOption(page.getByRole('combobox', { name: 'Payment status', exact: true }), 'paid');
+  await expectOptions(page.getByRole('combobox', { name: 'Order status', exact: true }), ['Keep New', 'Confirmed']);
+  await chooseOption(page.getByLabel('Order status'), 'confirmed');
+  await page.getByRole('button', { name: 'Save status' }).click();
+  await expect(page.getByRole('combobox', { name: 'Payment status', exact: true })).toHaveCount(0);
 });
 
 test('promotion editing uses Cairo wall time on a browser in another timezone and validates DST gaps', async ({ browser }) => {

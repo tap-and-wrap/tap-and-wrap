@@ -32,6 +32,7 @@ import { commerceOwner, guestOwner, rotateGuestCookie } from './ownership.js';
 import { readCart, cartResponse, addCartItem, updateCartQuantity, removeCartItem, clearCart, mergeGuestCart } from './cart.js';
 import { checkoutQuote, prepareCheckout, placeOrder, normalizePhone, presentOrder, getOwnedOrder, changeOrderState, orderFiles, findOwnedCheckoutSubmission } from './orders.js';
 import { GOVERNORATES, shippingForGovernorate } from './promotions.js';
+import ShippingConfig from '../models/ShippingConfig.js';
 
 import { openPrivateUpload } from './uploads.js';
 import { commerceError } from './errors.js';
@@ -153,7 +154,12 @@ commerceRoutes.post('/cart/merge', requireAuth, async (req, res) => {
   res.json({ ok: true, data: result });
 });
 commerceRoutes.get('/checkout/config', async (req, res) => {
-  res.json({ ok: true, data: { enabled: env.checkoutEnabled === true, governorates: GOVERNORATES, shippingStatus: 'pending_confirmation', shippingPiastres: null, instaPayNumber: approvedInstaPayDestination } });
+  const shipping = await ShippingConfig.findOne({ key: 'egypt-v1' }).lean().maxTimeMS(3000);
+  const approved = shipping?.approved === true && [shipping.cairoGizaPiastres, shipping.otherGovernoratesPiastres]
+    .every(amount => Number.isSafeInteger(amount) && amount >= 0 && amount <= 100000000);
+  res.json({ ok: true, data: { enabled: env.checkoutEnabled === true, governorates: GOVERNORATES,
+    shippingStatus: approved ? 'included_in_checkout' : 'pending_confirmation',
+    shippingPiastres: null, instaPayNumber: approvedInstaPayDestination } });
 });
 commerceRoutes.get('/checkout/submissions/:checkoutKey', submissionStatusLimit, async (req, res) => {
   z.object({}).strict().parse(req.query);

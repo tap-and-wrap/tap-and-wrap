@@ -126,13 +126,28 @@ test('cart operation retries recover one line without repeating quantity and con
   assert.equal((await Cart.findOne().lean()).addOperations.length, 1);
 });
 
-test('new blank or invisible gift cards are rejected without writes through the HTTP cart boundary', async () => {
-  const browser = client();
+test('explicitly selected blank and invisible-message Gift Cards are charged once and remain distinct from other messages', async () => {
+  const browser = client(), identities = new Set();
   for (const message of ['', ' \n\t', '\u200b\u200d\ufeff', '\u064e\u0651']) {
+    const result = await add(browser, giftCartInput(giftCartConfiguration({ message })));
+    assert.equal(result.items.at(-1).giftBox.giftCard.selected, true);
+    assert.equal(result.items.at(-1).giftBox.giftCard.message, message);
+    // The public cart deliberately omits private configuration identities.
+    assert.equal(Object.hasOwn(result.items.at(-1), 'configurationId'), false);
+    const savedCart = await Cart.findOne().lean();
+    const savedLine = savedCart.items.find(item => item.configuration?.selection?.giftCard?.message === message);
+    assert.ok(savedLine, `Missing persisted Gift Card variant for ${JSON.stringify(message)}`);
+    assert.equal(savedLine.configuration.selection.giftCard.message, message);
+    assert.equal(savedLine.configurationId, identifyGiftBoxConfiguration(savedLine.configuration).configurationId);
+    identities.add(savedLine.configurationId);
+  }
+  assert.equal(identities.size, 4);
+  assert.equal((await Cart.findOne().lean()).items.length, 4);
+  // Deliberately malformed Unicode and unsafe controls must still fail before writing.
+  for (const message of ['\ud800', 'a\u0000b']) {
     const response = await browser.request('/cart/items', { method: 'POST', body: giftCartInput(giftCartConfiguration({ message })) });
-    assert.equal(response.status, 409, JSON.stringify(response.body));
-    assert.equal(response.body.error.code, 'GIFT_BOX_CONFIGURATION_INVALID');
-    assert.equal((await Cart.findOne().lean())?.items.length ?? 0, 0);
+    assert.ok(response.status >= 400 && response.status < 500, JSON.stringify(response.body));
+    assert.equal((await Cart.findOne().lean()).items.length, 4);
   }
 });
 

@@ -112,7 +112,7 @@ test('photos stay local until Add; distinct licensed sticker styles, price, priv
   await page.getByRole('link',{name:'Proceed to Checkout'}).click(); await fillCheckout(page); await page.getByRole('radio',{name:'InstaPay',exact:true}).check(); await expect(page.getByRole('button',{name:'View transfer details',exact:true})).toHaveCount(0); await page.getByLabel(/^Transfer sender name/).fill('Fixture Sender'); await page.getByLabel('Transaction screenshot',{exact:true}).setInputFiles(isolatedImageFile()); await page.getByRole('button',{name:'Place Order'}).click();
   await expect(page.getByRole('heading',{name:'Thank you for your order!'})).toBeVisible(); expect(savedOrder().totals.totalPiastres).toBe(5000);
   fixture.state.user={id:'710000000000000000000050',name:'Fixture admin',role:'admin'};
-  await page.goto('/admin/commerce/orders/710000000000000000000040'); const design=page.getByRole('region',{name:"Customer's Gift Design"});
+  await page.goto('/admin/commerce/orders/710000000000000000000040'); await page.getByText('Gift Box arrangement previews', {exact:true}).click(); const design=page.getByRole('region',{name:"Customer's Gift Design"});
   await expect(design.locator('.gb-free-photo img')).toHaveCount(0); expect(fixture.calls.filter(call=>/\/files\//.test(call.path))).toHaveLength(0);
   await design.getByRole('button',{name:'View private photos in design'}).click(); await expect(design.locator('.gb-free-photo img')).toHaveCount(1);
   await expect(design).toContainText('Exterior sticker'); await expect(design.locator('.sticker-proof-image')).toHaveCount(1); await page.screenshot({path:info.outputPath('admin-design.png'),fullPage:true});
@@ -158,9 +158,10 @@ test('sticker and gift-card disclosures activate only the intended purchases and
   await page.getByRole('button',{name:'Remove sticker',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Remove sticker',exact:true}).click();await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
   await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();
   await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
-  await page.getByLabel('Your message').fill('A special day');await expect(page.locator('.gb-live-total strong')).toContainText('20.00');
-  await expect(page.getByLabel('Your message')).toHaveValue('A special day');
-  await page.getByLabel('Your message').fill('');await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
+  await page.getByRole('checkbox',{name:'Add a Gift Card'}).check(); await page.getByLabel('Message (optional)').fill('A special day');await expect(page.locator('.gb-live-total strong')).toContainText('20.00');
+  await expect(page.getByLabel('Message (optional)')).toHaveValue('A special day');
+  await page.getByLabel('Message (optional)').fill('');await expect(page.locator('.gb-live-total strong')).toContainText('20.00');
+  await page.getByRole('checkbox',{name:'Add a Gift Card'}).uncheck();await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
   await expect(page.getByText('Delivery priced separately',{exact:true})).toHaveCount(0);
 });
 
