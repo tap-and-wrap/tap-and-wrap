@@ -107,20 +107,26 @@ test('autoplay rejection leaves poster/manual retry and failed sources preserve 
   await expect(page.locator('.hero-film-poster')).toBeVisible(); await expect.poll(() => page.locator('.hero-film-poster').evaluate(img => img.naturalWidth)).toBeGreaterThan(0);
   await expect(page.getByRole('link', { name: 'Shop Gifts', exact: true })).toBeVisible();
 });
-test('service films load on visibility, decode both MP4s, keep manual pause and react to motion changes', async ({ page }) => {
-  await mockCatalog(page); await page.goto('/'); const films = page.locator('.home-service-media video');
+test('service films load only when visible, autoplay without controls, and honor reduced motion', async ({ page }) => {
+  await mockCatalog(page); await page.goto('/');
+  const films=page.locator('.home-service-media video');
   await expect(films.first()).not.toHaveAttribute('src');
   for (const title of ['Build Your Gift Box', 'Laser Engraving']) {
-    const video = page.getByLabel(`${title} film`, { exact: true }); await video.scrollIntoViewIfNeeded();
-    await expect.poll(() => video.evaluate(v => v.videoWidth)).toBe(title === 'Laser Engraving' ? 360 : 480);
-    await page.getByRole('button', { name: `Pause ${title} video` }).click();
-    await page.emulateMedia({ reducedMotion: 'reduce' }); await expect.poll(() => video.evaluate(v => v.paused)).toBe(true);
-    await page.getByRole('button', { name: `Play ${title} video` }).click(); await expect.poll(() => video.evaluate(v => v.paused)).toBe(false);
-    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    const video=page.getByLabel(`${title} film`,{exact:true});
+    const surface=page.locator('.home-service-media').filter({has:video});
+    await video.scrollIntoViewIfNeeded();
+    await expect.poll(()=>video.evaluate(v=>v.videoWidth)).toBe(title==='Laser Engraving' ? 360 : 480);
+    await expect(surface.getByRole('button')).toHaveCount(0);
+    await expect.poll(()=>video.evaluate(v=>v.paused)).toBe(false);
+    await page.emulateMedia({reducedMotion:'reduce'});
+    await expect.poll(()=>video.evaluate(v=>v.paused)).toBe(true);
+    await page.emulateMedia({reducedMotion:'no-preference'});
+    await expect.poll(()=>video.evaluate(v=>v.paused)).toBe(false);
   }
-  const first = films.first(); await first.scrollIntoViewIfNeeded();
-  if (!(await first.evaluate(v => v.paused))) await page.getByRole('button', { name: 'Pause Build Your Gift Box video' }).click();
-  await page.evaluate(() => window.scrollTo(0, 0)); await first.scrollIntoViewIfNeeded(); await expect.poll(() => first.evaluate(v => v.paused)).toBe(true);
+  const first=films.first();
+  await first.scrollIntoViewIfNeeded();
+  await page.evaluate(()=>window.scrollTo(0,0));
+  await expect.poll(()=>first.evaluate(v=>v.paused)).toBe(true);
 });
 
 test('failed service films preserve their posters and accessible service navigation', async ({ page }) => {
@@ -146,28 +152,26 @@ test('slow or interrupted video keeps a poster and usable links, including navig
   await page.getByRole('link', { name: 'Shop Gifts', exact: true }).click(); await expect(page).toHaveURL(/\/shop/);
   await page.goBack(); await expect(page.getByRole('heading', { level: 1 })).toBeVisible(); await expect(page.locator('.hero-film-poster')).toBeVisible();
 });
-test('trace HTML never reloads a playing storefront and repeated service scroll/navigation preserves media', async ({ page }, info) => {
-  await writeFile(info.outputPath('watcher-probe.html'), '<html>Initial isolated artifact</html>');
+test('trace artifacts never reload storefront and service film autoplay resumes on visibility', async ({ page }, info) => {
+  await writeFile(info.outputPath('watcher-probe.html'),'<html>Initial isolated artifact</html>');
   await mockCatalog(page); await page.goto('/');
-  let navigations = 0; page.on('framenavigated', frame => { if (frame === page.mainFrame()) navigations++; });
-  const first = page.getByLabel('Build Your Gift Box film', { exact: true }); await first.scrollIntoViewIfNeeded();
-  await expect.poll(() => first.evaluate(node => node.paused)).toBe(false);
-  await writeFile(info.outputPath('watcher-probe.html'), '<html>Isolated trace-style artifact</html>');
-  // Allow the development watcher to emit its debounced event, if misconfigured.
-  await page.waitForTimeout(1000); expect(navigations).toBe(0);
-  for (let repetition = 0; repetition < 3; repetition++) {
-    for (const title of ['Build Your Gift Box', 'Laser Engraving']) {
-      const video = page.getByLabel(`${title} film`, { exact: true }); await video.scrollIntoViewIfNeeded();
-      await expect.poll(() => video.evaluate(node => node.videoWidth)).toBe(title === 'Laser Engraving' ? 360 : 480);
-      await expect(page.getByRole('button', { name: `Pause ${title} video` })).toBeVisible();
-      await page.getByRole('button', { name: `Pause ${title} video` }).click();
-      await page.evaluate(() => scrollTo(0, 0)); await video.scrollIntoViewIfNeeded();
-      await expect.poll(() => video.evaluate(node => node.paused)).toBe(true);
-      await page.getByRole('button', { name: `Play ${title} video` }).click();
-      await expect.poll(() => video.evaluate(node => node.paused)).toBe(false);
+  let navigations=0;page.on('framenavigated',frame=>{if(frame===page.mainFrame())navigations++;});
+  const first=page.getByLabel('Build Your Gift Box film',{exact:true});await first.scrollIntoViewIfNeeded();
+  await expect.poll(()=>first.evaluate(v=>v.paused)).toBe(false);
+  await writeFile(info.outputPath('watcher-probe.html'),'<html>Isolated trace-style artifact</html>');
+  await page.waitForTimeout(1000);expect(navigations).toBe(0);
+  for(let repetition=0;repetition<3;repetition++){
+    for(const title of ['Build Your Gift Box','Laser Engraving']){
+      const video=page.getByLabel(`${title} film`,{exact:true});
+      await video.scrollIntoViewIfNeeded();
+      await expect.poll(()=>video.evaluate(v=>v.videoWidth)).toBe(title==='Laser Engraving'?360:480);
+      await expect.poll(()=>video.evaluate(v=>v.paused)).toBe(false);
+      await page.evaluate(()=>window.scrollTo(0,0));
+      await expect.poll(()=>video.evaluate(v=>v.paused)).toBe(true);
     }
   }
-  expect(navigations).toBe(0); expect(await page.evaluate(() => window.__mediaFailures)).toEqual([]);
+  expect(navigations).toBe(0);
+  expect(await page.evaluate(()=>window.__mediaFailures)).toEqual([]);
 });
 test('history-restricted browsers still open the native picker without damaging drafts', async ({ page }) => {
   await personalize(page); await page.evaluate(() => { history.pushState = () => { throw new DOMException('Restricted fixture', 'SecurityError'); }; });
@@ -176,31 +180,28 @@ test('history-restricted browsers still open the native picker without damaging 
   await expect(page.getByLabel(/^Gift name/)).toHaveValue('Keep this name');
 });
 
-test('hero video surface hides its cue while service films use explicit pause controls and preserve links', async ({ page }) => {
-  await mockCatalog(page); await page.emulateMedia({ reducedMotion: 'reduce' });
-  for (const width of [1440, 768, 320]) {
-    await page.setViewportSize({ width, height: 900 }); await page.goto('/');
-    const control = page.locator('.hero-video-control'), video = page.locator('.hero-film video');
-    await expect(control.locator('span')).toHaveCSS('opacity', '0');
-    await expect(control).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-    await control.focus(); await page.keyboard.press('Shift+Tab'); await page.keyboard.press('Tab'); await expect(control).toBeFocused(); await expect(control.locator('span')).toHaveCSS('opacity', '1');
-    await page.keyboard.press('Enter'); await expect.poll(() => video.evaluate(v => v.paused)).toBe(false);
-    await page.keyboard.press('Space'); await expect.poll(() => video.evaluate(v => v.paused)).toBe(true);
-    await control.click();
-    await expect.poll(() => video.evaluate(v => v.paused)).toBe(false);
-    await expect(control.locator('span')).toHaveCSS('opacity', '0');
-    await page.getByRole('link', { name: 'Shop Gifts', exact: true }).click(); await expect(page).toHaveURL(/\/shop/);
-    await page.goBack();
-    for (const title of ['Build Your Gift Box', 'Laser Engraving']) {
-      const surface = page.locator('.home-service-media').filter({ has: page.getByLabel(title + ' film', { exact: true }) });
-      await surface.scrollIntoViewIfNeeded(); const toggle = surface.getByRole('button');
-      await expect(toggle.locator('span')).toHaveCSS('opacity', '1');
-      await toggle.focus(); await page.keyboard.press('Shift+Tab'); await page.keyboard.press('Tab'); await expect(toggle).toBeFocused(); await expect(toggle.locator('span')).toHaveCSS('opacity', '1');
-      await page.keyboard.press('Enter'); await expect.poll(() => surface.locator('video').evaluate(v => v.paused)).toBe(false);
-      await page.keyboard.press('Space'); await expect.poll(() => surface.locator('video').evaluate(v => v.paused)).toBe(true);
-      await toggle.click(); await expect(toggle.locator('span')).toHaveCSS('opacity', '1');
-      await expect.poll(() => surface.locator('video').evaluate(v => v.paused)).toBe(false);
+test('hero controls remain keyboard accessible while service media never expose play/pause buttons', async ({ page }) => {
+  await mockCatalog(page); await page.emulateMedia({reducedMotion:'reduce'});
+  for(const width of [1440,768,320]){
+    await page.setViewportSize({width,height:900});await page.goto('/');
+    const control=page.locator('.hero-video-control'),hero=page.locator('.hero-film video');
+    await expect(control.locator('span')).toHaveCSS('opacity','0');
+    await expect(control).toHaveCSS('background-color','rgba(0, 0, 0, 0)');
+    await control.focus();await page.keyboard.press('Shift+Tab');await page.keyboard.press('Tab');
+    await expect(control).toBeFocused();await expect(control.locator('span')).toHaveCSS('opacity','1');
+    await page.keyboard.press('Enter');await expect.poll(()=>hero.evaluate(v=>v.paused)).toBe(false);
+    await page.keyboard.press('Space');await expect.poll(()=>hero.evaluate(v=>v.paused)).toBe(true);
+    await control.click();await expect.poll(()=>hero.evaluate(v=>v.paused)).toBe(false);
+    await page.getByRole('link',{name:'Shop Gifts',exact:true}).click();
+    await expect(page).toHaveURL(/\/shop/);await page.goBack();
+    for(const title of ['Build Your Gift Box','Laser Engraving']){
+      const surface=page.locator('.home-service-media').filter({has:page.getByLabel(title+' film',{exact:true})});
+      await surface.scrollIntoViewIfNeeded();
+      await expect(surface.getByRole('button')).toHaveCount(0);
+      await expect(surface.getByRole('link')).toHaveCount(0);
+      await expect(surface.locator('video')).toBeVisible();
+      await expect.poll(()=>surface.locator('video').evaluate(v=>v.paused)).toBe(true);
     }
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   }
 });

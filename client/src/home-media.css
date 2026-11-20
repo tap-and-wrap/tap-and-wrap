@@ -1,15 +1,18 @@
 .home-service-grid { align-items: stretch; max-width: 1160px; }
-.home-service-card { background: var(--tw-surface); border: 1px solid var(--tw-border); border-radius: 16px; overflow: hidden; display: flex; min-width: 0; box-shadow: 0 8px 30px rgba(98,72,63,.035); transition: box-shadow .2s ease; }
+.home-service-card { background: var(--tw-surface); border: 1px solid var(--tw-border); border-radius: 16px; overflow: hidden; display: flex; position: relative; min-width: 0; box-shadow: 0 8px 30px rgba(98,72,63,.035); transition: box-shadow .2s ease; }
 .home-service-card:hover { box-shadow: 0 11px 35px rgba(98,72,63,.075); }
 .home-service-media { position: relative; width: 41%; flex: 0 0 41%; overflow: hidden; background: var(--tw-soft); min-height: 285px; }
 .home-service-media > video, .home-service-media > img { display: block; width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; }
-.home-service-video-toggle { position: absolute; z-index: 1; bottom: 12px; left: 12px; min-width: 60px; min-height: 40px; border: 1px solid var(--tw-border); border-radius: 8px; color: var(--tw-ink); background: rgba(255,255,255,.92); font-size: 12px; }
 .home-service-detail { min-width: 0; padding: clamp(20px, 2.4vw, 32px); flex: 1; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; }
 .home-service-detail h3 { margin: 0; font-size: clamp(1.9rem, 3vw, 2.7rem); line-height: 1.05; }
 .customize-service-grid .home-service-detail h2 { margin: 0; font-size: clamp(1.9rem, 3vw, 2.7rem); line-height: 1.05; }
 .home-service-detail p { margin: 14px 0 22px; line-height: 1.55; font-size: .95rem; }
 .home-service-detail > span { display: inline-flex; align-items: center; gap: 9px; font-size: .83rem; font-weight: 650; color: var(--tw-rose-dark); }
 .home-service-detail:hover > span { text-decoration: underline; }
+/* One keyboard-accessible Link covers the whole service card on BOTH / and /customize. */
+.home-service-detail::after { content: ""; position: absolute; inset: 0; z-index: 2; }
+.home-service-detail:focus-visible { outline: none; }
+.home-service-detail:focus-visible::after { outline: 3px solid #795045; outline-offset: -5px; border-radius: inherit; }
 @media(max-width: 760px) { .home-service-grid { grid-template-columns: 1fr; } .home-service-card { min-height: 230px; } }
 @media(max-width: 410px) { .home-service-media { flex-basis: 42%; width: 42%; min-height: 220px; } .home-service-detail { padding: 18px 16px; } .home-service-detail h3 { font-size: 1.9rem; } .home-service-detail p { font-size: .84rem; margin: 10px 0 16px; } }
 @media(prefers-reduced-motion: reduce) { .home-service-card { transition: none; } }
@@ -47,8 +50,6 @@
 .home-media-hero .button-group .button:focus-visible { outline: 3px solid #fff; outline-offset: 4px; background: rgba(20,13,10,.55); }
 .home-media-hero .hero-video-control { position: absolute; right: 16px; bottom: 16px; z-index: 3; opacity: 1; pointer-events: auto; min-height: 44px; min-width: 100px; padding: 10px 16px; color: #62483F; background: #FFFFFF; border: 1px solid #EADAD5; border-radius: 8px; font: inherit; box-shadow: 0 2px 12px rgba(0,0,0,.2); }
 .home-media-hero .hero-video-control:focus-visible { outline: 3px solid #FFFFFF; outline-offset: 4px; }
-.home-service-media .home-service-video-toggle { opacity: 1; pointer-events: auto; z-index: 5; min-height: 44px; }
-.home-service-media .home-service-video-toggle:focus-visible { outline: 3px solid #795045; outline-offset: 3px; }
 @media (max-width: 767px) {
   .hero.home-media-hero { height: 59svh; min-height: 400px; }
   .home-media-hero .hero-film::before { display: none; }
@@ -64,14 +65,12 @@
   .home-media-hero .button-group .button { padding-inline: 15px; font-size: 15px; white-space: nowrap; }
 }
 @media(max-width:374px) { .home-media-hero .button-group { flex-direction: column; align-items: center; } .home-media-hero .button { min-width: 200px; } }
-@media (prefers-reduced-motion: reduce) { .home-service-media .home-service-video-toggle { transition: none; } }
 
-/* The film itself is the control. Only keyboard focus reveals a small cue. */
+/* Hero playback keeps its existing keyboard control; service films are decorative. */
 .home-media-hero .hero-film { isolation: isolate; }
 .home-media-hero .home-hero-content { pointer-events: none; }
 .home-media-hero .home-hero-content a, .home-media-hero .home-hero-content button { pointer-events: auto; }
-.home-media-hero .hero-video-control.video-surface-control,
-.home-service-media .home-service-video-toggle.video-surface-control {
+.home-media-hero .hero-video-control.video-surface-control {
   position: absolute; inset: 0; width: 100%; height: 100%; min-width: 0;
   margin: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none;
   background: transparent; color: white; cursor: pointer; z-index: 1;
@@ -81,8 +80,7 @@
   opacity: 1; position: absolute; bottom: 16px; right: 16px; padding: 8px 12px;
   border-radius: 6px; background: #62483F; color: white;
 }
-.home-media-hero .video-surface-control:focus-visible,
-.home-service-media .video-surface-control:focus-visible { outline: 3px solid white; outline-offset: -6px; }
+.home-media-hero .video-surface-control:focus-visible { outline: 3px solid white; outline-offset: -6px; }
 
 /* Tap & Wrap hero controls: the outline CTA must never become white-on-white. */
 .home-media-hero .button-group .button.button-outline:hover {

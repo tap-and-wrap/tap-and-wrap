@@ -56,6 +56,12 @@ test('gift card checkbox adds a paid blank card or an optional literal message',
   const toggleBox=await cardSection.locator('.gb-gift-card-toggle').boundingBox();
   expect(toggleBox.x).toBeGreaterThan(cardHeading.x);
   expect(toggleBox.width).toBeGreaterThanOrEqual(44);
+  // Same visual rhythm as the optional photo-upload card: no legacy 24px top padding.
+  await expect(cardSection).toHaveCSS('padding-top','0px');
+  await expect(cardSection.locator('.gb-gift-card-toggle')).toHaveCSS('border-top-width','0px');
+  await expect(cardSection.locator('.gb-gift-card-toggle')).toHaveCSS('margin-top','0px');
+  await expect(cardSection.locator('.gb-gift-card-toggle')).toHaveCSS('background-color','rgba(0, 0, 0, 0)');
+  await expect(cardSection.locator('.gb-gift-card-toggle input')).toHaveCSS('width','21px');
   await expect(selected).not.toBeChecked();
   await expect(page.getByLabel('Message (optional)')).toHaveCount(0);
   await expect(page.locator('.gb-live-total strong')).toContainText('10.00');

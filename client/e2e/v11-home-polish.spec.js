@@ -68,36 +68,25 @@ for (const service of [
   { title: 'Build Your Gift Box', href: '/customize/gift-box', index: 0 },
   { title: 'Laser Engraving', href: '/customize/laser-engraving', index: 1 },
 ]) {
-  test(`${service.title} card opens when its video area is tapped; explicit control only pauses`, async ({page}) => {
-    await page.setViewportSize({width:390,height:844});
-    await page.emulateMedia({reducedMotion:'reduce'});
-    await prepare(page);
-    await page.goto('/');
-    const card=page.locator('main.home-page .home-service-card').nth(service.index);
-    const control=card.getByRole('button',{name:new RegExp(`(?:Play|Pause) ${service.title} video`)});
-    await card.evaluate(node=>node.scrollIntoView({block:'center',behavior:'instant'}));
-    await expect(control).toBeVisible();
-    const controlBox=await control.boundingBox();
-    expect(controlBox.width).toBeGreaterThanOrEqual(44);
-    expect(controlBox.height).toBeGreaterThanOrEqual(44);
-    // Clicking the separately accessible video control never navigates.
-    await control.click();
-    await expect(page).toHaveURL(/\/$/);
-    // A real pointer click over the portrait should land on the full-card Link.
-    // Playwright locator.click() on the covered media div is the wrong action.
-    await card.evaluate(node=>node.scrollIntoView({block:'center',behavior:'instant'}));
-    const media=await card.locator('.home-service-media').boundingBox();
-    expect(media).not.toBeNull();
-    const point={
-      x:Math.round(media.x+Math.min(40,media.width*.35)),
-      y:Math.round(media.y+Math.min(40,media.height*.15)),
-    };
-    const hitIsLink=await page.evaluate(({x,y,href})=>{
-      const target=document.elementFromPoint(x,y);
-      return target?.closest('a.home-service-detail')?.getAttribute('href')===href;
-    },{...point,href:service.href});
-    expect(hitIsLink).toBe(true);
-    await page.mouse.click(point.x,point.y);
-    await expect(page).toHaveURL(new RegExp(`${service.href}$`));
-  });
+  for (const route of ['/', '/customize']) {
+    test(`${service.title} portrait opens from ${route} with no service pause controls`, async ({page}) => {
+      await page.setViewportSize({width:390,height:844});
+      await page.emulateMedia({reducedMotion:'reduce'});
+      await prepare(page);
+      await page.goto(route);
+      const selector=route==='/' ? 'main.home-page .home-service-card' : '.customize-service-grid .home-service-card';
+      const card=page.locator(selector).nth(service.index);
+      await card.evaluate(node=>node.scrollIntoView({block:'center',behavior:'instant'}));
+      const media=card.locator('.home-service-media');
+      await expect(media.getByRole('button')).toHaveCount(0);
+      await expect(card.getByRole('link')).toHaveAttribute('href',service.href);
+      const frame=await media.boundingBox();
+      expect(frame).not.toBeNull();
+      const point={x:Math.round(frame.x+Math.min(40,frame.width*.35)),y:Math.round(frame.y+Math.min(40,frame.height*.15))};
+      const hit=await page.evaluate(({x,y,href})=>document.elementFromPoint(x,y)?.closest('a.home-service-detail')?.getAttribute('href')===href,{...point,href:service.href});
+      expect(hit).toBe(true);
+      await page.mouse.click(point.x,point.y);
+      await expect(page).toHaveURL(new RegExp(`${service.href}$`));
+    });
+  }
 }
