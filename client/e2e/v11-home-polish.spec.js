@@ -38,8 +38,11 @@ for (const width of [320, 390, 440, 768, 1440]) {
       await expect(link).toBeVisible();
       await expect(link.locator(':scope > span')).toHaveCount(1);
       if(width<=760) {
-        expect(media.width/outer.width).toBeGreaterThan(.90);
-        expect(media.y).toBeLessThan((await link.boundingBox()).y);
+        expect(media.width/outer.width).toBeGreaterThan(.35);
+        expect(media.width/outer.width).toBeLessThan(.46);
+        expect(media.x).toBeLessThan((await link.boundingBox()).x);
+        expect(Math.abs(media.y-outer.y)).toBeLessThan(3);
+        expect(await card.locator('video').evaluate(node=>getComputedStyle(node).objectFit)).toBe('contain');
       } else {
         expect(media.width/outer.width).toBeLessThan(.55);
       }
@@ -60,3 +63,41 @@ test('category pill navigation follows actual rail scrolling and remains keyboar
   await expect(next).toBeDisabled();
   await expect(nav.locator('.home-slide-dot.is-active')).toHaveCount(1);
 });
+
+for (const service of [
+  { title: 'Build Your Gift Box', href: '/customize/gift-box', index: 0 },
+  { title: 'Laser Engraving', href: '/customize/laser-engraving', index: 1 },
+]) {
+  test(`${service.title} card opens when its video area is tapped; explicit control only pauses`, async ({page}) => {
+    await page.setViewportSize({width:390,height:844});
+    await page.emulateMedia({reducedMotion:'reduce'});
+    await prepare(page);
+    await page.goto('/');
+    const card=page.locator('main.home-page .home-service-card').nth(service.index);
+    const control=card.getByRole('button',{name:new RegExp(`(?:Play|Pause) ${service.title} video`)});
+    await card.evaluate(node=>node.scrollIntoView({block:'center',behavior:'instant'}));
+    await expect(control).toBeVisible();
+    const controlBox=await control.boundingBox();
+    expect(controlBox.width).toBeGreaterThanOrEqual(44);
+    expect(controlBox.height).toBeGreaterThanOrEqual(44);
+    // Clicking the separately accessible video control never navigates.
+    await control.click();
+    await expect(page).toHaveURL(/\/$/);
+    // A real pointer click over the portrait should land on the full-card Link.
+    // Playwright locator.click() on the covered media div is the wrong action.
+    await card.evaluate(node=>node.scrollIntoView({block:'center',behavior:'instant'}));
+    const media=await card.locator('.home-service-media').boundingBox();
+    expect(media).not.toBeNull();
+    const point={
+      x:Math.round(media.x+Math.min(40,media.width*.35)),
+      y:Math.round(media.y+Math.min(40,media.height*.15)),
+    };
+    const hitIsLink=await page.evaluate(({x,y,href})=>{
+      const target=document.elementFromPoint(x,y);
+      return target?.closest('a.home-service-detail')?.getAttribute('href')===href;
+    },{...point,href:service.href});
+    expect(hitIsLink).toBe(true);
+    await page.mouse.click(point.x,point.y);
+    await expect(page).toHaveURL(new RegExp(`${service.href}$`));
+  });
+}

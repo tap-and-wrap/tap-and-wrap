@@ -51,16 +51,44 @@
 .home-page .home-service-detail:hover > span { background: #f0ddd3; border-color: #d4b3a5; text-decoration: none; }
 .home-page .home-service-detail > span svg { flex: 0 0 auto; }
 @media (max-width: 760px) {
-  .home-page .home-service-grid { grid-template-columns: minmax(0, 1fr); max-width: 520px; margin-inline: auto; gap: 18px; }
-  .home-page .home-service-card { flex-direction: column; min-height: 0; }
-  .home-page .home-service-media { width: 100%; flex: 0 0 auto; min-height: 0; aspect-ratio: 16 / 9; background: #f7e8e1; }
-  .home-page .home-service-media > video, .home-page .home-service-media > img { object-fit: cover; object-position: center 48%; }
-  .home-page .home-service-detail { padding: 21px 22px 24px; justify-content: flex-start; }
-  .home-page .home-service-detail h3 { font-size: clamp(1.85rem, 5.4vw, 2.2rem); }
-  .home-page .home-service-detail p { margin: 10px 0 17px; font-size: .94rem; max-width: none; }
+  .home-page .home-service-grid { grid-template-columns: minmax(0, 1fr); max-width: 520px; margin-inline: auto; gap: 16px; }
+  /* Restore the portrait film on the LEFT at phone sizes. Do not crop vertical footage. */
+  .home-page .home-service-card { flex-direction: row; min-height: clamp(224px, 65vw, 292px); }
+  .home-page .home-service-media { flex: 0 0 40%; width: 40%; min-height: 0; aspect-ratio: auto; background: #f7e8e1; }
+  .home-page .home-service-media > video, .home-page .home-service-media > img { object-fit: contain; object-position: center; }
+  .home-page .home-service-detail { padding: 16px; justify-content: center; }
+  .home-page .home-service-detail h3 { font-size: clamp(1.4rem, 6vw, 1.85rem); line-height: 1.13; }
+  .home-page .home-service-detail p { margin: 9px 0 14px; font-size: .82rem; max-width: none; line-height: 1.45; }
+  .home-page .home-service-detail > span { font-size: .72rem; padding: 8px 9px; gap: 6px; min-height: 40px; }
+  .home-page .home-service-detail > span svg { width: 17px; height: 17px; }
 }
 @media (max-width: 350px) {
-  .home-page .home-service-detail { padding: 18px 18px 21px; }
-  .home-page .home-service-detail h3 { font-size: 1.75rem; }
+  .home-page .home-service-media { flex-basis: 39%; width: 39%; }
+  .home-page .home-service-detail { padding: 12px 11px; }
+  .home-page .home-service-detail h3 { font-size: 1.35rem; }
+  .home-page .home-service-detail p { font-size: .76rem; margin: 8px 0 11px; }
+  .home-page .home-service-detail > span { font-size: .67rem; padding-inline: 7px; gap: 4px; }
 }
 @media (prefers-reduced-motion: reduce) { .home-page .home-service-detail > span { transition: none; } }
+/* A stretched semantic link makes the ENTIRE homepage card navigate, including
+   portrait media, while retaining a separate visible 44px pause/play button. */
+.home-page .home-service-card { position: relative; }
+.home-page .home-service-detail::after { content: ''; position: absolute; inset: 0; z-index: 2; }
+.home-page .home-service-detail:focus-visible { outline: none; }
+.home-page .home-service-detail:focus-visible::after { outline: 3px solid #795045; outline-offset: -5px; border-radius: 19px; }
+.home-page .home-service-media .home-service-video-toggle.video-surface-control {
+  position: absolute; inset: auto auto 10px 10px; z-index: 5;
+  display: flex; align-items: center; justify-content: center;
+  width: auto; height: 44px; min-width: 82px; padding: 0 10px;
+  border: 1px solid #e3cfc5; border-radius: 10px;
+  background: rgba(255, 250, 247, .96); color: #62483f;
+  box-shadow: 0 3px 10px rgba(40, 27, 23, .13);
+}
+.home-page .home-service-media .video-surface-control > span,
+.home-page .home-service-media .video-surface-control:focus-visible > span {
+  display: inline; position: static; opacity: 1; padding: 0; background: none;
+  color: inherit; font-size: .72rem; font-weight: 650; pointer-events: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .home-page .home-service-card:hover .home-service-detail > span { background: #f0ddd3; border-color: #d4b3a5; }
+}
