@@ -1,17 +1,17 @@
-/* Gift Card: a single title, top-right selection and compact optional form. */
-.gb-gift-card-toggle{display:flex;align-items:center;gap:10px;font-weight:650;cursor:pointer;color:#62483f}
-.gb-gift-card-toggle input{width:19px;height:19px;accent-color:#62483f;flex:0 0 auto}
-.gb-finishing.gb-personal-section{margin-top:12px}
-.gb-finishing.gb-personal-section>header{padding:11px 14px;gap:8px;flex-wrap:nowrap;align-items:center}
-.gb-finishing.gb-personal-section h3{font-size:clamp(1.3rem,4vw,1.55rem);margin-top:3px}
+/* Gift Card uses the SAME inset/header rhythm as Add your photos. No legacy top pad. */
+.gb-finishing.gb-personal-section{margin-top:20px;padding-top:0}
+.gb-finishing.gb-personal-section>header{padding:20px 20px 16px;gap:12px;flex-wrap:nowrap;align-items:center}
+.gb-finishing.gb-personal-section h3{font-size:1.55rem;margin-top:4px}
 .gb-finishing .gb-gift-card-controls{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex:0 0 auto}
-.gb-finishing .gb-gift-card-controls small{font-size:.72rem;white-space:nowrap;color:var(--tw-rose-dark)}
-.gb-finishing .gb-gift-card-toggle{width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;gap:0;border:1px solid var(--tw-border);border-radius:11px;background:#fffaf7}
-.gb-finishing .gb-gift-card-toggle input{width:20px;height:20px;margin:0}
-.gb-finishing .gb-gift-card-toggle:focus-within{outline:2px solid var(--tw-button);outline-offset:2px}
-.gb-finishing .gb-personal-body{padding:0 14px 14px}
+.gb-finishing .gb-gift-card-controls small{font-size:.72rem;max-width:100px;overflow-wrap:anywhere;text-align:end;color:var(--tw-rose-dark)}
+/* A 44px invisible tap target, with ONLY the native checkbox visible. */
+.gb-finishing .gb-gift-card-toggle{display:flex;align-items:center;justify-content:center;width:44px;height:44px;flex:0 0 44px;min-height:44px;margin:0;padding:0;border:0;background:transparent;cursor:pointer}
+.gb-finishing .gb-gift-card-toggle input{display:block;width:21px;height:21px;margin:0;accent-color:#62483f;cursor:pointer;flex:0 0 auto}
+.gb-finishing .gb-gift-card-toggle:focus-within{outline:2px solid var(--tw-button);outline-offset:2px;border-radius:8px}
+.gb-finishing .gb-personal-body{padding:0 20px 20px}
 .gb-finishing .gb-personal-body>label{display:block;font-size:.8rem;margin:0 0 8px}
-@media(max-width:360px){.gb-finishing.gb-personal-section>header{padding:9px 11px}.gb-finishing.gb-personal-section h3{font-size:1.24rem}.gb-finishing .gb-gift-card-controls{gap:4px}.gb-finishing .gb-personal-body{padding:0 11px 11px}}
+@media(max-width:480px){.gb-finishing.gb-personal-section>header{padding:16px}.gb-finishing .gb-personal-body{padding:0 16px 16px}}
+@media(max-width:360px){.gb-finishing.gb-personal-section h3{font-size:1.35rem}.gb-finishing.gb-personal-section>header{gap:8px}.gb-finishing .gb-gift-card-controls{gap:4px}}
 .track-another-order{display:block;width:100%;margin-top:22px}
 .commerce-order-card-heading,.commerce-order-card-meta,.commerce-order-card-total{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .commerce-order-card-heading h2{margin:0}.commerce-order-card-meta{margin:10px 0;color:#776e6a;font-size:.88rem}

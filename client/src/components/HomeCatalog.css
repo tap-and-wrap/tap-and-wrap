@@ -70,25 +70,7 @@
   .home-page .home-service-detail > span { font-size: .67rem; padding-inline: 7px; gap: 4px; }
 }
 @media (prefers-reduced-motion: reduce) { .home-page .home-service-detail > span { transition: none; } }
-/* A stretched semantic link makes the ENTIRE homepage card navigate, including
-   portrait media, while retaining a separate visible 44px pause/play button. */
-.home-page .home-service-card { position: relative; }
-.home-page .home-service-detail::after { content: ''; position: absolute; inset: 0; z-index: 2; }
-.home-page .home-service-detail:focus-visible { outline: none; }
-.home-page .home-service-detail:focus-visible::after { outline: 3px solid #795045; outline-offset: -5px; border-radius: 19px; }
-.home-page .home-service-media .home-service-video-toggle.video-surface-control {
-  position: absolute; inset: auto auto 10px 10px; z-index: 5;
-  display: flex; align-items: center; justify-content: center;
-  width: auto; height: 44px; min-width: 82px; padding: 0 10px;
-  border: 1px solid #e3cfc5; border-radius: 10px;
-  background: rgba(255, 250, 247, .96); color: #62483f;
-  box-shadow: 0 3px 10px rgba(40, 27, 23, .13);
-}
-.home-page .home-service-media .video-surface-control > span,
-.home-page .home-service-media .video-surface-control:focus-visible > span {
-  display: inline; position: static; opacity: 1; padding: 0; background: none;
-  color: inherit; font-size: .72rem; font-weight: 650; pointer-events: none;
-}
+/* Full-card navigation lives in shared home-media.css, also used by /customize. */
 @media (hover: hover) and (pointer: fine) {
   .home-page .home-service-card:hover .home-service-detail > span { background: #f0ddd3; border-color: #d4b3a5; }
 }
