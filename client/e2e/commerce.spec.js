@@ -252,7 +252,7 @@ test('retired global delivery-rate editor cannot silently approve or save charge
   await expect(page).toHaveURL(/\/admin\/orders\?view=verification$/);
   await expect(page.getByRole('heading', { name: 'Orders', exact: true, level: 1 })).toBeVisible();
   await expect(page.getByLabel('Cairo and Giza shipping (EGP)', { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Verify payment', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Payment review', exact: true })).toHaveAttribute('aria-pressed', 'true');
   expect(fixture.calls.filter(call => call.path === '/admin/commerce/shipping' && call.method === 'PATCH')).toHaveLength(0);
 });
 
@@ -374,25 +374,25 @@ test('failed InstaPay order retries the identical owner-bound request without re
 test('admin proof is fetched only on request and viewed in an accessible in-page dialog', async ({ page }) => {
   const fixture = await mockCommerce(page, { role: 'admin', order: { ...commerceOrder, proofAvailable: true, paymentMethod: 'instapay', paymentState: 'awaiting_verification' } });
   await page.goto(`/admin/commerce/orders/${commerceOrder.id}`);
-  await expect(page.getByRole('button', { name: 'View Proof', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'View screenshot 1', exact: true })).toBeVisible();
   expect(fixture.calls.some((call) => call.path.endsWith('/proof'))).toBe(false);
-  await page.getByRole('button', { name: 'View Proof', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'InstaPay payment proof', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'View screenshot 1', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Payment screenshot 1', exact: true })).toBeVisible();
   expect(fixture.calls.filter((call) => call.path.endsWith('/proof'))).toHaveLength(1);
-  await expect(page.getByRole('img', { name: 'InstaPay payment proof', exact: true })).toHaveAttribute('src', /^blob:/);
-  await expect.poll(() => page.getByRole('img', { name: 'InstaPay payment proof', exact: true }).evaluate((image) => image.complete && image.naturalWidth > 0)).toBe(true);
+  await expect(page.getByRole('img', { name: 'Payment screenshot 1', exact: true })).toHaveAttribute('src', /^blob:/);
+  await expect.poll(() => page.getByRole('img', { name: 'Payment screenshot 1', exact: true }).evaluate((image) => image.complete && image.naturalWidth > 0)).toBe(true);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'View Proof', exact: true })).toBeFocused();
-  await chooseOption(page.getByRole('combobox', { name: /^Payment update/ }), 'paid');
-  await page.getByRole('button', { name: 'Save order update', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'View screenshot 1', exact: true })).toBeFocused();
+  await chooseOption(page.getByRole('combobox', { name: 'Payment status' }), 'paid');
+  await page.getByRole('button', { name: 'Save status', exact: true }).click();
   await expect.poll(() => fixture.state.order.paymentState).toBe('paid');
 });
 
 test('customer sessions cannot open admin commerce pages or fetch private receipts', async ({ page }) => {
   const fixture = await mockCommerce(page, { role: 'customer', order: { ...commerceOrder, proofAvailable: true } });
   await page.goto(`/admin/commerce/orders/${commerceOrder.id}`);
-  await expect(page.getByRole('button', { name: 'View Proof', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'View screenshot 1', exact: true })).toHaveCount(0);
   await expect.poll(() => fixture.calls.some((call) => call.path === '/auth/me')).toBe(true);
   expect(fixture.calls.some((call) => call.path.startsWith('/admin/commerce/orders/'))).toBe(false);
 });
@@ -483,7 +483,7 @@ test('successful customer login explicitly merges eligible guest cart items', as
 test('admin order search uses strict order-number filtering and bounded server pagination', async ({ page }) => {
   const fixture = await mockCommerce(page, { role: 'admin' });
   await page.goto('/admin/commerce/orders');
-  await page.getByLabel('Find an order', { exact: true }).fill(commerceOrder.orderNumber);
+  await page.getByLabel('Order number', { exact: true }).fill(commerceOrder.orderNumber);
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   await expect.poll(() => fixture.calls.some((call) => call.path === '/admin/commerce/orders' && call.query.q === commerceOrder.orderNumber)).toBe(true);
   await chooseOption(page.getByRole('combobox', { name: /^Sort/ }), 'oldest');

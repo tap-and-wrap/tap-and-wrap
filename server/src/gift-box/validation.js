@@ -1,4 +1,4 @@
-import { hasGiftCardMessage } from '../../../shared/gift-box/card-message.mjs';
+import { validGiftCardMessage } from '../../../shared/gift-box/card-message.mjs';
 import { z } from 'zod';
 import { FIXED_COMPONENTS, GIFT_CARD_POLICY } from '../../../shared/gift-box/definitions.mjs';
 import { commerceError } from '../commerce/errors.js';
@@ -55,6 +55,6 @@ export const estimateInput = z.object({
 });
 // Public estimates are new selections; internal legacy quote/snapshot readers
 // retain estimateInput so existing paid blank-card identities do not change.
-export const shoppingEstimateInput = estimateInput.refine(value => !value.giftCard || hasGiftCardMessage(value.giftCard.message), {
-  message: 'Enter a message to add a gift card.', path: ['giftCard', 'message'],
+export const shoppingEstimateInput = estimateInput.refine(value => !value.giftCard || validGiftCardMessage(value.giftCard.message), {
+  message: 'A gift card message may be empty, but it must be valid.', path: ['giftCard', 'message'],
 });

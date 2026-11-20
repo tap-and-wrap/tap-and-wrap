@@ -12,7 +12,7 @@ const cart = { items:[{
   id:'gift-line-v10',kind:'gift_box_v2',name:'Gift Box',quantity:1,valid:true,
   unitPricePiastres:20000,lineTotalPiastres:20000,giftBox,
 }],subtotalPiastres:20000,quantity:1 };
-const preview = page => page.getByRole('region',{name:'Gift card preview'});
+const preview = page => page.locator('[aria-label="Gift card details"]');
 
 for (const width of [320,390,1440]) {
   test(`saved gift-card preview matches cart and checkout at ${width}px`,async({page})=>{
@@ -20,15 +20,13 @@ for (const width of [320,390,1440]) {
     const fixture = await mockCommerce(page,{cart,checkoutEnabled:true});
     await page.goto('/cart');
     await page.getByRole('button',{name:'View Design Details'}).click();
-    await expect(preview(page)).toBeVisible();
-    await expect(preview(page).locator('.tw-gift-card__message')).toHaveText(message);
-    await expect(preview(page).locator('.tw-gift-card__message')).toHaveCSS('white-space','pre-wrap');
-    await expect(preview(page).locator('b')).toHaveCount(0);
+    await expect(page.locator('.commerce-gift-summary').getByText(message, {exact:true})).toBeVisible();
+    await expect(page.locator('.commerce-gift-summary bdi')).toContainText([message]);
     await page.goto('/checkout');
     await expect(preview(page)).toBeVisible();
-    await expect(preview(page)).toHaveClass(/tw-gift-card--compact/);
-    await expect(preview(page).locator('.tw-gift-card__message')).toHaveText(message);
-    await expect(preview(page).locator('.tw-gift-card__message')).toHaveCSS('white-space','pre-wrap');
+    await expect(preview(page)).toHaveClass(/tw-gift-card-details--compact/);
+    await expect(preview(page).locator('.tw-gift-card-details__value')).toHaveText(message);
+    await expect(preview(page).locator('.tw-gift-card-details__value')).toHaveCSS('white-space','pre-wrap');
     await expect(page.locator('.commerce-total')).toContainText('200.00');
     expect(fixture.calls.filter(call => call.method === 'POST' && /\/commerce\/(?:cart\/gift-box|checkout\/payments|orders)/.test(call.path))).toHaveLength(0);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -40,11 +38,11 @@ test('Gift Box review uses the same message proof without adding price twice',as
   await page.goto('/customize/gift-box');
   await page.getByRole('button',{name:'Choose Fixture box-2',exact:true}).click();
   await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();
-  await page.getByLabel('Your message').fill(message);
+  await page.getByRole('checkbox',{name:'Add a Gift Card'}).check(); await page.getByLabel('Message (optional)').fill(message);
   await expect(page.locator('.gb-live-total strong')).toContainText('20.00');
   await page.getByRole('button',{name:'Next: Review'}).click();
   await expect(preview(page)).toBeVisible();
-  await expect(preview(page).locator('.tw-gift-card__message')).toHaveText(message);
+  await expect(preview(page).locator('.tw-gift-card-details__value')).toHaveText(message);
   await expect(page.locator('.gb-live-total strong')).toContainText('20.00');
 });
 

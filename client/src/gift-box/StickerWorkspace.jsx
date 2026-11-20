@@ -38,38 +38,13 @@ export default function StickerWorkspace({ boxId, personal, onRemove }) {
   const [preview, setPreview] = useState(null), [reset, setReset] = useState(null);
   const board = useRef(null), root = useRef(null);
   const [selected, setSelected] = useState(false);
-  const measuredFrame = useRef(null);
   const latest = useRef(null); latest.current = { personal, placement };
-  // Normalize only the editable draft. Historical/cart/order proofs continue to
-  // render their exact saved rectangle through StickerProof above.
-  useEffect(() => {
-    let active = true;
-    async function measure() {
-      const family = stickerStyle(personal.sticker.styleId)?.fontFamily;
-      await document.fonts.load(`100px "${family}"`);
-      if (!active) return;
-      const context = document.createElement('canvas').getContext('2d');
-      context.font = `100px "${family}"`;
-      const text = personal.sticker.text;
-      if (!text) return;
-      const lines = stickerLines(text);
-      const width = Math.max(1, ...lines.map(line => { const m = context.measureText(line); return Math.max(m.width, m.actualBoundingBoxLeft + m.actualBoundingBoxRight); })) + 20;
-      const { placement: current, personal: draft } = latest.current;
-      const previous = measuredFrame.current;
-      // Grow wrapped lines at the current lettering size. A restored historical
-      // rectangle keeps its saved height; explicit resizing rebases this metric.
-      const sameFrame = previous?.boxId === boxId && Math.abs(previous.height-current.height)<1e-7 && Math.abs(previous.width-current.width)<1e-7;
-      const height = sameFrame ? current.height * lines.length / previous.lines : current.height;
-      const next = boundStickerPlacement({ ...current, height, width: height * width / (lines.length * 140) });
-      measuredFrame.current = {boxId,lines:lines.length,width:next.width,height:next.height};
-      if (Math.abs(next.width - current.width) > .000001 || Math.abs(next.height - current.height) > .000001) draft.updateSticker({ placements: { ...draft.sticker.placements, [boxId]: next } });
-    }
-    void measure().catch(() => {});
-    return () => { active = false; };
-  }, [boxId, personal.sticker.text, personal.sticker.styleId]);
+  // Keep a stable editable rectangle while the customer types. The SVG text
+  // scales to that rectangle; resizing it asynchronously after the first
+  // character caused the mobile workspace to visibly jump/repaint.
   useEffect(() => { const outside = event => { if (!root.current?.contains(event.target)) setSelected(false); }; document.addEventListener('pointerdown', outside, true); return () => document.removeEventListener('pointerdown', outside, true); }, []);
   const shown = preview || placement, proof = stickerProof(boxId, shown.view);
-  function commit(next) { const bounded=boundStickerPlacement(next); measuredFrame.current={boxId,lines:stickerLines(personal.sticker.text || 'With love').length,width:bounded.width,height:bounded.height}; setPreview(null); personal.updateSticker({ placements: { ...personal.sticker.placements, [boxId]: bounded } }); }
+  function commit(next) { const bounded=boundStickerPlacement(next); setPreview(null); personal.updateSticker({ placements: { ...personal.sticker.placements, [boxId]: bounded } }); }
   function patch(values) { commit({ ...placement, ...values }); }
   const { cancel: cancelGesture, ...gestures } = useArtworkGestures({ board, read: event => { const hit = event.target.closest('.sticker-text-target'); setSelected(Boolean(hit)); return hit ? placement : null; }, fit: boundStickerPlacement, onPreview: setPreview, onCommit: commit });
   function size(scale) { patch({ width: placement.width * scale, height: placement.height * scale }); }

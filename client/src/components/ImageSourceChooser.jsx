@@ -12,7 +12,7 @@ export default function ImageSourceChooser({ label = 'Upload Image', context, mu
   useEffect(() => { active.current = true;return () => { active.current = false;pending.current?.abort(); }; }, []);
   useEffect(()=>{
     // Native file cancel bubbles; it must not dismiss an enclosing form dialog.
-    const cancel=event=>{ event.stopPropagation(); if (!pending.current) { pickerGeneration.current = null; requestAnimationFrame(() => buttonRef.current?.focus({preventScroll:true})); } };
+    const cancel=event=>{ event.stopPropagation(); if (!pending.current) pickerGeneration.current = null; };
     const node=inputRef.current;node.addEventListener('cancel',cancel);
     return()=>node.removeEventListener('cancel',cancel);
   },[]);
@@ -28,14 +28,16 @@ export default function ImageSourceChooser({ label = 'Upload Image', context, mu
   function reportError(message) {setError(message);onError?.(message);}
   function choose() {
     if (pending.current || disabled) return;
-    reportError('');pickerGeneration.current = authGeneration();
+    // Do not set React state before opening the native picker: mobile WebView
+    // layout can be invalidated while the OS picker owns the viewport.
+    pickerGeneration.current = authGeneration();
     const input = inputRef.current;input.value = ''; // Previous files are copied or cancelled.
     try { input.click(); } catch { reportError('The file picker could not open. Try again.'); }
     // Open synchronously within the user gesture; keep the input alive while copying bytes.
   }
   async function select(event) {
     const input = event.currentTarget, files = Array.from(input.files || []);
-    if (!files.length) { pickerGeneration.current = null; requestAnimationFrame(() => buttonRef.current?.focus({preventScroll:true})); return; }
+    if (!files.length) { pickerGeneration.current = null; return; }
     if (pending.current || disabled) return;
     const operation = new AbortController(), generation = pickerGeneration.current ?? authGeneration();
     pending.current = operation;setPreparing(true);setReady('');reportError('');
@@ -44,7 +46,7 @@ export default function ImageSourceChooser({ label = 'Upload Image', context, mu
       if (!active.current || operation.signal.aborted || generation !== authGeneration()) return;
       const outcome = await onSelect(owned);
       if (outcome?.error) throw new ImageSelectionError(outcome.error);
-      if (active.current && !operation.signal.aborted && generation === authGeneration()) setReady(`${owned.length === 1 ? owned[0].name : `${owned.length} images`} · Ready to upload`);
+      if (active.current && !operation.signal.aborted && generation === authGeneration()) setReady('selected');
     } catch (caught) {
       // Keep the last valid preview unchanged, but explain the rejected picker
       // attempt. Only our controlled validation messages are shown verbatim.
@@ -64,6 +66,6 @@ export default function ImageSourceChooser({ label = 'Upload Image', context, mu
     {/* WAM home-reference pattern: no accept/capture hint restricting Android's native actions.
         Signature, size and decode validation still run before any selection is delivered. */}
     <input ref={inputRef} type="file" hidden tabIndex={-1} aria-hidden="true" aria-label={inputLabel} multiple={multiple} disabled={disabled} onChange={select} />
-    {!(error && onError) && <p className={error ? 'image-source-error' : 'image-source-status'} role={error ? 'alert' : 'status'}>{preparing ? 'Checking image…' : error || ready}</p>}
+    {!(error && onError) && <p className={error ? 'image-source-error' : 'image-source-status'} role={error ? 'alert' : 'status'}>{preparing ? 'Checking image…' : error}</p>}
   </div>;
 }

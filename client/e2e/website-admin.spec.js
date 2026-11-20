@@ -101,7 +101,7 @@ test('Payment redirects to order verification and diagnostics are absent on a ph
  await ownerFixture(page); await page.setViewportSize({ width: 320, height: 800 }); await page.goto('/admin/payment');
  await expect(page).toHaveURL(/\/admin\/orders\?view=verification$/);
  await expect(page.getByRole('heading', { name: 'Orders', exact: true, level: 1 })).toBeVisible();
- await expect(page.getByRole('button', { name: 'Verify payment', exact: true })).toHaveAttribute('aria-pressed', 'true');
+ await expect(page.getByRole('button', { name: 'Payment review', exact: true })).toHaveAttribute('aria-pressed', 'true');
  await expect(page.getByRole('button', { name: /Enable checkout|Send|Retry email/ })).toHaveCount(0);
  await expect(page.getByText('SMTP_ACCEPTANCE_UNCERTAIN')).toHaveCount(0);
  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -122,8 +122,8 @@ test('subcategory editing keeps homepage selection main-only and preserves omitt
   await page.goto('/admin/website/categories');
   await chooseOption(page.getByRole('combobox', { name: /^Category group/ }), category.slug);
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
-  await expect(page.getByLabel('Featured on homepage (main categories only)')).toBeDisabled();
-  await expect(page.getByText(/any existing subcategory feature metadata is preserved/)).toBeVisible();
+  await expect(page.getByLabel('Feature on homepage')).toBeDisabled();
+  await expect(page.getByText(/Existing historical metadata is preserved/)).toBeVisible();
   await page.getByRole('button', { name: 'Save category', exact: true }).click();
   await expect.poll(() => fixture.writes.length).toBe(1);
   expect(fixture.writes[0].payload.parentId).toBe(category._id);

@@ -125,7 +125,7 @@ test('creating a revision fences its source so stale approved-template editors c
   assert.equal((await CustomizationTemplate.findById(approved._id)).name, approved.name);
 });
 
-test('product configuration retains revision checks while obsolete global shipping edits are refused', async () => {
+test('product configuration revisions remain protected and partial delivery settings are rejected', async () => {
   const ready = await product('configured-revision');
   const path = `/api/v1/admin/commerce/products/${ready._id}/configuration`;
   const fields = [{ key: 'gift-message', label: 'Gift message', type: 'short_text', maxLength: 5000, required: false }];
@@ -138,7 +138,7 @@ test('product configuration retains revision checks while obsolete global shippi
   const initial = (await request(shippingPath)).data.configuration;
   assert.equal(initial.revision, 0);
   const shipping = await request(shippingPath, { method: 'PATCH', body: { expectedRevision: 0, cairoGizaPiastres: 9500 } });
-  assert.equal(shipping.status, 409); assert.equal(shipping.error.code, 'SHIPPING_POLICY_CHANGED');
+  assert.equal(shipping.status, 400); assert.equal(shipping.error.code, 'SHIPPING_RATE_INVALID');
   assert.equal(await ShippingConfig.countDocuments(), 0);
 });
 
@@ -333,12 +333,27 @@ test('admin product configuration preserves price and images while requiring an 
   assert.deepEqual(stored.galleryKeys, [...ready.galleryKeys]);
 });
 
-test('global shipping approval is retired and public delivery amounts remain null for every governorate', async () => {
+test('merchant must explicitly approve delivery rates; public API publishes only reviewed amounts', async () => {
+  const path = '/api/v1/admin/commerce/shipping';
   const initial = await request('/api/v1/commerce/shipping');
   assert.equal(initial.status, 200); assert.equal(initial.data.governorates.length, 27);
   assert.deepEqual(initial.data.rates, { cairoGizaPiastres: null, otherGovernoratesPiastres: null });
-  const rejected = await request('/api/v1/admin/commerce/shipping', { method: 'PATCH', body: { cairoGizaPiastres: 9000, otherGovernoratesPiastres: 12000, approved: true } });
-  assert.equal(rejected.status, 409); assert.equal(await ShippingConfig.countDocuments(), 0);
+  const body = { expectedRevision: 0, cairoGizaPiastres: 9500, otherGovernoratesPiastres: 12500, approved: true };
+  const unconfirmed = await request(path, { method:'PATCH', body });
+  assert.equal(unconfirmed.status, 400); assert.equal(unconfirmed.error.code, 'SHIPPING_ACTIVATION_REQUIRED');
+  assert.equal(await ShippingConfig.countDocuments(), 0);
+  const saved = await request(path, { method:'PATCH', body:{...body, confirmActivate:true} });
+  assert.equal(saved.status, 200, JSON.stringify(saved.error));
+  assert.equal(saved.data.configuration.approved, true);
+  assert.equal(saved.data.configuration.revision, 0);
+  const current = await request('/api/v1/commerce/shipping');
+  assert.deepEqual(current.data.rates, { cairoGizaPiastres: 9500, otherGovernoratesPiastres: 12500 });
+  const stale = await request(path, {method:'PATCH', body:{ ...body, otherGovernoratesPiastres: 25000, confirmActivate:true }});
+  assert.equal(stale.status, 200); // Fresh record creation starts at revision zero.
+  assert.equal(stale.data.configuration.revision, 1);
+  const rejected = await request(path, {method:'PATCH', body:{ ...body, cairoGizaPiastres: 10000, confirmActivate:true }});
+  assert.equal(rejected.status, 409); assert.equal(rejected.error.code, 'EDIT_CONFLICT');
+  assert.equal((await request('/api/v1/commerce/shipping')).data.rates.cairoGizaPiastres, 9500);
 });
 
 test('admin promotion mutations validate configured references and cannot reset redemption counts', async () => {
@@ -377,10 +392,11 @@ test('simultaneous discount claims cannot exceed a configured global usage limit
   assert.equal((await DiscountCode.findById(code._id)).usedCount, 1);
 });
 
-test('legacy shipping rates cannot change merchandise-only pending delivery quotes', async () => {
+test('reviewed delivery rates are available for checkout but legacy shipping-lock operations remain retired', async () => {
   await ShippingConfig.create({ key: 'egypt-v1', cairoGizaPiastres: 9000, otherGovernoratesPiastres: 12000, approved: true });
-  const quote = await getShippingQuote('cairo'); assert.equal(quote.shippingPiastres, null);
-  await assert.rejects(lockShippingQuote(quote), { code: 'SHIPPING_POLICY_CHANGED' });
+  const cairo = await getShippingQuote('cairo'); assert.equal(cairo.shippingPiastres, 9000); assert.equal(cairo.status, 'included_in_checkout');
+  const other = await getShippingQuote('alexandria'); assert.equal(other.shippingPiastres, 12000);
+  await assert.rejects(lockShippingQuote(cairo), { code: 'SHIPPING_POLICY_CHANGED' });
 });
 
 test('shipping defaults are never automatically initialized or approved', async () => {
@@ -458,9 +474,10 @@ test('partial component price and stock edits require renewed approvals while re
   assert.equal((await request(path, { method: 'PATCH', body: { inventory: [] } })).status, 400);
 });
 
-test('obsolete shipping edits leave historical rate records unchanged', async () => {
-  const legacy = await ShippingConfig.create({ key: 'egypt-v1', cairoGizaPiastres: 9000, otherGovernoratesPiastres: 12000, approved: true });
-  const result = await request('/api/v1/admin/commerce/shipping', { method: 'PATCH', body: { cairoGizaPiastres: 9500 } });
-  assert.equal(result.status, 409); assert.equal((await ShippingConfig.findById(legacy._id)).cairoGizaPiastres, 9000);
-  assert.equal((await request('/api/v1/commerce/shipping')).data.rates.cairoGizaPiastres, null);
+test('partial delivery edits cannot overwrite approved rates or existing merchant decisions', async () => {
+  const original = await ShippingConfig.create({ key:'egypt-v1', cairoGizaPiastres:9000, otherGovernoratesPiastres:12000, approved:true });
+  const result = await request('/api/v1/admin/commerce/shipping', { method:'PATCH', body:{ cairoGizaPiastres:9500 } });
+  assert.equal(result.status, 400);
+  assert.equal((await ShippingConfig.findById(original._id)).cairoGizaPiastres,9000);
+  assert.equal((await request('/api/v1/commerce/shipping')).data.rates.cairoGizaPiastres,9000);
 });

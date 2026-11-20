@@ -1,4 +1,4 @@
-import { hasGiftCardMessage, validGiftCardMessage } from '../../../shared/gift-box/card-message.mjs';
+import { validGiftCardMessage } from '../../../shared/gift-box/card-message.mjs';
 import { isFreePresentation,verticalSceneScale,sceneY,ribbonFootprint } from '../../../shared/gift-box/presentation.mjs';
 import { customerGiftComponentName } from '../../../shared/gift-box/customer-label.mjs';
 import { ARTWORK_METRICS } from './artwork-metrics.mjs';
@@ -92,8 +92,8 @@ export function changeArrangement(state, action) {
     case 'remove': return { ...state, instances: state.instances.filter(item => item.id !== action.id) };
     case 'clear': return { ...state, instances: [] };
     case 'ribbon': return { ...state, ribbonId: action.id, ...(state.freePlacement ? { ribbonPosition: state.ribbonPosition || { x: state.presentationVersion ? .385 : .32, y: sceneY(state.presentationVersion ? .67 : .65,state.presentationVersion), zone: 'inside' } } : {}) };
-    case 'card': return { ...state, cardEnabled: action.enabled && hasGiftCardMessage(state.message) };
-    case 'message': return { ...state, message: action.message, cardEnabled: hasGiftCardMessage(action.message) };
+    case 'card': return { ...state, cardEnabled: action.enabled === true };
+    case 'message': return { ...state, message: action.message };
     default: return state;
   }
 }
@@ -107,7 +107,7 @@ export function arrangementReducer(history, action) {
   return { present: next, past: [...history.past.slice(-29), history.present] };
 }
 export function estimateSelection(state, cardId) {
-  const cardSelected = hasGiftCardMessage(state.message);
+  const cardSelected = state.cardEnabled === true;
   if (!state.boxId || !validMessage(state.message) || cardSelected && !cardId) return null;
   return { boxId: state.boxId, items: Object.entries(counts(state.instances)).sort(([a], [b]) => a.localeCompare(b)).map(([componentId, quantity]) => ({ componentId, quantity })),
     ribbonId: state.ribbonId, giftCard: cardSelected ? { componentId: cardId, message: state.message } : null };

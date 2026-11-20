@@ -64,17 +64,15 @@ export async function imageRatio(file) {
 }
 
 export function TextArtwork({ layer, font, appearance }) {
-  const [readyFamily, fontReady] = useState(() => document.fonts.check(`100px "${font.family}"`) ? font.family : null);
-  useEffect(() => {
-    let current = true;
-    void loadArtworkFont(font.family).then(() => { if (current) fontReady(font.family); }).catch(() => {});
-    return () => { current = false; };
-  }, [font.family]);
+  // Font files are preloaded by the editor. Paint the first character with
+  // the available fallback instead of hiding the SVG until a late font-load
+  // effect forces an extra React paint on mobile.
+  useEffect(() => { void loadArtworkFont(font.family).catch(() => {}); }, [font.family]);
   if (!layer.text) return null;
   const metrics = artworkMetrics(layer.text, font.family);
   const lines = layer.text.split('\n'), height = 1000 / layer.aspectRatio;
   const size = Math.min(1000 / (metrics.width / 100 + .2), height / (lines.length * 1.4));
-  return <svg viewBox={`0 0 1000 ${height}`} aria-hidden="true" style={{ fontFamily: font.family, fill: appearance || colors[layer.color], visibility: readyFamily === font.family || document.fonts.check(`100px "${font.family}"`) ? 'visible' : 'hidden' }}><text textAnchor="middle" direction={/\p{Script=Arabic}/u.test(layer.text) ? 'rtl' : 'ltr'}>{lines.map((line, index) => <tspan key={index} x="500" y={height / 2 + (index - (lines.length - 1) / 2) * size * 1.3 + size * .28} fontSize={size}>{line || '\u00a0'}</tspan>)}</text></svg>;
+  return <svg viewBox={`0 0 1000 ${height}`} aria-hidden="true" style={{ fontFamily: font.family, fill: appearance || colors[layer.color] }}><text textAnchor="middle" direction={/\p{Script=Arabic}/u.test(layer.text) ? 'rtl' : 'ltr'}>{lines.map((line, index) => <tspan key={index} x="500" y={height / 2 + (index - (lines.length - 1) / 2) * size * 1.3 + size * .28} fontSize={size}>{line || '\u00a0'}</tspan>)}</text></svg>;
 }
 
 function OwnedEditor({ ownerScope, initialDraft, assets: suppliedAssets, approvedFontIds = [], onChange, surfaceControls = true, confirmReset = false, stylesReady = true, onError }) {

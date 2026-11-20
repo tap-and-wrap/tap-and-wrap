@@ -93,6 +93,7 @@ test('uncertain order response retries the identical request without a duplicate
 test('admin quotes shipping, opens saved WhatsApp text and records explicit acceptance and real collection', async ({ page }) => {
   const fixture = await foundation(page, { role: 'admin' });
   await page.goto(`/admin/commerce/orders/${fixture.order.id}`);
+  await page.getByText('Payment verification and financial records', { exact: true }).click();
   await page.getByText('Saved WhatsApp quotation', { exact: true }).click();
   await expect(page.getByRole('link', { name: 'Open prefilled WhatsApp quotation' })).toHaveAttribute('href', /^https:\/\/wa.me\//);
   await page.getByLabel('Actual amount (EGP)', { exact: true }).fill('90');
@@ -110,8 +111,8 @@ test('admin quotes shipping, opens saved WhatsApp text and records explicit acce
   await page.getByRole('button', { name: 'Confirm and record operation', exact: true }).click();
   await expect.poll(() => fixture.order.revision).toBe(1);
   await chooseOption(page.getByRole('combobox', { name: 'Operation', exact: true }), 'accept_charge');
-  await page.getByLabel('Private reconciliation / WhatsApp acceptance evidence', { exact: true }).fill('Customer accepted EGP 90 by WhatsApp');
-  await page.getByRole('checkbox', { name: /I confirmed the actual account/ }).check();
+  await page.getByLabel('Private financial note', { exact: true }).fill('Customer accepted EGP 90 by WhatsApp');
+  await page.getByRole('checkbox', { name: /I verified the applicable transaction, customer agreement or returned-stock inspection/ }).check();
   await page.getByRole('button', { name: 'Record operation', exact: true }).click();
   await page.getByRole('button', { name: 'Confirm and record operation', exact: true }).click();
   await expect.poll(() => fixture.order.revision).toBe(2);
@@ -125,15 +126,16 @@ test('admin records one completed transfer with merchandise and delivery refund 
   const fixture = await foundation(page, { role: 'admin' });
   Object.assign(fixture.order.accounting, { collectedPiastres: 54000, merchandisePiastres: 45000, settlements: [{ id: 'fixture-combined', direction: 'collection', scope: 'all_agreed', method: 'cod', reference: 'ACTUAL-COLLECTION', amountPiastres: 54000, allocations: [{ scope: 'merchandise', amountPiastres: 45000 }, { scope: 'shipping', amountPiastres: 9000 }] }] });
   await page.setViewportSize({ width: 320, height: 900 }); await page.goto(`/admin/commerce/orders/${fixture.order.id}`);
+  await page.getByText('Payment verification and financial records', { exact: true }).click();
   await chooseOption(page.getByRole('combobox', { name: 'Operation', exact: true }), 'refund');
   await chooseOption(page.getByRole('combobox', { name: 'Original collection', exact: true }), 'fixture-combined');
   await expect(page.getByLabel('Actual amount (EGP)', { exact: true })).toHaveValue('540.00');
   await expect(page.getByLabel(/^Original merchandise refund/)).toHaveValue('450.00');
   await expect(page.getByLabel(/^Delivery refund/)).toHaveValue('90.00');
   await chooseOption(page.getByRole('combobox', { name: 'Collection/payment method', exact: true }), 'instapay');
-  await page.getByLabel('Actual bank transfer or COD collection reference', { exact: true }).fill('ONE-REAL-REFUND');
-  await page.getByLabel('Private reconciliation / WhatsApp acceptance evidence', { exact: true }).fill('Completed actual combined refund reconciled independently');
-  await page.getByRole('checkbox', { name: /I confirmed the actual account/ }).check();
+  await page.getByLabel('Bank transaction ID or COD receipt number', { exact: true }).fill('ONE-REAL-REFUND');
+  await page.getByLabel('Private financial note', { exact: true }).fill('Completed actual combined refund reconciled independently');
+  await page.getByRole('checkbox', { name: /I verified the applicable transaction, customer agreement or returned-stock inspection/ }).check();
   await page.getByLabel(/^Delivery refund/).fill('80');
   await page.getByRole('button', { name: 'Record operation', exact: true }).click();
   await page.getByRole('button', { name: 'Confirm and record operation', exact: true }).click();

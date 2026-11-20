@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react';
 import '../admin.css';
+import './v11-admin.css';
 
 export const EmbeddedAdmin = createContext(false);
 

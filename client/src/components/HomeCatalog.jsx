@@ -1,4 +1,5 @@
 import LoadingState from './LoadingState.jsx';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { categoryHref } from '../../../shared/category-paths.mjs';
 import { approvedCategoryImage } from './category-artwork.mjs';
 import { useEffect, useRef, useState } from 'react';
@@ -61,11 +62,11 @@ export function FeaturedCategories() {
       })}
     </div>
     <nav className="home-category-navigation" aria-label="Category carousel navigation">
-      <button type="button" className="home-slide-arrow" aria-label="Previous categories" disabled={!slide.hasPrevious} onClick={() => navigate(slide.index - 1)}>←</button>
+      <button type="button" className="home-slide-arrow" aria-label="Previous categories" disabled={!slide.hasPrevious} onClick={() => navigate(slide.index - 1)}><ChevronLeft size={20} strokeWidth={1.9} aria-hidden="true"/></button>
       <div className="home-slide-dots" aria-label="Carousel positions">
         {Array.from({ length: Math.min(5, slide.pages) }, (_, offset) => Math.max(0, Math.min(slide.index - 2, slide.pages - 5)) + offset).map(index => <button type="button" key={index} className={`home-slide-dot${slide.index === index ? ' is-active' : ''}`} aria-label={`Show category slide ${index + 1}`} aria-current={slide.index === index ? 'true' : undefined} onClick={() => navigate(index)} />)}
       </div>
-      <button type="button" className="home-slide-arrow" aria-label="Next categories" disabled={!slide.hasNext} onClick={() => navigate(slide.index + 1)}>→</button>
+      <button type="button" className="home-slide-arrow" aria-label="Next categories" disabled={!slide.hasNext} onClick={() => navigate(slide.index + 1)}><ChevronRight size={20} strokeWidth={1.9} aria-hidden="true"/></button>
     </nav>
     <div className="home-section-footer"><Link className="button button-dark home-shop-all" to="/shop">Shop All</Link></div>
   </div>;

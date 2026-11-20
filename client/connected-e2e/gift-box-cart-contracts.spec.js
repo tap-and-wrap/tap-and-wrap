@@ -26,7 +26,14 @@ async function add(context, data) {
 async function currentCart(context) { return (await (await context.request.get(`${api}/api/v1/commerce/cart`)).json()).data.cart; }
 const input = configuration => ({ kind: 'gift_box_v2', configuration, quantity: 1, operationKey: crypto.randomUUID() });
 async function login(page, account) {
+  const pendingSession = page.waitForResponse(response => response.request().method() === 'GET'
+    && new URL(response.url()).pathname === '/api/v1/auth/me', {timeout:20_000});
+  const pendingCart = page.waitForResponse(response => response.request().method() === 'GET'
+    && new URL(response.url()).pathname === '/api/v1/commerce/cart', {timeout:20_000});
   await page.goto('/login?returnTo=%2Fcart');
+  const [sessionResponse, cartResponse] = await Promise.all([pendingSession, pendingCart]);
+  expect(sessionResponse.status()).toBe(200); expect(cartResponse.status()).toBe(200);
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await page.getByLabel('Email Address').fill(`${account}@connected.example.test`);
   await page.getByLabel('Password', { exact: true }).fill('isolated-fixture-password');
   const pendingLogin = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/auth/login', { timeout: 20_000 });

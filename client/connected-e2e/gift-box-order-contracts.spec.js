@@ -38,10 +38,10 @@ test('real internally-created mixed order is readable by its owner, uses immutab
   await expect(article.getByRole('heading', { name: 'Build Your Gift Box' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Connected generic product' })).toBeVisible();
   await expect(article.getByText('Synthetic rose-red × 3', { exact: true })).toBeVisible();
-  await expect(article.getByText(secret, { exact: true })).toBeHidden();
-  await article.getByText('View gift-card message', { exact: true }).click();
+  await expect(article.getByText('Gift card', { exact: true })).toBeVisible();
   await expect(article.getByText(secret, { exact: true })).toBeVisible();
-  await article.getByText('View gift-card message', { exact: true }).click();
+  // v11 deliberately displays the message as a plain label/value only to this authorized order owner.
+  await expect(article.getByText('View gift-card message', { exact: true })).toHaveCount(0);
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
@@ -80,5 +80,5 @@ test('real admin order response and page retain purchased arrangement, fulfillme
   await article.getByText('Saved arrangement and fulfillment policy', { exact: true }).click();
   await expect(article.getByText('isolated-cart-policy · fixture-v1', { exact: true })).toBeVisible();
   await expect(article.getByText(/They do not certify physical fit/)).toBeVisible();
-  await expect(article.getByText(secret, { exact: true })).toBeHidden();
+  await expect(article.getByText('Gift card', { exact: true })).toBeVisible(); await expect(article.getByText(secret, { exact: true })).toBeVisible();
 });

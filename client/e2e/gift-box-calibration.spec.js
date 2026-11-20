@@ -27,7 +27,7 @@ test('SPA navigation and targeted editing preserve photos, all choices, poses an
   while(!await page.getByRole('button',{name:'Choose Fixture ribbon-navy',exact:true}).count()) await page.getByRole('button',{name:'Show 6 more'}).click();
   await page.getByRole('button',{name:'Choose Fixture ribbon-navy',exact:true}).click();
 
-  await page.getByLabel('Your message').fill('For your special day');
+  await page.getByRole('checkbox',{name:'Add a Gift Card'}).check(); await page.getByLabel('Message (optional)').fill('For your special day');
   await page.getByRole('button',{name:'Next: Review'}).click();
   const poses=await page.locator('.gb-placed').evaluateAll(els=>els.map(el=>el.getAttribute('style')));
   await page.getByRole('banner').getByRole('link',{name:'Tap and Wrap home',exact:true}).click();await page.goBack();
@@ -37,7 +37,7 @@ test('SPA navigation and targeted editing preserve photos, all choices, poses an
   expect(await page.evaluate(()=>window.revokedGiftUrls)).not.toContain(url);
   await page.locator('.gb-review-edit').getByRole('button',{name:'Box',exact:true}).click();
   await page.getByRole('button',{name:'Finishing Touches',exact:true}).click();
-  await expect(page.getByLabel('Your message')).toHaveValue('For your special day');
+  await expect(page.getByLabel('Message (optional)')).toHaveValue('For your special day');
   await expect(page.getByRole('button',{name:'Choose Fixture ribbon-navy',exact:true})).toHaveAttribute('aria-pressed','true');
   await page.getByRole('button',{name:'Make It Personal',exact:true}).click();
   await expect(page.getByLabel('Write a name, special date, or heartfelt message')).toHaveValue('Nour, with love');

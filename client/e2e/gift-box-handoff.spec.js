@@ -74,7 +74,7 @@ for (const width of [320,390,440,768,1024,1440]) test(`owner handoff visual jour
     }
     if (index===5) {
       await expect(page.locator('.gb-finishing details')).toHaveCount(0);
-      await page.getByLabel('Your message', {exact:true}).fill('With love, always.');
+      await page.getByRole('checkbox',{name:'Add a Gift Card'}).check();await page.getByLabel('Message (optional)', {exact:true}).fill('With love, always.');
     }
     await noOverflow(page);
     await page.evaluate(()=>scrollTo(0,0));
@@ -130,13 +130,14 @@ test('stepper retains reached state, reduced motion, document-top navigation and
   const {fixture,audit}=await localCheckoutFixture(page); await beginGiftBox(page);
   await go(page,5);
   await expect(page.getByRole('button',{name:'Choose Your Box',exact:true})).toHaveAccessibleDescription('Completed');
-  const message=page.getByLabel('Your message',{exact:true});
+  const card=page.getByRole('checkbox',{name:'Add a Gift Card'});await card.check();
+  const message=page.getByLabel('Message (optional)',{exact:true});
   for(const value of [' ', '\u200b\u200d\ufeff', '\u064e\u0651']) {
-    await message.fill(value); await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
-    expect(fixture.estimates.at(-1).giftCard).toBeNull();
+    await message.fill(value); await expect(page.locator('.gb-live-total strong')).toContainText('20.00');
+    expect(fixture.estimates.at(-1).giftCard).not.toBeNull();
   }
   await message.fill('هَدِيَّة لَكِ'); await expect(page.locator('.gb-live-total strong')).toContainText('20.00');
-  await message.fill(''); await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
+  await message.fill(''); await expect(page.locator('.gb-live-total strong')).toContainText('20.00');await card.uncheck();await expect(page.locator('.gb-live-total strong')).toContainText('10.00');
   await page.getByRole('button',{name:'Back',exact:true}).click();
   await expect.poll(()=>page.evaluate(()=>scrollY)).toBe(0);
   await expect(page.locator('.gb-progress .is-complete')).toHaveCount(4);
@@ -211,7 +212,7 @@ for (const height of [700,420]) test(`focused personalization stays clear of hea
   await page.setViewportSize({width:390,height:height===700?420:700});
   await expect.poll(visible).toBe(true);
   await go(page,5);
-  const message=page.getByLabel('Your message',{exact:true}); await message.fill('With love');
+  await page.getByRole('checkbox',{name:'Add a Gift Card'}).check();const message=page.getByLabel('Message (optional)',{exact:true}); await message.fill('With love');
   await expect.poll(visible).toBe(true);
   await page.getByRole('button',{name:'Next: Review'}).click();
   await expect.poll(()=>page.evaluate(()=>scrollY)).toBe(0);

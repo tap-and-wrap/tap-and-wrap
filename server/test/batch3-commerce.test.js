@@ -347,7 +347,11 @@ test('F29 isolated shared checkout-fence contention is measured without removing
     const started = performance.now();
     await mongoose.connection.transaction(async session => {
       callbacks += 1; const line = await quoteCartLine({ productId: String(item._id), quantity: 1 }, owner, { session });
-      const shipping = await getShippingQuote('cairo', { session }); assert.equal(shipping.shippingPiastres, null); await assert.rejects(lockShippingQuote(shipping, { session }), { code: 'SHIPPING_POLICY_CHANGED' }); await consumeInventory([line], [], session);
+      const shipping = await getShippingQuote('cairo', { session });
+      // Stage 3: explicitly approved Cairo shipping is part of the immutable quote.
+      // The retired standalone shipping-lock operation must still reject writes.
+      assert.equal(shipping.shippingPiastres, 9000);
+      assert.equal(shipping.status, 'included_in_checkout'); await assert.rejects(lockShippingQuote(shipping, { session }), { code: 'SHIPPING_POLICY_CHANGED' }); await consumeInventory([line], [], session);
     }); elapsed.push(Math.round(performance.now() - started));
   };
   await Promise.all(products.map(perform));

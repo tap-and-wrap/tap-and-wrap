@@ -1,32 +1,18 @@
 import AccountActions from '../components/AccountActions.jsx';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowUpRight, ShoppingBag, ClipboardCheck, Wallet, CreditCard, Users } from 'lucide-react';
+import { ArrowUpRight, ShoppingBag, Wallet, CreditCard, Users, Package, TicketPercent } from 'lucide-react';
 import AdminLayout from '../admin/AdminLayout.jsx';
 import OrderTable, { adminDate } from '../admin/OrderTable.jsx';
 import { useSession } from '../auth/SessionProvider.jsx';
 import { privateQueryKey } from '../auth/session.js';
 import { getWebsiteAdmin } from '../services/website.js';
-import { adminCommerceGet, commerceError } from '../commerce/api.js';
+import { commerceError } from '../commerce/api.js';
 
-const flagLabels = { initial: 'Contact customer', overdue: 'Contact overdue', shipping: 'Confirm delivery', quote_preparation: 'Prepare quotation', quote_sharing: 'Share saved quotation', acceptance: 'Awaiting acceptance', payment_review: 'Review payment or refund', response: 'Respond to customer', payment_pending: 'Payment pending' };
 export function OwnerQueryState({ query, label = 'store activity' }) {
-  return query.isPending ? <p className="admin-state" role="status">Loading {label}…</p> : query.error ? <div className="admin-state" role="alert"><p>{commerceError(query.error)}</p><button className="admin-button admin-button-secondary" onClick={() => query.refetch()}>Try again</button></div> : null;
-}
-export function ActionCenter() {
-  const session = useSession();
-  const query = useQuery({ queryKey: privateQueryKey(session.ownerKey, 'attention', 1, 'all'), queryFn: ({ signal }) => adminCommerceGet('/attention', { page: 1, view: 'all' }, signal), retry: false, staleTime: 0 });
-  const orders = useQuery({ queryKey: privateQueryKey(session.ownerKey, 'owner-action-orders'), queryFn: ({ signal }) => adminCommerceGet('/orders', { view: 'requires_action', page: 1, limit: 5, sort: 'oldest' }, signal), retry: false, staleTime: 0 });
-  const rows = [
-    ...(orders.data?.orders || []).map(order => ({ kind: 'order', id: order.id || order._id, reference: order.orderNumber, customer: order.customer, task: order.actionRequired || 'Review order progress' })),
-    ...(query.data?.records || []).filter(row => row.kind === 'request' && !row.orderId).slice(0, 3).map(row => ({ ...row, task: row.flags.filter(flag => flag !== 'payment_pending').map(flag => flagLabels[flag]).filter(Boolean).slice(0, 2).join(' · ') || 'Check progress' })),
-  ];
-  return <section className="owner-workspace owner-action-center"><div className="owner-section-heading"><div><p className="admin-eyebrow">Keep things moving</p><h2>Action center</h2></div><Link to="/admin/orders?view=requires_action" className="owner-text-link">View action queue <ArrowUpRight size={16} aria-hidden="true"/></Link></div><OwnerQueryState query={query}/>
-    <OwnerQueryState query={orders} label="order tasks"/>
-    {rows.length > 0 && <ul className="owner-task-list">{rows.map(row => <li key={`${row.kind}:${row.id}`}><div><strong>{row.kind === 'order' ? `Order #${row.reference}` : `Request ${row.reference}`}</strong><p>{row.customer?.name} · {row.task}</p></div><Link className="admin-button admin-button-secondary" to={row.kind === 'request' ? `/admin/orders/requests/${row.id}` : `/admin/orders/${row.id}`}>Review</Link></li>)}</ul>}
-    {query.data && orders.data && !rows.length && <div className="admin-empty"><ClipboardCheck size={28} aria-hidden="true"/><h3>You’re up to date</h3><p>There is no active work in the order and quotation queue.</p></div>}
-    {query.data?.pagination.pages > 1 && <Link className="owner-text-link" to="/admin/orders/attention">More contacts and quotations</Link>}
-  </section>;
+  if (query.isPending) return <div className="v11-admin-skeleton" role="status">Loading {label}…</div>;
+  if (query.error) return <div className="admin-state" role="alert"><p>{commerceError(query.error)}</p><button className="admin-button admin-button-secondary" onClick={() => query.refetch()}>Retry</button></div>;
+  return null;
 }
 export default function AdminDashboardPage() {
   const session = useSession();
@@ -34,17 +20,18 @@ export default function AdminDashboardPage() {
   const analytics = useQuery({ queryKey: privateQueryKey(session.ownerKey, 'owner-analytics', 30), queryFn: ({ signal }) => getWebsiteAdmin('owner-analytics', { days: 30 }, signal), retry: false, staleTime: 60000 });
   const data = dashboard.data, sales = analytics.data;
   const cards = [
-    { label: 'Orders received', value: sales?.orders, detail: 'Last 30 days', icon: ShoppingBag, to: '/admin/orders' },
-    { label: 'Requiring action', value: data?.actionRequired, detail: 'Open orders · all dates', icon: ClipboardCheck, to: '/admin/orders?view=requires_action' },
-    { label: 'Verify payment', value: data?.paymentReview, detail: 'Proofs awaiting review · all dates', icon: CreditCard, to: '/admin/orders?view=verification' },
-    { label: 'Net collections · EGP', value: sales ? new Intl.NumberFormat('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(sales.netCollectionsPiastres / 100) : undefined, detail: 'Recorded collections less refunds · 30 days', icon: Wallet, to: '/admin/analytics' },
+    { label: 'Orders', value: sales?.orders, detail: 'Placed in the last 30 days', Icon: ShoppingBag, to: '/admin/orders' },
+    { label: 'Net collections', value: sales ? `EGP ${new Intl.NumberFormat('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format((sales.netCollectionsPiastres || 0) / 100)}` : undefined, detail: 'Collected minus refunds · 30 days', Icon: Wallet, to: '/admin/analytics' },
+    { label: 'Payment verification', value: data?.paymentReview, detail: 'Orders with proof to review', Icon: CreditCard, to: '/admin/orders?view=verification' },
+    { label: 'Customers', value: data?.customers, detail: 'Registered customer accounts', Icon: Users, to: '/admin/customers' },
   ];
-  return <AdminLayout title="Dashboard" description={`Welcome${session.user?.name ? `, ${session.user.name.split(' ')[0]}` : ' back'}. Here’s how your store is doing.`} actions={<time className="owner-today" dateTime={new Date().toISOString()}>{adminDate(new Date(), { weekday: 'long', dateStyle: undefined, day: 'numeric', month: 'long', year: 'numeric' })}</time>} busy={dashboard.isPending}>
-    <OwnerQueryState query={dashboard}/><OwnerQueryState query={analytics} label="sales summary"/>
-    <div className="owner-metrics">{cards.map(({ label, value, detail, icon: Icon, to }) => <Link className="owner-metric" to={to} key={label}><div><span>{label}</span><Icon size={20} aria-hidden="true"/></div><strong>{value ?? '—'}</strong><small>{detail}</small></Link>)}</div>
-    {sales && <p className="owner-period">Sales period: {adminDate(sales.since)} – {adminDate(sales.until)} · Cairo time. {sales.legacyPaidPiastres > 0 && 'Historical paid snapshots are shown separately in Analytics.'}</p>}
-    <div className="owner-dashboard-grid"><section className="owner-workspace"><div className="owner-section-heading"><div><p className="admin-eyebrow">From your customers</p><h2>Recent orders</h2></div><Link className="owner-text-link" to="/admin/orders">All orders <ArrowUpRight size={16} aria-hidden="true"/></Link></div>{data && <OrderTable orders={data.recentOrders} compact/>}</section><section className="owner-customer-activity"><Users size={26} aria-hidden="true"/><p className="admin-eyebrow">Your community</p><h2>Customer activity</h2><strong>{data?.newCustomers ?? '—'}</strong><p>New accounts in the last 30 days</p><span>{data ? `${data.customers} customer accounts in total` : 'Loading accounts…'}</span><Link className="admin-button admin-button-secondary" to="/admin/customers">View customers</Link></section></div>
-    <ActionCenter/>
-    <section className="owner-workspace owner-account"><h2>Account settings</h2><AccountActions compact/></section>
+  return <AdminLayout title="Dashboard" description="An overview of your store, customers and orders." busy={dashboard.isPending} actions={<time className="owner-today" dateTime={new Date().toISOString()}>{adminDate(new Date(), { weekday: 'long', dateStyle: undefined, day: 'numeric', month: 'long', year: 'numeric' })}</time>}>
+    <OwnerQueryState query={dashboard} label="store overview"/><OwnerQueryState query={analytics} label="sales figures"/>
+    <div className="owner-metrics v11-dashboard-metrics">{cards.map(({ label, value, detail, Icon, to }) => <Link className="owner-metric" to={to} key={label}><div><span>{label}</span><Icon size={20} aria-hidden="true"/></div><strong>{value ?? '—'}</strong><small>{detail}</small></Link>)}</div>
+    {sales && <p className="owner-period">Reporting period: {adminDate(sales.since)} – {adminDate(sales.until)} · Cairo time.</p>}
+    <div className="v11-dashboard-grid"><section className="owner-workspace"><div className="owner-section-heading"><div><p className="admin-eyebrow">Orders</p><h2>Recent orders</h2></div><Link className="owner-text-link" to="/admin/orders">View all <ArrowUpRight size={16} aria-hidden="true"/></Link></div>{data && <OrderTable orders={data.recentOrders || []} compact/>}</section>
+      <aside className="admin-panel v11-dashboard-links"><h2>Manage your store</h2><p>Everything you need to manage products and sales.</p><Link to="/admin/products"><Package size={18}/>Products and stock <ArrowUpRight size={16}/></Link><Link to="/admin/categories"><ShoppingBag size={18}/>Categories <ArrowUpRight size={16}/></Link><Link to="/admin/discounts"><TicketPercent size={18}/>Discount codes <ArrowUpRight size={16}/></Link><Link to="/admin/customers"><Users size={18}/>Customers <ArrowUpRight size={16}/></Link></aside>
+    </div>
+    <details className="v11-admin-settings"><summary>Account settings</summary><AccountActions compact/></details>
   </AdminLayout>;
 }

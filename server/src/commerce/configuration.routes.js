@@ -357,8 +357,22 @@ adminConfigurationRoutes.get('/shipping', wrap(async (req, res) => {
   const configuration = await ShippingConfig.findOne({ key: 'egypt-v1' }).lean().maxTimeMS(3000);
   respond(res, { governorates: GOVERNORATES, configuration: configuration ? adminRecord(configuration) : { key: 'egypt-v1', cairoGizaPiastres: 9000, otherGovernoratesPiastres: 12000, approved: false, revision: 0 } });
 }));
-adminConfigurationRoutes.patch('/shipping', wrap(async () => {
-  throw configurationError('Delivery is confirmed per order after checkout. Global checkout rates cannot be approved.', 'SHIPPING_POLICY_CHANGED', 409);
+adminConfigurationRoutes.patch('/shipping', wrap(async (req, res) => {
+  const { expectedRevision, values } = revisionBody(req.body,
+    ['cairoGizaPiastres', 'otherGovernoratesPiastres', 'approved', 'confirmActivate']);
+  const { cairoGizaPiastres, otherGovernoratesPiastres, approved, confirmActivate } = values;
+  if (![cairoGizaPiastres, otherGovernoratesPiastres].every(amount => Number.isSafeInteger(amount) && amount >= 0 && amount <= 100000000)
+    || typeof approved !== 'boolean') throw configurationError('Enter two exact delivery fees and choose whether to activate them.', 'SHIPPING_RATE_INVALID', 400);
+  if (approved && confirmActivate !== true) throw configurationError('Confirm activation of the exact delivery rates before saving.', 'SHIPPING_ACTIVATION_REQUIRED', 400);
+  const saved = await auditedMutation(req, 'shipping.updated', 'egypt-v1', async session => {
+    let document = await ShippingConfig.findOne({ key: 'egypt-v1' }).session(session).maxTimeMS(3000);
+    if (document) await prepareAdminRevision(document, expectedRevision, { session });
+    else if (expectedRevision !== 0) throw configurationError('Delivery settings changed. Reload before saving.', 'EDIT_CONFLICT', 409);
+    else document = new ShippingConfig({ key: 'egypt-v1' });
+    document.set({ cairoGizaPiastres, otherGovernoratesPiastres, approved, updatedBy: req.user._id });
+    return document.save({ session });
+  });
+  respond(res, { configuration: adminRecord(saved) });
 }));
 
 adminConfigurationRoutes.patch('/products/:id/configuration', wrap(async (req, res) => {

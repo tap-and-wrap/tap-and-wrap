@@ -24,9 +24,8 @@ export default function GiftBoxOrderDetails({ giftBox, admin = false }) {
         return <div key={category}><dt>{label}</dt><dd>{items.length ? <ul>{items.map(item => <li key={item.componentId}>{customerGiftComponentName(item)} × {item.quantityPerBox}</li>)}</ul> : 'None selected'}</dd></div>;
       })}
       <div><dt>Ribbon</dt><dd className="commerce-gift-ribbon">{ribbonColor && <span aria-hidden="true" className="commerce-gift-swatch" style={{ backgroundColor: ribbonColor }} />}{giftBox.ribbon ? (giftBox.ribbon.displayName || 'Saved ribbon details unavailable') : 'No ribbon selected'}</dd></div>
-      <div><dt>Gift card</dt><dd>{giftBox.giftCard?.selected ? 'Selected' : 'Not selected'}</dd></div>
+      <div><dt>Gift card</dt><dd dir="auto">{giftBox.giftCard?.selected ? (message.trim() ? <bdi>{message}</bdi> : 'Blank card') : 'Not selected'}</dd></div>
     </dl>
-    {giftBox.giftCard?.selected && (message ? <details className="commerce-gift-message"><summary>View gift-card message</summary><p>{message}</p></details> : <p className="commerce-muted">Gift card without a message.</p>)}
     {personalized?.sticker && <section><h4>Personalized sticker</h4><p dir="auto">{personalized.sticker.text}</p>{personalized.sticker.placement && <StickerProof sticker={personalized.sticker} placement={personalized.sticker.placement}/>}<p>{personalized.sticker.placement ? personalized.sticker.placement.view === 'exterior' ? 'Exterior sticker' : `${personalized.sticker.placement.view} side` : 'Apply to exterior front'} - {money(personalized.sticker.pricePiastres)}</p></section>}
     {personalized && <details className="commerce-gift-order-disclosure"><summary>Personal touches at purchase</summary>
       <p>Photo prints: {Number.isSafeInteger(personalized.photoCount) ? personalized.photoCount : photos.length} · Engravings: {engravings.length}</p>

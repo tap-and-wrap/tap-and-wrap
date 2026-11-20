@@ -45,10 +45,11 @@ for (const width of [320, 390, 768, 1440]) test(`customer purchased mixed order 
   for (const text of ['Completed gift boxes: 2', 'Purchased Red Rose × 3', 'Purchased Plush One × 1', 'Purchased Chocolate One × 1', 'Your custom gift box']) await expect(gift.getByText(text, { exact: true })).toBeVisible();
   await expect(gift.getByRole('definition').filter({ hasText: 'Purchased Box Two' })).toBeVisible();
   await expect(gift.getByRole('definition').filter({ hasText: 'Purchased Navy Ribbon' })).toBeVisible();
-  await expect(gift.getByText(message, { exact: true })).toBeHidden();
-  await gift.getByText('View gift-card message', { exact: true }).focus(); await page.keyboard.press('Enter');
-  await expect(gift.getByText(message, { exact: true })).toBeVisible(); await expect(gift.locator('b')).toHaveCount(0);
-  await page.keyboard.press('Enter'); await expect(gift.getByText(message, { exact: true })).toBeHidden();
+  // v11 deliberately shows the purchased Gift Card as an inline label/value.
+  // Verify the authorized order owner sees exact literal text without injecting markup.
+  await expect(gift.getByText(message, { exact: true })).toBeVisible();
+  await expect(gift.getByText('View gift-card message', { exact: true })).toHaveCount(0);
+  await expect(gift.locator('b')).toHaveCount(0);
   await gift.getByText('Component prices at purchase', { exact: true }).click();
   await expect(gift.getByText('3 × EGP 30.00 = EGP 90.00 per box', { exact: true })).toBeVisible();
   await expect(gift.getByText('6 units · EGP 180.00 for this order line', { exact: true })).toBeVisible();
@@ -76,7 +77,10 @@ for (const width of [320, 390, 768, 1440]) test(`admin purchased mixed order sho
   await expect(gift.getByText('synthetic-order-policy · fixture-v1', { exact: true })).toBeVisible();
   await expect(gift.getByText('Purchased Red Rose: inside · region synthetic-inside · x 0.3, y 0.4 · layer 0', { exact: true })).toBeVisible();
   await expect(gift.getByText(/They do not certify physical fit/)).toBeVisible();
-  await expect(gift.getByText(message, { exact: true })).toBeHidden();
+  // The admin is authorized to see the purchased message inline; no private file request is needed.
+  await expect(gift.getByText(message, { exact: true })).toBeVisible();
+  await expect(gift.getByText('View gift-card message', { exact: true })).toHaveCount(0);
+  await expect(gift.locator('b')).toHaveCount(0);
   expect(fixture.calls.filter(call => call.path.includes('/proof') || call.path.includes('/files/'))).toHaveLength(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
@@ -100,14 +104,15 @@ test('admin inspected return can restore tracked builder units and submits zero 
     return route.fulfill({ json: { ok: true, data: { order } }, headers: { 'access-control-allow-origin': 'http://127.0.0.1:5191', 'access-control-allow-credentials': 'true' } });
   });
   await page.goto(`/admin/commerce/orders/${order.id}`);
+  await page.getByText('Payment verification and financial records', { exact: true }).click();
   await chooseOption(page.getByRole('combobox', { name: 'Operation', exact: true }), 'inventory_return');
   await page.getByRole('spinbutton', { name: /Inspected resellable units: Purchased red roses/ }).fill('2');
   for (const name of ['Purchased plush', 'Purchased ribbon']) {
     const input = page.getByRole('spinbutton', { name: new RegExp(`Inspected resellable units: ${name}`) });
     await expect(input).toBeDisabled(); await expect(input).toHaveValue('0'); await expect(input).toHaveAttribute('max', '0');
   }
-  await page.getByLabel('Private reconciliation / WhatsApp acceptance evidence', { exact: true }).fill('Synthetic inspected return; only two roses can be resold.');
-  await page.getByRole('checkbox', { name: /I confirmed the actual account transaction/ }).check();
+  await page.getByLabel('Private financial note', { exact: true }).fill('Synthetic inspected return; only two roses can be resold.');
+  await page.getByRole('checkbox', { name: /I verified the applicable transaction, customer agreement or returned-stock inspection/ }).check();
   await page.getByRole('button', { name: 'Record operation', exact: true }).click();
   await page.getByRole('button', { name: 'Confirm and record operation', exact: true }).click();
   await expect.poll(() => submitted.length).toBe(1);

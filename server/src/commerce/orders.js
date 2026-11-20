@@ -22,7 +22,8 @@ import { env } from '../config/env.js';
 import { assertDatabaseWriteAllowed } from '../config/database-safety.js';
 import { quoteCart, quoteCartForGiftBoxDisposableCheckout } from './cart.js';
 import { fingerprint } from './pricing.js';
-import { calculatePromotions, GOVERNORATES, claimDiscountRedemption } from './promotions.js';
+import { calculatePromotions, GOVERNORATES, shippingForGovernorate, claimDiscountRedemption } from './promotions.js';
+import ShippingConfig from '../models/ShippingConfig.js';
 import { consumeInventory, restockInventory } from './inventory.js';
 import { retainUploads, releaseRetainedUploadQuota } from './uploads.js';
 import { enqueueOrderEvent } from './notifications.js';
@@ -53,14 +54,22 @@ async function checkoutQuoteCore(owner, input, { session, userId } = {}, capabil
   const policyFences = await readGiftBoxCheckoutPolicyFences(cart.items, { session });
   const promotions = await calculatePromotions(cart.items, { code: input.discountCode, session, userId });
   if (input.governorate !== undefined && !GOVERNORATES.some(area => area.id === input.governorate)) throw commerceError(400, 'INVALID_GOVERNORATE', 'Choose a supported governorate.');
-  const shipping = pendingShipping();
+  const hasMerchandise = cart.items.some(line => !isEngravingKind(line.kind));
+  const configuration = hasMerchandise ? await ShippingConfig.findOne({ key: 'egypt-v1' }).session(session || null).lean().maxTimeMS(3000) : null;
+  // Owner approval is an explicit prerequisite. Legacy unapproved shops keep
+  // the original post-order shipping terms until the owner enables rates.
+  if (hasMerchandise && configuration?.approved === true && !input.governorate)
+    throw commerceError(400, 'GOVERNORATE_REQUIRED', 'Choose a governorate to calculate the exact delivery fee before payment.');
+  const shipping = hasMerchandise && input.governorate ? shippingForGovernorate(input.governorate, configuration)
+    : { status: 'pending_confirmation', shippingPiastres: null };
+  const rate = shipping.shippingPiastres;
   const totals = { subtotalPiastres: promotions.subtotalPiastres, discountPiastres: promotions.discountPiastres,
-    shippingPiastres: null, totalPiastres: checkedMoney(promotions.totalPiastres), applied: promotions.applied };
+    shippingPiastres: rate, totalPiastres: checkedMoney(promotions.totalPiastres + (rate ?? 0)), applied: promotions.applied };
   const digest = fingerprint({ lines: cart.items.map(line => ({ identity: line.identity, quantity: line.quantity, unitPrice: line.unitPricePiastres, customization: line.customizationSnapshot, ...(isEngravingKind(line.kind) ? { kind: line.kind, specification: line.specification, reviewFingerprint: line.reviewFingerprint } : {}),
     ...(line.kind === 'gift_box_v2' ? { kind: line.kind, configuration: line.configuration,
       components: line.giftComponents.map(component => ({ ...component, priceApprovedAt: new Date(component.priceApprovedAt).toISOString() })),
       personalization: line.giftPersonalization, fulfillment: line.giftFulfillment, policyHash: line.giftPolicyHash } : {}) })), totals,
-    paymentPolicyVersion: ALL_METHODS_POLICY, engravingPaymentPolicy: cart.items.some(line => isEngravingKind(line.kind)) ? UPFRONT_ENGRAVING_POLICY : null, paymentMethod: input.paymentMethod, discountCode: input.discountCode?.trim().toUpperCase() || null });
+    paymentPolicyVersion: ALL_METHODS_POLICY, engravingPaymentPolicy: cart.items.some(line => isEngravingKind(line.kind)) ? UPFRONT_ENGRAVING_POLICY : null, paymentMethod: input.paymentMethod, discountCode: input.discountCode?.trim().toUpperCase() || null, shippingRateRevision: shipping.revision ?? null, shippingStatus: shipping.status });
   return { cart, totals, fingerprint: digest, shipping, policyFences };
 }
 export async function prepareCheckout(owner, input, userId) {
@@ -187,7 +196,7 @@ async function placeOrderCore(owner, input, userId, { trackingConsentId = null }
         await fenceGiftBoxCheckoutPolicies(quote.policyFences, session);
         await fenceGiftBoxPersonalization(quote.cart.items, session);
         const order = new Order({ paymentPolicyVersion: ALL_METHODS_POLICY, ...(hasEngraving || quote.cart.items.some(line => line.productEngravingSnapshot || line.photoSelection) ? { cartAddOperations: quote.cart.document.addOperations } : {}), ...(hasEngraving ? { engravingPaymentPolicy: UPFRONT_ENGRAVING_POLICY, engraving: initialEngravingWorkflow(quote.cart.items) } : {}), owner, userId: userId || null, trackingConsentId, checkoutKey: input.checkoutKey, requestHash, orderNumber: generateOrderNumber(), customer: normalized.customer.addressVersion ? { ...normalized.customer, address: [normalized.customer.city, normalized.customer.street, ...(normalized.customer.addressVersion === 'delivery-address-v3' ? ['building', 'floor', 'apartment'].filter(key => normalized.customer[key]).map(key => `${key[0].toUpperCase()}${key.slice(1)}: ${normalized.customer[key]}`) : [normalized.customer.building])].filter(Boolean).join(', ') } : normalized.customer,
-          lines: quote.cart.items.map(snapshotOrderLine), totals: quote.totals, inventoryClaims, uploadIds, accountingVersion: hasEngraving || hasGifts ? 2 : 1, ...((hasEngraving || hasGifts) ? { paymentGroups: initialPaymentGroups(quote.cart.items, quote.totals, input.paymentMethod, UPFRONT_ENGRAVING_POLICY), ...(quote.cart.items.some(line => !isEngravingKind(line.kind)) ? { merchandiseFulfillment: 'received' } : {}) } : {}), personalized, allowedPaymentMethods: ['cod', 'instapay'], charges: [...(quote.cart.items.some(line => !isEngravingKind(line.kind)) ? [pendingShipping()] : []), ...(hasEngraving ? [{ ...pendingShipping(), id: 'return_shipping', label: 'Item handoff / return' }] : [])], followUpDueAt: new Date(Date.now() + 12 * 3600000),
+          lines: quote.cart.items.map(snapshotOrderLine), totals: quote.totals, inventoryClaims, uploadIds, accountingVersion: hasEngraving || hasGifts ? 2 : 1, ...((hasEngraving || hasGifts) ? { paymentGroups: initialPaymentGroups(quote.cart.items, quote.totals, input.paymentMethod, UPFRONT_ENGRAVING_POLICY), ...(quote.cart.items.some(line => !isEngravingKind(line.kind)) ? { merchandiseFulfillment: 'received' } : {}) } : {}), personalized, allowedPaymentMethods: ['cod', 'instapay'], charges: [...(quote.cart.items.some(line => !isEngravingKind(line.kind)) && quote.totals.shippingPiastres === null ? [pendingShipping()] : []), ...(hasEngraving ? [{ ...pendingShipping(), id: 'return_shipping', label: 'Item handoff / return' }] : [])], responseState: 'clear',
           paymentMethod: input.paymentMethod, paymentState: input.paymentMethod === 'cod' ? 'unpaid' : quote.totals.totalPiastres === 0 ? 'paid' : 'awaiting_transfer',
           history: [{ at: new Date(), event: 'order_received', actor: userId ? 'customer' : 'guest' }] });
         for (const discount of quote.totals.applied.filter(value => value.kind === 'discount')) {

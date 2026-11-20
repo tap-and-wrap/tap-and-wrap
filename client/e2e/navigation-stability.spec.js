@@ -8,11 +8,11 @@ for (const role of [null, 'customer', 'admin']) for (const width of [320, 360, 3
     await mockCatalog(page, { role }); await page.setViewportSize({ width, height: 1000 });
     await page.goto('/shop');
     await expect(page.locator('header a.header-account')).toHaveAttribute('href', role === 'admin' ? '/admin' : role ? '/my-orders' : '/login');
-    await expect(page.getByRole('button', { name: /^Admin notifications/ })).toHaveCount(role === 'admin' ? 1 : 0);
+    await expect(page.getByRole('button', { name: /^Admin notifications/ })).toHaveCount(0);
     await expect(page.locator('header [data-cart-anchor]')).toBeVisible();
     if(width<1024 && role==='admin'){
-      const cart=await page.locator('header [data-cart-anchor]').boundingBox(),bell=await page.getByRole('button',{name:/^Admin notifications/}).boundingBox();
-      expect(cart.width).toBeGreaterThanOrEqual(44);expect(bell.width).toBeGreaterThanOrEqual(44);expect(cart.x-bell.x-bell.width).toBeGreaterThanOrEqual(12);
+      const cart=await page.locator('header [data-cart-anchor]').boundingBox();
+      expect(cart.width).toBeGreaterThanOrEqual(44);
     }
     if (width < 1024) {
       await expect(page.locator('header .header-account')).toBeHidden();

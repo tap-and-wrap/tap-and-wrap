@@ -19,7 +19,6 @@ import { getCatalog, getEstimate, getGiftBoxPersonalizationOptions } from '../gi
 import { commerceError, money } from '../commerce/api.js';
 import BuilderStepper from '../gift-box/BuilderStepper.jsx';
 import ConfirmRemoval from '../gift-box/ConfirmRemoval.jsx';
-import { hasGiftCardMessage } from '../../../shared/gift-box/card-message.mjs';
 import ArrangementCanvas from '../gift-box/ArrangementCanvas.jsx';
 import Options from '../gift-box/Options.jsx';
 import { useSession } from '../auth/SessionProvider.jsx';
@@ -31,6 +30,7 @@ import { useGiftBoxDraft } from '../gift-box/GiftBoxDraftProvider.jsx';
 import PersonalizationEditor from '../gift-box/PersonalizationEditor.jsx';
 
 import '../gift-box/gift-box.css';
+import '../commerce/v11-stage2.css';
 
 const categories = ['box', 'flower', 'plush', 'chocolate', null, 'ribbon'];
 const LAST_STEP = BUILDER_STEPS.length - 1;
@@ -110,7 +110,7 @@ export default function GiftBoxBuilderPage() {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         const control = document.activeElement;
-        if (!root.contains(control) || !control.matches('input, textarea, select')) return;
+        if (!root.contains(control) || !control.matches('input:not([type=file]):not([type=hidden]), textarea, select') || !control.getClientRects().length) return;
         const rect = control.getBoundingClientRect();
         const top = Math.max(0, document.querySelector('.site-header-stack')?.getBoundingClientRect().bottom || 0) + 12;
         const viewport = window.visualViewport;
@@ -158,11 +158,11 @@ export default function GiftBoxBuilderPage() {
     setRemoval(null);
   }
   async function addConfiguredGiftToCart() {
-    if (addLock.current || !imagesReady || addingGift || !cartConfigurationReady || !currentEstimate
+    if (addLock.current || !imagesReady || addingGift || !cart.backgroundQueueReady || !cart.checkoutOwnerKey || !cartConfigurationReady || !currentEstimate
       || !catalog.data?.freePlacementCommerceEnabled || !catalog.data.orderableBoxIds?.includes(state.boxId)
       || personal.hasContent && !personalizationOptions.data?.personalizationCheckoutEnabled) return;
     addLock.current = true; setAddingGift(true);
-    setNotice('Preparing your gift securely. You can continue browsing while it is added.');
+    setNotice('');
     try {
       // The global cart queue takes an immutable Blob-bearing snapshot before
       // this editor is reset. No private file or amount is sent to analytics.
@@ -173,7 +173,6 @@ export default function GiftBoxBuilderPage() {
       });
       if (mounted.current && draft.isCurrent()) {
         draft.resetDraft();
-        setNotice('Your gift is preparing in the background. The cart will confirm when it is saved.');
         toast.message('Preparing your gift. You can continue shopping.', { id: 'gift-box-queued' });
       }
     } catch (error) {
@@ -230,7 +229,7 @@ export default function GiftBoxBuilderPage() {
           {review ? <div className="gb-review">
             <p className="gb-review-dedication">A thoughtful gift, made your way.</p>
             <ul className="gb-review-highlights"><li>{label(state.boxId)}</li>{Object.entries(quantities).map(([id,quantity])=><li key={id}>{quantity} × {label(id)}</li>)}{state.ribbonId && <li>{label(state.ribbonId)}</li>}{personal.photos.length > 0 && <li>{personal.photos.length} photo prints</li>}{personal.sticker.enabled && <li>Personalized sticker: <bdi>{personal.sticker.text}</bdi></li>}</ul>
-            {hasGiftCardMessage(state.message) && <GiftCardPreview message={state.message}/>}
+            {state.cardEnabled && <GiftCardPreview message={state.message}/>}
             {personal.sticker.enabled && defaultStickerPlacement(state.boxId) && <StickerProof sticker={personal.sticker} placement={personal.sticker.placements?.[state.boxId] || defaultStickerPlacement(state.boxId)}/>}
             {personal.hasContent && personalPriceEstimate === null && <p role="alert">Personalization is unavailable or incomplete. Review your photos and sticker before adding to cart.</p>}
             {!canPurchase && <p className="gb-purchase-unavailable">Online ordering for this gift is currently unavailable.</p>}
@@ -239,14 +238,14 @@ export default function GiftBoxBuilderPage() {
             {category && <Options draftMode={draftMode} category={category} components={options} revealed={revealed[category] || 6} onReveal={() => setRevealed(current => ({ ...current, [category]: (current[category] || 6) + 6 }))} onChoose={choose} selectedId={category === 'box' ? state.boxId : state.ribbonId} quantities={quantities} boxSelected={Boolean(state.boxId)} canAddItem={item => canAdd(state,item.componentId,item,publishedBoxLimits,{study,flexible:true})}/>}
             {step === 4 && <PersonalizationEditor boxId={state.boxId} personal={personal} options={approvedOptions} printSelections={printOptionsByPhoto} onRemovePhoto={(id,label) => requestRemoval({id,label,photo:true})} onPrintSelection={(id,value) => setPrintOptionsByPhoto(current => ({ ...current,[id]:value }))}/>}
             {step === LAST_STEP && <section className="gb-personal-section gb-finishing" aria-labelledby="gb-card-heading"><header><div><p className="eyebrow">Optional</p><h3 id="gb-card-heading">Add a gift card</h3></div><small>{componentCanSupply(card) ? money(card.pricePiastres) : 'Currently unavailable'}</small></header><div className="gb-personal-body">
-              <label htmlFor="gb-card-message">Your message</label><textarea id="gb-card-message" value={state.message} dir="auto" rows={4} disabled={!componentCanSupply(card) && !state.message} aria-invalid={!validMessage(state.message)} aria-describedby="gb-card-hint" onChange={event => { if (codePointCount(event.target.value) <= 500) dispatch({ type:'message',message:event.target.value }); }}/>
-              <p id="gb-card-hint" className="gb-field-hint">{!validMessage(state.message) ? 'Use up to 500 characters without unsupported control characters.' : hasGiftCardMessage(state.message) ? 'Gift card added to your gift.' : 'Leave empty to continue without a card.'}</p>
+              <label className="gb-gift-card-toggle" htmlFor="gb-card-enabled"><input id="gb-card-enabled" type="checkbox" checked={state.cardEnabled === true} disabled={!componentCanSupply(card) && !state.cardEnabled} onChange={event => dispatch({type:'card',enabled:event.target.checked})}/>Add a Gift Card</label>
+              {state.cardEnabled && <><label htmlFor="gb-card-message">Message (optional)</label><textarea id="gb-card-message" value={state.message} dir="auto" rows={3} aria-invalid={!validMessage(state.message)} aria-describedby="gb-card-hint" placeholder="Leave blank for an empty gift card" onChange={event => { if (codePointCount(event.target.value) <= 500) dispatch({ type:'message',message:event.target.value }); }}/><p id="gb-card-hint" className="gb-field-hint">{validMessage(state.message) ? 'An empty gift card is fine. Your message will be printed exactly as written.' : 'Use up to 500 characters without unsupported control characters.'}</p></>}
             </div></section>}
           </>}
           <details className="gb-your-gift"><summary>Your Gift <span>{state.instances.length} items{state.boxId ? ' + box' : ''}</span></summary><ul className="gb-item-list">{state.boxId && <li><span>{label(state.boxId)}</span><span>{currentEstimate ? money(currentEstimate.items?.find(item => item.componentId === state.boxId)?.lineSubtotalPiastres) : 'Pending'}</span></li>}
             {Object.entries(quantities).map(([id,quantity]) => <li key={id}><span>{label(id)} × {quantity}</span><div><button type="button" aria-label={`Remove one ${label(id)}`} onClick={() => requestRemoval({ id:state.instances.findLast(item => item.componentId === id).id, label:label(id) })}>−</button><button type="button" aria-label={`Add one ${label(id)}`} disabled={!canAdd(state,id,components.find(item => item.componentId === id),publishedBoxLimits,{study,flexible:true})} onClick={() => choose(id)}>+</button></div><span>{currentEstimate ? money(currentEstimate.items?.find(item => item.componentId === id)?.lineSubtotalPiastres) : 'Pending'}</span></li>)}
             {state.ribbonId && <li><span>{label(state.ribbonId)}</span><span>{money(components.find(item => item.componentId === state.ribbonId)?.pricePiastres)}</span></li>}
-            {hasGiftCardMessage(state.message) && <li><span>Gift card</span><span>{money(card?.pricePiastres)}</span></li>}
+            {state.cardEnabled && <li><span>Gift card</span><span>{money(card?.pricePiastres)}</span></li>}
             {personal.photos.length > 0 && <li><span>{personal.photos.length} photo prints</span><span>{photoSubtotal === null ? 'Choose print types' : money(photoSubtotal)}</span></li>}
             {personal.sticker.enabled && <li><span>Personalized sticker: <bdi>{personal.sticker.text}</bdi></span><span>{money(approvedOptions.find(option => option.optionId === personal.sticker.optionId)?.pricePiastres)}</span></li>}
           </ul></details>
@@ -254,9 +253,10 @@ export default function GiftBoxBuilderPage() {
           {estimate.error && <div className="gb-feedback"><p role="alert">{commerceError(estimate.error)}</p><button type="button" onClick={() => estimate.refetch()}>Retry total</button></div>}
           {unavailableSelection && <p role="alert">A selected item is unavailable. Remove it or choose a replacement.</p>}
           {draft.storageError && <p className="gb-feedback" role="status">{draft.storageError}</p>}
-          {notice && <p className="gb-announcement" role="status">{notice}</p>}
+          {notice && <p className="gb-announcement" role="alert">{notice}</p>}
+          {review && !cart.backgroundQueueReady && <p className="gb-feedback" role="status">{cart.backgroundStorageMessage || 'Opening your private cart securely…'}</p>}
           <footer className="gb-purchase-bar"><div className="gb-live-total" aria-live="polite"><span>Your total</span><strong>{priceText === 'Updating total…' ? <LoadingSpinner label="Updating total…"/> : priceText}</strong></div><div className="gb-navigation">
-            {review ? <button className="button button-primary gb-add-gift" type="button" disabled={!imagesReady || addingGift || !canPurchase || !cartConfigurationReady || !currentEstimate} onClick={addConfiguredGiftToCart}>{addingGift ? 'Preparing your gift…' : 'Add Your Gift to Cart'}</button> : <>
+            {review ? <button className="button button-primary gb-add-gift" type="button" disabled={!imagesReady || addingGift || !cart.backgroundQueueReady || !cart.checkoutOwnerKey || !canPurchase || !cartConfigurationReady || !currentEstimate} onClick={addConfiguredGiftToCart}>{addingGift ? 'Preparing your gift…' : 'Add Your Gift to Cart'}</button> : <>
             {step === 0 ? <Link className="button button-secondary" to="/customize">Back</Link> : <button type="button" className="button button-secondary" onClick={() => navigate(review ? LAST_STEP : step - 1)}>Back</button>}
             {!review && <button type="button" className="button button-primary" disabled={!state.boxId || !imagesReady} onClick={() => navigate(Math.min(LAST_STEP,step+1),step === LAST_STEP)}>{step === LAST_STEP ? 'Next: Review' : 'Next'}</button>}
             </>}
